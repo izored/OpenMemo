@@ -1,0 +1,6 @@
+﻿# Claude local files
+CLAUDE.local.md
+*.local.md
+*.local.json
+.env
+secrets/

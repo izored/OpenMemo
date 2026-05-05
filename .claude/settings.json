@@ -1,0 +1,9 @@
+﻿{
+  "permissions": {},
+  "model": "",
+  "hookRegistry": {
+    "PostToolUse": "hooks/PostToolUse.sh",
+    "SessionStart": "hooks/SessionStart.sh",
+    "PreCompact": "hooks/PreCompact.sh"
+  }
+}
