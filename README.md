@@ -1,5 +1,4 @@
 # OpenMemo
-> **Spec Version: 1.5** — See [`Specs/OpenMemo_Spec1.5.md`](Specs/OpenMemo_Spec1.5.md) for full technical specification.
 
 A **local-first AI Knowledge OS** powered entirely by Ollama. Save articles, notes, files, videos, and more — then query your personal knowledge base with AI-powered RAG chat.
 
