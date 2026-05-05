@@ -16,12 +16,16 @@ router = APIRouter(prefix="/api/collections", tags=["collections"])
 
 class CollectionCreate(BaseModel):
     name: str
+    emoji: Optional[str] = "📁"
+    description: Optional[str] = None
     color: Optional[str] = "#D97706"
     workspace_id: Optional[str] = None
 
 
 class CollectionUpdate(BaseModel):
     name: Optional[str] = None
+    emoji: Optional[str] = None
+    description: Optional[str] = None
     color: Optional[str] = None
     pinned: Optional[bool] = None
     sort_order: Optional[int] = None
@@ -44,6 +48,8 @@ async def list_collections(
         {
             "id": c.id,
             "name": c.name,
+            "emoji": c.emoji,
+            "description": c.description,
             "color": c.color,
             "pinned": c.pinned,
             "sort_order": c.sort_order,
@@ -60,6 +66,8 @@ async def create_collection(data: CollectionCreate, db: AsyncSession = Depends(g
         id=str(uuid.uuid4()),
         workspace_id=data.workspace_id or "default",
         name=data.name,
+        emoji=data.emoji,
+        description=data.description,
         color=data.color,
     )
     db.add(collection)
@@ -80,6 +88,10 @@ async def update_collection(
     
     if data.name is not None:
         collection.name = data.name
+    if data.emoji is not None:
+        collection.emoji = data.emoji
+    if data.description is not None:
+        collection.description = data.description
     if data.color is not None:
         collection.color = data.color
     if data.pinned is not None:

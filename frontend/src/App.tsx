@@ -4,6 +4,7 @@ import { Dashboard } from '@/pages/Dashboard';
 import { MemoDetail } from '@/pages/MemoDetail';
 import { MemoCastPage } from '@/pages/MemoCastPage';
 import { AskMemoPage } from '@/pages/AskMemoPage';
+import { SettingsPage } from '@/pages/SettingsPage';
 
 export default function App() {
   return (
@@ -15,6 +16,7 @@ export default function App() {
           <Route path="memocast" element={<MemoCastPage />} />
           <Route path="memocast/:id" element={<MemoCastPage />} />
           <Route path="ask" element={<AskMemoPage />} />
+          <Route path="settings" element={<SettingsPage />} />
         </Route>
       </Routes>
     </BrowserRouter>

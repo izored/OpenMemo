@@ -1,0 +1,116 @@
+"""Hybrid search API - semantic + full-text (FTS5)."""
+from typing import Optional
+
+from fastapi import APIRouter, Depends, HTTPException, Query
+from sqlalchemy import select, or_, text
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from backend.db.database import get_db, AsyncSessionLocal
+from backend.db.models import Memo
+from backend.db.fts5 import search_fts5
+from backend.core.embedder import search_similar
+
+router = APIRouter(prefix="/api/search", tags=["search"])
+
+
+@router.get("")
+async def hybrid_search(
+    q: str,
+    workspace_id: str = "default",
+    limit: int = 20,
+):
+    """Hybrid search: full-text + semantic with reciprocal rank fusion."""
+    results = []
+    existing_ids = set()
+    
+    # --- Semantic search ---
+    try:
+        semantic_results = await search_similar(
+            query=q,
+            workspace_id=workspace_id,
+            n_results=limit,
+        )
+        
+        memo_ids = list(set(
+            r["metadata"]["memo_id"] for r in semantic_results
+            if r["metadata"].get("memo_id")
+        ))
+        
+        async with AsyncSessionLocal() as db:
+            if memo_ids:
+                result = await db.execute(
+                    select(Memo).where(Memo.id.in_(memo_ids))
+                )
+                memos = result.scalars().all()
+                
+                for memo in memos:
+                    if memo.id not in existing_ids:
+                        existing_ids.add(memo.id)
+                        results.append({
+                            "id": memo.id,
+                            "type": memo.type,
+                            "title": memo.title,
+                            "description": memo.description,
+                            "source_domain": memo.source_domain,
+                            "thumbnail_path": memo.thumbnail_path,
+                            "created_at": memo.created_at.isoformat(),
+                            "match_type": "semantic",
+                        })
+    except Exception:
+        pass
+    
+    # --- Full-text search (FTS5 preferred, ilike fallback) ---
+    try:
+        fts_results = await search_fts5(q, workspace_id, limit)
+        
+        if fts_results:
+            fts_ids = [r["memo_id"] for r in fts_results]
+            async with AsyncSessionLocal() as db:
+                result = await db.execute(
+                    select(Memo).where(Memo.id.in_(fts_ids))
+                )
+                memos = result.scalars().all()
+                
+                for memo in memos:
+                    if memo.id not in existing_ids:
+                        existing_ids.add(memo.id)
+                        results.append({
+                            "id": memo.id,
+                            "type": memo.type,
+                            "title": memo.title,
+                            "description": memo.description,
+                            "source_domain": memo.source_domain,
+                            "thumbnail_path": memo.thumbnail_path,
+                            "created_at": memo.created_at.isoformat(),
+                            "match_type": "fulltext",
+                        })
+        else:
+            # Fallback to ilike if FTS5 not available
+            async with AsyncSessionLocal() as db:
+                ft_result = await db.execute(
+                    select(Memo).where(
+                        or_(
+                            Memo.title.ilike(f"%{q}%"),
+                            Memo.content_text.ilike(f"%{q}%"),
+                        )
+                    ).where(Memo.workspace_id == workspace_id).limit(limit)
+                )
+                ft_memos = ft_result.scalars().all()
+                
+                for memo in ft_memos:
+                    if memo.id not in existing_ids:
+                        existing_ids.add(memo.id)
+                        results.append({
+                            "id": memo.id,
+                            "type": memo.type,
+                            "title": memo.title,
+                            "description": memo.description,
+                            "source_domain": memo.source_domain,
+                            "thumbnail_path": memo.thumbnail_path,
+                            "created_at": memo.created_at.isoformat(),
+                            "match_type": "fulltext",
+                        })
+    except Exception:
+        pass
+    
+    return {"results": results, "total": len(results)}

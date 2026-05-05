@@ -50,7 +50,7 @@ export function MemoDetail() {
   if (isLoading) {
     return (
       <div className="flex items-center justify-center h-full">
-        <div className="w-8 h-8 border-2 border-[#D97706] border-t-transparent rounded-full animate-spin" />
+        <div className="w-8 h-8 border-2 border-[#ea2804] border-t-transparent rounded-full animate-spin" />
       </div>
     );
   }
@@ -58,7 +58,7 @@ export function MemoDetail() {
   if (!memo) {
     return (
       <div className="flex items-center justify-center h-full">
-        <p className="text-[#6B7280]">Memo not found</p>
+        <p className="text-[#646464]">Memo not found</p>
       </div>
     );
   }
@@ -68,31 +68,31 @@ export function MemoDetail() {
       {/* Content pane */}
       <div className="flex-1 flex flex-col overflow-hidden">
         {/* Header */}
-        <header className="flex items-center justify-between px-6 py-3 border-b border-[#E5E7EB]">
+        <header className="flex items-center justify-between px-6 py-3 pl-14 border-b border-[#e5e5e5]">
           <div className="flex items-center gap-3">
             <button
               onClick={() => navigate(-1)}
-              className="p-1.5 rounded-lg hover:bg-[#F3F4F6]"
+              className="p-1.5 rounded-full hover:bg-[#f5f5f5] transition-colors"
             >
-              <ArrowLeft size={18} className="text-[#6B7280]" />
+              <ArrowLeft size={18} className="text-[#646464]" />
             </button>
-            <span className="text-sm text-[#9CA3AF]">{memo.type}</span>
+            <span className="text-xs font-semibold uppercase tracking-wider text-[#8d8d8d]">{memo.type}</span>
           </div>
-          <div className="flex items-center gap-2">
-            <button className="p-2 rounded-lg hover:bg-[#F3F4F6]">
-              <Share2 size={16} className="text-[#6B7280]" />
+          <div className="flex items-center gap-1">
+            <button className="p-2 rounded-full hover:bg-[#f5f5f5] transition-colors">
+              <Share2 size={16} className="text-[#646464]" />
             </button>
             <button
               onClick={() => setChatOpen(!chatOpen)}
-              className={`p-2 rounded-lg ${chatOpen ? 'bg-[#FEF3C7] text-[#D97706]' : 'hover:bg-[#F3F4F6] text-[#6B7280]'}`}
+              className={`p-2 rounded-full transition-colors ${chatOpen ? 'bg-[#FEE4E0] text-[#ea2804]' : 'hover:bg-[#f5f5f5] text-[#646464]'}`}
             >
               <MessageSquare size={16} />
             </button>
-            <button className="p-2 rounded-lg hover:bg-[#F3F4F6]">
-              <Tag size={16} className="text-[#6B7280]" />
+            <button className="p-2 rounded-full hover:bg-[#f5f5f5] transition-colors">
+              <Tag size={16} className="text-[#646464]" />
             </button>
-            <button className="p-2 rounded-lg hover:bg-[#F3F4F6]">
-              <MoreHorizontal size={16} className="text-[#6B7280]" />
+            <button className="p-2 rounded-full hover:bg-[#f5f5f5] transition-colors">
+              <MoreHorizontal size={16} className="text-[#646464]" />
             </button>
           </div>
         </header>
@@ -101,9 +101,9 @@ export function MemoDetail() {
         <div className="flex-1 overflow-y-auto p-6">
           <div className="max-w-3xl mx-auto">
             {/* Title & meta */}
-            <h1 className="text-2xl font-semibold text-[#1F2937] mb-2">{memo.title}</h1>
-            <div className="flex items-center gap-3 text-sm text-[#6B7280] mb-6">
-              <span>{new Date(memo.created_at).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })}</span>
+            <h1 className="text-2xl font-bold text-[#202020] mb-2 tracking-tight">{memo.title}</h1>
+            <div className="flex items-center gap-3 text-sm text-[#646464] mb-6">
+              <span className="font-mono text-[11px]">{new Date(memo.created_at).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })}</span>
               {memo.source_domain && (
                 <>
                   <span>•</span>
@@ -111,9 +111,9 @@ export function MemoDetail() {
                     href={memo.source_url}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="flex items-center gap-1 hover:text-[#D97706]"
+                    className="flex items-center gap-1 hover:text-[#ea2804] transition-colors link-dotted"
                   >
-                    {memo.source_favicon && <img src={memo.source_favicon} alt="" className="w-4 h-4 rounded" />}
+                    {memo.source_favicon && <img src={memo.source_favicon} alt="" className="w-4 h-4 rounded-full" />}
                     {memo.source_domain}
                     <ExternalLink size={12} />
                   </a>
@@ -124,7 +124,7 @@ export function MemoDetail() {
                   <span>•</span>
                   <div className="flex gap-1">
                     {memo.tags.map((tag: string) => (
-                      <span key={tag} className="px-2 py-0.5 bg-[#F3F4F6] rounded text-xs">{tag}</span>
+                      <span key={tag} className="px-2 py-0.5 bg-[#f5f5f5] rounded-full text-[11px] font-semibold uppercase tracking-wide">{tag}</span>
                     ))}
                   </div>
                 </>
@@ -133,12 +133,12 @@ export function MemoDetail() {
 
             {/* AI Summary */}
             {memo.ai_summary ? (
-              <div className="mb-6 p-4 rounded-xl border-2 border-[#D97706]/30 bg-[#FFFBEB]">
+              <div className="mb-6 p-5 rounded-2xl border border-[#ea2804]/20 bg-[#FFF5F3]">
                 <div className="flex items-center gap-2 mb-2">
-                  <Sparkles size={16} className="text-[#D97706]" />
-                  <span className="text-sm font-medium text-[#92400E]">AI Summary</span>
+                  <Sparkles size={16} className="text-[#ea2804]" />
+                  <span className="text-sm font-semibold text-[#202020]">AI Summary</span>
                 </div>
-                <div className="text-sm text-[#78350F] prose prose-sm max-w-none">
+                <div className="text-sm text-[#202020] prose prose-sm max-w-none">
                   <ReactMarkdown>{memo.ai_summary}</ReactMarkdown>
                 </div>
               </div>
@@ -146,7 +146,7 @@ export function MemoDetail() {
               <button
                 onClick={handleGenerateSummary}
                 disabled={generatingSummary}
-                className="mb-6 flex items-center gap-2 px-4 py-2 border border-[#D97706] text-[#D97706] rounded-lg text-sm hover:bg-[#FEF3C7] disabled:opacity-50"
+                className="mb-6 flex items-center gap-2 px-5 py-2 border border-[#202020] text-[#202020] rounded-full text-sm font-semibold hover:bg-[#f5f5f5] disabled:opacity-40 transition-colors"
               >
                 {generatingSummary ? <Loader2 size={14} className="animate-spin" /> : <Sparkles size={14} />}
                 Generate AI Summary
@@ -155,13 +155,13 @@ export function MemoDetail() {
 
             {/* Thumbnail / Image */}
             {memo.type === 'image' && memo.file_path && (
-              <div className="mb-6 rounded-xl overflow-hidden">
+              <div className="mb-6 rounded-2xl overflow-hidden border border-[#e5e5e5]">
                 <img src={`/files/${memo.file_path}`} alt={memo.title} className="w-full" />
               </div>
             )}
 
             {memo.type === 'video' && memo.source_url && (
-              <div className="mb-6 aspect-video rounded-xl overflow-hidden bg-black">
+              <div className="mb-6 aspect-video rounded-2xl overflow-hidden bg-[#202020]">
                 <iframe
                   src={`https://www.youtube.com/embed/${new URL(memo.source_url).searchParams.get('v') || ''}`}
                   className="w-full h-full"
@@ -172,24 +172,34 @@ export function MemoDetail() {
 
             {/* Content body */}
             {memo.content_text && (
-              <div className="prose prose-sm max-w-none text-[#374151]">
-                <ReactMarkdown>{memo.content_raw || memo.content_text}</ReactMarkdown>
+              <div className="prose prose-sm max-w-none text-[#202020]">
+                <ReactMarkdown components={{
+                  code: ({node, inline, className, children, ...props}: any) => (
+                    inline ? (
+                      <code className="bg-[#24292e] text-white px-1 py-0.5 rounded text-[11px] font-mono" {...props}>{children}</code>
+                    ) : (
+                      <pre className="bg-[#24292e] text-white p-4 rounded-xl overflow-x-auto font-mono text-[12px] my-3" {...props}>
+                        <code>{children}</code>
+                      </pre>
+                    )
+                  )
+                }}>{memo.content_raw || memo.content_text}</ReactMarkdown>
               </div>
             )}
 
             {/* Related memos */}
             {related.length > 0 && (
-              <div className="mt-10 pt-6 border-t border-[#E5E7EB]">
-                <h3 className="text-sm font-medium text-[#6B7280] mb-3">Related Memos</h3>
+              <div className="mt-10 pt-6 border-t border-[#e5e5e5]">
+                <h3 className="text-xs font-semibold text-[#8d8d8d] uppercase tracking-wider mb-3">Related Memos</h3>
                 <div className="flex gap-3 overflow-x-auto pb-2">
                   {related.map((r: any) => (
                     <button
                       key={r.id}
                       onClick={() => navigate(`/memo/${r.id}`)}
-                      className="flex-shrink-0 w-48 p-3 border border-[#E5E7EB] rounded-xl hover:bg-[#F3F4F6] text-left"
+                      className="flex-shrink-0 w-48 p-3 border border-[#e5e5e5] rounded-2xl hover:border-[#202020] text-left transition-colors"
                     >
-                      <p className="text-sm font-medium text-[#1F2937] line-clamp-2">{r.title}</p>
-                      <p className="text-xs text-[#9CA3AF] mt-1">{r.source_domain || r.type}</p>
+                      <p className="text-sm font-semibold text-[#202020] line-clamp-2">{r.title}</p>
+                      <p className="text-[11px] text-[#8d8d8d] mt-1 font-mono">{r.source_domain || r.type}</p>
                     </button>
                   ))}
                 </div>
@@ -201,7 +211,7 @@ export function MemoDetail() {
 
       {/* Chat pane */}
       {chatOpen && (
-        <div className="w-96 border-l border-[#E5E7EB] flex flex-col">
+        <div className="w-96 border-l border-[#e5e5e5] flex flex-col">
           <AskMemoPanel memoId={id!} />
         </div>
       )}

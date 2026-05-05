@@ -29,6 +29,8 @@ export interface CollectionRef {
 export interface Collection {
   id: string;
   name: string;
+  emoji: string;
+  description?: string;
   color: string;
   pinned: boolean;
   sort_order: number;
