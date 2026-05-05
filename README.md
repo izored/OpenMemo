@@ -101,8 +101,8 @@ Real-time token streaming via Server-Sent Events. See the AI think as it types â
 ### The One-Liner (Docker)
 
 ```bash
-git clone https://github.com/izored/Open_Memento.git
-cd Open_Memento
+git clone https://github.com/izored/OpenMemo.git
+cd OpenMemo
 docker-compose up -d
 ```
 
@@ -213,11 +213,11 @@ See [`MEMORY.md`](MEMORY.md) for the full roadmap, architectural findings, and c
 ---
 ## Star History
 
-<a href="https://www.star-history.com/?repos=izored%2FOpen_Memento&type=timeline&logscale=&legend=top-left">
+<a href="https://www.star-history.com/?repos=izored%2FOpenMemo&type=timeline&logscale=&legend=top-left">
  <picture>
-   <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/chart?repos=izored/Open_Memento&type=timeline&theme=dark&logscale&legend=top-left" />
-   <source media="(prefers-color-scheme: light)" srcset="https://api.star-history.com/chart?repos=izored/Open_Memento&type=timeline&logscale&legend=top-left" />
-   <img alt="Star History Chart" src="https://api.star-history.com/chart?repos=izored/Open_Memento&type=timeline&logscale&legend=top-left" />
+   <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/chart?repos=izored/OpenMemo&type=timeline&theme=dark&logscale&legend=top-left" />
+   <source media="(prefers-color-scheme: light)" srcset="https://api.star-history.com/chart?repos=izored/OpenMemo&type=timeline&logscale&legend=top-left" />
+   <img alt="Star History Chart" src="https://api.star-history.com/chart?repos=izored/OpenMemo&type=timeline&logscale&legend=top-left" />
  </picture>
 </a>
 ---
