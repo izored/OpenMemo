@@ -72,7 +72,7 @@ async def chat_stream(data: ChatRequest, db: AsyncSession = Depends(get_db)):
     query = data.query
     if query.startswith("@general ") or query.startswith("@"):
         use_rag = False
-        query = query.lstrip("@general").lstrip("@").strip()
+        query = query.removeprefix("@general ").removeprefix("@general").removeprefix("@").strip()
     
     # Get chat history for context
     history = []
@@ -80,10 +80,12 @@ async def chat_stream(data: ChatRequest, db: AsyncSession = Depends(get_db)):
         result = await db.execute(
             select(Message)
             .where(Message.session_id == session_id)
-            .order_by(Message.created_at)
+            .order_by(Message.created_at.desc())
+            .limit(6)
         )
         msgs = result.scalars().all()
-        history = [{"role": m.role, "content": m.content} for m in msgs[-6:]]
+        msgs = list(reversed(msgs))
+        history = [{"role": m.role, "content": m.content} for m in msgs]
     
     async def event_stream():
         full_response = ""

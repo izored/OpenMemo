@@ -5,7 +5,7 @@ from pathlib import Path
 
 class Settings(BaseSettings):
     APP_NAME: str = "OpenMemo"
-    VERSION: str = "1.6.5"
+    VERSION: str = "1.6.6"
     
     # Paths
     BASE_DIR: Path = Path(__file__).parent.parent
@@ -42,6 +42,8 @@ class Settings(BaseSettings):
         "http://127.0.0.1:3000",
         "http://localhost:80",
         "http://localhost",
+        "http://openmemo.local",
+        "http://openmemo.local:80",
     ]
     
     @field_validator("OLLAMA_HOSTS", "CORS_ORIGINS", mode="before")

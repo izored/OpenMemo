@@ -45,12 +45,6 @@ interface AppState {
   editingCollection: Collection | null;
   setEditingCollection: (collection: Collection | null) => void;
 
-  // Search
-  searchQuery: string;
-  setSearchQuery: (q: string) => void;
-  searchOpen: boolean;
-  setSearchOpen: (open: boolean) => void;
-
   // Theme & appearance
   theme: 'light' | 'dark';
   setTheme: (theme: 'light' | 'dark') => void;
@@ -70,6 +64,11 @@ const persist = (partial: Partial<AppState>) => {
     }));
   }
 };
+
+// Apply dark class on initial load based on saved theme
+if (saved.theme === 'dark') {
+  document.documentElement.classList.add('dark');
+}
 
 export const useAppStore = create<AppState>((set) => ({
   sidebarOpen: false,
@@ -97,15 +96,15 @@ export const useAppStore = create<AppState>((set) => ({
   editingCollection: null,
   setEditingCollection: (collection) => set({ editingCollection: collection }),
 
-  searchQuery: '',
-  setSearchQuery: (q) => set({ searchQuery: q }),
-  searchOpen: false,
-  setSearchOpen: (open) => set({ searchOpen: open }),
-
   theme: saved.theme || 'light',
   setTheme: (theme) => {
     set({ theme });
     persist({ theme });
+    if (theme === 'dark') {
+      document.documentElement.classList.add('dark');
+    } else {
+      document.documentElement.classList.remove('dark');
+    }
   },
   bgColor: saved.bgColor || '#F5F0E8',
   setBgColor: (bgColor) => {

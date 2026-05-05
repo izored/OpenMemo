@@ -3,10 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   ArrowLeft,
-  Share2,
   MessageSquare,
-  Tag,
-  MoreHorizontal,
   Sparkles,
   Loader2,
   ExternalLink,
@@ -14,6 +11,21 @@ import {
 import { memoApi } from '@/lib/api';
 import { AskMemoPanel } from '@/components/AskMemoPanel';
 import ReactMarkdown from 'react-markdown';
+
+function getYouTubeVideoId(url: string): string | null {
+  try {
+    const u = new URL(url);
+    if (u.hostname.includes('youtube.com')) {
+      return u.searchParams.get('v');
+    }
+    if (u.hostname.includes('youtu.be')) {
+      return u.pathname.slice(1);
+    }
+  } catch {
+    return null;
+  }
+  return null;
+}
 
 export function MemoDetail() {
   const { id } = useParams<{ id: string }>();
@@ -63,6 +75,8 @@ export function MemoDetail() {
     );
   }
 
+  const youtubeId = memo.type === 'video' && memo.source_url ? getYouTubeVideoId(memo.source_url) : null;
+
   return (
     <div className="h-full flex">
       {/* Content pane */}
@@ -79,20 +93,22 @@ export function MemoDetail() {
             <span className="text-xs font-semibold uppercase tracking-wider text-[#8d8d8d]">{memo.type}</span>
           </div>
           <div className="flex items-center gap-1">
-            <button className="p-2 rounded-full hover:bg-[#f5f5f5] transition-colors">
-              <Share2 size={16} className="text-[#646464]" />
-            </button>
+            {memo.source_url && (
+              <a
+                href={memo.source_url}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium text-[#646464] hover:text-[#202020] hover:bg-[#f5f5f5] rounded-full transition-colors"
+              >
+                <ExternalLink size={14} />
+                Open Original
+              </a>
+            )}
             <button
               onClick={() => setChatOpen(!chatOpen)}
               className={`p-2 rounded-full transition-colors ${chatOpen ? 'bg-[#FEE4E0] text-[#ea2804]' : 'hover:bg-[#f5f5f5] text-[#646464]'}`}
             >
               <MessageSquare size={16} />
-            </button>
-            <button className="p-2 rounded-full hover:bg-[#f5f5f5] transition-colors">
-              <Tag size={16} className="text-[#646464]" />
-            </button>
-            <button className="p-2 rounded-full hover:bg-[#f5f5f5] transition-colors">
-              <MoreHorizontal size={16} className="text-[#646464]" />
             </button>
           </div>
         </header>
@@ -156,16 +172,17 @@ export function MemoDetail() {
             {/* Thumbnail / Image */}
             {memo.type === 'image' && memo.file_path && (
               <div className="mb-6 rounded-2xl overflow-hidden border border-[#e5e5e5]">
-                <img src={`/files/${memo.file_path}`} alt={memo.title} className="w-full" />
+                <img src={`/api/files/${memo.file_path}`} alt={memo.title} className="w-full" />
               </div>
             )}
 
-            {memo.type === 'video' && memo.source_url && (
+            {youtubeId && (
               <div className="mb-6 aspect-video rounded-2xl overflow-hidden bg-[#202020]">
                 <iframe
-                  src={`https://www.youtube.com/embed/${new URL(memo.source_url).searchParams.get('v') || ''}`}
+                  src={`https://www.youtube.com/embed/${youtubeId}`}
                   className="w-full h-full"
                   allowFullScreen
+                  title={memo.title}
                 />
               </div>
             )}

@@ -48,8 +48,28 @@ async def init_fts5():
             """))
 
 
+import re
+
+
+def _escape_fts5(query: str) -> str:
+    """Escape FTS5 special characters and wrap terms in quotes for literal matching."""
+    # Strip FTS5 control characters
+    query = re.sub(r'["*\-\(\)]', ' ', query)
+    # Normalize whitespace
+    query = re.sub(r'\s+', ' ', query).strip()
+    if not query:
+        return ""
+    # Wrap each term in double quotes for literal match
+    terms = query.split()
+    return " ".join(f'"{term}"' for term in terms)
+
+
 async def search_fts5(query: str, workspace_id: str, limit: int = 20) -> list[dict]:
     """Search memos using FTS5. Returns list of {memo_id, rank}."""
+    escaped = _escape_fts5(query)
+    if not escaped:
+        return []
+    
     async with AsyncSessionLocal() as db:
         try:
             # FTS5 search with rank
@@ -62,10 +82,11 @@ async def search_fts5(query: str, workspace_id: str, limit: int = 20) -> list[di
                     ORDER BY memos_fts.rank ASC
                     LIMIT :limit
                 """),
-                {"query": query, "workspace_id": workspace_id, "limit": limit}
+                {"query": escaped, "workspace_id": workspace_id, "limit": limit}
             )
             rows = result.fetchall()
             return [{"memo_id": row[0], "rank": row[1]} for row in rows]
-        except Exception:
+        except Exception as e:
             # FTS5 may not be available or table not set up
+            print(f"FTS5 search error: {e}")
             return []

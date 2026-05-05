@@ -68,21 +68,19 @@ export function AskMemoPage() {
               const data = JSON.parse(json);
               if (data.type === 'token') {
                 setMessages((prev) => {
-                  const updated = [...prev];
-                  const last = updated[updated.length - 1];
+                  const last = prev[prev.length - 1];
                   if (last.role === 'assistant') {
-                    last.content += data.data;
+                    return [...prev.slice(0, -1), { ...last, content: last.content + data.data }];
                   }
-                  return [...updated];
+                  return prev;
                 });
               } else if (data.type === 'sources') {
                 setMessages((prev) => {
-                  const updated = [...prev];
-                  const last = updated[updated.length - 1];
+                  const last = prev[prev.length - 1];
                   if (last.role === 'assistant') {
-                    last.sources = data.data;
+                    return [...prev.slice(0, -1), { ...last, sources: data.data }];
                   }
-                  return [...updated];
+                  return prev;
                 });
               } else if (data.type === 'done') {
                 setSessionId(data.session_id);

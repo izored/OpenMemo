@@ -56,8 +56,8 @@ async def hybrid_search(
                             "created_at": memo.created_at.isoformat(),
                             "match_type": "semantic",
                         })
-    except Exception:
-        pass
+    except Exception as e:
+        print(f"Semantic search error: {e}")
     
     # --- Full-text search (FTS5 preferred, ilike fallback) ---
     try:
@@ -110,7 +110,7 @@ async def hybrid_search(
                             "created_at": memo.created_at.isoformat(),
                             "match_type": "fulltext",
                         })
-    except Exception:
-        pass
+    except Exception as e:
+        print(f"Full-text search error: {e}")
     
     return {"results": results, "total": len(results)}

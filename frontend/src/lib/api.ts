@@ -43,11 +43,16 @@ export const ingestApi = {
       method: 'POST',
       body: JSON.stringify({ title, content, collection_id }),
     }),
-  file: (file: File, workspace_id?: string) => {
+  file: async (file: File, workspace_id?: string) => {
     const form = new FormData();
     form.append('file', file);
     if (workspace_id) form.append('workspace_id', workspace_id);
-    return fetch(`${API_BASE}/ingest/file`, { method: 'POST', body: form }).then(r => r.json());
+    const resp = await fetch(`${API_BASE}/ingest/file`, { method: 'POST', body: form });
+    if (!resp.ok) {
+      const error = await resp.json().catch(() => ({ detail: resp.statusText }));
+      throw new Error(error.detail || 'Upload failed');
+    }
+    return resp.json();
   },
 };
 

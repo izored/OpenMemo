@@ -1,4 +1,5 @@
 """Embedding pipeline - chunks text and stores in ChromaDB."""
+import asyncio
 from backend.core.ollama_client import ollama_client
 from backend.core.chunker import chunk_text
 from backend.db.chroma_client import get_collection
@@ -23,7 +24,7 @@ async def embed_memo(
     # Generate embeddings in batch
     embeddings = await ollama_client.embed_batch(chunks)
     
-    # Store in ChromaDB
+    # Store in ChromaDB (blocking I/O — run in thread)
     collection = get_collection()
     ids = [f"memo_{memo_id}_chunk_{i}" for i in range(len(chunks))]
     metadatas = [
@@ -38,7 +39,8 @@ async def embed_memo(
         for i in range(len(chunks))
     ]
     
-    collection.upsert(
+    await asyncio.to_thread(
+        collection.upsert,
         ids=ids,
         documents=chunks,
         embeddings=embeddings,
@@ -51,12 +53,13 @@ async def embed_memo(
 async def delete_memo_embeddings(memo_id: str):
     """Remove all chunks for a memo from ChromaDB."""
     collection = get_collection()
-    # Get all chunks for this memo
-    results = collection.get(
+    # Get all chunks for this memo (blocking I/O)
+    results = await asyncio.to_thread(
+        collection.get,
         where={"memo_id": memo_id},
     )
     if results["ids"]:
-        collection.delete(ids=results["ids"])
+        await asyncio.to_thread(collection.delete, ids=results["ids"])
 
 
 async def search_similar(
@@ -88,7 +91,7 @@ async def search_similar(
     if where:
         kwargs["where"] = where
     
-    results = collection.query(**kwargs)
+    results = await asyncio.to_thread(collection.query, **kwargs)
     
     # Format results
     items = []

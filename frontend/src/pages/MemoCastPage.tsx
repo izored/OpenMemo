@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Radio, Play, Pause, Loader2, Clock, FileText } from 'lucide-react';
 import { memocastApi } from '@/lib/api';
@@ -9,6 +9,10 @@ export function MemoCastPage() {
   const [creating, setCreating] = useState(false);
   const [selectedEpisode, setSelectedEpisode] = useState<any>(null);
   const [playing, setPlaying] = useState(false);
+  const [progress, setProgress] = useState(0);
+  const [currentTime, setCurrentTime] = useState(0);
+  const [duration, setDuration] = useState(0);
+  const audioRef = useRef<HTMLAudioElement>(null);
 
   const { data: episodes = [], isLoading } = useQuery({
     queryKey: ['memocasts'],
@@ -25,6 +29,36 @@ export function MemoCastPage() {
       console.error(e);
     } finally {
       setCreating(false);
+    }
+  };
+
+  useEffect(() => {
+    const audio = audioRef.current;
+    if (!audio) return;
+    const onTimeUpdate = () => {
+      setCurrentTime(audio.currentTime);
+      setProgress(audio.duration ? (audio.currentTime / audio.duration) * 100 : 0);
+    };
+    const onLoadedMetadata = () => setDuration(audio.duration);
+    const onEnded = () => setPlaying(false);
+    audio.addEventListener('timeupdate', onTimeUpdate);
+    audio.addEventListener('loadedmetadata', onLoadedMetadata);
+    audio.addEventListener('ended', onEnded);
+    return () => {
+      audio.removeEventListener('timeupdate', onTimeUpdate);
+      audio.removeEventListener('loadedmetadata', onLoadedMetadata);
+      audio.removeEventListener('ended', onEnded);
+    };
+  }, [selectedEpisode]);
+
+  const togglePlay = () => {
+    const audio = audioRef.current;
+    if (!audio) return;
+    if (playing) {
+      audio.pause();
+      setPlaying(false);
+    } else {
+      audio.play().then(() => setPlaying(true)).catch(() => setPlaying(false));
     }
   };
 
@@ -94,17 +128,31 @@ export function MemoCastPage() {
                   )}
                 </div>
 
+                {/* Audio element */}
+                {selectedEpisode.audio_path && (
+                  <audio ref={audioRef} src={`/api/files/${selectedEpisode.audio_path}`} className="hidden" />
+                )}
+
                 {/* Play controls */}
                 <div className="flex items-center gap-4 mt-5">
                   <button
-                    onClick={() => setPlaying(!playing)}
-                    className="w-12 h-12 rounded-full bg-[#ea2804] text-white flex items-center justify-center hover:bg-[#c92000] transition-colors"
+                    onClick={togglePlay}
+                    disabled={!selectedEpisode.audio_path}
+                    className="w-12 h-12 rounded-full bg-[#ea2804] text-white flex items-center justify-center hover:bg-[#c92000] disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
                   >
                     {playing ? <Pause size={20} /> : <Play size={20} className="ml-0.5" />}
                   </button>
                   <div className="flex-1 h-1.5 bg-[#4e4e4e] rounded-full">
-                    <div className="h-full w-0 bg-[#ea2804] rounded-full" />
+                    <div
+                      className="h-full bg-[#ea2804] rounded-full transition-all"
+                      style={{ width: `${progress}%` }}
+                    />
                   </div>
+                  <span className="text-xs text-[#bbbbbb] font-mono">
+                    {selectedEpisode.audio_path
+                      ? `${Math.floor(currentTime / 60)}:${(Math.floor(currentTime) % 60).toString().padStart(2, '0')} / ${Math.floor(duration / 60)}:${(Math.floor(duration) % 60).toString().padStart(2, '0')}`
+                      : 'Generating...'}
+                  </span>
                 </div>
               </div>
 

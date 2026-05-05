@@ -6,6 +6,35 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ---
 
+## [1.6.6] - 2026-05-05
+
+### Security
+
+- **Path traversal fix** — `workspace_id` in file uploads is now sanitized (whitelist `a-zA-Z0-9_-`) preventing `../../` attacks
+- **File upload validation** — Max 50MB limit, magic-byte content validation, rejected executable types
+- **Secure file serving** — `/files/` static mount replaced with `/api/files/:path` endpoint that verifies memo ownership before serving
+- **FTS5 query escaping** — User search terms are escaped before passing to SQLite FTS5 `MATCH`, preventing syntax errors and injection
+
+### Fixed
+
+- **Card detail navigation** — ALL card types now navigate to `/memo/:id` detail view with an "Open Original" button for external links (previously video/link/article cards bypassed detail)
+- **`@general` RAG bypass** — Fixed `lstrip("@general")` bug that was stripping individual characters instead of the substring
+- **Memo update collections/tags** — `update_memo()` now properly persists `collection_ids` and `tags` changes
+- **YouTube subtitle extraction** — Transcript result is now used as `content_text` instead of being discarded
+- **Search silent failures** — Exceptions in hybrid search are now logged instead of silently swallowed
+- **Chat history over-fetch** — Replaced `.all()[-6:]` with `.order_by(...).limit(6)` SQL-level pagination
+- **Async blocking I/O** — ChromaDB operations, PDF parsing, DOCX parsing, image reading, and yt-dlp subprocess now run in threadpool/async subprocess
+- **Chrome extension error handling** — Added `response.ok` check before streaming
+
+### Changed
+
+- **Inline search bar** — Replaced centered `SearchModal` popup with a real search input in the Dashboard header. Type directly, see dropdown results, `Ctrl+K` to focus, `Escape` to clear
+- **MemoCast audio playback** — Play/pause now wires to a real `<audio>` element with progress tracking and time display
+- **Branded local URL** — Default access URL changed from `localhost` to `openmemo.local`. Documented hosts-file setup
+- **Removed dead UI** — Hidden Voice tab, Share/Tag/More buttons in MemoDetail until implemented
+
+---
+
 ## [1.6.5] - 2026-05-05
 
 ### Sidebar & Navigation

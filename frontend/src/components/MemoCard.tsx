@@ -9,7 +9,6 @@ import {
   Mic,
   File,
   Link2,
-  ExternalLink,
   Play,
   GripVertical,
 } from 'lucide-react';
@@ -51,16 +50,8 @@ export function MemoCard({ memo }: MemoCardProps) {
     day: 'numeric',
   });
 
-  const hasExternalUrl =
-    memo.source_url &&
-    (memo.type === 'link' || memo.type === 'article' || memo.type === 'video');
-
   const handleClick = () => {
-    if (hasExternalUrl) {
-      window.open(memo.source_url, '_blank', 'noopener,noreferrer');
-    } else {
-      navigate(`/memo/${memo.id}`);
-    }
+    navigate(`/memo/${memo.id}`);
   };
 
   const DragHandle = () => (
@@ -126,7 +117,7 @@ export function MemoCard({ memo }: MemoCardProps) {
         {memo.thumbnail_path || memo.file_path ? (
           <div className="aspect-square overflow-hidden">
             <img
-              src={memo.thumbnail_path || `/files/${memo.file_path}`}
+              src={memo.thumbnail_path || `/api/files/${memo.file_path}`}
               alt=""
               className="w-full h-full object-cover transition-transform duration-500 hover:scale-105"
               onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
@@ -176,11 +167,7 @@ export function MemoCard({ memo }: MemoCardProps) {
                 <Play size={26} className="text-[#202020] ml-0.5" fill="#202020" />
               </div>
             </div>
-            {hasExternalUrl && (
-              <div className="absolute top-4 right-4 w-9 h-9 rounded-full bg-white/90 flex items-center justify-center shadow-md opacity-0 group-hover:opacity-100 transition-opacity">
-                <ExternalLink size={15} className="text-[#202020]" />
-              </div>
-            )}
+
           </div>
         ) : (
           <div className="aspect-[4/3] flex items-center justify-center relative" style={{ backgroundColor: config.bg }}>
@@ -256,10 +243,7 @@ export function MemoCard({ memo }: MemoCardProps) {
     <div
       ref={setNodeRef}
       onClick={handleClick}
-      className={cn(
-        'group relative bg-white rounded-[28px] overflow-hidden cursor-pointer shadow-sm hover:shadow-xl transition-all duration-300 hover:-translate-y-1',
-        hasExternalUrl && 'relative'
-      )}
+      className="group relative bg-white rounded-[28px] overflow-hidden cursor-pointer shadow-sm hover:shadow-xl transition-all duration-300 hover:-translate-y-1"
       style={{ ...dragStyle, opacity: isDragging ? 0.3 : undefined }}
     >
       <DragHandle />
@@ -271,11 +255,7 @@ export function MemoCard({ memo }: MemoCardProps) {
             className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
             onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
           />
-          {hasExternalUrl && (
-            <div className="absolute top-4 right-4 w-9 h-9 rounded-full bg-white/90 flex items-center justify-center shadow-md opacity-0 group-hover:opacity-100 transition-opacity">
-              <ExternalLink size={15} className="text-[#202020]" />
-            </div>
-          )}
+
         </div>
       ) : (
         <div className="aspect-[4/3] flex items-center justify-center relative" style={{ backgroundColor: config.bg }}>

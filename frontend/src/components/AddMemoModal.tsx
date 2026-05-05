@@ -1,6 +1,6 @@
 import { useState, useRef, useCallback } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
-import { X, Link2, FileText, Upload, Mic, Loader2 } from 'lucide-react';
+import { X, Link2, FileText, Upload, Loader2 } from 'lucide-react';
 import { useAppStore } from '@/stores/appStore';
 import { ingestApi } from '@/lib/api';
 import { cn } from '@/lib/utils';
@@ -97,7 +97,6 @@ export function AddMemoModal() {
     { id: 'link', label: 'Link', icon: Link2 },
     { id: 'note', label: 'Note', icon: FileText },
     { id: 'file', label: 'File', icon: Upload },
-    { id: 'voice', label: 'Voice', icon: Mic },
   ];
 
   return (
@@ -239,20 +238,7 @@ export function AddMemoModal() {
             </div>
           )}
 
-          {/* Voice Tab */}
-          {activeTab === 'voice' && (
-            <div className="text-center py-8">
-              <div className="w-16 h-16 rounded-full bg-[#FEE2E2] flex items-center justify-center mx-auto mb-4">
-                <Mic size={28} className="text-[#DC2626]" />
-              </div>
-              <p className="text-sm text-[#646464] mb-4">
-                Click to start recording a voice note
-              </p>
-              <button className="px-6 py-2.5 bg-[#DC2626] text-white rounded-full text-sm font-semibold hover:bg-[#B91C1C] transition-colors">
-                Start Recording
-              </button>
-            </div>
-          )}
+
         </div>
       </div>
     </div>

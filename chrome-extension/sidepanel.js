@@ -1,6 +1,6 @@
 // OpenMemo Side Panel - Shows AI summary of current page
 
-const API_BASE = 'http://localhost:8000/api';
+const API_BASE = 'http://openmemo.local/api';
 const contentEl = document.getElementById('content');
 
 async function summarizeCurrentPage() {
@@ -31,6 +31,11 @@ async function summarizeCurrentPage() {
         use_rag: false,
       }),
     });
+
+    if (!response.ok) {
+      contentEl.innerHTML = `<p>Error: ${response.status} ${response.statusText}</p>`;
+      return;
+    }
 
     const reader = response.body.getReader();
     const decoder = new TextDecoder();
