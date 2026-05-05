@@ -64,6 +64,24 @@ body {
   text-decoration: underline solid var(--color-text);
 }
 
+/* Dark mode */
+html.dark {
+  --color-bg: #0f0f0f;
+  --color-bg-sidebar: #1a1a1a;
+  --color-bg-hover: #2a2a2a;
+  --color-border: #333333;
+  --color-text: #f0f0f0;
+  --color-text-secondary: #a0a0a0;
+  --color-text-muted: #666666;
+  --color-text-link: #555555;
+  --color-dark: #f0f0f0;
+}
+
+html.dark body {
+  background: var(--color-bg);
+  color: var(--color-text);
+}
+
 /* Selection */
 ::selection {
   background: var(--color-brand-light);

@@ -3,7 +3,6 @@ import { Plus, Menu } from 'lucide-react';
 import { Sidebar } from './Sidebar';
 import { AddMemoModal } from './AddMemoModal';
 import { AddCollectionModal } from './AddCollectionModal';
-import { SearchModal } from './SearchModal';
 import { useAppStore } from '@/stores/appStore';
 
 export function Layout() {
@@ -52,7 +51,6 @@ export function Layout() {
 
       <AddMemoModal />
       <AddCollectionModal />
-      <SearchModal />
     </div>
   );
 }

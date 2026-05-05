@@ -121,7 +121,7 @@ export function SettingsPage() {
             </div>
             <div>
               <h3 className="text-lg font-bold text-[#202020]">OpenMemo</h3>
-              <p className="text-[14px] text-[#646464]">Version 1.6.5</p>
+              <p className="text-[14px] text-[#646464]">Version 1.6.6</p>
             </div>
           </div>
         </div>

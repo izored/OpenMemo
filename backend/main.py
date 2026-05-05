@@ -3,9 +3,9 @@ import uuid
 from contextlib import asynccontextmanager
 from pathlib import Path
 
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.staticfiles import StaticFiles
+from fastapi.responses import FileResponse
 
 from backend.config import settings
 from backend.db.database import init_db, AsyncSessionLocal
@@ -71,10 +71,37 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Mount static files for uploaded content
+# Secure file serving — check ownership before returning files
 files_path = Path(settings.FILES_DIR)
 files_path.mkdir(parents=True, exist_ok=True)
-app.mount("/files", StaticFiles(directory=str(files_path)), name="files")
+
+
+@app.get("/api/files/{file_path:path}")
+async def serve_file(file_path: str):
+    """Serve an uploaded file if it belongs to a memo in the workspace."""
+    from sqlalchemy import select
+    from backend.db.database import AsyncSessionLocal
+    from backend.db.models import Memo
+    
+    target = files_path / file_path
+    # Prevent path traversal
+    try:
+        target.resolve().relative_to(files_path.resolve())
+    except ValueError:
+        raise HTTPException(status_code=404, detail="File not found")
+    
+    if not target.exists():
+        raise HTTPException(status_code=404, detail="File not found")
+    
+    async with AsyncSessionLocal() as db:
+        result = await db.execute(
+            select(Memo).where(Memo.file_path == str(target))
+        )
+        memo = result.scalar_one_or_none()
+        if not memo:
+            raise HTTPException(status_code=404, detail="File not found")
+    
+    return FileResponse(str(target))
 
 # Register routers
 from backend.api.memos import router as memos_router

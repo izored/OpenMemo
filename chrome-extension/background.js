@@ -1,6 +1,6 @@
 // OpenMemo Chrome Extension - Background Service Worker
 
-const API_BASE = 'http://localhost:8000/api';
+const API_BASE = 'http://openmemo.local/api';
 
 // Context menu setup
 chrome.runtime.onInstalled.addListener(() => {

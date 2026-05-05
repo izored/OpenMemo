@@ -141,16 +141,19 @@ async def extract_youtube(url: str) -> dict:
 
 async def extract_pdf(file_path: str) -> dict:
     """Extract text from PDF."""
+    import asyncio
     from PyPDF2 import PdfReader
     
-    reader = PdfReader(file_path)
-    pages_text = []
-    for page in reader.pages:
-        text = page.extract_text()
-        if text:
-            pages_text.append(text)
+    def _read_pdf():
+        reader = PdfReader(file_path)
+        pages_text = []
+        for page in reader.pages:
+            text = page.extract_text()
+            if text:
+                pages_text.append(text)
+        return "\n\n".join(pages_text)
     
-    content = "\n\n".join(pages_text)
+    content = await asyncio.to_thread(_read_pdf)
     filename = Path(file_path).stem
     
     return {
@@ -163,11 +166,15 @@ async def extract_pdf(file_path: str) -> dict:
 
 async def extract_docx(file_path: str) -> dict:
     """Extract text from DOCX."""
+    import asyncio
     from docx import Document
     
-    doc = Document(file_path)
-    paragraphs = [p.text for p in doc.paragraphs if p.text.strip()]
-    content = "\n\n".join(paragraphs)
+    def _read_docx():
+        doc = Document(file_path)
+        paragraphs = [p.text for p in doc.paragraphs if p.text.strip()]
+        return "\n\n".join(paragraphs)
+    
+    content = await asyncio.to_thread(_read_docx)
     filename = Path(file_path).stem
     
     return {
@@ -180,8 +187,13 @@ async def extract_docx(file_path: str) -> dict:
 
 async def extract_image(file_path: str) -> dict:
     """Extract description from image using vision model."""
-    with open(file_path, "rb") as f:
-        image_data = base64.b64encode(f.read()).decode("utf-8")
+    import asyncio
+    
+    def _read_image():
+        with open(file_path, "rb") as f:
+            return base64.b64encode(f.read()).decode("utf-8")
+    
+    image_data = await asyncio.to_thread(_read_image)
     
     # Use vision model to describe
     try:

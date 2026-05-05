@@ -223,6 +223,25 @@ async def update_memo(memo_id: str, data: MemoUpdate, db: AsyncSession = Depends
     if data.content_raw is not None:
         memo.content_raw = data.content_raw
     
+    # Update collections
+    if data.collection_ids is not None:
+        memo.collections.clear()
+        for cid in data.collection_ids:
+            col = await db.get(Collection, cid)
+            if col:
+                memo.collections.append(col)
+    
+    # Update tags
+    if data.tags is not None:
+        memo.tags.clear()
+        for tag_name in data.tags:
+            result = await db.execute(select(Tag).where(Tag.name == tag_name))
+            tag = result.scalar_one_or_none()
+            if not tag:
+                tag = Tag(id=str(uuid.uuid4()), name=tag_name)
+                db.add(tag)
+            memo.tags.append(tag)
+    
     memo.updated_at = datetime.utcnow()
     await db.commit()
     
