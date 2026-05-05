@@ -1,0 +1,307 @@
+"""Memo CRUD API endpoints."""
+import uuid
+from datetime import datetime
+from typing import Optional
+
+from fastapi import APIRouter, Depends, HTTPException, Query
+from sqlalchemy import select, func, desc
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
+from pydantic import BaseModel
+
+from backend.db.database import get_db
+from backend.db.models import Memo, Collection, Tag, memo_collections, memo_tags
+
+router = APIRouter(prefix="/api/memos", tags=["memos"])
+
+
+# --- Schemas ---
+
+class MemoCreate(BaseModel):
+    type: str
+    title: str
+    description: Optional[str] = None
+    content_text: Optional[str] = None
+    content_raw: Optional[str] = None
+    source_url: Optional[str] = None
+    source_domain: Optional[str] = None
+    source_favicon: Optional[str] = None
+    thumbnail_path: Optional[str] = None
+    workspace_id: Optional[str] = None
+    collection_ids: Optional[list[str]] = None
+    tags: Optional[list[str]] = None
+
+
+class MemoUpdate(BaseModel):
+    title: Optional[str] = None
+    description: Optional[str] = None
+    content_text: Optional[str] = None
+    content_raw: Optional[str] = None
+    collection_ids: Optional[list[str]] = None
+    tags: Optional[list[str]] = None
+
+
+class MemoResponse(BaseModel):
+    id: str
+    type: str
+    title: str
+    description: Optional[str]
+    content_text: Optional[str]
+    source_url: Optional[str]
+    source_domain: Optional[str]
+    source_favicon: Optional[str]
+    thumbnail_path: Optional[str]
+    ai_summary: Optional[str]
+    is_processed: bool
+    created_at: datetime
+    updated_at: datetime
+    collections: list[dict] = []
+    tags: list[str] = []
+
+    class Config:
+        from_attributes = True
+
+
+# --- Routes ---
+
+@router.get("")
+async def list_memos(
+    workspace_id: Optional[str] = None,
+    type: Optional[str] = None,
+    collection_id: Optional[str] = None,
+    search: Optional[str] = None,
+    offset: int = 0,
+    limit: int = 50,
+    db: AsyncSession = Depends(get_db),
+):
+    """List memos with filtering and pagination."""
+    query = select(Memo).options(
+        selectinload(Memo.collections),
+        selectinload(Memo.tags),
+    )
+    
+    if workspace_id:
+        query = query.where(Memo.workspace_id == workspace_id)
+    if type and type != "all":
+        query = query.where(Memo.type == type)
+    if collection_id:
+        query = query.join(memo_collections).where(
+            memo_collections.c.collection_id == collection_id
+        )
+    if search:
+        query = query.where(
+            Memo.title.ilike(f"%{search}%") | Memo.content_text.ilike(f"%{search}%")
+        )
+    
+    # Count total
+    count_query = select(func.count()).select_from(query.subquery())
+    total = (await db.execute(count_query)).scalar()
+    
+    # Fetch with pagination
+    query = query.order_by(desc(Memo.created_at)).offset(offset).limit(limit)
+    result = await db.execute(query)
+    memos = result.scalars().all()
+    
+    return {
+        "items": [
+            {
+                "id": m.id,
+                "type": m.type,
+                "title": m.title,
+                "description": m.description,
+                "source_url": m.source_url,
+                "source_domain": m.source_domain,
+                "source_favicon": m.source_favicon,
+                "thumbnail_path": m.thumbnail_path,
+                "ai_summary": m.ai_summary,
+                "is_processed": m.is_processed,
+                "created_at": m.created_at.isoformat(),
+                "updated_at": m.updated_at.isoformat(),
+                "collections": [{"id": c.id, "name": c.name, "color": c.color} for c in m.collections],
+                "tags": [t.name for t in m.tags],
+            }
+            for m in memos
+        ],
+        "total": total,
+        "offset": offset,
+        "limit": limit,
+    }
+
+
+@router.get("/{memo_id}")
+async def get_memo(memo_id: str, db: AsyncSession = Depends(get_db)):
+    """Get a single memo by ID."""
+    query = select(Memo).options(
+        selectinload(Memo.collections),
+        selectinload(Memo.tags),
+    ).where(Memo.id == memo_id)
+    
+    result = await db.execute(query)
+    memo = result.scalar_one_or_none()
+    
+    if not memo:
+        raise HTTPException(status_code=404, detail="Memo not found")
+    
+    return {
+        "id": memo.id,
+        "type": memo.type,
+        "title": memo.title,
+        "description": memo.description,
+        "content_text": memo.content_text,
+        "content_raw": memo.content_raw,
+        "source_url": memo.source_url,
+        "source_domain": memo.source_domain,
+        "source_favicon": memo.source_favicon,
+        "file_path": memo.file_path,
+        "thumbnail_path": memo.thumbnail_path,
+        "ai_summary": memo.ai_summary,
+        "is_processed": memo.is_processed,
+        "created_at": memo.created_at.isoformat(),
+        "updated_at": memo.updated_at.isoformat(),
+        "collections": [{"id": c.id, "name": c.name, "color": c.color} for c in memo.collections],
+        "tags": [t.name for t in memo.tags],
+    }
+
+
+@router.post("")
+async def create_memo(data: MemoCreate, db: AsyncSession = Depends(get_db)):
+    """Create a new memo."""
+    memo = Memo(
+        id=str(uuid.uuid4()),
+        workspace_id=data.workspace_id or "default",
+        type=data.type,
+        title=data.title,
+        description=data.description,
+        content_text=data.content_text,
+        content_raw=data.content_raw,
+        source_url=data.source_url,
+        source_domain=data.source_domain,
+        source_favicon=data.source_favicon,
+        thumbnail_path=data.thumbnail_path,
+        created_at=datetime.utcnow(),
+        updated_at=datetime.utcnow(),
+    )
+    
+    # Add to collections
+    if data.collection_ids:
+        for cid in data.collection_ids:
+            col = await db.get(Collection, cid)
+            if col:
+                memo.collections.append(col)
+    
+    # Add tags
+    if data.tags:
+        for tag_name in data.tags:
+            # Get or create tag
+            result = await db.execute(select(Tag).where(Tag.name == tag_name))
+            tag = result.scalar_one_or_none()
+            if not tag:
+                tag = Tag(id=str(uuid.uuid4()), name=tag_name)
+                db.add(tag)
+            memo.tags.append(tag)
+    
+    db.add(memo)
+    await db.commit()
+    await db.refresh(memo)
+    
+    return {"id": memo.id, "status": "created"}
+
+
+@router.put("/{memo_id}")
+async def update_memo(memo_id: str, data: MemoUpdate, db: AsyncSession = Depends(get_db)):
+    """Update an existing memo."""
+    memo = await db.get(Memo, memo_id)
+    if not memo:
+        raise HTTPException(status_code=404, detail="Memo not found")
+    
+    if data.title is not None:
+        memo.title = data.title
+    if data.description is not None:
+        memo.description = data.description
+    if data.content_text is not None:
+        memo.content_text = data.content_text
+    if data.content_raw is not None:
+        memo.content_raw = data.content_raw
+    
+    memo.updated_at = datetime.utcnow()
+    await db.commit()
+    
+    return {"id": memo.id, "status": "updated"}
+
+
+@router.delete("/{memo_id}")
+async def delete_memo(memo_id: str, db: AsyncSession = Depends(get_db)):
+    """Delete a memo."""
+    memo = await db.get(Memo, memo_id)
+    if not memo:
+        raise HTTPException(status_code=404, detail="Memo not found")
+    
+    # Delete embeddings from ChromaDB
+    from backend.core.embedder import delete_memo_embeddings
+    await delete_memo_embeddings(memo_id)
+    
+    await db.delete(memo)
+    await db.commit()
+    
+    return {"status": "deleted"}
+
+
+@router.post("/{memo_id}/summary")
+async def generate_memo_summary(memo_id: str, db: AsyncSession = Depends(get_db)):
+    """Generate AI summary for a memo."""
+    memo = await db.get(Memo, memo_id)
+    if not memo:
+        raise HTTPException(status_code=404, detail="Memo not found")
+    
+    if not memo.content_text:
+        raise HTTPException(status_code=400, detail="Memo has no content to summarize")
+    
+    from backend.core.rag import generate_summary
+    summary = await generate_summary(memo.content_text)
+    
+    memo.ai_summary = summary
+    memo.updated_at = datetime.utcnow()
+    await db.commit()
+    
+    return {"id": memo.id, "summary": summary}
+
+
+@router.get("/{memo_id}/related")
+async def get_related_memos(memo_id: str, db: AsyncSession = Depends(get_db)):
+    """Get semantically related memos."""
+    memo = await db.get(Memo, memo_id)
+    if not memo:
+        raise HTTPException(status_code=404, detail="Memo not found")
+    
+    from backend.core.embedder import search_similar
+    
+    # Use memo title + description as query
+    query_text = f"{memo.title} {memo.description or ''}"
+    results = await search_similar(query=query_text, n_results=5)
+    
+    # Filter out self and deduplicate by memo_id
+    seen = set()
+    related = []
+    for r in results:
+        mid = r["metadata"].get("memo_id")
+        if mid and mid != memo_id and mid not in seen:
+            seen.add(mid)
+            related.append(mid)
+    
+    # Fetch memo details
+    if related:
+        query = select(Memo).where(Memo.id.in_(related[:4]))
+        result = await db.execute(query)
+        memos = result.scalars().all()
+        return [
+            {
+                "id": m.id,
+                "type": m.type,
+                "title": m.title,
+                "thumbnail_path": m.thumbnail_path,
+                "source_domain": m.source_domain,
+            }
+            for m in memos
+        ]
+    
+    return []
