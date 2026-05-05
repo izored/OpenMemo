@@ -1,0 +1,36 @@
+services:
+  openmemo-api:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./data:/app/data
+      - ./files:/app/files
+    environment:
+      - OLLAMA_HOST=http://host.docker.internal:11434
+      - DATABASE_URL=sqlite+aiosqlite:///./data/openmemo.db
+      - CHROMA_PERSIST_DIR=./data/chroma
+      - FILES_DIR=./files
+    restart: unless-stopped
+
+  openmemo-web:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    ports:
+      - "3000:3000"
+    depends_on:
+      - openmemo-api
+    restart: unless-stopped
+
+  chromadb:
+    image: chromadb/chroma:latest
+    ports:
+      - "8001:8000"
+    volumes:
+      - ./data/chroma:/chroma/chroma
+    environment:
+      - ANONYMIZED_TELEMETRY=FALSE
+    restart: unless-stopped

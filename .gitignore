@@ -1,6 +1,44 @@
-﻿# Claude local files
+# Claude local files
 CLAUDE.local.md
 *.local.md
 *.local.json
 .env
 secrets/
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.venv/
+venv/
+env/
+.eggs/
+*.egg-info/
+
+# Node
+node_modules/
+dist/
+.vite/
+
+# Data (local runtime)
+data/
+files/
+*.db
+chroma_data/
+
+# Build output
+build/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Chrome extension build
+chrome-extension/icons/*.png

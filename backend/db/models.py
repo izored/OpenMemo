@@ -1,0 +1,148 @@
+import uuid
+from datetime import datetime
+from sqlalchemy import (
+    Column, String, Text, DateTime, Boolean, Integer, ForeignKey, Table, JSON
+)
+from sqlalchemy.orm import relationship, DeclarativeBase
+
+
+def generate_uuid() -> str:
+    return str(uuid.uuid4())
+
+
+class Base(DeclarativeBase):
+    pass
+
+
+# Association tables
+memo_collections = Table(
+    "memo_collections",
+    Base.metadata,
+    Column("memo_id", String, ForeignKey("memos.id"), primary_key=True),
+    Column("collection_id", String, ForeignKey("collections.id"), primary_key=True),
+)
+
+memo_tags = Table(
+    "memo_tags",
+    Base.metadata,
+    Column("memo_id", String, ForeignKey("memos.id"), primary_key=True),
+    Column("tag_id", String, ForeignKey("tags.id"), primary_key=True),
+)
+
+
+class User(Base):
+    __tablename__ = "users"
+    
+    id = Column(String, primary_key=True, default=generate_uuid)
+    email = Column(String, unique=True, nullable=True)
+    name = Column(String, default="Local User")
+    avatar = Column(String, nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    
+    workspaces = relationship("Workspace", back_populates="owner")
+
+
+class Workspace(Base):
+    __tablename__ = "workspaces"
+    
+    id = Column(String, primary_key=True, default=generate_uuid)
+    name = Column(String, nullable=False)
+    owner_id = Column(String, ForeignKey("users.id"))
+    type = Column(String, default="personal")  # personal | team
+    created_at = Column(DateTime, default=datetime.utcnow)
+    
+    owner = relationship("User", back_populates="workspaces")
+    memos = relationship("Memo", back_populates="workspace")
+    collections = relationship("Collection", back_populates="workspace")
+    chat_sessions = relationship("ChatSession", back_populates="workspace")
+
+
+class Memo(Base):
+    __tablename__ = "memos"
+    
+    id = Column(String, primary_key=True, default=generate_uuid)
+    workspace_id = Column(String, ForeignKey("workspaces.id"))
+    type = Column(String, nullable=False)  # note, article, video, image, audio, document, link
+    title = Column(String, nullable=False)
+    description = Column(Text, nullable=True)
+    content_text = Column(Text, nullable=True)
+    content_raw = Column(Text, nullable=True)  # markdown/html
+    source_url = Column(String, nullable=True)
+    source_domain = Column(String, nullable=True)
+    source_favicon = Column(String, nullable=True)
+    file_path = Column(String, nullable=True)
+    thumbnail_path = Column(String, nullable=True)
+    ai_summary = Column(Text, nullable=True)
+    embedding_ids = Column(JSON, nullable=True)  # list of chunk IDs in ChromaDB
+    is_processed = Column(Boolean, default=False)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    
+    workspace = relationship("Workspace", back_populates="memos")
+    collections = relationship("Collection", secondary=memo_collections, back_populates="memos")
+    tags = relationship("Tag", secondary=memo_tags, back_populates="memos")
+
+
+class Collection(Base):
+    __tablename__ = "collections"
+    
+    id = Column(String, primary_key=True, default=generate_uuid)
+    workspace_id = Column(String, ForeignKey("workspaces.id"))
+    name = Column(String, nullable=False)
+    color = Column(String, default="#D97706")
+    pinned = Column(Boolean, default=False)
+    sort_order = Column(Integer, default=0)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    
+    workspace = relationship("Workspace", back_populates="collections")
+    memos = relationship("Memo", secondary=memo_collections, back_populates="collections")
+
+
+class Tag(Base):
+    __tablename__ = "tags"
+    
+    id = Column(String, primary_key=True, default=generate_uuid)
+    name = Column(String, unique=True, nullable=False)
+    
+    memos = relationship("Memo", secondary=memo_tags, back_populates="tags")
+
+
+class ChatSession(Base):
+    __tablename__ = "chat_sessions"
+    
+    id = Column(String, primary_key=True, default=generate_uuid)
+    workspace_id = Column(String, ForeignKey("workspaces.id"))
+    collection_id = Column(String, ForeignKey("collections.id"), nullable=True)
+    memo_id = Column(String, ForeignKey("memos.id"), nullable=True)
+    title = Column(String, default="New Chat")
+    model_used = Column(String, nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    
+    workspace = relationship("Workspace", back_populates="chat_sessions")
+    messages = relationship("Message", back_populates="session", cascade="all, delete-orphan")
+
+
+class Message(Base):
+    __tablename__ = "messages"
+    
+    id = Column(String, primary_key=True, default=generate_uuid)
+    session_id = Column(String, ForeignKey("chat_sessions.id"))
+    role = Column(String, nullable=False)  # user | assistant | system
+    content = Column(Text, nullable=False)
+    sources_json = Column(JSON, nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    
+    session = relationship("ChatSession", back_populates="messages")
+
+
+class MemoCast(Base):
+    __tablename__ = "memocasts"
+    
+    id = Column(String, primary_key=True, default=generate_uuid)
+    workspace_id = Column(String, ForeignKey("workspaces.id"))
+    title = Column(String, nullable=False)
+    script_text = Column(Text, nullable=True)
+    audio_path = Column(String, nullable=True)
+    duration = Column(Integer, nullable=True)  # seconds
+    memos_json = Column(JSON, nullable=True)  # list of memo IDs
+    created_at = Column(DateTime, default=datetime.utcnow)

@@ -1,0 +1,106 @@
+const API_BASE = '/api';
+
+async function fetchJSON<T>(url: string, options?: RequestInit): Promise<T> {
+  const resp = await fetch(`${API_BASE}${url}`, {
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    ...options,
+  });
+  if (!resp.ok) {
+    const error = await resp.json().catch(() => ({ detail: resp.statusText }));
+    throw new Error(error.detail || 'Request failed');
+  }
+  return resp.json();
+}
+
+// Memos
+export const memoApi = {
+  list: (params?: { type?: string; collection_id?: string; search?: string; offset?: number; limit?: number }) => {
+    const search = new URLSearchParams();
+    if (params?.type && params.type !== 'all') search.set('type', params.type);
+    if (params?.collection_id) search.set('collection_id', params.collection_id);
+    if (params?.search) search.set('search', params.search);
+    if (params?.offset) search.set('offset', String(params.offset));
+    if (params?.limit) search.set('limit', String(params.limit));
+    return fetchJSON<{ items: any[]; total: number }>(`/memos?${search}`);
+  },
+  get: (id: string) => fetchJSON<any>(`/memos/${id}`),
+  create: (data: any) => fetchJSON<{ id: string }>('/memos', { method: 'POST', body: JSON.stringify(data) }),
+  update: (id: string, data: any) => fetchJSON<any>(`/memos/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
+  delete: (id: string) => fetchJSON<any>(`/memos/${id}`, { method: 'DELETE' }),
+  summary: (id: string) => fetchJSON<{ summary: string }>(`/memos/${id}/summary`, { method: 'POST' }),
+  related: (id: string) => fetchJSON<any[]>(`/memos/${id}/related`),
+};
+
+// Ingestion
+export const ingestApi = {
+  url: (url: string, collection_id?: string) =>
+    fetchJSON<{ id: string; title: string }>('/ingest/url', {
+      method: 'POST',
+      body: JSON.stringify({ url, collection_id }),
+    }),
+  note: (title: string, content: string, collection_id?: string) =>
+    fetchJSON<{ id: string }>('/ingest/note', {
+      method: 'POST',
+      body: JSON.stringify({ title, content, collection_id }),
+    }),
+  file: (file: File, workspace_id?: string) => {
+    const form = new FormData();
+    form.append('file', file);
+    if (workspace_id) form.append('workspace_id', workspace_id);
+    return fetch(`${API_BASE}/ingest/file`, { method: 'POST', body: form }).then(r => r.json());
+  },
+};
+
+// Collections
+export const collectionApi = {
+  list: () => fetchJSON<any[]>('/collections'),
+  create: (name: string, color?: string) =>
+    fetchJSON<{ id: string }>('/collections', { method: 'POST', body: JSON.stringify({ name, color }) }),
+  update: (id: string, data: any) =>
+    fetchJSON<any>(`/collections/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
+  delete: (id: string) => fetchJSON<any>(`/collections/${id}`, { method: 'DELETE' }),
+  addMemo: (collectionId: string, memoId: string) =>
+    fetchJSON<any>(`/collections/${collectionId}/memos/${memoId}`, { method: 'POST' }),
+  removeMemo: (collectionId: string, memoId: string) =>
+    fetchJSON<any>(`/collections/${collectionId}/memos/${memoId}`, { method: 'DELETE' }),
+};
+
+// Chat
+export const chatApi = {
+  sessions: () => fetchJSON<any[]>('/chat/sessions'),
+  messages: (sessionId: string) => fetchJSON<any[]>(`/chat/sessions/${sessionId}/messages`),
+  deleteSession: (sessionId: string) => fetchJSON<any>(`/chat/sessions/${sessionId}`, { method: 'DELETE' }),
+  stream: (data: {
+    query: string;
+    session_id?: string;
+    collection_id?: string;
+    memo_id?: string;
+    model?: string;
+    use_rag?: boolean;
+  }) => {
+    return fetch(`${API_BASE}/chat/stream`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data),
+    });
+  },
+};
+
+// MemoCast
+export const memocastApi = {
+  list: () => fetchJSON<any[]>('/memocast'),
+  get: (id: string) => fetchJSON<any>(`/memocast/${id}`),
+  create: (memo_ids?: string[], model?: string) =>
+    fetchJSON<any>('/memocast', { method: 'POST', body: JSON.stringify({ memo_ids, model }) }),
+};
+
+// Search
+export const searchApi = {
+  search: (q: string) => fetchJSON<{ results: any[] }>(`/search?q=${encodeURIComponent(q)}`),
+};
+
+// Health & Models
+export const systemApi = {
+  health: () => fetchJSON<{ status: string; ollama_connected: boolean }>('/health'),
+  models: () => fetchJSON<{ models: any[] }>('/models'),
+};
