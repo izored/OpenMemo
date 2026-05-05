@@ -211,6 +211,16 @@ See [`MEMORY.md`](MEMORY.md) for the full roadmap, architectural findings, and c
 4. Open a PR — all contributions welcome
 
 ---
+## Star History
+
+<a href="https://www.star-history.com/?repos=izored%2FOpen_Memento&type=timeline&logscale=&legend=top-left">
+ <picture>
+   <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/chart?repos=izored/Open_Memento&type=timeline&theme=dark&logscale&legend=top-left" />
+   <source media="(prefers-color-scheme: light)" srcset="https://api.star-history.com/chart?repos=izored/Open_Memento&type=timeline&logscale&legend=top-left" />
+   <img alt="Star History Chart" src="https://api.star-history.com/chart?repos=izored/Open_Memento&type=timeline&logscale&legend=top-left" />
+ </picture>
+</a>
+---
 
 ## License
 
