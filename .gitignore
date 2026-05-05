@@ -1,7 +1,11 @@
 # Claude local files
+CLAUDE.md
 CLAUDE.local.md
 *.local.md
 *.local.json
+
+# Specs folder (local planning docs)
+Specs/
 .env
 secrets/
 
