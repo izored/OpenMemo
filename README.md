@@ -34,7 +34,8 @@ Drop a PDF. Paste a URL. Jot a quick note. Record a voice memo. The Chrome Exten
 
 ---
 
-## Chat With Everything You've Ever Saved
+## Chat With Everything You've Ever Saved (roadmap)
+----- (let me get to it, i'm building it) ----
 
 Ask natural-language questions. Get answers grounded in *your* actual content — with clickable citations back to the source.
 
