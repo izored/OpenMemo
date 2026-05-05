@@ -1,4 +1,6 @@
 import { useNavigate } from 'react-router-dom';
+import { useDraggable } from '@dnd-kit/core';
+import { CSS } from '@dnd-kit/utilities';
 import {
   FileText,
   Globe,
@@ -7,134 +9,308 @@ import {
   Mic,
   File,
   Link2,
-  MoreHorizontal,
-  FolderPlus,
-  Trash2,
-  MessageSquare,
+  ExternalLink,
+  Play,
+  GripVertical,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import type { Memo, MemoType } from '@/types';
 
-const typeConfig: Record<MemoType, { icon: any; color: string; label: string }> = {
-  note: { icon: FileText, color: '#FEF3C7', label: 'Note' },
-  article: { icon: Globe, color: '#E0F2FE', label: 'Article' },
-  video: { icon: Video, color: '#FEE2E2', label: 'Video' },
-  image: { icon: Image, color: '#F3E8FF', label: 'Image' },
-  audio: { icon: Mic, color: '#D1FAE5', label: 'Audio' },
-  document: { icon: File, color: '#F3F4F6', label: 'Document' },
-  link: { icon: Link2, color: '#E0F2FE', label: 'Link' },
+const typeConfig: Record<
+  MemoType,
+  { icon: any; color: string; label: string; bg: string }
+> = {
+  note: { icon: FileText, color: '#92400E', label: 'Notes', bg: '#FEF3C7' },
+  article: { icon: Globe, color: '#1E40AF', label: 'Article', bg: '#EFF6FF' },
+  video: { icon: Video, color: '#991B1B', label: 'Video', bg: '#FEF2F2' },
+  image: { icon: Image, color: '#6B21A8', label: 'Image', bg: '#FAF5FF' },
+  audio: { icon: Mic, color: '#065F46', label: 'Audio', bg: '#ECFDF5' },
+  document: { icon: File, color: '#374151', label: 'File', bg: '#F9FAFB' },
+  link: { icon: Link2, color: '#1E40AF', label: 'Link', bg: '#EFF6FF' },
 };
 
 interface MemoCardProps {
   memo: Memo;
-  view?: 'grid' | 'list';
 }
 
-export function MemoCard({ memo, view = 'grid' }: MemoCardProps) {
+export function MemoCard({ memo }: MemoCardProps) {
   const navigate = useNavigate();
   const config = typeConfig[memo.type] || typeConfig.note;
   const Icon = config.icon;
+
+  const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({
+    id: memo.id,
+  });
+
+  const dragStyle = transform
+    ? { transform: CSS.Transform.toString(transform) }
+    : undefined;
 
   const formattedDate = new Date(memo.created_at).toLocaleDateString('en-US', {
     month: 'short',
     day: 'numeric',
   });
 
-  if (view === 'list') {
+  const hasExternalUrl =
+    memo.source_url &&
+    (memo.type === 'link' || memo.type === 'article' || memo.type === 'video');
+
+  const handleClick = () => {
+    if (hasExternalUrl) {
+      window.open(memo.source_url, '_blank', 'noopener,noreferrer');
+    } else {
+      navigate(`/memo/${memo.id}`);
+    }
+  };
+
+  const DragHandle = () => (
+    <span
+      {...listeners}
+      {...attributes}
+      className="absolute top-3 right-3 z-10 p-1.5 rounded-full bg-black/10 hover:bg-black/20 text-white/80 cursor-grab active:cursor-grabbing opacity-0 group-hover:opacity-100 transition-opacity"
+      onClick={(e) => e.stopPropagation()}
+      title="Drag to collection"
+    >
+      <GripVertical size={14} />
+    </span>
+  );
+
+  // ─── Sticky Note ───
+  if (memo.type === 'note') {
     return (
       <div
-        onClick={() => navigate(`/memo/${memo.id}`)}
-        className="flex items-center gap-4 px-4 py-3 hover:bg-[#F3F4F6] rounded-lg cursor-pointer group transition-colors"
+        ref={setNodeRef}
+        onClick={handleClick}
+        className="group relative rounded-[28px] p-8 cursor-pointer transition-all duration-300 hover:shadow-xl hover:-translate-y-1 min-h-[320px] flex flex-col"
+        style={{ backgroundColor: config.bg, ...dragStyle, opacity: isDragging ? 0.3 : undefined }}
       >
-        <div
-          className="w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0"
-          style={{ backgroundColor: config.color }}
-        >
-          <Icon size={16} className="text-[#6B7280]" />
-        </div>
-        <div className="flex-1 min-w-0">
-          <p className="text-sm font-medium text-[#1F2937] truncate">{memo.title}</p>
-          {memo.description && (
-            <p className="text-xs text-[#6B7280] truncate mt-0.5">{memo.description}</p>
-          )}
-        </div>
-        <div className="flex items-center gap-3 text-xs text-[#9CA3AF]">
-          {memo.source_domain && <span>{memo.source_domain}</span>}
-          <span>{formattedDate}</span>
+        <DragHandle />
+        <h3 className="text-lg font-bold line-clamp-3 leading-snug mb-4 pr-6" style={{ color: config.color }}>
+          {memo.title}
+        </h3>
+        {memo.content_text && (
+          <p className="text-[15px] line-clamp-5 leading-relaxed opacity-75 mb-6" style={{ color: config.color }}>
+            {memo.content_text}
+          </p>
+        )}
+        {!memo.content_text && memo.description && (
+          <p className="text-[15px] line-clamp-5 leading-relaxed opacity-75 mb-6" style={{ color: config.color }}>
+            {memo.description}
+          </p>
+        )}
+        <div className="mt-auto pt-5 border-t border-black/5 flex items-center justify-between">
+          <div className="flex items-center gap-2.5">
+            <Icon size={16} style={{ color: config.color }} />
+            <span className="text-sm font-semibold" style={{ color: config.color }}>
+              {config.label}
+            </span>
+          </div>
+          <span className="text-[13px] opacity-50 font-medium" style={{ color: config.color }}>
+            {formattedDate}
+          </span>
         </div>
       </div>
     );
   }
 
-  return (
-    <div
-      onClick={() => navigate(`/memo/${memo.id}`)}
-      className="bg-white rounded-2xl border border-[#E5E7EB] shadow-[0_1px_3px_rgba(0,0,0,0.08)] hover:shadow-[0_4px_12px_rgba(0,0,0,0.1)] transition-all cursor-pointer group overflow-hidden"
-    >
-      {/* Thumbnail */}
-      {memo.thumbnail_path ? (
-        <div className="h-32 bg-[#F3F4F6] overflow-hidden">
-          <img
-            src={memo.thumbnail_path}
-            alt=""
-            className="w-full h-full object-cover"
-            onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
-          />
-        </div>
-      ) : (
-        <div
-          className="h-24 flex items-center justify-center"
-          style={{ backgroundColor: config.color }}
-        >
-          <Icon size={32} className="text-[#6B7280] opacity-50" />
-        </div>
-      )}
-
-      {/* Content */}
-      <div className="p-3">
-        <h3 className="text-sm font-medium text-[#1F2937] line-clamp-2 leading-snug">
-          {memo.title}
-        </h3>
-        {memo.description && (
-          <p className="text-xs text-[#6B7280] line-clamp-1 mt-1">{memo.description}</p>
-        )}
-
-        {/* Footer */}
-        <div className="flex items-center justify-between mt-3 pt-2 border-t border-[#F3F4F6]">
-          <div className="flex items-center gap-1.5">
-            {memo.source_favicon && (
-              <img src={memo.source_favicon} alt="" className="w-3.5 h-3.5 rounded" />
-            )}
-            <span className="text-xs text-[#9CA3AF] truncate max-w-[80px]">
-              {memo.source_domain || config.label}
-            </span>
+  // ─── Image Card ───
+  if (memo.type === 'image') {
+    return (
+      <div
+        ref={setNodeRef}
+        onClick={handleClick}
+        className="group relative bg-white rounded-[28px] overflow-hidden cursor-pointer shadow-sm hover:shadow-xl transition-all duration-300 hover:-translate-y-1"
+        style={{ ...dragStyle, opacity: isDragging ? 0.3 : undefined }}
+      >
+        <DragHandle />
+        {memo.thumbnail_path || memo.file_path ? (
+          <div className="aspect-square overflow-hidden">
+            <img
+              src={memo.thumbnail_path || `/files/${memo.file_path}`}
+              alt=""
+              className="w-full h-full object-cover transition-transform duration-500 hover:scale-105"
+              onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
+            />
           </div>
-          <div className="flex items-center gap-1.5">
-            <span
-              className="text-[10px] px-1.5 py-0.5 rounded-full font-medium"
-              style={{ backgroundColor: config.color, color: '#6B7280' }}
-            >
-              {config.label}
-            </span>
-            <span className="text-[10px] text-[#9CA3AF]">{formattedDate}</span>
+        ) : (
+          <div className="aspect-square flex items-center justify-center" style={{ backgroundColor: config.bg }}>
+            <Icon size={64} className="text-[#646464] opacity-20" />
+          </div>
+        )}
+        <div className="p-7">
+          <h3 className="text-[17px] font-bold text-[#202020] line-clamp-2 leading-snug">
+            {memo.title}
+          </h3>
+          <div className="flex items-center justify-between mt-6">
+            <div className="flex items-center gap-2.5">
+              <Icon size={16} className="text-[#8d8d8d]" />
+              <span className="text-sm text-[#8d8d8d] font-semibold">{config.label}</span>
+            </div>
+            <span className="text-[13px] text-[#8d8d8d] font-medium">{formattedDate}</span>
           </div>
         </div>
       </div>
+    );
+  }
 
-      {/* Hover actions */}
-      <div className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity flex gap-1">
-        <button
-          onClick={(e) => { e.stopPropagation(); }}
-          className="p-1.5 bg-white rounded-lg shadow-sm hover:bg-[#F3F4F6]"
-        >
-          <MessageSquare size={14} />
-        </button>
-        <button
-          onClick={(e) => { e.stopPropagation(); }}
-          className="p-1.5 bg-white rounded-lg shadow-sm hover:bg-[#F3F4F6]"
-        >
-          <MoreHorizontal size={14} />
-        </button>
+  // ─── Video Card ───
+  if (memo.type === 'video') {
+    return (
+      <div
+        ref={setNodeRef}
+        onClick={handleClick}
+        className="group relative bg-white rounded-[28px] overflow-hidden cursor-pointer shadow-sm hover:shadow-xl transition-all duration-300 hover:-translate-y-1"
+        style={{ ...dragStyle, opacity: isDragging ? 0.3 : undefined }}
+      >
+        <DragHandle />
+        {memo.thumbnail_path ? (
+          <div className="aspect-[4/3] overflow-hidden relative">
+            <img
+              src={memo.thumbnail_path}
+              alt=""
+              className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
+              onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
+            />
+            <div className="absolute inset-0 bg-black/20 flex items-center justify-center group-hover:bg-black/30 transition-colors">
+              <div className="w-16 h-16 rounded-full bg-white/90 flex items-center justify-center shadow-xl">
+                <Play size={26} className="text-[#202020] ml-0.5" fill="#202020" />
+              </div>
+            </div>
+            {hasExternalUrl && (
+              <div className="absolute top-4 right-4 w-9 h-9 rounded-full bg-white/90 flex items-center justify-center shadow-md opacity-0 group-hover:opacity-100 transition-opacity">
+                <ExternalLink size={15} className="text-[#202020]" />
+              </div>
+            )}
+          </div>
+        ) : (
+          <div className="aspect-[4/3] flex items-center justify-center relative" style={{ backgroundColor: config.bg }}>
+            <Icon size={64} className="text-[#646464] opacity-20" />
+          </div>
+        )}
+        <div className="p-7">
+          <h3 className="text-[17px] font-bold text-[#202020] line-clamp-2 leading-snug">
+            {memo.title}
+          </h3>
+          <div className="flex items-center justify-between mt-6 pt-4 border-t border-[#f0f0f0]">
+            <div className="flex items-center gap-3">
+              {memo.source_favicon ? (
+                <img src={memo.source_favicon} alt="" className="w-5 h-5 rounded-full"
+                  onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }} />
+              ) : (
+                <Icon size={17} className="text-[#8d8d8d]" />
+              )}
+              <span className="text-[15px] text-[#646464] font-semibold truncate max-w-[150px]">
+                {memo.source_domain || config.label}
+              </span>
+            </div>
+            <span className="text-[13px] text-[#8d8d8d] font-medium">{formattedDate}</span>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // ─── Document Card ───
+  if (memo.type === 'document') {
+    return (
+      <div
+        ref={setNodeRef}
+        onClick={handleClick}
+        className="group relative bg-white rounded-[28px] overflow-hidden cursor-pointer shadow-sm hover:shadow-xl transition-all duration-300 hover:-translate-y-1"
+        style={{ ...dragStyle, opacity: isDragging ? 0.3 : undefined }}
+      >
+        <DragHandle />
+        {memo.thumbnail_path ? (
+          <div className="aspect-[4/3] overflow-hidden bg-[#f8f8f8]">
+            <img src={memo.thumbnail_path} alt="" className="w-full h-full object-cover"
+              onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }} />
+          </div>
+        ) : (
+          <div className="aspect-[4/3] flex items-center justify-center" style={{ backgroundColor: config.bg }}>
+            <Icon size={64} className="text-[#646464] opacity-20" />
+          </div>
+        )}
+        <div className="p-7">
+          <h3 className="text-[17px] font-bold text-[#202020] line-clamp-2 leading-snug">
+            {memo.title}
+          </h3>
+          {memo.description && (
+            <p className="text-[15px] text-[#646464] line-clamp-2 mt-3 leading-relaxed">
+              {memo.description}
+            </p>
+          )}
+          <div className="flex items-center justify-between mt-6 pt-4 border-t border-[#f0f0f0]">
+            <div className="flex items-center gap-2.5">
+              <Icon size={16} className="text-[#8d8d8d]" />
+              <span className="text-sm text-[#8d8d8d] font-semibold">{config.label}</span>
+            </div>
+            <span className="text-[13px] text-[#8d8d8d] font-medium">{formattedDate}</span>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // ─── Link / Article / Audio / Fallback ───
+  return (
+    <div
+      ref={setNodeRef}
+      onClick={handleClick}
+      className={cn(
+        'group relative bg-white rounded-[28px] overflow-hidden cursor-pointer shadow-sm hover:shadow-xl transition-all duration-300 hover:-translate-y-1',
+        hasExternalUrl && 'relative'
+      )}
+      style={{ ...dragStyle, opacity: isDragging ? 0.3 : undefined }}
+    >
+      <DragHandle />
+      {memo.thumbnail_path ? (
+        <div className="aspect-[4/3] overflow-hidden relative">
+          <img
+            src={memo.thumbnail_path}
+            alt=""
+            className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
+            onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
+          />
+          {hasExternalUrl && (
+            <div className="absolute top-4 right-4 w-9 h-9 rounded-full bg-white/90 flex items-center justify-center shadow-md opacity-0 group-hover:opacity-100 transition-opacity">
+              <ExternalLink size={15} className="text-[#202020]" />
+            </div>
+          )}
+        </div>
+      ) : (
+        <div className="aspect-[4/3] flex items-center justify-center relative" style={{ backgroundColor: config.bg }}>
+          {memo.source_favicon ? (
+            <img src={memo.source_favicon} alt="" className="w-20 h-20 rounded-2xl"
+              onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }} />
+          ) : (
+            <Icon size={64} className="text-[#646464] opacity-20" />
+          )}
+        </div>
+      )}
+
+      <div className="p-7">
+        <h3 className="text-[17px] font-bold text-[#202020] line-clamp-2 leading-snug">
+          {memo.title}
+        </h3>
+        {memo.description && (
+          <p className="text-[15px] text-[#646464] line-clamp-2 mt-3 leading-relaxed">
+            {memo.description}
+          </p>
+        )}
+        <div className="flex items-center justify-between mt-7 pt-4 border-t border-[#f0f0f0]">
+          <div className="flex items-center gap-3">
+            {memo.source_favicon ? (
+              <img src={memo.source_favicon} alt="" className="w-5 h-5 rounded-full"
+                onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }} />
+            ) : (
+              <Icon size={17} className="text-[#8d8d8d]" />
+            )}
+            <span className="text-[15px] text-[#646464] font-semibold truncate max-w-[150px]">
+              {memo.source_domain || config.label}
+            </span>
+          </div>
+          <span className="text-[13px] text-[#8d8d8d] font-medium">{formattedDate}</span>
+        </div>
       </div>
     </div>
   );

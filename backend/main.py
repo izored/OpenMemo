@@ -22,6 +22,13 @@ async def lifespan(app: FastAPI):
     # Init DB
     await init_db()
     
+    # Init FTS5 search
+    from backend.db.fts5 import init_fts5
+    try:
+        await init_fts5()
+    except Exception as e:
+        print(f"FTS5 init warning (non-critical): {e}")
+    
     # Create default user and workspace if not exist
     async with AsyncSessionLocal() as db:
         from sqlalchemy import select
@@ -76,6 +83,7 @@ from backend.api.collections import router as collections_router
 from backend.api.ingest import router as ingest_router
 from backend.api.export import router as export_router
 from backend.api.memocast import router as memocast_router
+from backend.api.search import router as search_router
 
 app.include_router(memos_router)
 app.include_router(chat_router)
@@ -83,6 +91,7 @@ app.include_router(collections_router)
 app.include_router(ingest_router)
 app.include_router(export_router)
 app.include_router(memocast_router)
+app.include_router(search_router)
 
 
 @app.get("/api/health")
@@ -111,101 +120,4 @@ async def list_models():
         return {"models": [], "error": str(e)}
 
 
-@app.get("/api/search")
-async def hybrid_search(
-    q: str,
-    workspace_id: str = "default",
-    limit: int = 20,
-):
-    """Hybrid search: full-text + semantic."""
-    from backend.core.embedder import search_similar
-    from backend.db.database import AsyncSessionLocal
-    from backend.db.models import Memo
-    from sqlalchemy import select, or_
-    
-    results = []
-    
-    # Semantic search
-    try:
-        semantic_results = await search_similar(
-            query=q,
-            workspace_id=workspace_id,
-            n_results=limit,
-        )
-        
-        # Get unique memo IDs
-        memo_ids = list(set(
-            r["metadata"]["memo_id"] for r in semantic_results
-            if r["metadata"].get("memo_id")
-        ))
-        
-        async with AsyncSessionLocal() as db:
-            if memo_ids:
-                result = await db.execute(
-                    select(Memo).where(Memo.id.in_(memo_ids))
-                )
-                memos = result.scalars().all()
-                
-                for memo in memos:
-                    results.append({
-                        "id": memo.id,
-                        "type": memo.type,
-                        "title": memo.title,
-                        "description": memo.description,
-                        "source_domain": memo.source_domain,
-                        "thumbnail_path": memo.thumbnail_path,
-                        "created_at": memo.created_at.isoformat(),
-                        "match_type": "semantic",
-                    })
-            
-            # Also do full-text search for additional results
-            ft_result = await db.execute(
-                select(Memo).where(
-                    or_(
-                        Memo.title.ilike(f"%{q}%"),
-                        Memo.content_text.ilike(f"%{q}%"),
-                    )
-                ).limit(limit)
-            )
-            ft_memos = ft_result.scalars().all()
-            
-            existing_ids = {r["id"] for r in results}
-            for memo in ft_memos:
-                if memo.id not in existing_ids:
-                    results.append({
-                        "id": memo.id,
-                        "type": memo.type,
-                        "title": memo.title,
-                        "description": memo.description,
-                        "source_domain": memo.source_domain,
-                        "thumbnail_path": memo.thumbnail_path,
-                        "created_at": memo.created_at.isoformat(),
-                        "match_type": "fulltext",
-                    })
-    except Exception as e:
-        # Fallback to full-text only
-        async with AsyncSessionLocal() as db:
-            result = await db.execute(
-                select(Memo).where(
-                    or_(
-                        Memo.title.ilike(f"%{q}%"),
-                        Memo.content_text.ilike(f"%{q}%"),
-                    )
-                ).limit(limit)
-            )
-            memos = result.scalars().all()
-            results = [
-                {
-                    "id": m.id,
-                    "type": m.type,
-                    "title": m.title,
-                    "description": m.description,
-                    "source_domain": m.source_domain,
-                    "thumbnail_path": m.thumbnail_path,
-                    "created_at": m.created_at.isoformat(),
-                    "match_type": "fulltext",
-                }
-                for m in memos
-            ]
-    
-    return {"results": results, "total": len(results)}
+

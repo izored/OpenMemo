@@ -16,7 +16,7 @@ async def generate_audio(text: str, output_path: str) -> str | None:
     try:
         result = subprocess.run(
             ["kokoro", "--text", text, "--output", output_path],
-            capture_output=True, timeout=120,
+            capture_output=True, timeout=180,
         )
         if result.returncode == 0:
             return output_path
@@ -28,7 +28,7 @@ async def generate_audio(text: str, output_path: str) -> str | None:
         result = subprocess.run(
             ["piper", "--model", "en_US-lessac-medium", "--output_file", output_path],
             input=text.encode(),
-            capture_output=True, timeout=120,
+            capture_output=True, timeout=180,
         )
         if result.returncode == 0:
             return output_path

@@ -89,6 +89,8 @@ class Collection(Base):
     id = Column(String, primary_key=True, default=generate_uuid)
     workspace_id = Column(String, ForeignKey("workspaces.id"))
     name = Column(String, nullable=False)
+    emoji = Column(String, default="📁")
+    description = Column(String, nullable=True)
     color = Column(String, default="#D97706")
     pinned = Column(Boolean, default=False)
     sort_order = Column(Integer, default=0)

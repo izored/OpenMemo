@@ -7,10 +7,14 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     build-essential \
     && rm -rf /var/lib/apt/lists/*
 
-COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
+# Create backend package directory
+RUN mkdir -p /app/backend
 
-COPY . .
+COPY requirements.txt /app/backend/
+RUN pip install --no-cache-dir -r /app/backend/requirements.txt
+
+# Copy all backend files into the backend package directory
+COPY . /app/backend/
 
 EXPOSE 8000
 

@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from 'react';
-import { Send, Bot, User, Loader2, Globe } from 'lucide-react';
+import { Send, Bot, Loader2, Globe } from 'lucide-react';
 import { chatApi } from '@/lib/api';
 import { useAppStore } from '@/stores/appStore';
 import ReactMarkdown from 'react-markdown';
@@ -99,9 +99,9 @@ export function AskMemoPanel({ memoId, collectionId }: AskMemoPanelProps) {
   };
 
   return (
-    <div className="h-full flex flex-col">
-      <div className="px-4 py-3 border-b border-[#E5E7EB]">
-        <h3 className="text-sm font-medium text-[#374151]">
+    <div className="h-full flex flex-col bg-white">
+      <div className="px-4 py-3 border-b border-[#e5e5e5]">
+        <h3 className="text-sm font-semibold text-[#202020]">
           AskMemo {memoId ? '(this memo)' : collectionId ? '(collection)' : ''}
         </h3>
       </div>
@@ -109,27 +109,39 @@ export function AskMemoPanel({ memoId, collectionId }: AskMemoPanelProps) {
       <div ref={scrollRef} className="flex-1 overflow-y-auto p-4 space-y-4">
         {messages.length === 0 && (
           <div className="text-center py-8">
-            <Bot size={24} className="mx-auto mb-2 text-[#D97706]" />
-            <p className="text-xs text-[#6B7280]">Ask questions about this content</p>
+            <Bot size={24} className="mx-auto mb-2 text-[#ea2804]" />
+            <p className="text-xs text-[#646464]">Ask questions about this content</p>
           </div>
         )}
         {messages.map((msg) => (
           <div key={msg.id} className={`flex gap-2 ${msg.role === 'user' ? 'justify-end' : ''}`}>
             {msg.role === 'assistant' && (
-              <div className="w-6 h-6 rounded-full bg-[#FEF3C7] flex items-center justify-center flex-shrink-0 mt-0.5">
-                <Bot size={12} className="text-[#D97706]" />
+              <div className="w-6 h-6 rounded-full bg-[#FEE4E0] flex items-center justify-center flex-shrink-0 mt-0.5">
+                <Bot size={12} className="text-[#ea2804]" />
               </div>
             )}
-            <div className={`max-w-[85%] rounded-xl px-3 py-2 text-sm ${msg.role === 'user' ? 'bg-[#D97706] text-white' : 'bg-[#F3F4F6]'}`}>
+            <div className={`max-w-[85%] rounded-2xl px-3.5 py-2.5 text-sm ${msg.role === 'user' ? 'bg-[#202020] text-white' : 'bg-[#f5f5f5] text-[#202020]'}`}>
               {msg.role === 'assistant' ? (
-                <div className="prose prose-xs max-w-none"><ReactMarkdown>{msg.content || '...'}</ReactMarkdown></div>
+                <div className="prose prose-xs max-w-none">
+                  <ReactMarkdown components={{
+                    code: ({node, inline, className, children, ...props}: any) => (
+                      inline ? (
+                        <code className="bg-[#24292e] text-white px-1 py-0.5 rounded text-[11px] font-mono" {...props}>{children}</code>
+                      ) : (
+                        <pre className="bg-[#24292e] text-white p-3 rounded-xl overflow-x-auto font-mono text-[11px] my-2" {...props}>
+                          <code>{children}</code>
+                        </pre>
+                      )
+                    )
+                  }}>{msg.content || '...'}</ReactMarkdown>
+                </div>
               ) : (
                 msg.content
               )}
               {msg.sources && msg.sources.length > 0 && (
                 <div className="mt-2 flex flex-wrap gap-1">
                   {msg.sources.map((s: any, i: number) => (
-                    <span key={i} className="inline-flex items-center gap-0.5 px-1.5 py-0.5 bg-white rounded text-[10px] text-[#6B7280] border">
+                    <span key={i} className="inline-flex items-center gap-0.5 px-2 py-0.5 bg-white rounded-full text-[10px] text-[#646464] border border-[#e5e5e5]">
                       <Globe size={8} /> [{i + 1}]
                     </span>
                   ))}
@@ -140,20 +152,20 @@ export function AskMemoPanel({ memoId, collectionId }: AskMemoPanelProps) {
         ))}
       </div>
 
-      <div className="p-3 border-t border-[#E5E7EB]">
+      <div className="p-3 border-t border-[#e5e5e5]">
         <div className="flex gap-2">
           <input
             value={input}
             onChange={(e) => setInput(e.target.value)}
             onKeyDown={(e) => e.key === 'Enter' && handleSend()}
             placeholder="Ask a question..."
-            className="flex-1 px-3 py-2 border border-[#E5E7EB] rounded-lg text-sm focus:outline-none focus:border-[#D97706]"
+            className="flex-1 px-4 py-2 border border-[#e5e5e5] rounded-full text-sm focus:outline-none focus:border-[#202020] bg-white transition-colors"
             disabled={streaming}
           />
           <button
             onClick={handleSend}
             disabled={!input.trim() || streaming}
-            className="p-2 bg-[#D97706] text-white rounded-lg disabled:opacity-50"
+            className="p-2.5 bg-[#202020] text-white rounded-full disabled:opacity-40 hover:bg-black transition-colors"
           >
             {streaming ? <Loader2 size={14} className="animate-spin" /> : <Send size={14} />}
           </button>
