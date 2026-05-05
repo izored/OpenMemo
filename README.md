@@ -2,9 +2,9 @@
 
 # OpenMemo
 
-### Your Second Brain. Entirely Yours.
+### Organize Your Digital Attic.
 
-**Save everything. Find anything. Chat with your knowledge.**
+**Tame the clutter. Map your interests. Surface what matters.**
 
 A local-first, open-source AI Knowledge OS powered by [Ollama](https://ollama.ai).
 No cloud. No subscriptions. No API keys. Your data stays on your machine.
