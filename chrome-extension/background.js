@@ -1,6 +1,6 @@
 // OpenMemo Chrome Extension - Background Service Worker
 
-const DEFAULT_API_BASE = 'http://openmemo.local/api';
+const DEFAULT_API_BASE = 'http://localhost:8091/api';
 
 async function getApiBase() {
   const stored = await chrome.storage.sync.get('apiBase');

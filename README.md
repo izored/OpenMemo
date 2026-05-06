@@ -105,7 +105,7 @@ cd OpenMemo
 docker-compose up -d
 ```
 
-Open **http://openmemo.local** — that's it.
+Open **http://localhost:8091** — that's it.
 
 ### Prerequisites
 

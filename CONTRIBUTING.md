@@ -18,7 +18,7 @@ cp .env.example .env
 docker-compose up -d
 ```
 
-Visit `http://openmemo.local` and you're good to go.
+Visit `http://localhost:8091` and you're good to go.
 
 ### Local Dev (hot reload)
 ```bash
