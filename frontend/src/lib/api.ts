@@ -26,6 +26,7 @@ export const memoApi = {
   get: (id: string) => fetchJSON<any>(`/memos/${id}`),
   create: (data: any) => fetchJSON<{ id: string }>('/memos', { method: 'POST', body: JSON.stringify(data) }),
   update: (id: string, data: any) => fetchJSON<any>(`/memos/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
+  updateSort: (id: string, sort_order: number) => fetchJSON<any>(`/memos/${id}/sort`, { method: 'PUT', body: JSON.stringify({ sort_order }) }),
   delete: (id: string) => fetchJSON<any>(`/memos/${id}`, { method: 'DELETE' }),
   summary: (id: string) => fetchJSON<{ summary: string }>(`/memos/${id}/summary`, { method: 'POST' }),
   related: (id: string) => fetchJSON<any[]>(`/memos/${id}/related`),
@@ -106,6 +107,6 @@ export const searchApi = {
 
 // Health & Models
 export const systemApi = {
-  health: () => fetchJSON<{ status: string; ollama_connected: boolean }>('/health'),
+  health: () => fetchJSON<{ status: string; ollama_connected: boolean; version: string }>('/health'),
   models: () => fetchJSON<{ models: any[] }>('/models'),
 };

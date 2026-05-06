@@ -11,6 +11,8 @@ export interface Memo {
   file_path?: string;
   thumbnail_path?: string;
   ai_summary?: string;
+  notes?: string;
+  sort_order?: number;
   is_processed: boolean;
   created_at: string;
   updated_at: string;
