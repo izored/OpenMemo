@@ -1,5 +1,5 @@
 import { Outlet, useLocation } from 'react-router-dom';
-import { Plus, Menu, X } from 'lucide-react';
+import { Plus, Menu } from 'lucide-react';
 import { Sidebar } from './Sidebar';
 import { AddMemoModal } from './AddMemoModal';
 import { AddCollectionModal } from './AddCollectionModal';
@@ -17,50 +17,37 @@ export function Layout() {
 
   return (
     <div className="flex h-screen overflow-hidden bg-[var(--color-bg)]">
-      {/* Backdrop — click to close sidebar */}
+      {/* Sidebar — flex item, pushes content */}
       <div
-        onClick={toggleSidebar}
-        className="fixed inset-0 z-30 bg-black/20 backdrop-blur-[1px] transition-opacity duration-200"
-        style={{ opacity: sidebarOpen ? 1 : 0, pointerEvents: sidebarOpen ? 'auto' : 'none' }}
-      />
-
-      {/* Sidebar — overlay, slides in from left */}
-      <div
-        className="fixed left-0 top-0 h-screen z-40 transition-transform duration-200 ease-[cubic-bezier(0.16,1,0.3,1)]"
-        style={{ transform: sidebarOpen ? 'translateX(0)' : 'translateX(-100%)' }}
+        className="h-screen flex-shrink-0 overflow-hidden transition-[width] duration-200 ease-[cubic-bezier(0.16,1,0.3,1)]"
+        style={{ width: sidebarOpen ? '240px' : '0px' }}
       >
-        <Sidebar />
+        <div className="w-[240px] h-full">
+          <Sidebar />
+        </div>
       </div>
 
-      {/* Main content — always full width, no shift */}
-      <main className="flex-1 overflow-y-auto min-w-0 px-8 md:px-16 lg:px-20 py-6 relative bg-[var(--color-bg)]">
-        <Outlet />
-      </main>
+      {/* Main content */}
+      <div className="relative flex-1 min-w-0 overflow-hidden">
+        {/* Backdrop — dims content when sidebar open, click to close */}
+        <div
+          onClick={toggleSidebar}
+          className="absolute inset-0 z-30 bg-black/10 transition-opacity duration-200 pointer-events-none"
+          style={{ opacity: sidebarOpen ? 1 : 0, pointerEvents: sidebarOpen ? 'auto' : 'none' }}
+        />
+        <main className="h-full overflow-y-auto px-8 md:px-16 lg:px-20 py-6 bg-[var(--color-bg)]">
+          <Outlet />
+        </main>
+      </div>
 
-      {/* Hamburger / X — morphs in place */}
+      {/* Hamburger — hidden behind sidebar when open */}
       <button
         onClick={toggleSidebar}
-        className="fixed top-5 left-5 z-50 p-2.5 rounded-full hover:bg-[var(--color-bg-hover)] transition-colors duration-150"
-        title="Toggle sidebar"
+        className="fixed top-5 left-5 z-50 p-2.5 rounded-full hover:bg-[var(--color-bg-hover)] transition-all duration-150"
+        style={{ opacity: sidebarOpen ? 0 : 1, pointerEvents: sidebarOpen ? 'none' : 'auto' }}
+        title="Open sidebar"
       >
-        <div className="relative w-5 h-5">
-          <Menu
-            size={20}
-            className="absolute inset-0 text-[var(--color-text-secondary)] transition-all duration-150"
-            style={{
-              opacity: sidebarOpen ? 0 : 1,
-              transform: sidebarOpen ? 'rotate(90deg) scale(0.7)' : 'rotate(0deg) scale(1)',
-            }}
-          />
-          <X
-            size={20}
-            className="absolute inset-0 text-[var(--color-text-secondary)] transition-all duration-150"
-            style={{
-              opacity: sidebarOpen ? 1 : 0,
-              transform: sidebarOpen ? 'rotate(0deg) scale(1)' : 'rotate(-90deg) scale(0.7)',
-            }}
-          />
-        </div>
+        <Menu size={20} className="text-[var(--color-text-secondary)]" />
       </button>
 
       {/* Add New — dashboard only */}

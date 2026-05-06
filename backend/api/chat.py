@@ -91,23 +91,27 @@ async def chat_stream(data: ChatRequest, db: AsyncSession = Depends(get_db)):
     async def event_stream():
         full_response = ""
         sources_data = None
-        
-        async for chunk in rag_chat(
-            query=query,
-            workspace_id=data.workspace_id,
-            collection_id=data.collection_id,
-            memo_id=data.memo_id,
-            model=data.model,
-            history=history,
-            use_rag=use_rag,
-        ):
-            if chunk["type"] == "sources":
-                sources_data = chunk["data"]
-                yield f"data: {json.dumps({'type': 'sources', 'data': sources_data})}\n\n"
-            elif chunk["type"] == "token":
-                full_response += chunk["data"]
-                yield f"data: {json.dumps({'type': 'token', 'data': chunk['data']})}\n\n"
-        
+
+        try:
+            async for chunk in rag_chat(
+                query=query,
+                workspace_id=data.workspace_id,
+                collection_id=data.collection_id,
+                memo_id=data.memo_id,
+                model=data.model,
+                history=history,
+                use_rag=use_rag,
+            ):
+                if chunk["type"] == "sources":
+                    sources_data = chunk["data"]
+                    yield f"data: {json.dumps({'type': 'sources', 'data': sources_data})}\n\n"
+                elif chunk["type"] == "token":
+                    full_response += chunk["data"]
+                    yield f"data: {json.dumps({'type': 'token', 'data': chunk['data']})}\n\n"
+        except Exception as e:
+            yield f"data: {json.dumps({'type': 'error', 'data': str(e)})}\n\n"
+            return
+
         # Save assistant message
         async with (await _get_session()) as save_db:
             assistant_msg = Message(
@@ -119,7 +123,7 @@ async def chat_stream(data: ChatRequest, db: AsyncSession = Depends(get_db)):
             )
             save_db.add(assistant_msg)
             await save_db.commit()
-        
+
         yield f"data: {json.dumps({'type': 'done', 'session_id': session_id})}\n\n"
     
     return StreamingResponse(

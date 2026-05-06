@@ -128,14 +128,24 @@ async def health_check():
     }
 
 
+_EMBED_FAMILIES = {"bert", "nomic-bert", "nomic-bert-moe"}
+
 @app.get("/api/models")
 async def list_models():
-    """List available Ollama models."""
+    """List available Ollama models, excluding embed-only models."""
     from backend.core.ollama_client import ollama_client
-    
+
     try:
         models = await ollama_client.list_models()
-        return {"models": models}
+        chat_models = [
+            m for m in models
+            if "embed" not in m.get("name", "").lower()
+            and not any(
+                f in _EMBED_FAMILIES
+                for f in (m.get("details", {}).get("families") or [])
+            )
+        ]
+        return {"models": chat_models}
     except Exception as e:
         return {"models": [], "error": str(e)}
 
