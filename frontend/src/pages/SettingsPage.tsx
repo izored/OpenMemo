@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Settings, Moon, Sun, Check, Loader2 } from 'lucide-react';
+import { Settings, Moon, Sun, Loader2, Wifi, WifiOff, ChevronDown, ChevronUp } from 'lucide-react';
 import { useAppStore } from '@/stores/appStore';
 import { cn } from '@/lib/utils';
 import { systemApi } from '@/lib/api';
@@ -8,20 +8,49 @@ export function SettingsPage() {
   const { theme, setTheme } = useAppStore();
   const [version, setVersion] = useState<string>('');
   const [versionLoading, setVersionLoading] = useState(true);
+  const [ollamaConnected, setOllamaConnected] = useState<boolean | null>(null);
+  const [ollamaModels, setOllamaModels] = useState<any[]>([]);
+  const [ollamaLoading, setOllamaLoading] = useState(true);
+  const [modelsExpanded, setModelsExpanded] = useState(false);
 
   useEffect(() => {
     systemApi.health()
-      .then((data) => setVersion(data.version || ''))
-      .catch(() => setVersion(''))
-      .finally(() => setVersionLoading(false));
+      .then((data) => {
+        setVersion(data.version || '');
+        setOllamaConnected(data.ollama_connected);
+      })
+      .catch(() => {
+        setVersion('');
+        setOllamaConnected(false);
+      })
+      .finally(() => {
+        setVersionLoading(false);
+        setOllamaLoading(false);
+      });
+
+    systemApi.models()
+      .then((data) => setOllamaModels(data.models || []))
+      .catch(() => setOllamaModels([]));
   }, []);
+
+  const refreshOllama = () => {
+    setOllamaLoading(true);
+    setOllamaModels([]);
+    systemApi.health()
+      .then((data) => setOllamaConnected(data.ollama_connected))
+      .catch(() => setOllamaConnected(false))
+      .finally(() => setOllamaLoading(false));
+    systemApi.models()
+      .then((data) => setOllamaModels(data.models || []))
+      .catch(() => setOllamaModels([]));
+  };
 
   return (
     <div className="max-w-2xl mx-auto pt-8 pb-20">
       {/* Header */}
       <div className="flex items-center gap-4 mb-12">
         <div className="w-12 h-12 rounded-2xl bg-[var(--color-bg-active)] flex items-center justify-center">
-          <Settings size={24} className="text-white" />
+          <Settings size={24} className="text-[var(--color-text-active)]" />
         </div>
         <div>
           <h1 className="text-2xl font-bold text-[var(--color-text)]">Settings</h1>
@@ -35,7 +64,6 @@ export function SettingsPage() {
           Appearance
         </h2>
 
-        {/* Theme Toggle */}
         <div className="bg-[var(--color-bg-card)] rounded-3xl p-8 shadow-sm mb-6">
           <div className="flex items-center justify-between">
             <div>
@@ -70,7 +98,94 @@ export function SettingsPage() {
             </div>
           </div>
         </div>
+      </section>
 
+      {/* Ollama Section */}
+      <section className="mb-12">
+        <h2 className="text-sm font-bold text-[var(--color-text-muted)] uppercase tracking-widest mb-6">
+          Ollama
+        </h2>
+
+        <div className="bg-[var(--color-bg-card)] rounded-3xl p-8 shadow-sm">
+          {/* Status row */}
+          <div className="flex items-center justify-between mb-6">
+            <div>
+              <h3 className="text-lg font-bold text-[var(--color-text)] mb-1">Local AI</h3>
+              <p className="text-[14px] text-[var(--color-text-secondary)]">
+                Powers chat, RAG, and embeddings via Ollama
+              </p>
+            </div>
+            <div className="flex items-center gap-3">
+              {ollamaLoading ? (
+                <Loader2 size={16} className="animate-spin text-[var(--color-text-muted)]" />
+              ) : ollamaConnected ? (
+                <span className="flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 text-[13px] font-semibold">
+                  <Wifi size={13} />
+                  Connected
+                </span>
+              ) : (
+                <span className="flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-red-500/10 text-red-500 text-[13px] font-semibold">
+                  <WifiOff size={13} />
+                  Offline
+                </span>
+              )}
+              <button
+                onClick={refreshOllama}
+                className="text-[13px] text-[var(--color-text-muted)] hover:text-[var(--color-brand)] transition-colors font-medium"
+              >
+                Refresh
+              </button>
+            </div>
+          </div>
+
+          {/* Models */}
+          {ollamaConnected && (
+            <div className="border-t border-[var(--color-border)] pt-5">
+              <button
+                onClick={() => setModelsExpanded((v) => !v)}
+                className="w-full flex items-center justify-between text-[14px] font-semibold text-[var(--color-text)] hover:text-[var(--color-brand)] transition-colors"
+              >
+                <span>
+                  {ollamaModels.length} model{ollamaModels.length !== 1 ? 's' : ''} available
+                </span>
+                {modelsExpanded ? <ChevronUp size={15} /> : <ChevronDown size={15} />}
+              </button>
+
+              {modelsExpanded && ollamaModels.length > 0 && (
+                <div className="mt-4 space-y-2">
+                  {ollamaModels.map((m: any) => (
+                    <div
+                      key={m.name}
+                      className="flex items-center justify-between px-4 py-2.5 rounded-2xl bg-[var(--color-bg-hover)]"
+                    >
+                      <span className="font-mono text-[13px] text-[var(--color-text)]">{m.name}</span>
+                      {m.size && (
+                        <span className="text-[12px] text-[var(--color-text-muted)]">
+                          {(m.size / 1e9).toFixed(1)} GB
+                        </span>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {modelsExpanded && ollamaModels.length === 0 && (
+                <p className="mt-3 text-[13px] text-[var(--color-text-muted)]">
+                  No models found. Run <code className="font-mono">ollama pull llama3.2</code> to get started.
+                </p>
+              )}
+            </div>
+          )}
+
+          {!ollamaConnected && !ollamaLoading && (
+            <div className="border-t border-[var(--color-border)] pt-5">
+              <p className="text-[13px] text-[var(--color-text-muted)] leading-relaxed">
+                Ollama is not running. Start it with <code className="font-mono text-[var(--color-text)]">ollama serve</code> then refresh.
+                AskMemo and embeddings won't work until connected.
+              </p>
+            </div>
+          )}
+        </div>
       </section>
 
       {/* About Section */}
@@ -89,7 +204,7 @@ export function SettingsPage() {
                 {versionLoading ? (
                   <Loader2 size={14} className="animate-spin" />
                 ) : (
-                  <>Version {version || '1.6.6'}</>
+                  <>Version {version || '—'}</>
                 )}
               </p>
             </div>
