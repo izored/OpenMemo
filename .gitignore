@@ -47,3 +47,5 @@ Thumbs.db
 
 # Chrome extension build
 chrome-extension/icons/*.png
+
+docker-compose.override.yml

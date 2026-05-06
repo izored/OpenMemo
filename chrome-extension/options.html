@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>OpenMemo Settings</title>
+  <style>
+    body { font-family: system-ui, sans-serif; max-width: 400px; margin: 40px auto; padding: 20px; }
+    label { display: block; margin-bottom: 6px; font-weight: 600; }
+    input { width: 100%; padding: 10px; font-size: 14px; border: 1px solid #ccc; border-radius: 8px; box-sizing: border-box; }
+    button { margin-top: 16px; padding: 10px 20px; background: #202020; color: #fff; border: none; border-radius: 8px; cursor: pointer; }
+    button:hover { background: #000; }
+    .status { margin-top: 12px; font-size: 13px; color: #2b9a66; }
+  </style>
+</head>
+<body>
+  <h2>OpenMemo Extension Settings</h2>
+  <label for="apiBase">OpenMemo API URL</label>
+  <input type="url" id="apiBase" placeholder="http://localhost/api" />
+  <button id="save">Save</button>
+  <p class="status" id="status"></p>
+
+  <script>
+    const input = document.getElementById('apiBase');
+    const status = document.getElementById('status');
+
+    // Load saved value
+    chrome.storage.sync.get('apiBase', (data) => {
+      input.value = data.apiBase || 'http://localhost/api';
+    });
+
+    document.getElementById('save').addEventListener('click', () => {
+      const url = input.value.trim() || 'http://localhost/api';
+      chrome.storage.sync.set({ apiBase: url }, () => {
+        status.textContent = 'Saved!';
+        setTimeout(() => status.textContent = '', 2000);
+      });
+    });
+  </script>
+</body>
+</html>
