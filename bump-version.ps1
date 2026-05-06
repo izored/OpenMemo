@@ -1,40 +1,43 @@
 <#
 .SYNOPSIS
-    Bump OpenMemo version across all project files.
+    Full OpenMemo release script — bump version, commit, tag, and create GitHub release.
 
 .DESCRIPTION
     Reads current version from backend/config.py, computes the new version
-    based on bump type (major | minor | patch), then updates every file
-    that carries the version string.
+    based on bump type (major | minor | patch), updates every file that carries
+    the version string, commits, tags, creates a GitHub Release, and pushes.
 
 .PARAMETER Bump
     Which semver segment to increment: major, minor, or patch.
+
+.PARAMETER Title
+    Short release title for the commit message (e.g. "fix blank page, Ollama fallback").
+    Defaults to a generic title.
 
 .PARAMETER Date
     Optional release date override (default: today).
 
 .PARAMETER SkipChangelog
     Skip prepending a new blank section to docs/CHANGELOG.md.
+    Use this if you already wrote the changelog section before running the script.
 
 .PARAMETER DryRun
-    Print what would change without writing any files.
+    Print what would change without writing any files or creating releases.
 
 .EXAMPLE
-    .\bump-version.ps1 patch
-    # 1.6.5 -> 1.6.6
+    .\bump-version.ps1 patch -Title "fix blank page, Ollama fallback, memo sort"
+    # Full release: bump -> commit -> tag -> GitHub release -> push
 
 .EXAMPLE
-    .\bump-version.ps1 minor
-    # 1.6.5 -> 1.7.0
-
-.EXAMPLE
-    .\bump-version.ps1 major -DryRun
-    # Shows diff but does not write files
+    .\bump-version.ps1 minor -DryRun
+    # Shows diff but does not modify anything
 #>
 param(
     [Parameter(Mandatory = $true, Position = 0)]
     [ValidateSet("major", "minor", "patch")]
     [string]$Bump,
+
+    [string]$Title = "",
 
     [string]$Date = (Get-Date -Format "yyyy-MM-dd"),
 
@@ -44,6 +47,17 @@ param(
 )
 
 $ErrorActionPreference = "Stop"
+
+# --- Resolve gh CLI path ---
+$gh = Get-Command gh -ErrorAction SilentlyContinue
+if (-not $gh) {
+    $ghPath = "C:\Program Files\GitHub CLI\gh.exe"
+    if (Test-Path $ghPath) {
+        $gh = Get-Command $ghPath
+    } else {
+        throw "GitHub CLI (gh) not found. Install it: winget install --id GitHub.cli"
+    }
+}
 
 # --- Resolve project root ---
 $root = Split-Path -Parent $MyInvocation.MyCommand.Definition
@@ -73,8 +87,13 @@ switch ($Bump) {
 }
 $newVersion = "$newMajor.$newMinor.$newPatch"
 
+if (-not $Title) {
+    $Title = "release v$newVersion"
+}
+
 Write-Host "Current version: $currentVersion"
 Write-Host "New version:     $newVersion"
+Write-Host "Title:           $Title"
 Write-Host ""
 
 # --- Define file replacements ---
@@ -82,18 +101,13 @@ Write-Host ""
 $replacements = @(
     @{
         Path    = "backend\config.py"
-        Pattern = '(VERSION:\s*str\s*=\s*")\d+\.\d+\.\d+(")'
+        Pattern = '(VERSION:\s*str\s*=\s*")\d+\.\d+\.\d+("\s*)'
         Replace = '${1}' + $newVersion + '${2}'
     },
     @{
-        Path    = "frontend\src\pages\SettingsPage.tsx"
-        Pattern = '(Version\s+)\d+\.\d+\.\d+'
-        Replace = '${1}' + $newVersion
-    },
-    @{
         Path    = "README.md"
-        Pattern = '(Version:\s*)\d+\.\d+\.\d+'
-        Replace = '${1}' + $newVersion
+        Pattern = '(version-)\d+\.\d+\.\d+(-\d+.*?style)'
+        Replace = '${1}' + $newVersion + '${2}'
     },
     @{
         Path    = "chrome-extension\manifest.json"
@@ -133,7 +147,7 @@ foreach ($r in $replacements) {
 $changelogPath = Join-Path $root "docs\CHANGELOG.md"
 if ((-not $SkipChangelog) -and (Test-Path $changelogPath)) {
     $changelog = Get-Content $changelogPath -Raw
-    $headerPattern = '^## \[\d+\.\d+\.\d+\].*?\n(?=## |#|$)'
+    $headerPattern = '^## \[\d+\.\d+\.\d+\].*?\n(?=## |# |$)'
     $firstEntry = [regex]::Match($changelog, $headerPattern, [System.Text.RegularExpressions.RegexOptions]::Singleline)
 
     $newSection = "## [$newVersion] - $Date" + "`n`n" +
@@ -164,35 +178,60 @@ if ((-not $SkipChangelog) -and (Test-Path $changelogPath)) {
 Write-Host ""
 if ($DryRun) {
     Write-Host "Dry run complete - no files were modified."
-} else {
-    Write-Host "Version bumped: $currentVersion -> $newVersion"
-    Write-Host "Files touched: $($changedFiles.Count)"
-    Write-Host ""
-    # --- GitHub Release (minor/major only) ---
-    if ($Bump -ne "patch") {
-        $gh = Get-Command gh -ErrorAction SilentlyContinue
-        if ($gh) {
-            Write-Host ""
-            Write-Host "Creating GitHub release v$newVersion..."
-            $releaseNotesPath = Join-Path $root "RELEASE_NOTES.md"
-            if (Test-Path $releaseNotesPath) {
-                & gh release create "v$newVersion" --title "OpenMemo v$newVersion" --notes-file "$releaseNotesPath"
-            } else {
-                & gh release create "v$newVersion" --title "OpenMemo v$newVersion" --generate-notes
-            }
-            Write-Host "GitHub release created: v$newVersion"
-        } else {
-            Write-Host ""
-            Write-Host "NOTE: Install GitHub CLI (gh) to auto-create releases for minor/major bumps."
-        }
-    }
-
-    Write-Host ""
-    Write-Host "Next steps:"
-    Write-Host "  1. Fill in the CHANGELOG section for $newVersion"
-    Write-Host "  2. Update RELEASE_NOTES.md with formatted release notes (copy-paste to GitHub)"
-    Write-Host "  3. git add -A && git commit -m 'Release v$newVersion'"
-    Write-Host "  4. git tag v$newVersion"
-    Write-Host "  5. git push origin main --tags"
-    Write-Host "  6. gh release create v$newVersion --title 'OpenMemo v$newVersion' --notes-file RELEASE_NOTES.md"
+    Write-Host "Next: run without -DryRun to execute the full release."
+    exit 0
 }
+
+Write-Host "Version bumped: $currentVersion -> $newVersion"
+Write-Host "Files touched: $($changedFiles.Count)"
+Write-Host ""
+
+# --- Git: stage, commit, tag, push ---
+Write-Host "Staging changes..."
+git add -A
+
+$commitMsg = "release: v$newVersion - $Title"
+Write-Host "Committing: $commitMsg"
+git commit -m $commitMsg
+
+Write-Host "Creating annotated tag: v$newVersion"
+git tag -a "v$newVersion" -m "OpenMemo v$newVersion"
+
+Write-Host "Pushing main + tags to origin..."
+git push origin main --tags
+
+# --- GitHub Release ---
+Write-Host ""
+Write-Host "Creating GitHub release v$newVersion..."
+
+# Extract just this version's notes from CHANGELOG.md
+$changelogContent = Get-Content $changelogPath -Raw
+# Escape dots in version so regex doesn't treat them as wildcards
+$escapedVersion = [regex]::Escape($newVersion)
+$versionPattern = "## \[$escapedVersion\].*?(?=\r?\n## \[\d+\.\d+\.\d+\]|\z)"
+$versionMatch = [regex]::Match($changelogContent, $versionPattern, [System.Text.RegularExpressions.RegexOptions]::Singleline)
+
+if ($versionMatch.Success) {
+    $releaseNotes = $versionMatch.Value.Trim()
+    # Strip trailing --- separator if present
+    $releaseNotes = $releaseNotes -replace '\r?\n---\s*$', ''
+    $releaseNotes = $releaseNotes.Trim()
+    $lineCount = ($releaseNotes -split '\r?\n').Count
+    Write-Host "Extracted $lineCount lines for GitHub Release notes."
+    $tempNotes = [System.IO.Path]::GetTempFileName()
+    Set-Content -Path $tempNotes -Value $releaseNotes -NoNewline
+    & $gh.Source release create "v$newVersion" --title "OpenMemo v$newVersion" --notes-file "$tempNotes"
+    Remove-Item $tempNotes
+} else {
+    Write-Warning "Could not extract changelog section for v$newVersion. Using auto-generated notes."
+    & $gh.Source release create "v$newVersion" --title "OpenMemo v$newVersion" --generate-notes
+}
+
+Write-Host ""
+Write-Host "Release complete!"
+Write-Host "  GitHub: https://github.com/izored/OpenMemo/releases/tag/v$newVersion"
+Write-Host ""
+Write-Host "Post-release reminders:"
+Write-Host "  1. Fill in CHANGELOG placeholders if you used the skeleton"
+Write-Host "  2. Rebuild Docker containers if code changed"
+Write-Host "  3. Hard-refresh browser to verify"
