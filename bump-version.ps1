@@ -1,107 +1,113 @@
 <#
 .SYNOPSIS
-    Full OpenMemo release script — bump version, commit, tag, and create GitHub release.
-
-.DESCRIPTION
-    Reads current version from backend/config.py, computes the new version
-    based on bump type (major | minor | patch), updates every file that carries
-    the version string, commits, tags, creates a GitHub Release, and pushes.
+    OpenMemo release script.
 
 .PARAMETER Bump
-    Which semver segment to increment: major, minor, or patch.
+    major | minor | patch
 
 .PARAMETER Title
-    Short release title for the commit message (e.g. "fix blank page, Ollama fallback").
-    Defaults to a generic title.
+    Short release title for commit message and GitHub Release.
 
 .PARAMETER Date
-    Optional release date override (default: today).
-
-.PARAMETER SkipChangelog
-    Skip prepending a new blank section to docs/CHANGELOG.md.
-    Use this if you already wrote the changelog section before running the script.
+    Release date override (default: today, YYYY-MM-DD).
 
 .PARAMETER DryRun
-    Print what would change without writing any files or creating releases.
+    Preview without writing files or running git/gh commands.
 
 .EXAMPLE
-    .\bump-version.ps1 patch -Title "fix blank page, Ollama fallback, memo sort"
-    # Full release: bump -> commit -> tag -> GitHub release -> push
-
-.EXAMPLE
-    .\bump-version.ps1 minor -DryRun
-    # Shows diff but does not modify anything
+    .\bump-version.ps1 patch -Title "fix blank page, Ollama fallback"
 #>
 param(
-    [Parameter(Mandatory = $true, Position = 0)]
+    [Parameter(Mandatory, Position = 0)]
     [ValidateSet("major", "minor", "patch")]
     [string]$Bump,
 
-    [string]$Title = "",
+    [Parameter(Mandatory)]
+    [string]$Title,
 
     [string]$Date = (Get-Date -Format "yyyy-MM-dd"),
-
-    [switch]$SkipChangelog,
 
     [switch]$DryRun
 )
 
 $ErrorActionPreference = "Stop"
-
-# --- Resolve gh CLI path ---
-$gh = Get-Command gh -ErrorAction SilentlyContinue
-if (-not $gh) {
-    $ghPath = "C:\Program Files\GitHub CLI\gh.exe"
-    if (Test-Path $ghPath) {
-        $gh = Get-Command $ghPath
-    } else {
-        throw "GitHub CLI (gh) not found. Install it: winget install --id GitHub.cli"
-    }
+if ($PSVersionTable.PSVersion -ge [version]"7.3") {
+    $PSNativeCommandErrorActionPreference = 'Stop'
 }
 
-# --- Resolve project root ---
 $root = Split-Path -Parent $MyInvocation.MyCommand.Definition
-if (-not $root) { $root = $PWD }
+if (-not $root) { $root = $PWD.Path }
 
-# --- Read current version from single source of truth ---
+# --- Read current version ---
 $configPath = Join-Path $root "backend\config.py"
-if (-not (Test-Path $configPath)) {
-    throw "Cannot find backend/config.py - are you running from repo root?"
-}
-
 $configText = Get-Content $configPath -Raw
 if ($configText -notmatch 'VERSION:\s*str\s*=\s*"(\d+)\.(\d+)\.(\d+)"') {
     throw "Could not parse VERSION from backend/config.py"
 }
+$oldVersion = "$([int]$Matches[1]).$([int]$Matches[2]).$([int]$Matches[3])"
+$maj = [int]$Matches[1]; $min = [int]$Matches[2]; $pat = [int]$Matches[3]
 
-$currentMajor = [int]$Matches[1]
-$currentMinor = [int]$Matches[2]
-$currentPatch = [int]$Matches[3]
-$currentVersion = "$currentMajor.$currentMinor.$currentPatch"
-
-# --- Compute new version ---
 switch ($Bump) {
-    "major" { $newMajor = $currentMajor + 1; $newMinor = 0; $newPatch = 0 }
-    "minor" { $newMajor = $currentMajor; $newMinor = $currentMinor + 1; $newPatch = 0 }
-    "patch" { $newMajor = $currentMajor; $newMinor = $currentMinor; $newPatch = $currentPatch + 1 }
+    "major" { $maj++; $min = 0; $pat = 0 }
+    "minor" { $min++;           $pat = 0 }
+    "patch" {                   $pat++   }
 }
-$newVersion = "$newMajor.$newMinor.$newPatch"
+$newVersion = "$maj.$min.$pat"
 
-if (-not $Title) {
-    $Title = "release v$newVersion"
-}
-
-Write-Host "Current version: $currentVersion"
-Write-Host "New version:     $newVersion"
-Write-Host "Title:           $Title"
+Write-Host "Version: $oldVersion -> $newVersion"
 Write-Host ""
 
-# --- Define file replacements ---
-# Each entry: Path relative to root, regex pattern, replacement template
+# --- Pre-flight ---
+Write-Host "Pre-flight..."
+
+$branch = (git branch --show-current 2>&1)
+if ($LASTEXITCODE -ne 0 -or $branch.Trim() -ne "main") {
+    throw "Not on main (on '$($branch.Trim())'). Switch first."
+}
+Write-Host "  OK  On main"
+
+$dirty = (git status --porcelain 2>&1)
+if ($LASTEXITCODE -ne 0) { throw "git status failed" }
+if ($dirty) { throw "Uncommitted changes present. Commit or stash first." }
+Write-Host "  OK  Clean working tree"
+
+$ghExe = (Get-Command gh -ErrorAction SilentlyContinue)
+if (-not $ghExe) {
+    $ghPath = "C:\Program Files\GitHub CLI\gh.exe"
+    if (Test-Path $ghPath) { $ghExe = Get-Command $ghPath }
+    else { throw "gh not found. Install: winget install --id GitHub.cli" }
+}
+& $ghExe.Source auth status 2>&1 | Out-Null
+if ($LASTEXITCODE -ne 0) { throw "gh not authenticated. Run: gh auth login" }
+Write-Host "  OK  gh authenticated"
+Write-Host ""
+
+# --- Find TEMP_CHANGELOG ---
+$tempFiles = Get-ChildItem -Path $root -Filter "TEMP_CHANGELOG_v*.md" -ErrorAction SilentlyContinue
+if (-not $tempFiles) {
+    throw "No TEMP_CHANGELOG_v*.md found in repo root. Create it with the release notes first."
+}
+if ($tempFiles.Count -gt 1) {
+    throw "Multiple TEMP_CHANGELOG files: $($tempFiles.Name -join ', '). Keep only one."
+}
+$tempPath = $tempFiles[0].FullName
+$tempContent = Get-Content $tempPath -Raw
+Write-Host "Notes: $($tempFiles[0].Name)"
+Write-Host ""
+
+if ($DryRun) {
+    Write-Host "[DryRun] $oldVersion -> $newVersion"
+    Write-Host "[DryRun] Commit:  release: v$newVersion - $Title"
+    Write-Host "[DryRun] Release: OpenMemo v$newVersion — $Title"
+    exit 0
+}
+
+# --- Bump version files ---
+Write-Host "Bumping version files..."
 $replacements = @(
     @{
         Path    = "backend\config.py"
-        Pattern = '(VERSION:\s*str\s*=\s*")\d+\.\d+\.\d+("\s*)'
+        Pattern = '(VERSION:\s*str\s*=\s*")\d+\.\d+\.\d+(")'
         Replace = '${1}' + $newVersion + '${2}'
     },
     @{
@@ -111,127 +117,77 @@ $replacements = @(
     },
     @{
         Path    = "chrome-extension\manifest.json"
-        Pattern = '("version"\s*:\s*")\d+\.\d+\.\d+("\s*,?)'
+        Pattern = '("version"\s*:\s*")\d+\.\d+\.\d+(")'
         Replace = '${1}' + $newVersion + '${2}'
     }
 )
 
-# --- Execute replacements ---
-$changedFiles = @()
+$staged = [System.Collections.Generic.List[string]]::new()
 foreach ($r in $replacements) {
-    $filePath = Join-Path $root $r.Path
-    if (-not (Test-Path $filePath)) {
-        Write-Warning "Skipping missing file: $($r.Path)"
-        continue
-    }
-
-    $original = Get-Content $filePath -Raw
-    $updated  = [regex]::Replace($original, $r.Pattern, $r.Replace)
-
-    if ($original -eq $updated) {
-        Write-Host "  - $($r.Path) - no match"
-        continue
-    }
-
-    $changedFiles += $r.Path
-
-    if ($DryRun) {
-        Write-Host "  -> $($r.Path) (dry run)"
-    } else {
-        Set-Content -Path $filePath -Value $updated -NoNewline
-        Write-Host "  + $($r.Path)"
-    }
+    $fp = Join-Path $root $r.Path
+    if (-not (Test-Path $fp)) { Write-Warning "Skipping missing file: $($r.Path)"; continue }
+    $orig    = Get-Content $fp -Raw
+    $updated = [regex]::Replace($orig, $r.Pattern, $r.Replace)
+    if ($orig -eq $updated) { Write-Warning "No version match in $($r.Path)"; continue }
+    Set-Content -Path $fp -Value $updated -NoNewline
+    $staged.Add($r.Path)
+    Write-Host "  + $($r.Path)"
 }
 
-# --- CHANGELOG.md - prepend new release section ---
+# --- Prepend to docs/CHANGELOG.md ---
 $changelogPath = Join-Path $root "docs\CHANGELOG.md"
-if ((-not $SkipChangelog) -and (Test-Path $changelogPath)) {
-    $changelog = Get-Content $changelogPath -Raw
-    $headerPattern = '^## \[\d+\.\d+\.\d+\].*?\n(?=## |# |$)'
-    $firstEntry = [regex]::Match($changelog, $headerPattern, [System.Text.RegularExpressions.RegexOptions]::Singleline)
-
-    $newSection = "## [$newVersion] - $Date" + "`n`n" +
-        "### Added" + "`n`n" +
-        "- (fill in before release)" + "`n`n" +
-        "### Changed" + "`n`n" +
-        "- (fill in before release)" + "`n`n" +
-        "### Fixed" + "`n`n" +
-        "- (fill in before release)" + "`n`n" +
-        "---" + "`n`n"
-
-    if ($firstEntry.Success) {
-        $updatedChangelog = $changelog.Insert($firstEntry.Index, $newSection)
-    } else {
-        $updatedChangelog = $newSection + $changelog
-    }
-
-    if ($DryRun) {
-        Write-Host "  -> docs/CHANGELOG.md (dry run)"
-    } else {
-        Set-Content -Path $changelogPath -Value $updatedChangelog -NoNewline
-        Write-Host "  + docs/CHANGELOG.md"
-    }
-    $changedFiles += "docs\CHANGELOG.md"
+if (Test-Path $changelogPath) {
+    $existing = Get-Content $changelogPath -Raw
+    $section  = "## [$newVersion] - $Date — $Title`n`n" + $tempContent.TrimEnd() + "`n`n---`n`n"
+    Set-Content -Path $changelogPath -Value ($section + $existing) -NoNewline
+    $staged.Add("docs\CHANGELOG.md")
+    Write-Host "  + docs/CHANGELOG.md"
 }
-
-# --- Summary ---
-Write-Host ""
-if ($DryRun) {
-    Write-Host "Dry run complete - no files were modified."
-    Write-Host "Next: run without -DryRun to execute the full release."
-    exit 0
-}
-
-Write-Host "Version bumped: $currentVersion -> $newVersion"
-Write-Host "Files touched: $($changedFiles.Count)"
 Write-Host ""
 
-# --- Git: stage, commit, tag, push ---
-Write-Host "Staging changes..."
-git add -A
-
+# --- Commit + tag (local only until gh release succeeds) ---
+Write-Host "Committing..."
+foreach ($f in $staged) {
+    git add (Join-Path $root $f)
+    if ($LASTEXITCODE -ne 0) { throw "git add failed: $f" }
+}
 $commitMsg = "release: v$newVersion - $Title"
-Write-Host "Committing: $commitMsg"
 git commit -m $commitMsg
+if ($LASTEXITCODE -ne 0) { throw "git commit failed" }
+Write-Host "  OK  $commitMsg"
 
-Write-Host "Creating annotated tag: v$newVersion"
 git tag -a "v$newVersion" -m "OpenMemo v$newVersion"
-
-Write-Host "Pushing main + tags to origin..."
-git push origin main --tags
-
-# --- GitHub Release ---
+if ($LASTEXITCODE -ne 0) { throw "git tag failed" }
+Write-Host "  OK  Tag v$newVersion"
 Write-Host ""
-Write-Host "Creating GitHub release v$newVersion..."
 
-# Extract just this version's notes from CHANGELOG.md
-$changelogContent = Get-Content $changelogPath -Raw
-# Escape dots in version so regex doesn't treat them as wildcards
-$escapedVersion = [regex]::Escape($newVersion)
-$versionPattern = "## \[$escapedVersion\].*?(?=\r?\n## \[\d+\.\d+\.\d+\]|\z)"
-$versionMatch = [regex]::Match($changelogContent, $versionPattern, [System.Text.RegularExpressions.RegexOptions]::Singleline)
-
-if ($versionMatch.Success) {
-    $releaseNotes = $versionMatch.Value.Trim()
-    # Strip trailing --- separator if present
-    $releaseNotes = $releaseNotes -replace '\r?\n---\s*$', ''
-    $releaseNotes = $releaseNotes.Trim()
-    $lineCount = ($releaseNotes -split '\r?\n').Count
-    Write-Host "Extracted $lineCount lines for GitHub Release notes."
-    $tempNotes = [System.IO.Path]::GetTempFileName()
-    Set-Content -Path $tempNotes -Value $releaseNotes -NoNewline
-    & $gh.Source release create "v$newVersion" --title "OpenMemo v$newVersion" --notes-file "$tempNotes"
-    Remove-Item $tempNotes
-} else {
-    Write-Warning "Could not extract changelog section for v$newVersion. Using auto-generated notes."
-    & $gh.Source release create "v$newVersion" --title "OpenMemo v$newVersion" --generate-notes
+# --- GitHub Release (before push — failure here is recoverable) ---
+Write-Host "Creating GitHub Release..."
+& $ghExe.Source release create "v$newVersion" `
+    --title "OpenMemo v$newVersion — $Title" `
+    --notes-file "$tempPath" `
+    --target main
+if ($LASTEXITCODE -ne 0) {
+    Write-Host ""
+    Write-Host "GitHub Release failed. Commit + tag are local only (not pushed). Retry:"
+    Write-Host "  gh release create v$newVersion --title ""OpenMemo v$newVersion — $Title"" --notes-file ""$tempPath"""
+    Write-Host "  git push origin main --tags"
+    exit 1
 }
+Write-Host "  OK  Release created"
+Write-Host ""
 
+# --- Push ---
+Write-Host "Pushing..."
+git push origin main --tags
+if ($LASTEXITCODE -ne 0) {
+    Write-Host "Push failed. Release exists on GitHub. Run: git push origin main --tags"
+    exit 1
+}
+Write-Host "  OK  Pushed"
+
+# --- Cleanup ---
+Remove-Item $tempPath
+Write-Host "  OK  Deleted $($tempFiles[0].Name)"
 Write-Host ""
-Write-Host "Release complete!"
-Write-Host "  GitHub: https://github.com/izored/OpenMemo/releases/tag/v$newVersion"
-Write-Host ""
-Write-Host "Post-release reminders:"
-Write-Host "  1. Fill in CHANGELOG placeholders if you used the skeleton"
-Write-Host "  2. Rebuild Docker containers if code changed"
-Write-Host "  3. Hard-refresh browser to verify"
+Write-Host "Done: https://github.com/izored/OpenMemo/releases/tag/v$newVersion"
