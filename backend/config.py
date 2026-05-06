@@ -41,9 +41,9 @@ class Settings(BaseSettings):
         "http://localhost:5173",
         "http://127.0.0.1:3000",
         "http://localhost:80",
+        "http://localhost:8091",
         "http://localhost",
-        "http://openmemo.local",
-        "http://openmemo.local:80",
+
     ]
     
     @field_validator("OLLAMA_HOSTS", "CORS_ORIGINS", mode="before")

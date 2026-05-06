@@ -10,7 +10,7 @@ cp .env.example .env
 docker-compose up -d
 ```
 
-Visit `http://openmemo.local`.
+Visit `http://localhost:8091`.
 
 ### Prerequisites
 - Docker Desktop (Windows/Mac) or Docker Engine + Compose (Linux)
