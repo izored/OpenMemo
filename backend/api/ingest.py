@@ -1,6 +1,5 @@
 """Content ingestion API - handles URL saving, file uploads, and processing."""
 import uuid
-import shutil
 from datetime import datetime
 from pathlib import Path
 from typing import Optional
@@ -12,63 +11,12 @@ from pydantic import BaseModel
 from backend.config import settings
 from backend.db.database import get_db, AsyncSessionLocal
 from backend.db.models import Memo
+from backend.core.security import sanitize_workspace_id, validate_url, FileUploadHandler
 
 router = APIRouter(prefix="/api/ingest", tags=["ingest"])
 
-# Maximum file size: 50MB
-MAX_FILE_SIZE = 50 * 1024 * 1024
-
-# Magic bytes for common file types
-MAGIC_BYTES = {
-    b"%PDF": "document",
-    b"\x89PNG": "image",
-    b"\xff\xd8\xff": "image",  # JPEG
-    b"RIFF": "audio",  # WAV
-    b"ID3": "audio",  # MP3
-    b"\x66\x74\x79\x70": "audio",  # MP4/M4A
-}
-
-
-def _sanitize_workspace_id(workspace_id: str) -> str:
-    """Sanitize workspace_id to prevent path traversal."""
-    import re
-    sanitized = re.sub(r"[^a-zA-Z0-9_-]", "", workspace_id)
-    if not sanitized or sanitized != workspace_id:
-        raise HTTPException(status_code=400, detail="Invalid workspace_id")
-    return sanitized
-
-
-def _validate_file_type(file: UploadFile, content: bytes) -> str:
-    """Validate file type by magic bytes and extension."""
-    ext = Path(file.filename or "unknown").suffix.lower()
-    allowed_exts = {
-        ".pdf", ".doc", ".docx", ".xlsx", ".xls",
-        ".png", ".jpg", ".jpeg", ".gif", ".webp",
-        ".mp3", ".wav", ".m4a", ".ogg",
-    }
-    if ext not in allowed_exts:
-        raise HTTPException(status_code=400, detail=f"File type not allowed: {ext}")
-    
-    # Check magic bytes
-    header = content[:8]
-    matched = False
-    for magic, expected_type in MAGIC_BYTES.items():
-        if header.startswith(magic):
-            matched = True
-            break
-    
-    # Allow through if extension is in allowed list (magic bytes can fail for docx/xlsx)
-    if not matched and ext not in (".doc", ".docx", ".xlsx", ".xls", ".ogg", ".m4a"):
-        raise HTTPException(status_code=400, detail="File content does not match extension")
-    
-    type_map = {
-        ".pdf": "document", ".doc": "document", ".docx": "document",
-        ".xlsx": "document", ".xls": "document",
-        ".png": "image", ".jpg": "image", ".jpeg": "image",
-        ".gif": "image", ".webp": "image",
-        ".mp3": "audio", ".wav": "audio", ".m4a": "audio", ".ogg": "audio",
-    }
-    return type_map.get(ext, "document")
+# Shared file upload handler
+_upload_handler = FileUploadHandler(settings.FILES_DIR)
 
 
 class URLIngest(BaseModel):
@@ -151,7 +99,7 @@ async def ingest_url(
     
     memo = Memo(
         id=str(uuid.uuid4()),
-        workspace_id=data.workspace_id or "default",
+        workspace_id=sanitize_workspace_id(data.workspace_id),
         type=extracted.get("type", "article"),
         title=extracted.get("title", data.url),
         description=extracted.get("description"),
@@ -183,7 +131,7 @@ async def ingest_note(
     """Create a note memo."""
     memo = Memo(
         id=str(uuid.uuid4()),
-        workspace_id=data.workspace_id or "default",
+        workspace_id=sanitize_workspace_id(data.workspace_id),
         type="note",
         title=data.title,
         content_text=data.content,
@@ -209,46 +157,29 @@ async def ingest_file(
     db: AsyncSession = Depends(get_db),
 ):
     """Upload and ingest a file (PDF, DOCX, image, audio)."""
-    # Sanitize workspace_id
-    workspace_id = _sanitize_workspace_id(workspace_id)
-    
-    # Read file content
-    content = await file.read()
-    if len(content) > MAX_FILE_SIZE:
-        raise HTTPException(status_code=413, detail=f"File too large. Max size: {MAX_FILE_SIZE // (1024*1024)}MB")
-    
-    # Validate file type
-    ext = Path(file.filename or "unknown").suffix.lower()
-    memo_type = _validate_file_type(file, content)
-    
-    # Save file
-    file_dir = Path(settings.FILES_DIR) / workspace_id
-    file_dir.mkdir(parents=True, exist_ok=True)
-    
-    file_id = str(uuid.uuid4())
-    file_path = file_dir / f"{file_id}{ext}"
-    
-    with open(file_path, "wb") as f:
-        f.write(content)
-    
+    ws = sanitize_workspace_id(workspace_id)
+
+    # Use secure upload handler
+    result = await _upload_handler.save(file, workspace_id=ws)
+
     # Create memo
     memo = Memo(
-        id=file_id,
-        workspace_id=workspace_id,
-        type=memo_type,
-        title=Path(file.filename).stem,
-        file_path=str(file_path),
+        id=Path(result.path).stem,
+        workspace_id=ws,
+        type=result.type,
+        title=result.filename,
+        file_path=result.path,
         created_at=datetime.utcnow(),
         updated_at=datetime.utcnow(),
     )
-    
+
     db.add(memo)
     await db.commit()
-    
+
     # Process in background (extract text from file)
-    background_tasks.add_task(process_file_memo, memo.id, str(file_path), memo_type)
-    
-    return {"id": memo.id, "title": memo.title, "type": memo_type, "status": "processing"}
+    background_tasks.add_task(process_file_memo, memo.id, result.path, result.type)
+
+    return {"id": memo.id, "title": memo.title, "type": result.type, "status": "processing"}
 
 
 async def process_file_memo(memo_id: str, file_path: str, memo_type: str):
@@ -305,7 +236,7 @@ async def ingest_from_extension(
     
     memo = Memo(
         id=str(uuid.uuid4()),
-        workspace_id=data.workspace_id or "default",
+        workspace_id=sanitize_workspace_id(data.workspace_id),
         type=data.type,
         title=data.title,
         content_text=data.content_text,

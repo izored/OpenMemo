@@ -10,6 +10,7 @@ from fastapi.responses import FileResponse
 from backend.config import settings
 from backend.db.database import init_db, AsyncSessionLocal
 from backend.db.models import User, Workspace
+from backend.core.security import SafePath
 
 
 @asynccontextmanager
@@ -72,8 +73,7 @@ app.add_middleware(
 )
 
 # Secure file serving — check ownership before returning files
-files_path = Path(settings.FILES_DIR)
-files_path.mkdir(parents=True, exist_ok=True)
+_file_store = SafePath(settings.FILES_DIR)
 
 
 @app.get("/api/files/{file_path:path}")
@@ -82,17 +82,10 @@ async def serve_file(file_path: str):
     from sqlalchemy import select
     from backend.db.database import AsyncSessionLocal
     from backend.db.models import Memo
-    
-    target = files_path / file_path
-    # Prevent path traversal
-    try:
-        target.resolve().relative_to(files_path.resolve())
-    except ValueError:
-        raise HTTPException(status_code=404, detail="File not found")
-    
-    if not target.exists():
-        raise HTTPException(status_code=404, detail="File not found")
-    
+
+    # SafePath resolves and validates traversal
+    target = _file_store.serve_path(file_path)
+
     async with AsyncSessionLocal() as db:
         result = await db.execute(
             select(Memo).where(Memo.file_path == str(target))
@@ -100,7 +93,7 @@ async def serve_file(file_path: str):
         memo = result.scalar_one_or_none()
         if not memo:
             raise HTTPException(status_code=404, detail="File not found")
-    
+
     return FileResponse(str(target))
 
 # Register routers

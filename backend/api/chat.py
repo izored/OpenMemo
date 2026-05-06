@@ -12,6 +12,7 @@ from pydantic import BaseModel
 
 from backend.db.database import get_db
 from backend.db.models import ChatSession, Message
+from backend.core.security import sanitize_workspace_id
 
 router = APIRouter(prefix="/api/chat", tags=["chat"])
 
@@ -146,7 +147,7 @@ async def list_sessions(
     """List chat sessions."""
     query = select(ChatSession).order_by(ChatSession.created_at.desc())
     if workspace_id:
-        query = query.where(ChatSession.workspace_id == workspace_id)
+        query = query.where(ChatSession.workspace_id == sanitize_workspace_id(workspace_id))
     
     result = await db.execute(query)
     sessions = result.scalars().all()

@@ -9,6 +9,7 @@ from backend.db.database import get_db, AsyncSessionLocal
 from backend.db.models import Memo
 from backend.db.fts5 import search_fts5
 from backend.core.embedder import search_similar
+from backend.core.security import sanitize_workspace_id
 
 router = APIRouter(prefix="/api/search", tags=["search"])
 
@@ -19,6 +20,7 @@ async def hybrid_search(
     workspace_id: str = "default",
     limit: int = 20,
 ):
+    workspace_id = sanitize_workspace_id(workspace_id)
     """Hybrid search: full-text + semantic with reciprocal rank fusion."""
     results = []
     existing_ids = set()
