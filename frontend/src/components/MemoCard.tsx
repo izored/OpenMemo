@@ -18,15 +18,15 @@ import type { Memo, MemoType } from '@/types';
 
 const typeConfig: Record<
   MemoType,
-  { icon: any; color: string; label: string; bg: string }
+  { icon: any; label: string; cssBg: string; cssText: string }
 > = {
-  note: { icon: FileText, color: '#92400E', label: 'Notes', bg: '#FEF3C7' },
-  article: { icon: Globe, color: '#1E40AF', label: 'Article', bg: '#EFF6FF' },
-  video: { icon: Video, color: '#991B1B', label: 'Video', bg: '#FEF2F2' },
-  image: { icon: Image, color: '#6B21A8', label: 'Image', bg: '#FAF5FF' },
-  audio: { icon: Mic, color: '#065F46', label: 'Audio', bg: '#ECFDF5' },
-  document: { icon: File, color: '#374151', label: 'File', bg: '#F9FAFB' },
-  link: { icon: Link2, color: '#1E40AF', label: 'Link', bg: '#EFF6FF' },
+  note: { icon: FileText, label: 'Notes', cssBg: 'var(--color-type-note-bg)', cssText: 'var(--color-type-note-text)' },
+  article: { icon: Globe, label: 'Article', cssBg: 'var(--color-type-article-bg)', cssText: 'var(--color-type-article-text)' },
+  video: { icon: Video, label: 'Video', cssBg: 'var(--color-type-video-bg)', cssText: 'var(--color-type-video-text)' },
+  image: { icon: Image, label: 'Image', cssBg: 'var(--color-type-image-bg)', cssText: 'var(--color-type-image-text)' },
+  audio: { icon: Mic, label: 'Audio', cssBg: 'var(--color-type-audio-bg)', cssText: 'var(--color-type-audio-text)' },
+  document: { icon: File, label: 'File', cssBg: 'var(--color-type-document-bg)', cssText: 'var(--color-type-document-text)' },
+  link: { icon: Link2, label: 'Link', cssBg: 'var(--color-type-link-bg)', cssText: 'var(--color-type-link-text)' },
 };
 
 interface MemoCardProps {
@@ -67,7 +67,7 @@ export function MemoCard({ memo, dragHandleProps }: MemoCardProps) {
     <span
       {...(dragHandleProps?.attributes || {})}
       {...(dragHandleProps?.listeners || {})}
-      className="absolute top-3 left-3 z-10 p-2 rounded-lg bg-[#202020]/80 hover:bg-[#202020] text-white backdrop-blur-sm cursor-grab active:cursor-grabbing opacity-0 group-hover:opacity-100 transition-opacity shadow-lg"
+      className="absolute top-3 left-3 z-10 p-2 rounded-lg bg-[var(--color-dark)]/80 hover:bg-[var(--color-dark)] text-[var(--color-bg)] backdrop-blur-sm cursor-grab active:cursor-grabbing opacity-0 group-hover:opacity-100 transition-opacity shadow-lg"
       onClick={(e) => e.stopPropagation()}
       title="Drag to collection"
     >
@@ -79,7 +79,7 @@ export function MemoCard({ memo, dragHandleProps }: MemoCardProps) {
     <button
       onClick={handleDelete}
       className={cn(
-        'absolute top-3 right-3 z-10 w-7 h-7 rounded-full bg-[#ea2804]/90 hover:bg-[#ea2804] text-white flex items-center justify-center opacity-0 group-hover:opacity-100 transition-all shadow-lg',
+        'absolute top-3 right-3 z-10 w-7 h-7 rounded-full bg-[var(--color-brand)]/90 hover:bg-[var(--color-brand)] text-white flex items-center justify-center opacity-0 group-hover:opacity-100 transition-all shadow-lg',
         'delay-[3000ms] duration-300'
       )}
       title="Delete memo"
@@ -94,31 +94,31 @@ export function MemoCard({ memo, dragHandleProps }: MemoCardProps) {
       <div
         onClick={handleClick}
         className="group relative rounded-[28px] p-8 cursor-pointer transition-all duration-300 hover:shadow-xl hover:-translate-y-1 min-h-[320px] flex flex-col"
-        style={{ backgroundColor: config.bg }}
+        style={{ backgroundColor: config.cssBg }}
       >
         <DragHandle />
         <DeleteButton />
-        <h3 className="text-lg font-bold line-clamp-3 leading-snug mb-4 pr-6" style={{ color: config.color }}>
+        <h3 className="text-lg font-bold line-clamp-3 leading-snug mb-4 pr-6" style={{ color: config.cssText }}>
           {memo.title}
         </h3>
         {memo.content_text && (
-          <p className="text-[15px] line-clamp-5 leading-relaxed opacity-75 mb-6" style={{ color: config.color }}>
+          <p className="text-[15px] line-clamp-5 leading-relaxed opacity-75 mb-6" style={{ color: config.cssText }}>
             {memo.content_text}
           </p>
         )}
         {!memo.content_text && memo.description && (
-          <p className="text-[15px] line-clamp-5 leading-relaxed opacity-75 mb-6" style={{ color: config.color }}>
+          <p className="text-[15px] line-clamp-5 leading-relaxed opacity-75 mb-6" style={{ color: config.cssText }}>
             {memo.description}
           </p>
         )}
         <div className="mt-auto pt-5 border-t border-black/5 flex items-center justify-between">
           <div className="flex items-center gap-2.5">
-            <Icon size={16} style={{ color: config.color }} />
-            <span className="text-sm font-semibold" style={{ color: config.color }}>
+            <Icon size={16} style={{ color: config.cssText }} />
+            <span className="text-sm font-semibold" style={{ color: config.cssText }}>
               {config.label}
             </span>
           </div>
-          <span className="text-[13px] opacity-50 font-medium" style={{ color: config.color }}>
+          <span className="text-[13px] opacity-50 font-medium" style={{ color: config.cssText }}>
             {formattedDate}
           </span>
         </div>
@@ -145,7 +145,7 @@ export function MemoCard({ memo, dragHandleProps }: MemoCardProps) {
             />
           </div>
         ) : (
-          <div className="aspect-square flex items-center justify-center" style={{ backgroundColor: config.bg }}>
+          <div className="aspect-square flex items-center justify-center" style={{ backgroundColor: config.cssBg }}>
             <Icon size={64} className="text-[var(--color-text-muted)] opacity-20" />
           </div>
         )}
@@ -190,7 +190,7 @@ export function MemoCard({ memo, dragHandleProps }: MemoCardProps) {
 
           </div>
         ) : (
-          <div className="aspect-[4/3] flex items-center justify-center relative" style={{ backgroundColor: config.bg }}>
+          <div className="aspect-[4/3] flex items-center justify-center relative" style={{ backgroundColor: config.cssBg }}>
             <Icon size={64} className="text-[var(--color-text-muted)] opacity-20" />
           </div>
         )}
@@ -232,7 +232,7 @@ export function MemoCard({ memo, dragHandleProps }: MemoCardProps) {
               onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }} />
           </div>
         ) : (
-          <div className="aspect-[4/3] flex items-center justify-center" style={{ backgroundColor: config.bg }}>
+          <div className="aspect-[4/3] flex items-center justify-center" style={{ backgroundColor: config.cssBg }}>
             <Icon size={64} className="text-[var(--color-text-muted)] opacity-20" />
           </div>
         )}
@@ -276,7 +276,7 @@ export function MemoCard({ memo, dragHandleProps }: MemoCardProps) {
 
         </div>
       ) : (
-        <div className="aspect-[4/3] flex items-center justify-center relative" style={{ backgroundColor: config.bg }}>
+        <div className="aspect-[4/3] flex items-center justify-center relative" style={{ backgroundColor: config.cssBg }}>
           {memo.source_favicon ? (
             <img src={memo.source_favicon} alt="" className="w-20 h-20 rounded-2xl"
               onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }} />

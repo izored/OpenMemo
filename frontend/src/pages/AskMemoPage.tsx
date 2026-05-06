@@ -104,18 +104,18 @@ export function AskMemoPage() {
   };
 
   return (
-    <div className="h-full flex flex-col bg-white">
+    <div className="h-full flex flex-col bg-[var(--color-bg-card)]">
       {/* Header */}
-      <header className="flex items-center justify-between px-6 py-4 pl-14 border-b border-[#e5e5e5]">
+      <header className="flex items-center justify-between px-6 py-4 pl-14 border-b border-[var(--color-border)]">
         <div className="flex items-center gap-2.5">
-          <Sparkles size={20} className="text-[#ea2804]" />
-          <h1 className="text-xl font-semibold text-[#202020] tracking-tight">AskMemo</h1>
+          <Sparkles size={20} className="text-[var(--color-brand)]" />
+          <h1 className="text-xl font-semibold text-[var(--color-text)] tracking-tight">AskMemo</h1>
         </div>
         <div className="flex items-center gap-3">
           <select
             value={chatModel}
             onChange={(e) => setChatModel(e.target.value)}
-            className="px-3 py-1.5 border border-[#e5e5e5] rounded-full text-sm text-[#202020] bg-white font-mono text-xs focus:outline-none focus:border-[#202020]"
+            className="px-3 py-1.5 border border-[var(--color-border)] rounded-full text-sm text-[var(--color-text)] bg-[var(--color-bg-card)] font-mono text-xs focus:outline-none focus:border-[var(--color-text)]"
           >
             {(modelsData?.models || []).map((m: any) => (
               <option key={m.name} value={m.name}>{m.name}</option>
@@ -131,14 +131,14 @@ export function AskMemoPage() {
       <div ref={scrollRef} className="flex-1 overflow-y-auto p-6 space-y-6">
         {messages.length === 0 && (
           <div className="flex flex-col items-center justify-center h-full text-center">
-            <div className="w-16 h-16 rounded-full bg-[#FEE4E0] flex items-center justify-center mb-4">
-              <Bot size={28} className="text-[#ea2804]" />
+            <div className="w-16 h-16 rounded-full bg-[var(--color-brand-light)] flex items-center justify-center mb-4">
+              <Bot size={28} className="text-[var(--color-brand)]" />
             </div>
-            <h3 className="text-lg font-semibold text-[#202020] mb-2 tracking-tight">Ask anything about your memos</h3>
-            <p className="text-sm text-[#646464] max-w-md leading-relaxed">
+            <h3 className="text-lg font-semibold text-[var(--color-text)] mb-2 tracking-tight">Ask anything about your memos</h3>
+            <p className="text-sm text-[var(--color-text-secondary)] max-w-md leading-relaxed">
               I'll search through your saved articles, notes, and documents to give you grounded answers with citations.
             </p>
-            <p className="text-xs text-[#8d8d8d] mt-3 font-mono">
+            <p className="text-xs text-[var(--color-text-muted)] mt-3 font-mono">
               Tip: Start with @ to use general knowledge (no RAG)
             </p>
           </div>
@@ -147,16 +147,16 @@ export function AskMemoPage() {
         {messages.map((msg) => (
           <div key={msg.id} className={cn('flex gap-3', msg.role === 'user' && 'justify-end')}>
             {msg.role === 'assistant' && (
-              <div className="w-8 h-8 rounded-full bg-[#FEE4E0] flex items-center justify-center flex-shrink-0">
-                <Bot size={16} className="text-[#ea2804]" />
+              <div className="w-8 h-8 rounded-full bg-[var(--color-brand-light)] flex items-center justify-center flex-shrink-0">
+                <Bot size={16} className="text-[var(--color-brand)]" />
               </div>
             )}
             <div
               className={cn(
                 'max-w-[70%] rounded-2xl px-4 py-3',
                 msg.role === 'user'
-                  ? 'bg-[#202020] text-white'
-                  : 'bg-[#f5f5f5] text-[#202020]'
+                  ? 'bg-[var(--color-bg-active)] text-[var(--color-text-active)]'
+                  : 'bg-[var(--color-bg-hover)] text-[var(--color-text)]'
               )}
             >
               {msg.role === 'assistant' ? (
@@ -164,9 +164,9 @@ export function AskMemoPage() {
                   <ReactMarkdown components={{
                     code: ({node, inline, className, children, ...props}: any) => (
                       inline ? (
-                        <code className="bg-[#24292e] text-white px-1 py-0.5 rounded text-[11px] font-mono" {...props}>{children}</code>
+                        <code className="bg-[var(--color-bg-code)] text-white px-1 py-0.5 rounded text-[11px] font-mono" {...props}>{children}</code>
                       ) : (
-                        <pre className="bg-[#24292e] text-white p-3 rounded-xl overflow-x-auto font-mono text-[11px] my-2" {...props}>
+                        <pre className="bg-[var(--color-bg-code)] text-white p-3 rounded-xl overflow-x-auto font-mono text-[11px] my-2" {...props}>
                           <code>{children}</code>
                         </pre>
                       )
@@ -177,11 +177,11 @@ export function AskMemoPage() {
                 <p className="text-sm">{msg.content}</p>
               )}
               {msg.sources && msg.sources.length > 0 && (
-                <div className="mt-3 pt-2 border-t border-[#e5e5e5] flex flex-wrap gap-1.5">
+                <div className="mt-3 pt-2 border-t border-[var(--color-border)] flex flex-wrap gap-1.5">
                   {msg.sources.map((s: any, i: number) => (
                     <span
                       key={i}
-                      className="inline-flex items-center gap-1 px-2.5 py-0.5 bg-white rounded-full text-[11px] text-[#646464] border border-[#e5e5e5] font-mono"
+                      className="inline-flex items-center gap-1 px-2.5 py-0.5 bg-[var(--color-bg-card)] rounded-full text-[11px] text-[var(--color-text-secondary)] border border-[var(--color-border)] font-mono"
                       title={s.snippet}
                     >
                       <Globe size={9} />
@@ -192,8 +192,8 @@ export function AskMemoPage() {
               )}
             </div>
             {msg.role === 'user' && (
-              <div className="w-8 h-8 rounded-full bg-[#e5e5e5] flex items-center justify-center flex-shrink-0">
-                <User size={16} className="text-[#646464]" />
+              <div className="w-8 h-8 rounded-full bg-[var(--color-bg-hover)] flex items-center justify-center flex-shrink-0">
+                <User size={16} className="text-[var(--color-text-secondary)]" />
               </div>
             )}
           </div>
@@ -201,7 +201,7 @@ export function AskMemoPage() {
       </div>
 
       {/* Input */}
-      <div className="p-4 border-t border-[#e5e5e5]">
+      <div className="p-4 border-t border-[var(--color-border)]">
         <div className="flex items-center gap-2 max-w-3xl mx-auto">
           <input
             type="text"
@@ -209,13 +209,13 @@ export function AskMemoPage() {
             onChange={(e) => setInput(e.target.value)}
             onKeyDown={(e) => e.key === 'Enter' && !e.shiftKey && handleSend()}
             placeholder="Ask about your saved knowledge..."
-            className="flex-1 px-5 py-3 border border-[#e5e5e5] rounded-full text-sm focus:outline-none focus:border-[#202020] bg-white transition-colors"
+            className="flex-1 px-5 py-3 border border-[var(--color-border)] rounded-full text-sm focus:outline-none focus:border-[var(--color-text)] bg-[var(--color-bg-card)] transition-colors"
             disabled={streaming}
           />
           <button
             onClick={handleSend}
             disabled={!input.trim() || streaming}
-            className="p-3 bg-[#202020] text-white rounded-full hover:bg-black disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+            className="p-3 bg-[var(--color-bg-active)] text-[var(--color-text-active)] rounded-full hover:bg-[var(--color-text)] disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
           >
             {streaming ? <Loader2 size={18} className="animate-spin" /> : <Send size={18} />}
           </button>

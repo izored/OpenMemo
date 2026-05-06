@@ -169,7 +169,7 @@ export function MemoDetail() {
   if (isLoading) {
     return (
       <div className="flex items-center justify-center h-full">
-        <div className="w-8 h-8 border-2 border-[#ea2804] border-t-transparent rounded-full animate-spin" />
+        <div className="w-8 h-8 border-2 border-[var(--color-brand)] border-t-transparent rounded-full animate-spin" />
       </div>
     );
   }
@@ -215,7 +215,7 @@ export function MemoDetail() {
                 <button
                   onClick={handleSave}
                   disabled={saving}
-                  className="flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium text-white bg-[#202020] rounded-full transition-colors disabled:opacity-50"
+                  className="flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium text-[var(--color-text-active)] bg-[var(--color-bg-active)] rounded-full transition-colors disabled:opacity-50"
                 >
                   {saving ? <Loader2 size={14} className="animate-spin" /> : <Save size={14} />}
                   Save
@@ -242,7 +242,7 @@ export function MemoDetail() {
             )}
             <button
               onClick={() => setChatOpen(!chatOpen)}
-              className={`p-2 rounded-full transition-colors ${chatOpen ? 'bg-[#FEE4E0] text-[#ea2804]' : 'hover:bg-[var(--color-bg-hover)] text-[var(--color-text-secondary)]'}`}
+              className={`p-2 rounded-full transition-colors ${chatOpen ? 'bg-[var(--color-brand-light)] text-[var(--color-brand)]' : 'hover:bg-[var(--color-bg-hover)] text-[var(--color-text-secondary)]'}`}
             >
               <MessageSquare size={16} />
             </button>
@@ -257,7 +257,7 @@ export function MemoDetail() {
               <input
                 value={editTitle}
                 onChange={(e) => setEditTitle(e.target.value)}
-                className="w-full text-2xl font-bold text-[var(--color-text)] mb-2 tracking-tight bg-transparent border-b-2 border-[var(--color-border)] focus:border-[#202020] outline-none pb-2"
+                className="w-full text-2xl font-bold text-[var(--color-text)] mb-2 tracking-tight bg-transparent border-b-2 border-[var(--color-border)] focus:border-[var(--color-text)] outline-none pb-2"
               />
             ) : (
               <h1 className="text-2xl font-bold text-[var(--color-text)] mb-2 tracking-tight">{memo.title}</h1>
@@ -273,7 +273,7 @@ export function MemoDetail() {
                     href={memo.source_url}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="flex items-center gap-1 hover:text-[#ea2804] transition-colors link-dotted"
+                    className="flex items-center gap-1 hover:text-[var(--color-brand)] transition-colors link-dotted"
                   >
                     {memo.source_favicon && <img src={memo.source_favicon} alt="" className="w-4 h-4 rounded-full" />}
                     {memo.source_domain}
@@ -288,7 +288,7 @@ export function MemoDetail() {
                     value={editSourceUrl}
                     onChange={(e) => setEditSourceUrl(e.target.value)}
                     placeholder="Source URL"
-                    className="flex-1 min-w-[200px] bg-transparent border-b border-[var(--color-border)] focus:border-[#202020] outline-none text-sm"
+                    className="flex-1 min-w-[200px] bg-transparent border-b border-[var(--color-border)] focus:border-[var(--color-text)] outline-none text-sm"
                   />
                 </>
               )}
@@ -315,7 +315,7 @@ export function MemoDetail() {
                   {editTags.map((tag) => (
                     <span key={tag} className="inline-flex items-center gap-1 px-2.5 py-1 bg-[var(--color-bg-hover)] rounded-full text-xs font-semibold">
                       {tag}
-                      <button onClick={() => removeTag(tag)} className="hover:text-[#ea2804]"><X size={12} /></button>
+                      <button onClick={() => removeTag(tag)} className="hover:text-[var(--color-brand)]"><X size={12} /></button>
                     </span>
                   ))}
                   <input
@@ -323,7 +323,7 @@ export function MemoDetail() {
                     onChange={(e) => setEditTagInput(e.target.value)}
                     onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); addTag(); } }}
                     placeholder="Add tag..."
-                    className="px-2 py-1 text-xs border border-[var(--color-border)] rounded-full outline-none focus:border-[#202020]"
+                    className="px-2 py-1 text-xs border border-[var(--color-border)] rounded-full outline-none focus:border-[var(--color-text)]"
                   />
                 </div>
               </div>
@@ -343,8 +343,8 @@ export function MemoDetail() {
                       onClick={() => toggleCollection(col.id)}
                       className={`px-3 py-1.5 rounded-full text-xs font-semibold transition-colors ${
                         editCollectionIds.includes(col.id)
-                          ? 'bg-[#202020] text-white'
-                          : 'bg-[var(--color-bg-hover)] text-[var(--color-text-secondary)] hover:bg-[#e5e5e5]'
+                          ? 'bg-[var(--color-bg-active)] text-[var(--color-text-active)]'
+                          : 'bg-[var(--color-bg-hover)] text-[var(--color-text-secondary)] hover:bg-[var(--color-border)]'
                       }`}
                     >
                       {col.emoji} {col.name}
@@ -360,7 +360,7 @@ export function MemoDetail() {
                 {memo.ai_summary ? (
                   <div className="mb-6 p-5 rounded-2xl border border-[#ea2804]/20 bg-[var(--color-brand-light)]">
                     <div className="flex items-center gap-2 mb-2">
-                      <Sparkles size={16} className="text-[#ea2804]" />
+                      <Sparkles size={16} className="text-[var(--color-brand)]" />
                       <span className="text-sm font-semibold text-[var(--color-text)]">AI Summary</span>
                     </div>
                     <div className="text-sm text-[var(--color-text)] prose prose-sm max-w-none">
@@ -371,7 +371,7 @@ export function MemoDetail() {
                   <button
                     onClick={handleGenerateSummary}
                     disabled={generatingSummary}
-                    className="mb-6 flex items-center gap-2 px-5 py-2 border border-[#202020] text-[var(--color-text)] rounded-full text-sm font-semibold hover:bg-[var(--color-bg-hover)] disabled:opacity-40 transition-colors"
+                    className="mb-6 flex items-center gap-2 px-5 py-2 border border-[var(--color-text)] text-[var(--color-text)] rounded-full text-sm font-semibold hover:bg-[var(--color-bg-hover)] disabled:opacity-40 transition-colors"
                   >
                     {generatingSummary ? <Loader2 size={14} className="animate-spin" /> : <Sparkles size={14} />}
                     Generate AI Summary
@@ -389,7 +389,7 @@ export function MemoDetail() {
 
             {/* Video */}
             {youtubeId && !isEditing && (
-              <div className="mb-6 aspect-video rounded-2xl overflow-hidden bg-[#202020]">
+              <div className="mb-6 aspect-video rounded-2xl overflow-hidden bg-[var(--color-bg-active)]">
                 <iframe
                   src={`https://www.youtube.com/embed/${youtubeId}`}
                   className="w-full h-full"
@@ -426,7 +426,7 @@ export function MemoDetail() {
                       href={memo.source_url}
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="inline-flex items-center gap-2 px-5 py-2.5 bg-[#202020] text-white rounded-full text-sm font-semibold hover:bg-black transition-colors"
+                      className="inline-flex items-center gap-2 px-5 py-2.5 bg-[var(--color-bg-active)] text-[var(--color-text-active)] rounded-full text-sm font-semibold hover:bg-[var(--color-text)] transition-colors"
                     >
                       Open Original
                       <ExternalLink size={14} />
@@ -449,9 +449,9 @@ export function MemoDetail() {
                         <ReactMarkdown components={{
                           code: ({node, inline, className, children, ...props}: any) => (
                             inline ? (
-                              <code className="bg-[#24292e] text-white px-1 py-0.5 rounded text-[11px] font-mono" {...props}>{children}</code>
+                              <code className="bg-[var(--color-bg-code)] text-white px-1 py-0.5 rounded text-[11px] font-mono" {...props}>{children}</code>
                             ) : (
-                              <pre className="bg-[#24292e] text-white p-4 rounded-xl overflow-x-auto font-mono text-[12px] my-3" {...props}>
+                              <pre className="bg-[var(--color-bg-code)] text-white p-4 rounded-xl overflow-x-auto font-mono text-[12px] my-3" {...props}>
                                 <code>{children}</code>
                               </pre>
                             )
@@ -470,9 +470,9 @@ export function MemoDetail() {
                 <ReactMarkdown components={{
                   code: ({node, inline, className, children, ...props}: any) => (
                     inline ? (
-                      <code className="bg-[#24292e] text-white px-1 py-0.5 rounded text-[11px] font-mono" {...props}>{children}</code>
+                      <code className="bg-[var(--color-bg-code)] text-white px-1 py-0.5 rounded text-[11px] font-mono" {...props}>{children}</code>
                     ) : (
-                      <pre className="bg-[#24292e] text-white p-4 rounded-xl overflow-x-auto font-mono text-[12px] my-3" {...props}>
+                      <pre className="bg-[var(--color-bg-code)] text-white p-4 rounded-xl overflow-x-auto font-mono text-[12px] my-3" {...props}>
                         <code>{children}</code>
                       </pre>
                     )
@@ -489,7 +489,7 @@ export function MemoDetail() {
                   value={editContent}
                   onChange={(e) => setEditContent(e.target.value)}
                   rows={12}
-                  className="w-full p-4 rounded-2xl border border-[var(--color-border)] text-sm text-[var(--color-text)] outline-none focus:border-[#202020] resize-y font-mono"
+                  className="w-full p-4 rounded-2xl border border-[var(--color-border)] text-sm text-[var(--color-text)] outline-none focus:border-[var(--color-text)] resize-y font-mono"
                 />
               </div>
             )}
@@ -509,7 +509,7 @@ export function MemoDetail() {
                   onChange={(e) => setEditNotes(e.target.value)}
                   rows={6}
                   placeholder="Add your thoughts, annotations, or highlights..."
-                  className="w-full p-4 rounded-2xl border border-[var(--color-border)] text-sm text-[var(--color-text)] outline-none focus:border-[#202020] resize-y bg-[#FFFDF5]"
+                  className="w-full p-4 rounded-2xl border border-[var(--color-border)] text-sm text-[var(--color-text)] outline-none focus:border-[var(--color-text)] resize-y bg-[var(--color-type-note-bg)]"
                 />
               ) : (
                 <textarea
@@ -517,7 +517,7 @@ export function MemoDetail() {
                   onChange={(e) => setNotesDraft(e.target.value)}
                   rows={4}
                   placeholder="Click to add your thoughts, annotations, or highlights..."
-                  className="w-full p-4 rounded-2xl border border-[var(--color-border)] text-sm text-[var(--color-text)] outline-none focus:border-[#ea2804] focus:ring-1 focus:ring-[#ea2804]/20 resize-y bg-[#FFFDF5] transition-all"
+                  className="w-full p-4 rounded-2xl border border-[var(--color-border)] text-sm text-[var(--color-text)] outline-none focus:border-[var(--color-brand)] focus:ring-1 focus:ring-[var(--color-brand)]/20 resize-y bg-[var(--color-type-note-bg)] transition-all"
                 />
               )}
             </div>
@@ -531,7 +531,7 @@ export function MemoDetail() {
                     <button
                       key={r.id}
                       onClick={() => navigate(`/memo/${r.id}`)}
-                      className="flex-shrink-0 w-48 p-3 border border-[var(--color-border)] rounded-2xl hover:border-[#202020] text-left transition-colors"
+                      className="flex-shrink-0 w-48 p-3 border border-[var(--color-border)] rounded-2xl hover:border-[var(--color-text)] text-left transition-colors"
                     >
                       <p className="text-sm font-semibold text-[var(--color-text)] line-clamp-2">{r.title}</p>
                       <p className="text-[11px] text-[var(--color-text-muted)] mt-1 font-mono">{r.source_domain || r.type}</p>

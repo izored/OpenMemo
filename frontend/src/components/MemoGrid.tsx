@@ -88,13 +88,13 @@ export function MemoGrid({ memos }: MemoGridProps) {
   if (memos.length === 0) {
     return (
       <div className="flex flex-col items-center justify-center py-32 text-center">
-        <div className="w-24 h-24 rounded-full bg-[#FEE4E0] flex items-center justify-center mb-6">
+        <div className="w-24 h-24 rounded-full bg-[var(--color-brand-light)] flex items-center justify-center mb-6">
           <span className="text-4xl">&#128218;</span>
         </div>
-        <h3 className="text-xl font-bold text-[#202020] mb-3 tracking-tight">
+        <h3 className="text-xl font-bold text-[var(--color-text)] mb-3 tracking-tight">
           No memos yet
         </h3>
-        <p className="text-[15px] text-[#646464] max-w-sm leading-relaxed">
+        <p className="text-[15px] text-[var(--color-text-secondary)] max-w-sm leading-relaxed">
           Start by saving your first article, note, or file. Use the &quot;Add New&quot;
           button below.
         </p>
