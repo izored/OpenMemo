@@ -8,17 +8,53 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [1.7.1] - 2026-05-06
 
-### Fixed
+### Added
 
-- 🐛 **Fixed `Prism is not defined` fatal error** — Vite 8's Rolldown bundler wrapped `prismjs` (transitive dep via `@mdxeditor/editor` → `@lexical/code`) in an IIFE, scoping `var Prism` locally. `@lexical/code` referenced bare `Prism` as a free variable, causing a `ReferenceError` that killed the entire JS bundle before React could mount. Downgraded `vite` to 7.3.2 and `@vitejs/plugin-react` to 4.7.0 to restore Rollup-based bundling
-- 🐛 **Fixed Ollama `/api/embed` 404 on older versions** — Added automatic fallback from modern `/api/embed` to legacy `/api/embeddings` endpoint in `ollama_client.py`. `embed()` and `embed_batch()` both retry with the legacy endpoint on 404
-- 🐛 **Fixed memo sort 422 error** — `PUT /api/memos/{id}/sort` expected `sort_order` as a query parameter, but the frontend sent it in the JSON body. Changed the endpoint to accept a `SortUpdate` Pydantic model from the request body
-- 🎨 **Removed all blur effects** — Removed `backdrop-blur-sm` from `MemoCard.tsx` drag handle per user preference (no blur anywhere)
+- 🎨 Centralized CSS token system in `index.css` with light/dark variants
+- 🎨 All hardcoded `#hex`, `rgb()`, `bg-white`, `bg-[#...]` Tailwind values replaced with `var(--color-*)` tokens
+- 🎨 Added type-specific dark tokens: `--color-type-{note,article,video,image,audio,document,link}-{bg,text}`
+- 🎨 Scrollbar colors use CSS variables
+- 🎨 `::selection` dark mode override
+- 🎨 Dark mode auto-application on load disabled — manual toggle only until fully polished
+- 🧱 `<PageBox>` — `rounded-2xl` container with `var(--color-bg-card)` and dark mode baked in
+- 🧱 `<BackButton>` — reusable brand-colored back navigation
+- 🧱 `<Card>` — generic card base with consistent padding, radius, shadow, and dark mode
+- ⚡ `transitions.css` with named durations: `--transition-fast: 150ms`, `--transition-base: 280ms ease-out`, `--transition-slow: 400ms ease-out`
+- ⚡ `--ease-out`, `--ease-in-out`, `--ease-spring` tokens
+- ⚡ Sidebar slide: `320ms` with `cubic-bezier(0.16, 1, 0.3, 1)` easing
+- ⚡ Hamburger fade-in delay: `450ms` after sidebar closes
+- 🗄️ `BaseService` generic class with `get()`, `get_or_404()`, `list()`, `create()`, `update()`, `delete()`
+- 🗄️ `MemoService`: `list_by_workspace()`, `create_memo()`, `update_memo()` with safe relation replacement
+- 🔒 `backend/core/security/sanitize.py` — unified input sanitization (`sanitize_workspace_id`, `sanitize_filename`, `escape_fts5_query`, `validate_url`, `sanitize_string`, `SafePath`)
+- 🔒 `backend/core/security/upload.py` — `FileUploadHandler` with size limits, extension whitelist, magic byte validation, UUID-based filenames
+- 📝 Installed `@mdxeditor/editor`
+- 📝 `<MarkdownEditor>` component with plugins: headings, lists, quotes, thematic breaks, markdown shortcuts, bold/italic/underline toolbar
+- 📝 Note-type memos: inline markdown editor in `MemoDetail` (click to edit, auto-save on blur)
+- 🙏 SettingsPage "Built With" section listing open-source dependencies
+- 🙏 README.md "Credits & Open Source" section
 
 ### Changed
 
+- 🎨 Removed `bgColor` from Zustand store — background now pure CSS-driven
+- 📐 Standardized inner content padding — no arbitrary `p-3`, `p-7` scattered around
+- 📐 `MemoCastPage`, `AskMemoPage`: `rounded-2xl overflow-hidden` containers
+- 📐 Back button moved above title in `MemoDetail`, inline style
+- 🔍 Removed `Ctrl+K` kbd badge from search input
+- 🔍 Placeholder text: `"Search memos…  Ctrl+K"`
+- 🎴 Note cards show `content_raw` as fallback preview when `content_text` is empty
 - ⬆️ `vite` 8.0.10 → 7.3.2 (bundler regression fix)
 - ⬆️ `@vitejs/plugin-react` 6.0.1 → 4.7.0 (Vite 7 compatibility)
+
+### Fixed
+
+- 🐛 **Fixed `Prism is not defined` fatal error** — Vite 8's Rolldown bundler wrapped `prismjs` in an IIFE, scoping `var Prism` locally. `@lexical/code` referenced bare `Prism` as a free variable, causing a `ReferenceError` that killed the entire JS bundle before React could mount. Downgraded `vite` to 7.3.2 and `@vitejs/plugin-react` to 4.7.0 to restore Rollup-based bundling
+- 🐛 **Fixed Ollama `/api/embed` 404 on older versions** — Added automatic fallback from modern `/api/embed` to legacy `/api/embeddings` endpoint in `ollama_client.py`. `embed()` and `embed_batch()` both retry with the legacy endpoint on 404
+- 🐛 **Fixed memo sort 422 error** — `PUT /api/memos/{id}/sort` expected `sort_order` as a query parameter, but the frontend sent it in the JSON body. Changed the endpoint to accept a `SortUpdate` Pydantic model from the request body
+- 🎨 **Removed all blur effects** — Removed `backdrop-blur-sm` from `MemoCard.tsx` drag handle per user preference (no blur anywhere)
+- 🔒 All 13 API endpoints now use `sanitize_workspace_id()`
+- 🔒 `ingest.py` refactored: removed inline sanitization, uses shared module
+- 🔒 `main.py` `serve_file()` uses `SafePath.serve_path()`
+- 🔒 `fts5.py` deduplicated: imports `escape_fts5_query` from `sanitize.py`
 
 ---
 

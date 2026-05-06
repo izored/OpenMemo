@@ -216,7 +216,7 @@ We love contributions! See [`CONTRIBUTING.md`](CONTRIBUTING.md) for setup, codin
 
 OpenMemo stands on the shoulders of incredible open-source projects:
 
-- **[MDXEditor](https://mdxeditor.dev)** — Inline markdown editing. Thank you to Petyo Ivanov and contributors for building a beautiful WYSIWYG markdown editor.
+- **[MDXEditor](https://mdxeditor.dev)** — Inline markdown editing. Thank you to Petyo Ivanov and contributors for building a beautiful markdown editor.
 - **[Ollama](https://ollama.ai)** — Local LLM inference made simple. The heart of our AI features.
 - **[ChromaDB](https://chromadb.dev)** — Vector database for semantic search.
 - **[TanStack Query](https://tanstack.com/query)** — Elegant data fetching and caching.
