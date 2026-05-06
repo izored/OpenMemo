@@ -122,7 +122,7 @@ export function MemoGrid({ memos: serverMemos }: MemoGridProps) {
       onDragEnd={handleDragEnd}
     >
       <SortableContext items={localMemos.map((m) => m.id)} strategy={rectSortingStrategy}>
-        <div className="max-w-[1280px] mx-auto">
+        <div className="max-w-[1280px] mx-auto pb-4">
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-8">
             {localMemos.map((memo) => (
               <SortableMemoCard key={memo.id} memo={memo} />

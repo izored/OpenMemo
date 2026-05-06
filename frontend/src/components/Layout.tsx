@@ -28,7 +28,7 @@ export function Layout() {
       </div>
 
       {/* Main content */}
-      <div className="relative flex-1 min-w-0 overflow-hidden">
+      <div className="relative flex-1 min-w-0 overflow-x-hidden">
         {/* Backdrop — dims content when sidebar open, click to close */}
         <div
           onClick={toggleSidebar}
