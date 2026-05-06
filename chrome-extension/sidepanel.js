@@ -1,10 +1,17 @@
 // OpenMemo Side Panel - Shows AI summary of current page
 
-const API_BASE = 'http://openmemo.local/api';
+const DEFAULT_API_BASE = 'http://localhost/api';
+
+async function getApiBase() {
+  const stored = await chrome.storage.sync.get('apiBase');
+  return stored.apiBase || DEFAULT_API_BASE;
+}
+
 const contentEl = document.getElementById('content');
 
 async function summarizeCurrentPage() {
   try {
+    const API_BASE = await getApiBase();
     const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
     
     // Extract page content
@@ -41,9 +48,6 @@ async function summarizeCurrentPage() {
     const decoder = new TextDecoder();
     let summary = '';
     
-    contentEl.innerHTML = '<h2>AI Summary</h2><p id="summary-text"></p>';
-    const summaryEl = document.getElementById('summary-text');
-
     while (true) {
       const { done, value } = await reader.read();
       if (done) break;
@@ -52,25 +56,44 @@ async function summarizeCurrentPage() {
       const lines = chunk.split('\n');
       
       for (const line of lines) {
-        if (!line.startsWith('data: ')) continue;
-        try {
-          const data = JSON.parse(line.slice(6));
-          if (data.type === 'token') {
-            summary += data.data;
-            summaryEl.textContent = summary;
-          }
-        } catch {}
+        if (line.startsWith('data: ')) {
+          const data = line.slice(6);
+          if (data === '[DONE]') continue;
+          try {
+            const parsed = JSON.parse(data);
+            if (parsed.content) {
+              summary += parsed.content;
+              contentEl.innerHTML = formatSummary(summary);
+            }
+          } catch {}
+        }
       }
     }
   } catch (err) {
-    contentEl.innerHTML = `<p>Error: ${err.message}. Make sure OpenMemo server is running.</p>`;
+    contentEl.innerHTML = `<p>Error: ${err.message}</p>`;
   }
 }
 
-summarizeCurrentPage();
+function formatSummary(text) {
+  // Convert markdown-like formatting to HTML
+  return text
+    .replace(/#{3}\s+(.+)/g, '<h3>$1</h3>')
+    .replace(/#{2}\s+(.+)/g, '<h2>$1</h2>')
+    .replace(/#{1}\s+(.+)/g, '<h1>$1</h1>')
+    .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
+    .replace(/\*(.+?)\*/g, '<em>$1</em>')
+    .replace(/`(.+?)`/g, '<code>$1</code>')
+    .replace(/\n\n/g, '</p><p>')
+    .replace(/\n/g, '<br>')
+    .replace(/^(.+)$/gm, (match) => {
+      if (match.startsWith('- ') || match.startsWith('• ')) {
+        return `<li>${match.slice(2)}</li>`;
+      }
+      return match;
+    })
+    .replace(/(<li>.+<\/li>)+/g, '<ul>$&</ul>')
+    .replace(/<\/ul><ul>/g, '');
+}
 
-// Re-summarize when tab changes
-chrome.tabs.onActivated.addListener(() => {
-  contentEl.innerHTML = '<div class="loading">Generating summary...</div>';
-  summarizeCurrentPage();
-});
+// Auto-summarize when panel opens
+summarizeCurrentPage();

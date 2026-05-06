@@ -1,6 +1,11 @@
 // OpenMemo Chrome Extension - Background Service Worker
 
-const API_BASE = 'http://openmemo.local/api';
+const DEFAULT_API_BASE = 'http://localhost/api';
+
+async function getApiBase() {
+  const stored = await chrome.storage.sync.get('apiBase');
+  return stored.apiBase || DEFAULT_API_BASE;
+}
 
 // Context menu setup
 chrome.runtime.onInstalled.addListener(() => {
@@ -15,6 +20,7 @@ chrome.runtime.onInstalled.addListener(() => {
 chrome.contextMenus.onClicked.addListener(async (info, tab) => {
   if (info.menuItemId === 'save-to-openmemo') {
     try {
+      const API_BASE = await getApiBase();
       // Get page content via content script
       const [result] = await chrome.scripting.executeScript({
         target: { tabId: tab.id },
@@ -72,6 +78,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 
 async function savePage(data) {
   try {
+    const API_BASE = await getApiBase();
     const response = await fetch(`${API_BASE}/ingest/extension`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -85,6 +92,7 @@ async function savePage(data) {
 
 async function checkConnection() {
   try {
+    const API_BASE = await getApiBase();
     const response = await fetch(`${API_BASE}/health`);
     const data = await response.json();
     return { connected: true, ollama: data.ollama_connected };
