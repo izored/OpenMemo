@@ -6,6 +6,22 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ---
 
+## [1.7.1] - 2026-05-06
+
+### Fixed
+
+- **Blank page / `Prism is not defined` fatal error** — Vite 8's Rolldown bundler wrapped `prismjs` (transitive dep via `@mdxeditor/editor` → `@lexical/code`) in an IIFE, scoping `var Prism` locally. `@lexical/code` referenced bare `Prism` as a free variable, causing a `ReferenceError` that killed the entire JS bundle before React could mount. Downgraded `vite` to 7.3.2 and `@vitejs/plugin-react` to 4.7.0 to restore Rollup-based bundling
+- **Ollama `/api/embed` 404 on older versions** — Added automatic fallback from modern `/api/embed` to legacy `/api/embeddings` endpoint in `ollama_client.py`. `embed()` and `embed_batch()` both retry with the legacy endpoint on 404
+- **Memo sort 422 error** — `PUT /api/memos/{id}/sort` expected `sort_order` as a query parameter, but the frontend sent it in the JSON body. Changed the endpoint to accept a `SortUpdate` Pydantic model from the request body
+- **Removed all blur effects** — Removed `backdrop-blur-sm` from `MemoCard.tsx` drag handle per user preference (no blur anywhere)
+
+### Changed
+
+- `vite` 8.0.10 → 7.3.2 (bundler regression fix)
+- `@vitejs/plugin-react` 6.0.1 → 4.7.0 (Vite 7 compatibility)
+
+---
+
 ## [1.7.0] - 2026-05-05
 
 ### Open-Source Readiness

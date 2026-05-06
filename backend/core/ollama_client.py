@@ -65,10 +65,19 @@ class OllamaClient:
         model = model or settings.EMBED_MODEL
         host = await self._get_working_host()
         async with httpx.AsyncClient(timeout=self.timeout) as client:
+            # Try modern /api/embed first, fallback to legacy /api/embeddings
             resp = await client.post(
                 f"{host}/api/embed",
                 json={"model": model, "input": text},
             )
+            if resp.status_code == 404:
+                resp = await client.post(
+                    f"{host}/api/embeddings",
+                    json={"model": model, "prompt": text},
+                )
+                resp.raise_for_status()
+                data = resp.json()
+                return data["embedding"]
             resp.raise_for_status()
             data = resp.json()
             return data["embeddings"][0]
@@ -77,10 +86,22 @@ class OllamaClient:
         model = model or settings.EMBED_MODEL
         host = await self._get_working_host()
         async with httpx.AsyncClient(timeout=self.timeout) as client:
+            # Try modern /api/embed first, fallback to legacy /api/embeddings (sequential)
             resp = await client.post(
                 f"{host}/api/embed",
                 json={"model": model, "input": texts},
             )
+            if resp.status_code == 404:
+                # Legacy Ollama doesn't support batch — fall back to sequential single embeds
+                results = []
+                for text in texts:
+                    r = await client.post(
+                        f"{host}/api/embeddings",
+                        json={"model": model, "prompt": text},
+                    )
+                    r.raise_for_status()
+                    results.append(r.json()["embedding"])
+                return results
             resp.raise_for_status()
             data = resp.json()
             return data["embeddings"]

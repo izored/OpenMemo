@@ -8,7 +8,7 @@
 
 A local-first, open-source toolkit designed to structure scattered resources. Use [Ollama](https://ollama.ai) to query and summarize your findings without ever leaving your hardware.<br>No cloud. No subscriptions. No API keys.
 
-[![Version](https://img.shields.io/badge/version-1.7.0-202020?style=flat-square&logo=github)](docs/CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-1.7.1-202020?style=flat-square&logo=github)](docs/CHANGELOG.md)
 [![License](https://img.shields.io/badge/license-MIT-ea2804?style=flat-square)](LICENSE)
 [![Docker](https://img.shields.io/badge/docker-ready-2496ED?style=flat-square&logo=docker)](docs/INSTALL.md)
 

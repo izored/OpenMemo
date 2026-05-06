@@ -276,16 +276,20 @@ async def update_memo(memo_id: str, data: MemoUpdate, db: AsyncSession = Depends
     return {"id": memo.id, "status": "updated"}
 
 
+class SortUpdate(BaseModel):
+    sort_order: int
+
+
 @router.put("/{memo_id}/sort")
-async def update_memo_sort(memo_id: str, sort_order: int, db: AsyncSession = Depends(get_db)):
+async def update_memo_sort(memo_id: str, body: SortUpdate, db: AsyncSession = Depends(get_db)):
     """Update a memo's sort order."""
     memo = await db.get(Memo, memo_id)
     if not memo:
         raise HTTPException(status_code=404, detail="Memo not found")
-    memo.sort_order = sort_order
+    memo.sort_order = body.sort_order
     memo.updated_at = datetime.utcnow()
     await db.commit()
-    return {"id": memo.id, "sort_order": sort_order, "status": "updated"}
+    return {"id": memo.id, "sort_order": memo.sort_order, "status": "updated"}
 
 
 @router.delete("/{memo_id}")
