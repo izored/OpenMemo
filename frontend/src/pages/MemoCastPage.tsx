@@ -63,7 +63,7 @@ export function MemoCastPage() {
   };
 
   return (
-    <div className="h-full flex flex-col bg-[var(--color-bg-card)]">
+    <div className="h-full flex flex-col bg-[var(--color-bg-card)] rounded-2xl overflow-hidden">
       {/* Header */}
       <header className="flex items-center justify-between px-6 py-4 pl-14 border-b border-[var(--color-border)]">
         <div className="flex items-center gap-2.5">

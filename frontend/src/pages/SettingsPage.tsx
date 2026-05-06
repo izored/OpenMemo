@@ -96,6 +96,42 @@ export function SettingsPage() {
           </div>
         </div>
       </section>
+
+      {/* Open Source Credits */}
+      <section className="mt-12">
+        <h2 className="text-sm font-bold text-[var(--color-text-muted)] uppercase tracking-widest mb-6">
+          Built With
+        </h2>
+        <div className="bg-[var(--color-bg-card)] rounded-3xl p-8 shadow-sm">
+          <p className="text-[14px] text-[var(--color-text-secondary)] leading-relaxed mb-4">
+            OpenMemo is made possible by these incredible open-source projects:
+          </p>
+          <div className="flex flex-wrap gap-2">
+            {[
+              { name: 'MDXEditor', url: 'https://mdxeditor.dev', desc: 'Inline markdown editing' },
+              { name: 'Ollama', url: 'https://ollama.ai', desc: 'Local LLM inference' },
+              { name: 'ChromaDB', url: 'https://chromadb.dev', desc: 'Vector database' },
+              { name: 'TanStack Query', url: 'https://tanstack.com/query', desc: 'Data fetching' },
+              { name: 'Zustand', url: 'https://github.com/pmndrs/zustand', desc: 'State management' },
+              { name: 'dnd-kit', url: 'https://dndkit.com', desc: 'Drag & drop' },
+            ].map((dep) => (
+              <a
+                key={dep.name}
+                href={dep.url}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full border border-[var(--color-border)] text-[13px] text-[var(--color-text-secondary)] hover:text-[var(--color-brand)] hover:border-[var(--color-brand)]/30 transition-colors"
+              >
+                <span className="font-semibold">{dep.name}</span>
+                <span className="text-[var(--color-text-muted)]">— {dep.desc}</span>
+              </a>
+            ))}
+          </div>
+          <p className="text-[13px] text-[var(--color-text-muted)] mt-4">
+            Thank you to every contributor who makes these tools available.
+          </p>
+        </div>
+      </section>
     </div>
   );
 }

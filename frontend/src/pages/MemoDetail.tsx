@@ -2,7 +2,6 @@ import { useState, useEffect, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import {
-  ArrowLeft,
   MessageSquare,
   Sparkles,
   Loader2,
@@ -16,6 +15,8 @@ import {
   Tag,
   Folder,
 } from 'lucide-react';
+import { BackButton } from '@/components/BackButton';
+import { MarkdownEditor } from '@/components/MarkdownEditor';
 import { memoApi, collectionApi } from '@/lib/api';
 import { AskMemoPanel } from '@/components/AskMemoPanel';
 import ReactMarkdown from 'react-markdown';
@@ -192,13 +193,6 @@ export function MemoDetail() {
         {/* Header */}
         <header className="flex items-center justify-between px-6 py-3 pl-6 border-b border-[var(--color-border)]">
           <div className="flex items-center gap-3 flex-1">
-            <button
-              onClick={() => navigate(-1)}
-              className="flex items-center gap-2 px-4 py-2.5 bg-[var(--color-bg-card)] rounded-2xl shadow-sm hover:shadow-md transition-all text-sm font-semibold text-[var(--color-text-secondary)] hover:text-[var(--color-text)]"
-            >
-              <ArrowLeft size={16} />
-              Back to memos
-            </button>
             <span className="text-xs font-semibold uppercase tracking-wider text-[var(--color-text-muted)]">{memo.type}</span>
           </div>
           <div className="flex items-center gap-1">
@@ -253,6 +247,11 @@ export function MemoDetail() {
         <div className="flex-1 overflow-y-auto p-6">
           <div className="max-w-3xl mx-auto">
             {/* Title */}
+            {/* Back button */}
+            <div className="mb-3">
+              <BackButton />
+            </div>
+
             {isEditing ? (
               <input
                 value={editTitle}
@@ -465,7 +464,16 @@ export function MemoDetail() {
             )}
 
             {/* Content body for note/document */}
-            {(memo.type === 'note' || memo.type === 'document') && !isEditing && memo.content_text && (
+            {memo.type === 'note' && !isEditing && (
+              <div className="mb-6">
+                <MarkdownEditor
+                  value={memo.content_raw || memo.content_text || ''}
+                  onSave={(val) => memoApi.update(memo.id, { content_raw: val, content_text: val })}
+                  placeholder="Click anywhere to edit your note..."
+                />
+              </div>
+            )}
+            {memo.type === 'document' && !isEditing && memo.content_text && (
               <div className="prose prose-sm max-w-none text-[var(--color-text)]">
                 <ReactMarkdown components={{
                   code: ({node, inline, className, children, ...props}: any) => (
@@ -503,23 +511,15 @@ export function MemoDetail() {
                 </div>
                 {notesSaving && <Loader2 size={14} className="animate-spin text-[var(--color-text-muted)]" />}
               </div>
-              {isEditing ? (
-                <textarea
-                  value={editNotes}
-                  onChange={(e) => setEditNotes(e.target.value)}
-                  rows={6}
-                  placeholder="Add your thoughts, annotations, or highlights..."
-                  className="w-full p-4 rounded-2xl border border-[var(--color-border)] text-sm text-[var(--color-text)] outline-none focus:border-[var(--color-text)] resize-y bg-[var(--color-type-note-bg)]"
-                />
-              ) : (
-                <textarea
-                  value={notesDraft}
-                  onChange={(e) => setNotesDraft(e.target.value)}
-                  rows={4}
-                  placeholder="Click to add your thoughts, annotations, or highlights..."
-                  className="w-full p-4 rounded-2xl border border-[var(--color-border)] text-sm text-[var(--color-text)] outline-none focus:border-[var(--color-brand)] focus:ring-1 focus:ring-[var(--color-brand)]/20 resize-y bg-[var(--color-type-note-bg)] transition-all"
-                />
-              )}
+              <MarkdownEditor
+                value={isEditing ? editNotes : notesDraft}
+                onChange={isEditing ? (val) => setEditNotes(val) : (val) => setNotesDraft(val)}
+                onSave={(val) => {
+                  if (isEditing) return;
+                  memoApi.update(memo.id, { notes: val });
+                }}
+                placeholder="Click to add your thoughts, annotations, or highlights..."
+              />
             </div>
 
             {/* Related memos */}

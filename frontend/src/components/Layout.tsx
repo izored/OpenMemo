@@ -14,7 +14,7 @@ export function Layout() {
     <div className="flex h-screen overflow-hidden bg-[var(--color-bg)]">
       {/* Sidebar — push layout with width transition */}
       <div
-        className="flex-shrink-0 h-screen overflow-hidden transition-[width] duration-300 ease-out"
+        className="flex-shrink-0 h-screen overflow-hidden transition-[width] duration-[320ms] ease-[cubic-bezier(0.16,1,0.3,1)]"
         style={{ width: sidebarOpen ? 240 : 0 }}
       >
         <div className="w-60 h-screen">
@@ -30,11 +30,11 @@ export function Layout() {
       {/* Global hamburger — fades in after sidebar closes */}
       <button
         onClick={toggleSidebar}
-        className="fixed top-5 left-5 z-50 p-3 rounded-full hover:bg-black/5 transition-all duration-200"
+        className="fixed top-5 left-5 z-50 p-3 rounded-full hover:bg-black/5 transition-all duration-[var(--duration-fast)]"
         style={{
           opacity: sidebarOpen ? 0 : 1,
           pointerEvents: sidebarOpen ? 'none' : 'auto',
-          transitionDelay: sidebarOpen ? '0ms' : '300ms',
+          transitionDelay: sidebarOpen ? '0ms' : '450ms',
         }}
         title="Toggle sidebar"
       >

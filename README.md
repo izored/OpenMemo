@@ -211,6 +211,24 @@ We love contributions! See [`CONTRIBUTING.md`](CONTRIBUTING.md) for setup, codin
 - 📖 Read [`MEMORY.md`](MEMORY.md) for architecture decisions
 
 ---
+
+## Credits & Open Source
+
+OpenMemo stands on the shoulders of incredible open-source projects:
+
+- **[MDXEditor](https://mdxeditor.dev)** — Inline markdown editing. Thank you to Petyo Ivanov and contributors for building a beautiful WYSIWYG markdown editor.
+- **[Ollama](https://ollama.ai)** — Local LLM inference made simple. The heart of our AI features.
+- **[ChromaDB](https://chromadb.dev)** — Vector database for semantic search.
+- **[TanStack Query](https://tanstack.com/query)** — Elegant data fetching and caching.
+- **[Zustand](https://github.com/pmndrs/zustand)** — Minimal, powerful state management.
+- **[dnd-kit](https://dndkit.com)** — Accessible, modern drag-and-drop primitives.
+- **[FastAPI](https://fastapi.tiangolo.com)** — Async Python web framework.
+- **[React](https://react.dev)** + **[Vite](https://vitejs.dev)** + **[Tailwind CSS](https://tailwindcss.com)** — Frontend stack.
+
+To every contributor in these communities: thank you for making software that empowers others to build.
+
+---
+
 ## Star History
 
 <a href="https://www.star-history.com/?repos=izored%2FOpenMemo&type=timeline&logscale=&legend=top-left">

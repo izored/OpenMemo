@@ -155,17 +155,13 @@ export function Dashboard() {
                   searchInputRef.current?.blur();
                 }
               }}
-              placeholder="Search your memos..."
+              placeholder="Search memos…  Ctrl+K"
               className="flex-1 bg-transparent outline-none placeholder:text-[var(--color-text-muted)] text-[var(--color-text)] text-sm"
             />
-            {searchQuery ? (
+            {searchQuery && (
               <button onClick={() => { setSearchQuery(''); setSearchResults([]); }}>
                 <X size={14} className="text-[var(--color-text-muted)]" />
               </button>
-            ) : (
-              <kbd className="hidden sm:inline-block text-[11px] px-2 py-0.5 bg-[var(--color-bg-hover)] rounded-md font-mono border border-[var(--color-border)] flex-shrink-0">
-                Ctrl+K
-              </kbd>
             )}
           </div>
 
