@@ -17,7 +17,7 @@ class Settings(BaseSettings):
     
     # Ollama
     OLLAMA_HOST: str = "http://localhost:11434"
-    OLLAMA_HOSTS: list[str] = ["http://localhost:11434", "http://host.docker.internal:11434", "http://ollama_gpu0:11434", "http://ollama_gpu1:11435"]
+    OLLAMA_HOSTS: list[str] = ["http://localhost:11434", "http://localhost:11435", "http://host.docker.internal:11434", "http://host.docker.internal:11435"]
     EMBED_MODEL: str = "nomic-embed-text"
     DEFAULT_CHAT_MODEL: str = "qwen2.5:7b"
     DEFAULT_VISION_MODEL: str = "gemma3:4b"

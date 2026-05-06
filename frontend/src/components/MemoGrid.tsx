@@ -1,5 +1,5 @@
 import { DndContext, useSensor, useSensors, PointerSensor, DragOverlay, type DragEndEvent } from '@dnd-kit/core';
-import { SortableContext, rectSortingStrategy, useSortable } from '@dnd-kit/sortable';
+import { SortableContext, rectSortingStrategy, useSortable, arrayMove } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import { useState } from 'react';
 import { MemoCard } from './MemoCard';
@@ -71,12 +71,11 @@ export function MemoGrid({ memos }: MemoGridProps) {
     const newIndex = memos.findIndex((m) => m.id === over.id);
     if (oldIndex === -1 || newIndex === -1) return;
 
-    // Swap sort orders with the target
-    const activeMemo = memos[oldIndex];
-    const overMemo = memos[newIndex];
+    const newMemos = arrayMove(memos, oldIndex, newIndex);
     try {
-      await memoApi.updateSort(activeMemo.id, overMemo.sort_order ?? 0);
-      await memoApi.updateSort(overMemo.id, activeMemo.sort_order ?? 0);
+      await Promise.all(
+        newMemos.map((m, i) => memoApi.updateSort(m.id, newMemos.length - i))
+      );
       queryClient.invalidateQueries({ queryKey: ['memos'] });
     } catch (e) {
       console.error('Failed to reorder memos:', e);
