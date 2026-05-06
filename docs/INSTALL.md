@@ -26,7 +26,7 @@ OpenMemo has **two ways to run**:
 | Mode | When to use | Entry URL |
 |------|-------------|-----------|
 | **Development** (`npm run dev` + `uvicorn`) | Daily development, debugging, fastest reload | `http://localhost:3000` |
-| **Docker Production** (`docker-compose up`) | Stable deployment, single-port access, reverse proxy | `http://localhost` (port 80) |
+| **Docker Production** (`docker-compose up`) | Stable deployment, single-port access, reverse proxy | `http://openmemo.local` (port 80) |
 
 > **Why Docker exists:** The `docker-compose.yml` bundles the full stack (backend, frontend, ChromaDB, nginx) into reproducible containers. It adds an **nginx reverse proxy on port 80** that unifies all traffic — no CORS issues, no port juggling, and SSE streaming works out of the box.
 
@@ -122,7 +122,7 @@ The Vite dev server proxies `/api` and `/files` to `localhost:8000` automaticall
 docker-compose up -d
 ```
 
-Open **`http://localhost`** (port 80) in your browser.
+Open **`http://openmemo.local`** (port 80) in your browser.
 
 ### What the compose stack does
 
@@ -235,7 +235,7 @@ Then set `OLLAMA_HOSTS=http://ollama:11434`.
 3. Click **Load unpacked** → select the `chrome-extension/` folder
 4. Click the OpenMemo icon to save any page
 
-> The extension communicates with `http://localhost:8000`. If you run Docker production on port 80, update the extension's API URL in `chrome-extension/background.js` to `http://localhost/api`.
+> The extension communicates with the API via `http://openmemo.local/api`. The default in `chrome-extension/background.js` is already set to this.
 
 ---
 
@@ -268,7 +268,7 @@ docker exec -it openmemo-api-1 curl http://host.docker.internal:11434/api/tags
 **Fix:**
 - Ensure you are accessing via the intended origin:
   - Dev mode: `http://localhost:3000` or `http://127.0.0.1:3000`
-  - Docker mode: `http://localhost` (port 80)
+  - Docker mode: `http://openmemo.local` (port 80)
 - `backend/config.py` now includes `127.0.0.1:3000` and `localhost:80` in `CORS_ORIGINS`
 
 ---
@@ -389,5 +389,5 @@ The project uses forward slashes (`/`) in Python code and config, which work fin
 ## Need More Help?
 
 1. Check backend logs: `docker logs openmemo-api-1` or watch the uvicorn terminal
-2. Check health: `curl http://localhost:8000/api/health` (dev) or `curl http://localhost/api/health` (Docker)
+2. Check health: `curl http://localhost:8000/api/health` (dev) or `curl http://openmemo.local/api/health` (Docker)
 3. Verify Ollama: `curl http://localhost:11434/api/tags`
