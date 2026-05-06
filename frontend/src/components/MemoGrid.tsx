@@ -1,7 +1,7 @@
 import { DndContext, useSensor, useSensors, PointerSensor, DragOverlay, type DragEndEvent } from '@dnd-kit/core';
 import { SortableContext, rectSortingStrategy, useSortable, arrayMove } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { MemoCard } from './MemoCard';
 import { collectionApi, memoApi } from '@/lib/api';
 import { useQueryClient } from '@tanstack/react-query';
@@ -38,10 +38,11 @@ export function MemoGrid({ memos: serverMemos }: MemoGridProps) {
   const queryClient = useQueryClient();
   const [activeId, setActiveId] = useState<string | null>(null);
   const [localMemos, setLocalMemos] = useState(serverMemos);
+  const reorderingRef = useRef(false);
 
-  // Sync server data when not dragging
+  // Sync server data when not dragging and no pending reorder
   useEffect(() => {
-    if (!activeId) {
+    if (!activeId && !reorderingRef.current) {
       setLocalMemos(serverMemos);
     }
   }, [serverMemos, activeId]);
@@ -79,15 +80,18 @@ export function MemoGrid({ memos: serverMemos }: MemoGridProps) {
     if (oldIndex === -1 || newIndex === -1) return;
 
     const newMemos = arrayMove(localMemos, oldIndex, newIndex);
-    setLocalMemos(newMemos); // instant visual update, no waiting for API
+    reorderingRef.current = true;
+    setLocalMemos(newMemos);
 
     Promise.all(
       newMemos.map((m, i) => memoApi.updateSort(m.id, newMemos.length - i))
     ).then(() => {
+      reorderingRef.current = false;
       queryClient.invalidateQueries({ queryKey: ['memos'] });
     }).catch((e) => {
       console.error('Failed to reorder memos:', e);
-      setLocalMemos(serverMemos); // revert on error
+      reorderingRef.current = false;
+      setLocalMemos(serverMemos);
       queryClient.invalidateQueries({ queryKey: ['memos'] });
     });
   };
