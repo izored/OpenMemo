@@ -6,6 +6,49 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ---
 
+## [1.7.0] - 2026-05-05
+
+### Open-Source Readiness
+
+- **GitHub community files** — Added `.github/ISSUE_TEMPLATE/bug_report.md`, `.github/ISSUE_TEMPLATE/feature_request.md`, `.github/PULL_REQUEST_TEMPLATE.md`, `.github/FUNDING.yml`, and `.github/labels.yml`
+- **Community standards** — New `CONTRIBUTING.md` (setup, style, PR workflow), `CODE_OF_CONDUCT.md` (Contributor Covenant 2.1), `SECURITY.md` (reporting + scope), and `SUPPORT.md` (help channels + FAQ)
+- **CI skeleton** — Backend test infrastructure (`pytest`, `pytest-asyncio`, `httpx`) in `backend/tests/`. Frontend test deps (`vitest`, `@testing-library/react`) added to `package.json`
+- **Documentation** — New `docs/architecture.md`, `docs/deployment.md`, and `docs/faq.md`
+- **EditorConfig** — Added `.editorconfig` for consistent cross-editor formatting
+
+### Added
+
+- **Inline memo editing** — MemoDetail page now supports inline editing for title, source URL, tags, collections, content, and notes. Toggle edit mode with the pencil icon
+- **User notes / annotations** — Every memo has a private `notes` field (textarea, auto-saved) that is included in embeddings for RAG retrieval
+- **Sortable drag & drop** — Memo cards can be reordered within the grid via `@dnd-kit/sortable`. New `PUT /api/memos/{id}/sort` endpoint with `sort_order` persistence
+- **Rich link preview** — Article/link memos display favicon, domain, description, thumbnail, and collapsible extracted content in MemoDetail
+- **Delete button on MemoCards** — Red `×` appears on hover after a 3-second delay to prevent accidental deletion
+- **Dynamic version** — Settings page now shows live version from `/api/health` instead of hardcoded string
+- **Rotating greeting** — Dashboard greeting cycles through 10 variations on each page refresh (was once-per-day)
+
+### UX Polish
+
+- **Dark mode foundation** — CSS variable system (`--color-bg-*`, `--color-text-*`) with `html.dark` overrides. Applied across Dashboard, Sidebar, Settings, Search, and Layout
+- **Flash-of-light-mode fix** — Inline script in `index.html` applies `dark` class before React hydrates, eliminating FOUC
+- **Prominent drag handles** — Grip icon now has dark `bg-[#202020]/80` with `backdrop-blur-sm` for visibility on any card background
+- **Ctrl+K search positioning** — Fixed absolute positioning so it no longer overlaps the grid on short viewports
+- **Back button styling** — MemoDetail back arrow matches brand color and has hover state
+
+### Infrastructure
+
+- **Environment-driven config** — Removed all hardcoded personal paths/domains. `docker-compose.yml` is clean; local overrides go in `docker-compose.override.yml` (gitignored)
+- **Chrome extension config** — API URL is now configurable via an options page (`options.html`) reading from `chrome.storage.sync`. Default: `http://localhost/api`
+- **CORS override** — `CORS_ORIGINS` accepts comma-separated env var override for custom domains
+- **Demo data seeding** — `seed_data.py` generates 19 rich memos across 4 collections for fresh installs
+
+### Fixed
+
+- **`update_memo()` MissingGreenlet crash** — Replaced async `.clear()` with synchronous `= []` on pre-loaded relationships via `selectinload`
+- **`update_memo()` collections/tags persistence** — Collections and tags are now properly replaced on update (not just appended)
+- **Hamburger visibility** — Toggle button now visible on all pages including Settings and MemoDetail
+
+---
+
 ## [1.6.6] - 2026-05-05
 
 ### Security

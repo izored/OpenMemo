@@ -8,7 +8,7 @@
 
 A local-first, open-source toolkit designed to structure scattered resources. Use [Ollama](https://ollama.ai) to query and summarize your findings without ever leaving your hardware.<br>No cloud. No subscriptions. No API keys.
 
-[![Version](https://img.shields.io/badge/version-1.6.6-202020?style=flat-square&logo=github)](docs/CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-1.7.0-202020?style=flat-square&logo=github)](docs/CHANGELOG.md)
 [![License](https://img.shields.io/badge/license-MIT-ea2804?style=flat-square)](LICENSE)
 [![Docker](https://img.shields.io/badge/docker-ready-2496ED?style=flat-square&logo=docker)](docs/INSTALL.md)
 
@@ -34,8 +34,7 @@ Drop a PDF. Paste a URL. Jot a quick note. Record a voice memo. The Chrome Exten
 
 ---
 
-## Chat With Everything You've Ever Saved (roadmap)
------ (let me get to it, i'm building it) ----
+## Chat With Everything You've Ever Saved
 
 Ask natural-language questions. Get answers grounded in *your* actual content — with clickable citations back to the source.
 
@@ -205,10 +204,11 @@ See [`MEMORY.md`](MEMORY.md) for the full roadmap, architectural findings, and c
 
 ## Contributing
 
-1. Read [`MEMORY.md`](MEMORY.md) for architecture decisions and gotchas
-2. Run `.\bump-version.ps1 patch|minor|major` when releasing
-3. No hardcoded paths, secrets, or personal data in commits (`.env` is gitignored)
-4. Open a PR — all contributions welcome
+We love contributions! See [`CONTRIBUTING.md`](CONTRIBUTING.md) for setup, coding style, and PR guidelines.
+
+- 🐛 [Report a bug](https://github.com/izored/OpenMemo/issues/new?template=bug_report.md)
+- 💡 [Request a feature](https://github.com/izored/OpenMemo/issues/new?template=feature_request.md)
+- 📖 Read [`MEMORY.md`](MEMORY.md) for architecture decisions
 
 ---
 ## Star History
@@ -224,4 +224,4 @@ See [`MEMORY.md`](MEMORY.md) for the full roadmap, architectural findings, and c
 
 ## License
 
-MIT — free to use, modify, and self-host.
+OpenMemo is released under the [MIT License](LICENSE). Free to use, modify, and self-host.
