@@ -1,5 +1,13 @@
 # OpenMemo Release Procedure
 
+## Prerequisites
+
+All work for this release must be **merged to `main` via PR** first. Then:
+
+```bash
+git checkout main && git pull
+```
+
 ## Flow
 
 1. Write `TEMP_CHANGELOG_vX.Y.Z.md` in repo root with release notes
