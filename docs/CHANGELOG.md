@@ -4,6 +4,24 @@ All notable changes to OpenMemo are documented here.
 
 ---
 
+## [1.7.2] - 2026-05-07
+
+### Fixed
+
+- 📐 Sidebar now pushes content (flex layout) instead of overlaying — responsive, no overlap
+- 📐 Removed `backdrop-blur` from sidebar backdrop — cleaner dim effect on main content only
+- 📐 Hamburger button fades out when sidebar is open (close button lives inside sidebar header)
+- ⚡ Drag-and-drop card reorder is instant — optimistic local state updates immediately, API fires in background
+- 🗄️ Ollama embed model fallback now distinguishes endpoint-404 from model-404 — prevents cascading fallback to removed `/api/embeddings` route
+- 🗄️ `EMBED_MODEL` correctly wired into `docker-compose.yml` environment — was only in `backend/.env` which Docker ignores
+- 🗄️ `/api/models` filters out embed/bert-family models — only chat models appear in the dropdown
+- 🗄️ AskMemo stream error handling — Ollama exceptions yield SSE error event instead of silently closing the connection
+- 🗄️ AskMemo checks `resp.ok` before reading stream — surfaces HTTP errors clearly
+- 🎨 Model picker auto-selects first available Ollama model on load — no more hardcoded `qwen2.5:7b` default
+- 🎨 Selected chat model persists to `localStorage` across sessions
+
+---
+
 ## [1.7.1] - 2026-05-06
 
 ### Added
