@@ -37,6 +37,8 @@ class MemoUpdate(BaseModel):
     description: Optional[str] = None
     content_text: Optional[str] = None
     content_raw: Optional[str] = None
+    source_url: Optional[str] = None
+    notes: Optional[str] = None
     collection_ids: Optional[list[str]] = None
     tags: Optional[list[str]] = None
 
@@ -98,7 +100,7 @@ async def list_memos(
     total = (await db.execute(count_query)).scalar()
     
     # Fetch with pagination
-    query = query.order_by(desc(Memo.created_at)).offset(offset).limit(limit)
+    query = query.order_by(desc(Memo.sort_order), desc(Memo.created_at)).offset(offset).limit(limit)
     result = await db.execute(query)
     memos = result.scalars().all()
     
@@ -114,6 +116,8 @@ async def list_memos(
                 "source_favicon": m.source_favicon,
                 "thumbnail_path": m.thumbnail_path,
                 "ai_summary": m.ai_summary,
+                "notes": m.notes,
+                "sort_order": m.sort_order,
                 "is_processed": m.is_processed,
                 "created_at": m.created_at.isoformat(),
                 "updated_at": m.updated_at.isoformat(),
@@ -149,12 +153,15 @@ async def get_memo(memo_id: str, db: AsyncSession = Depends(get_db)):
         "description": memo.description,
         "content_text": memo.content_text,
         "content_raw": memo.content_raw,
+        "notes": memo.notes,
         "source_url": memo.source_url,
         "source_domain": memo.source_domain,
         "source_favicon": memo.source_favicon,
         "file_path": memo.file_path,
         "thumbnail_path": memo.thumbnail_path,
         "ai_summary": memo.ai_summary,
+        "notes": memo.notes,
+        "sort_order": memo.sort_order,
         "is_processed": memo.is_processed,
         "created_at": memo.created_at.isoformat(),
         "updated_at": memo.updated_at.isoformat(),
@@ -210,7 +217,12 @@ async def create_memo(data: MemoCreate, db: AsyncSession = Depends(get_db)):
 @router.put("/{memo_id}")
 async def update_memo(memo_id: str, data: MemoUpdate, db: AsyncSession = Depends(get_db)):
     """Update an existing memo."""
-    memo = await db.get(Memo, memo_id)
+    result = await db.execute(
+        select(Memo)
+        .options(selectinload(Memo.collections), selectinload(Memo.tags))
+        .where(Memo.id == memo_id)
+    )
+    memo = result.scalar_one_or_none()
     if not memo:
         raise HTTPException(status_code=404, detail="Memo not found")
     
@@ -222,10 +234,17 @@ async def update_memo(memo_id: str, data: MemoUpdate, db: AsyncSession = Depends
         memo.content_text = data.content_text
     if data.content_raw is not None:
         memo.content_raw = data.content_raw
+    if data.source_url is not None:
+        memo.source_url = data.source_url
+    if data.notes is not None:
+        memo.notes = data.notes
+    
+    # Trigger re-embedding if content changed
+    content_changed = data.content_text is not None or data.notes is not None
     
     # Update collections
     if data.collection_ids is not None:
-        memo.collections.clear()
+        memo.collections = []
         for cid in data.collection_ids:
             col = await db.get(Collection, cid)
             if col:
@@ -233,7 +252,7 @@ async def update_memo(memo_id: str, data: MemoUpdate, db: AsyncSession = Depends
     
     # Update tags
     if data.tags is not None:
-        memo.tags.clear()
+        memo.tags = []
         for tag_name in data.tags:
             result = await db.execute(select(Tag).where(Tag.name == tag_name))
             tag = result.scalar_one_or_none()
@@ -245,7 +264,25 @@ async def update_memo(memo_id: str, data: MemoUpdate, db: AsyncSession = Depends
     memo.updated_at = datetime.utcnow()
     await db.commit()
     
+    # Re-embed in background if content changed
+    if content_changed:
+        from backend.api.ingest import process_memo
+        import asyncio
+        asyncio.create_task(process_memo(memo_id))
+    
     return {"id": memo.id, "status": "updated"}
+
+
+@router.put("/{memo_id}/sort")
+async def update_memo_sort(memo_id: str, sort_order: int, db: AsyncSession = Depends(get_db)):
+    """Update a memo's sort order."""
+    memo = await db.get(Memo, memo_id)
+    if not memo:
+        raise HTTPException(status_code=404, detail="Memo not found")
+    memo.sort_order = sort_order
+    memo.updated_at = datetime.utcnow()
+    await db.commit()
+    return {"id": memo.id, "sort_order": sort_order, "status": "updated"}
 
 
 @router.delete("/{memo_id}")

@@ -1,12 +1,37 @@
-import { DndContext, useSensor, useSensors, PointerSensor, DragOverlay } from '@dnd-kit/core';
+import { DndContext, useSensor, useSensors, PointerSensor, DragOverlay, type DragEndEvent } from '@dnd-kit/core';
+import { SortableContext, rectSortingStrategy, useSortable } from '@dnd-kit/sortable';
+import { CSS } from '@dnd-kit/utilities';
 import { useState } from 'react';
 import { MemoCard } from './MemoCard';
-import { collectionApi } from '@/lib/api';
+import { collectionApi, memoApi } from '@/lib/api';
 import { useQueryClient } from '@tanstack/react-query';
 import type { Memo } from '@/types';
 
 interface MemoGridProps {
   memos: Memo[];
+}
+
+function SortableMemoCard({ memo }: { memo: Memo }) {
+  const {
+    attributes,
+    listeners,
+    setNodeRef,
+    transform,
+    transition,
+    isDragging,
+  } = useSortable({ id: memo.id });
+
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    opacity: isDragging ? 0.3 : 1,
+  };
+
+  return (
+    <div ref={setNodeRef} style={style}>
+      <MemoCard memo={memo} dragHandleProps={{ attributes, listeners: listeners || {} }} />
+    </div>
+  );
 }
 
 export function MemoGrid({ memos }: MemoGridProps) {
@@ -19,13 +44,17 @@ export function MemoGrid({ memos }: MemoGridProps) {
     })
   );
 
-  const handleDragEnd = async (event: any) => {
+  const handleDragEnd = async (event: DragEndEvent) => {
     const { active, over } = event;
     setActiveId(null);
 
-    if (over && active.id !== over.id) {
-      // over.id is a collection id (prefixed with 'col-' in sidebar droppables)
-      const collectionId = String(over.id).replace('col-', '');
+    if (!over || active.id === over.id) return;
+
+    const overId = String(over.id);
+
+    // Check if dropped on a collection (sidebar droppable)
+    if (overId.startsWith('col-')) {
+      const collectionId = overId.replace('col-', '');
       const memoId = String(active.id);
       try {
         await collectionApi.addMemo(collectionId, memoId);
@@ -34,6 +63,23 @@ export function MemoGrid({ memos }: MemoGridProps) {
       } catch (e) {
         console.error('Failed to add memo to collection:', e);
       }
+      return;
+    }
+
+    // Sort reorder within grid
+    const oldIndex = memos.findIndex((m) => m.id === active.id);
+    const newIndex = memos.findIndex((m) => m.id === over.id);
+    if (oldIndex === -1 || newIndex === -1) return;
+
+    // Swap sort orders with the target
+    const activeMemo = memos[oldIndex];
+    const overMemo = memos[newIndex];
+    try {
+      await memoApi.updateSort(activeMemo.id, overMemo.sort_order ?? 0);
+      await memoApi.updateSort(overMemo.id, activeMemo.sort_order ?? 0);
+      queryClient.invalidateQueries({ queryKey: ['memos'] });
+    } catch (e) {
+      console.error('Failed to reorder memos:', e);
     }
   };
 
@@ -49,7 +95,7 @@ export function MemoGrid({ memos }: MemoGridProps) {
           No memos yet
         </h3>
         <p className="text-[15px] text-[#646464] max-w-sm leading-relaxed">
-          Start by saving your first article, note, or file. Use the "Add New"
+          Start by saving your first article, note, or file. Use the &quot;Add New&quot;
           button below.
         </p>
       </div>
@@ -62,13 +108,15 @@ export function MemoGrid({ memos }: MemoGridProps) {
       onDragStart={(e) => setActiveId(String(e.active.id))}
       onDragEnd={handleDragEnd}
     >
-      <div className="max-w-[1280px] mx-auto">
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-8">
-          {memos.map((memo) => (
-            <MemoCard key={memo.id} memo={memo} />
-          ))}
+      <SortableContext items={memos.map((m) => m.id)} strategy={rectSortingStrategy}>
+        <div className="max-w-[1280px] mx-auto">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-8">
+            {memos.map((memo) => (
+              <SortableMemoCard key={memo.id} memo={memo} />
+            ))}
+          </div>
         </div>
-      </div>
+      </SortableContext>
 
       <DragOverlay dropAnimation={null}>
         {activeMemo ? (

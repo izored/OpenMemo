@@ -26,6 +26,33 @@ const typeIcons: Record<string, any> = {
   link: Link2,
 };
 
+const GREETINGS = [
+  "Hi there! New memo to add?",
+  "Welcome back, ready to capture something?",
+  "What's on your mind today?",
+  "Your knowledge base is growing 🌱",
+  "Ready to memo?",
+  "Capture an idea before it fades ✨",
+  "Build your second brain, one memo at a time.",
+  "What are you learning today?",
+  "Drop a link, save a thought.",
+  "OpenMemo — your ideas, organized.",
+];
+
+function getDailyGreeting(): string {
+  const today = new Date().toISOString().slice(0, 10);
+  const saved = localStorage.getItem('openmemo_greeting');
+  if (saved) {
+    try {
+      const { date, index } = JSON.parse(saved);
+      if (date === today) return GREETINGS[index % GREETINGS.length];
+    } catch { /* ignore */ }
+  }
+  const index = Math.floor(Math.random() * GREETINGS.length);
+  localStorage.setItem('openmemo_greeting', JSON.stringify({ date: today, index }));
+  return GREETINGS[index];
+}
+
 export function Dashboard() {
   const {
     activeFilter,
@@ -37,6 +64,7 @@ export function Dashboard() {
   const [searchResults, setSearchResults] = useState<any[]>([]);
   const [searchLoading, setSearchLoading] = useState(false);
   const [searchFocused, setSearchFocused] = useState(false);
+  const [greeting] = useState(() => getDailyGreeting());
   const searchInputRef = useRef<HTMLInputElement>(null);
   const navigate = useNavigate();
 
@@ -108,7 +136,7 @@ export function Dashboard() {
         <div className="relative">
           <div
             className={cn(
-              'flex items-center gap-3 px-5 py-3 bg-white rounded-full text-[15px] text-[#646464] transition-all shadow-sm',
+              'flex items-center gap-3 px-5 py-3 bg-[var(--color-bg-card)] rounded-full text-[15px] text-[var(--color-text-secondary)] transition-all shadow-sm',
               searchFocused ? 'ring-2 ring-[#202020] w-80' : 'hover:bg-white w-64'
             )}
           >
@@ -128,14 +156,14 @@ export function Dashboard() {
                 }
               }}
               placeholder="Search your memos..."
-              className="flex-1 bg-transparent outline-none placeholder:text-[#8d8d8d] text-[#202020] text-sm"
+              className="flex-1 bg-transparent outline-none placeholder:text-[var(--color-text-muted)] text-[var(--color-text)] text-sm"
             />
             {searchQuery ? (
               <button onClick={() => { setSearchQuery(''); setSearchResults([]); }}>
                 <X size={14} className="text-[#8d8d8d]" />
               </button>
             ) : (
-              <kbd className="text-[11px] px-2 py-0.5 bg-[#f5f5f5] rounded-md font-mono border border-[#e5e5e5] flex-shrink-0">
+              <kbd className="hidden sm:inline-block text-[11px] px-2 py-0.5 bg-[var(--color-bg-hover)] rounded-md font-mono border border-[var(--color-border)] flex-shrink-0">
                 Ctrl+K
               </kbd>
             )}
@@ -143,12 +171,12 @@ export function Dashboard() {
 
           {/* Search results dropdown */}
           {showResults && (
-            <div className="absolute top-full left-0 right-0 mt-2 bg-white rounded-2xl shadow-xl border border-[#e5e5e5] overflow-hidden z-50">
+            <div className="absolute top-full left-0 right-0 mt-2 bg-[var(--color-bg-card)] rounded-2xl shadow-xl border border-[var(--color-border)] overflow-hidden z-50">
               {searchLoading && (
-                <div className="px-4 py-3 text-sm text-[#646464]">Searching...</div>
+                <div className="px-4 py-3 text-sm text-[var(--color-text-secondary)]">Searching...</div>
               )}
               {!searchLoading && searchResults.length === 0 && searchQuery.trim() && (
-                <div className="px-4 py-6 text-center text-sm text-[#646464]">No results found</div>
+                <div className="px-4 py-6 text-center text-sm text-[var(--color-text-secondary)]">No results found</div>
               )}
               {!searchLoading && searchResults.map((result: any) => {
                 const Icon = typeIcons[result.type] || FileText;
@@ -160,9 +188,9 @@ export function Dashboard() {
                   >
                     <Icon size={15} className="text-[#646464] flex-shrink-0" />
                     <div className="flex-1 min-w-0">
-                      <p className="text-sm font-medium text-[#202020] truncate">{result.title}</p>
+                      <p className="text-sm font-medium text-[var(--color-text)] truncate">{result.title}</p>
                       {result.description && (
-                        <p className="text-xs text-[#646464] truncate">{result.description}</p>
+                        <p className="text-xs text-[var(--color-text-secondary)] truncate">{result.description}</p>
                       )}
                     </div>
                     <span className="text-[11px] text-[#8d8d8d] font-mono">{result.source_domain}</span>
@@ -174,8 +202,13 @@ export function Dashboard() {
         </div>
       </header>
 
+      {/* Greeting */}
+      <div className="pt-2 pb-4 text-center">
+        <h2 className="text-2xl font-bold text-[var(--color-text)] tracking-tight">{greeting}</h2>
+      </div>
+
       {/* Filter tabs */}
-      <div className="pt-8 pb-14">
+      <div className="pt-4 pb-14">
         <div className="flex gap-3 flex-wrap justify-center">
           {filterTabs.map((tab) => (
             <button
@@ -184,8 +217,8 @@ export function Dashboard() {
               className={cn(
                 'px-6 py-3 rounded-full text-base font-semibold transition-all',
                 activeFilter === tab.id
-                  ? 'bg-[#202020] text-white shadow-md'
-                  : 'bg-white/70 text-[#646464] hover:bg-white shadow-sm'
+                  ? 'bg-[var(--color-bg-active)] text-[var(--color-text-active)] shadow-md'
+                  : 'bg-[var(--color-bg-card)]/70 text-[var(--color-text-secondary)] hover:bg-[var(--color-bg-card)] shadow-sm'
               )}
             >
               {tab.label}

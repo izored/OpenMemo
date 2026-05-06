@@ -168,6 +168,31 @@ if ($DryRun) {
     Write-Host "Version bumped: $currentVersion -> $newVersion"
     Write-Host "Files touched: $($changedFiles.Count)"
     Write-Host ""
+    # --- GitHub Release (minor/major only) ---
+    if ($Bump -ne "patch") {
+        $gh = Get-Command gh -ErrorAction SilentlyContinue
+        if ($gh) {
+            Write-Host ""
+            Write-Host "Creating GitHub release v$newVersion..."
+            $releaseNotes = "Release v$newVersion`n`nSee CHANGELOG.md for details."
+            $changelogPath = Join-Path $root "docs\CHANGELOG.md"
+            if (Test-Path $changelogPath) {
+                $changelog = Get-Content $changelogPath -Raw
+                $sectionPattern = "(?s)## \[$newVersion\].*?(?=## \[|\z)"
+                $section = [regex]::Match($changelog, $sectionPattern)
+                if ($section.Success) {
+                    $releaseNotes = $section.Value.Trim()
+                }
+            }
+            & gh release create "v$newVersion" --title "v$newVersion" --notes "$releaseNotes"
+            Write-Host "GitHub release created: v$newVersion"
+        } else {
+            Write-Host ""
+            Write-Host "NOTE: Install GitHub CLI (gh) to auto-create releases for minor/major bumps."
+        }
+    }
+
+    Write-Host ""
     Write-Host "Next steps:"
     Write-Host "  1. Fill in the CHANGELOG section for $newVersion"
     Write-Host "  2. git add -A && git commit -m 'Release v$newVersion'"

@@ -31,14 +31,16 @@ export function Layout() {
         <Outlet />
       </main>
 
-      {/* Global hamburger — visible on all pages */}
-      <button
-        onClick={toggleSidebar}
-        className="fixed top-5 left-5 z-50 p-3 rounded-full hover:bg-black/5 transition-colors"
-        title="Toggle sidebar"
-      >
-        <Menu size={22} className="text-[#646464]" />
-      </button>
+      {/* Global hamburger — hidden when sidebar is open */}
+      {!sidebarOpen && (
+        <button
+          onClick={toggleSidebar}
+          className="fixed top-5 left-5 z-50 p-3 rounded-full hover:bg-black/5 transition-colors"
+          title="Toggle sidebar"
+        >
+          <Menu size={22} className="text-[#646464]" />
+        </button>
+      )}
 
       {/* Floating Add New button — bottom center */}
       <button

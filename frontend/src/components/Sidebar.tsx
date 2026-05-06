@@ -91,7 +91,7 @@ export function Sidebar() {
   };
 
   return (
-    <aside className="w-60 h-screen bg-[#F5F0E8] border-r border-[#E5E0D8]/60 flex flex-col">
+    <aside className="w-60 h-screen bg-[var(--color-bg-sidebar)] border-r border-[var(--color-border)]/60 flex flex-col">
       {/* Header */}
       <div className="p-5 flex items-center justify-between">
         <div
@@ -101,7 +101,7 @@ export function Sidebar() {
           <div className="w-8 h-8 rounded-full bg-[#ea2804] flex items-center justify-center">
             <span className="text-white font-bold text-sm">O</span>
           </div>
-          <span className="font-bold text-[#202020] tracking-tight text-[15px]">
+          <span className="font-bold text-[var(--color-text)] tracking-tight text-[15px]">
             OpenMemo
           </span>
         </div>

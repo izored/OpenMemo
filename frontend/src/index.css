@@ -16,6 +16,10 @@
   --color-dark: #202020;
   --color-note: #FEF3C7;
   --color-note-text: #92400E;
+  --color-bg-card: #ffffff;
+  --color-bg-input: #ffffff;
+  --color-bg-active: #202020;
+  --color-text-active: #ffffff;
 }
 
 body {
@@ -75,6 +79,10 @@ html.dark {
   --color-text-muted: #666666;
   --color-text-link: #555555;
   --color-dark: #f0f0f0;
+  --color-bg-card: #1a1a1a;
+  --color-bg-input: #2a2a2a;
+  --color-bg-active: #f0f0f0;
+  --color-text-active: #0f0f0f;
 }
 
 html.dark body {

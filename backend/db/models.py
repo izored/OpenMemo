@@ -74,6 +74,8 @@ class Memo(Base):
     thumbnail_path = Column(String, nullable=True)
     ai_summary = Column(Text, nullable=True)
     embedding_ids = Column(JSON, nullable=True)  # list of chunk IDs in ChromaDB
+    notes = Column(Text, nullable=True)
+    sort_order = Column(Integer, default=0)
     is_processed = Column(Boolean, default=False)
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)

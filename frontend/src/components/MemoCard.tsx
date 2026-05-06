@@ -1,6 +1,5 @@
 import { useNavigate } from 'react-router-dom';
-import { useDraggable } from '@dnd-kit/core';
-import { CSS } from '@dnd-kit/utilities';
+import { useQueryClient } from '@tanstack/react-query';
 import {
   FileText,
   Globe,
@@ -11,8 +10,10 @@ import {
   Link2,
   Play,
   GripVertical,
+  X,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { memoApi } from '@/lib/api';
 import type { Memo, MemoType } from '@/types';
 
 const typeConfig: Record<
@@ -30,20 +31,17 @@ const typeConfig: Record<
 
 interface MemoCardProps {
   memo: Memo;
+  dragHandleProps?: {
+    attributes: Record<string, any>;
+    listeners?: Record<string, any>;
+  };
 }
 
-export function MemoCard({ memo }: MemoCardProps) {
+export function MemoCard({ memo, dragHandleProps }: MemoCardProps) {
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
   const config = typeConfig[memo.type] || typeConfig.note;
   const Icon = config.icon;
-
-  const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({
-    id: memo.id,
-  });
-
-  const dragStyle = transform
-    ? { transform: CSS.Transform.toString(transform) }
-    : undefined;
 
   const formattedDate = new Date(memo.created_at).toLocaleDateString('en-US', {
     month: 'short',
@@ -54,11 +52,22 @@ export function MemoCard({ memo }: MemoCardProps) {
     navigate(`/memo/${memo.id}`);
   };
 
+  const handleDelete = async (e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (!confirm(`Delete "${memo.title}"?`)) return;
+    try {
+      await memoApi.delete(memo.id);
+      queryClient.invalidateQueries({ queryKey: ['memos'] });
+    } catch (err) {
+      alert('Failed to delete memo');
+    }
+  };
+
   const DragHandle = () => (
     <span
-      {...listeners}
-      {...attributes}
-      className="absolute top-3 right-3 z-10 p-1.5 rounded-full bg-black/10 hover:bg-black/20 text-white/80 cursor-grab active:cursor-grabbing opacity-0 group-hover:opacity-100 transition-opacity"
+      {...(dragHandleProps?.attributes || {})}
+      {...(dragHandleProps?.listeners || {})}
+      className="absolute top-3 left-3 z-10 p-2 rounded-lg bg-[#202020]/80 hover:bg-[#202020] text-white backdrop-blur-sm cursor-grab active:cursor-grabbing opacity-0 group-hover:opacity-100 transition-opacity shadow-lg"
       onClick={(e) => e.stopPropagation()}
       title="Drag to collection"
     >
@@ -66,16 +75,29 @@ export function MemoCard({ memo }: MemoCardProps) {
     </span>
   );
 
+  const DeleteButton = () => (
+    <button
+      onClick={handleDelete}
+      className={cn(
+        'absolute top-3 right-3 z-10 w-7 h-7 rounded-full bg-[#ea2804]/90 hover:bg-[#ea2804] text-white flex items-center justify-center opacity-0 group-hover:opacity-100 transition-all shadow-lg',
+        'delay-[3000ms] duration-300'
+      )}
+      title="Delete memo"
+    >
+      <X size={13} strokeWidth={3} />
+    </button>
+  );
+
   // ─── Sticky Note ───
   if (memo.type === 'note') {
     return (
       <div
-        ref={setNodeRef}
         onClick={handleClick}
         className="group relative rounded-[28px] p-8 cursor-pointer transition-all duration-300 hover:shadow-xl hover:-translate-y-1 min-h-[320px] flex flex-col"
-        style={{ backgroundColor: config.bg, ...dragStyle, opacity: isDragging ? 0.3 : undefined }}
+        style={{ backgroundColor: config.bg }}
       >
         <DragHandle />
+        <DeleteButton />
         <h3 className="text-lg font-bold line-clamp-3 leading-snug mb-4 pr-6" style={{ color: config.color }}>
           {memo.title}
         </h3>
@@ -108,12 +130,11 @@ export function MemoCard({ memo }: MemoCardProps) {
   if (memo.type === 'image') {
     return (
       <div
-        ref={setNodeRef}
         onClick={handleClick}
-        className="group relative bg-white rounded-[28px] overflow-hidden cursor-pointer shadow-sm hover:shadow-xl transition-all duration-300 hover:-translate-y-1"
-        style={{ ...dragStyle, opacity: isDragging ? 0.3 : undefined }}
+        className="group relative bg-[var(--color-bg-card)] rounded-[28px] overflow-hidden cursor-pointer shadow-sm hover:shadow-xl transition-all duration-300 hover:-translate-y-1"
       >
         <DragHandle />
+        <DeleteButton />
         {memo.thumbnail_path || memo.file_path ? (
           <div className="aspect-square overflow-hidden">
             <img
@@ -125,19 +146,19 @@ export function MemoCard({ memo }: MemoCardProps) {
           </div>
         ) : (
           <div className="aspect-square flex items-center justify-center" style={{ backgroundColor: config.bg }}>
-            <Icon size={64} className="text-[#646464] opacity-20" />
+            <Icon size={64} className="text-[var(--color-text-muted)] opacity-20" />
           </div>
         )}
         <div className="p-7">
-          <h3 className="text-[17px] font-bold text-[#202020] line-clamp-2 leading-snug">
+          <h3 className="text-[17px] font-bold text-[var(--color-text)] line-clamp-2 leading-snug">
             {memo.title}
           </h3>
           <div className="flex items-center justify-between mt-6">
             <div className="flex items-center gap-2.5">
-              <Icon size={16} className="text-[#8d8d8d]" />
-              <span className="text-sm text-[#8d8d8d] font-semibold">{config.label}</span>
+              <Icon size={16} className="text-[var(--color-text-muted)]" />
+              <span className="text-sm text-[var(--color-text-muted)] font-semibold">{config.label}</span>
             </div>
-            <span className="text-[13px] text-[#8d8d8d] font-medium">{formattedDate}</span>
+            <span className="text-[13px] text-[var(--color-text-muted)] font-medium">{formattedDate}</span>
           </div>
         </div>
       </div>
@@ -148,12 +169,11 @@ export function MemoCard({ memo }: MemoCardProps) {
   if (memo.type === 'video') {
     return (
       <div
-        ref={setNodeRef}
         onClick={handleClick}
-        className="group relative bg-white rounded-[28px] overflow-hidden cursor-pointer shadow-sm hover:shadow-xl transition-all duration-300 hover:-translate-y-1"
-        style={{ ...dragStyle, opacity: isDragging ? 0.3 : undefined }}
+        className="group relative bg-[var(--color-bg-card)] rounded-[28px] overflow-hidden cursor-pointer shadow-sm hover:shadow-xl transition-all duration-300 hover:-translate-y-1"
       >
         <DragHandle />
+        <DeleteButton />
         {memo.thumbnail_path ? (
           <div className="aspect-[4/3] overflow-hidden relative">
             <img
@@ -164,33 +184,33 @@ export function MemoCard({ memo }: MemoCardProps) {
             />
             <div className="absolute inset-0 bg-black/20 flex items-center justify-center group-hover:bg-black/30 transition-colors">
               <div className="w-16 h-16 rounded-full bg-white/90 flex items-center justify-center shadow-xl">
-                <Play size={26} className="text-[#202020] ml-0.5" fill="#202020" />
+                <Play size={26} className="text-[var(--color-text)] ml-0.5" fill="currentColor" />
               </div>
             </div>
 
           </div>
         ) : (
           <div className="aspect-[4/3] flex items-center justify-center relative" style={{ backgroundColor: config.bg }}>
-            <Icon size={64} className="text-[#646464] opacity-20" />
+            <Icon size={64} className="text-[var(--color-text-muted)] opacity-20" />
           </div>
         )}
         <div className="p-7">
-          <h3 className="text-[17px] font-bold text-[#202020] line-clamp-2 leading-snug">
+          <h3 className="text-[17px] font-bold text-[var(--color-text)] line-clamp-2 leading-snug">
             {memo.title}
           </h3>
-          <div className="flex items-center justify-between mt-6 pt-4 border-t border-[#f0f0f0]">
+          <div className="flex items-center justify-between mt-6 pt-4 border-t border-[var(--color-border)]">
             <div className="flex items-center gap-3">
               {memo.source_favicon ? (
                 <img src={memo.source_favicon} alt="" className="w-5 h-5 rounded-full"
                   onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }} />
               ) : (
-                <Icon size={17} className="text-[#8d8d8d]" />
+                <Icon size={17} className="text-[var(--color-text-muted)]" />
               )}
-              <span className="text-[15px] text-[#646464] font-semibold truncate max-w-[150px]">
+              <span className="text-[15px] text-[var(--color-text-secondary)] font-semibold truncate max-w-[150px]">
                 {memo.source_domain || config.label}
               </span>
             </div>
-            <span className="text-[13px] text-[#8d8d8d] font-medium">{formattedDate}</span>
+            <span className="text-[13px] text-[var(--color-text-muted)] font-medium">{formattedDate}</span>
           </div>
         </div>
       </div>
@@ -201,37 +221,36 @@ export function MemoCard({ memo }: MemoCardProps) {
   if (memo.type === 'document') {
     return (
       <div
-        ref={setNodeRef}
         onClick={handleClick}
-        className="group relative bg-white rounded-[28px] overflow-hidden cursor-pointer shadow-sm hover:shadow-xl transition-all duration-300 hover:-translate-y-1"
-        style={{ ...dragStyle, opacity: isDragging ? 0.3 : undefined }}
+        className="group relative bg-[var(--color-bg-card)] rounded-[28px] overflow-hidden cursor-pointer shadow-sm hover:shadow-xl transition-all duration-300 hover:-translate-y-1"
       >
         <DragHandle />
+        <DeleteButton />
         {memo.thumbnail_path ? (
-          <div className="aspect-[4/3] overflow-hidden bg-[#f8f8f8]">
+          <div className="aspect-[4/3] overflow-hidden bg-[var(--color-bg-hover)]">
             <img src={memo.thumbnail_path} alt="" className="w-full h-full object-cover"
               onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }} />
           </div>
         ) : (
           <div className="aspect-[4/3] flex items-center justify-center" style={{ backgroundColor: config.bg }}>
-            <Icon size={64} className="text-[#646464] opacity-20" />
+            <Icon size={64} className="text-[var(--color-text-muted)] opacity-20" />
           </div>
         )}
         <div className="p-7">
-          <h3 className="text-[17px] font-bold text-[#202020] line-clamp-2 leading-snug">
+          <h3 className="text-[17px] font-bold text-[var(--color-text)] line-clamp-2 leading-snug">
             {memo.title}
           </h3>
           {memo.description && (
-            <p className="text-[15px] text-[#646464] line-clamp-2 mt-3 leading-relaxed">
+            <p className="text-[15px] text-[var(--color-text-secondary)] line-clamp-2 mt-3 leading-relaxed">
               {memo.description}
             </p>
           )}
-          <div className="flex items-center justify-between mt-6 pt-4 border-t border-[#f0f0f0]">
+          <div className="flex items-center justify-between mt-6 pt-4 border-t border-[var(--color-border)]">
             <div className="flex items-center gap-2.5">
-              <Icon size={16} className="text-[#8d8d8d]" />
-              <span className="text-sm text-[#8d8d8d] font-semibold">{config.label}</span>
+              <Icon size={16} className="text-[var(--color-text-muted)]" />
+              <span className="text-sm text-[var(--color-text-muted)] font-semibold">{config.label}</span>
             </div>
-            <span className="text-[13px] text-[#8d8d8d] font-medium">{formattedDate}</span>
+            <span className="text-[13px] text-[var(--color-text-muted)] font-medium">{formattedDate}</span>
           </div>
         </div>
       </div>
@@ -241,12 +260,11 @@ export function MemoCard({ memo }: MemoCardProps) {
   // ─── Link / Article / Audio / Fallback ───
   return (
     <div
-      ref={setNodeRef}
       onClick={handleClick}
-      className="group relative bg-white rounded-[28px] overflow-hidden cursor-pointer shadow-sm hover:shadow-xl transition-all duration-300 hover:-translate-y-1"
-      style={{ ...dragStyle, opacity: isDragging ? 0.3 : undefined }}
+      className="group relative bg-[var(--color-bg-card)] rounded-[28px] overflow-hidden cursor-pointer shadow-sm hover:shadow-xl transition-all duration-300 hover:-translate-y-1"
     >
       <DragHandle />
+      <DeleteButton />
       {memo.thumbnail_path ? (
         <div className="aspect-[4/3] overflow-hidden relative">
           <img
@@ -263,33 +281,33 @@ export function MemoCard({ memo }: MemoCardProps) {
             <img src={memo.source_favicon} alt="" className="w-20 h-20 rounded-2xl"
               onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }} />
           ) : (
-            <Icon size={64} className="text-[#646464] opacity-20" />
+            <Icon size={64} className="text-[var(--color-text-muted)] opacity-20" />
           )}
         </div>
       )}
 
       <div className="p-7">
-        <h3 className="text-[17px] font-bold text-[#202020] line-clamp-2 leading-snug">
+        <h3 className="text-[17px] font-bold text-[var(--color-text)] line-clamp-2 leading-snug">
           {memo.title}
         </h3>
         {memo.description && (
-          <p className="text-[15px] text-[#646464] line-clamp-2 mt-3 leading-relaxed">
+          <p className="text-[15px] text-[var(--color-text-secondary)] line-clamp-2 mt-3 leading-relaxed">
             {memo.description}
           </p>
         )}
-        <div className="flex items-center justify-between mt-7 pt-4 border-t border-[#f0f0f0]">
+        <div className="flex items-center justify-between mt-7 pt-4 border-t border-[var(--color-border)]">
           <div className="flex items-center gap-3">
             {memo.source_favicon ? (
               <img src={memo.source_favicon} alt="" className="w-5 h-5 rounded-full"
                 onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }} />
             ) : (
-              <Icon size={17} className="text-[#8d8d8d]" />
+              <Icon size={17} className="text-[var(--color-text-muted)]" />
             )}
-            <span className="text-[15px] text-[#646464] font-semibold truncate max-w-[150px]">
+            <span className="text-[15px] text-[var(--color-text-secondary)] font-semibold truncate max-w-[150px]">
               {memo.source_domain || config.label}
             </span>
           </div>
-          <span className="text-[13px] text-[#8d8d8d] font-medium">{formattedDate}</span>
+          <span className="text-[13px] text-[var(--color-text-muted)] font-medium">{formattedDate}</span>
         </div>
       </div>
     </div>

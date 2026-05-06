@@ -107,9 +107,12 @@ async def process_memo(memo_id: str):
             return
         
         try:
+            text_to_embed = memo.content_text
+            if memo.notes:
+                text_to_embed += f"\n\n--- Notes ---\n{memo.notes}"
             chunk_ids = await embed_memo(
                 memo_id=memo.id,
-                text=memo.content_text,
+                text=text_to_embed,
                 metadata={
                     "workspace_id": memo.workspace_id,
                     "type": memo.type,
