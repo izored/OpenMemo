@@ -174,17 +174,12 @@ if ($DryRun) {
         if ($gh) {
             Write-Host ""
             Write-Host "Creating GitHub release v$newVersion..."
-            $releaseNotes = "Release v$newVersion`n`nSee CHANGELOG.md for details."
-            $changelogPath = Join-Path $root "docs\CHANGELOG.md"
-            if (Test-Path $changelogPath) {
-                $changelog = Get-Content $changelogPath -Raw
-                $sectionPattern = "(?s)## \[$newVersion\].*?(?=## \[|\z)"
-                $section = [regex]::Match($changelog, $sectionPattern)
-                if ($section.Success) {
-                    $releaseNotes = $section.Value.Trim()
-                }
+            $releaseNotesPath = Join-Path $root "RELEASE_NOTES.md"
+            if (Test-Path $releaseNotesPath) {
+                & gh release create "v$newVersion" --title "OpenMemo v$newVersion" --notes-file "$releaseNotesPath"
+            } else {
+                & gh release create "v$newVersion" --title "OpenMemo v$newVersion" --generate-notes
             }
-            & gh release create "v$newVersion" --title "v$newVersion" --notes "$releaseNotes"
             Write-Host "GitHub release created: v$newVersion"
         } else {
             Write-Host ""
@@ -195,7 +190,9 @@ if ($DryRun) {
     Write-Host ""
     Write-Host "Next steps:"
     Write-Host "  1. Fill in the CHANGELOG section for $newVersion"
-    Write-Host "  2. git add -A && git commit -m 'Release v$newVersion'"
-    Write-Host "  3. git tag v$newVersion"
-    Write-Host "  4. git push origin main --tags"
+    Write-Host "  2. Update RELEASE_NOTES.md with formatted release notes (copy-paste to GitHub)"
+    Write-Host "  3. git add -A && git commit -m 'Release v$newVersion'"
+    Write-Host "  4. git tag v$newVersion"
+    Write-Host "  5. git push origin main --tags"
+    Write-Host "  6. gh release create v$newVersion --title 'OpenMemo v$newVersion' --notes-file RELEASE_NOTES.md"
 }

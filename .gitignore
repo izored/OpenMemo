@@ -49,3 +49,6 @@ Thumbs.db
 chrome-extension/icons/*.png
 
 docker-compose.override.yml
+
+# Release notes (internal working doc)
+RELEASE_NOTES.md

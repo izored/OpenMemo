@@ -83,6 +83,22 @@ refactor: replace hardcoded colors with CSS variables
 5. Open a PR and fill out the template.
 6. A maintainer will review within a few days.
 
+## Releasing (maintainers only)
+
+1. Run `.\bump-version.ps1 minor|patch`
+2. Fill in the new CHANGELOG section in `docs/CHANGELOG.md`
+3. Write formatted release notes in `RELEASE_NOTES.md` (emoji-rich, copy-paste ready)
+4. Commit, tag, and push:
+   ```bash
+   git add -A && git commit -m "Release vX.Y.Z"
+   git tag vX.Y.Z
+   git push origin main --tags
+   ```
+5. Publish the GitHub release (copy from `RELEASE_NOTES.md`):
+   ```bash
+   gh release create vX.Y.Z --title "OpenMemo vX.Y.Z" --notes-file RELEASE_NOTES.md
+   ```
+
 ## Questions?
 
 - Check `docs/INSTALL.md` for troubleshooting.
