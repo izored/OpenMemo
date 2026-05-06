@@ -61,16 +61,27 @@ class OllamaClient:
             data = resp.json()
             return data.get("models", [])
 
+    def _is_endpoint_not_found(self, resp: httpx.Response) -> bool:
+        """True only when the route itself is missing, not when the model is missing."""
+        if resp.status_code != 404:
+            return False
+        try:
+            body = resp.json()
+            msg = str(body.get("error", "")).lower()
+            return not msg or "not found" not in msg or "model" not in msg
+        except Exception:
+            return True  # no JSON body → route missing
+
     async def embed(self, text: str, model: str | None = None) -> list[float]:
         model = model or settings.EMBED_MODEL
         host = await self._get_working_host()
         async with httpx.AsyncClient(timeout=self.timeout) as client:
-            # Try modern /api/embed first, fallback to legacy /api/embeddings
             resp = await client.post(
                 f"{host}/api/embed",
                 json={"model": model, "input": text},
             )
-            if resp.status_code == 404:
+            if self._is_endpoint_not_found(resp):
+                # Legacy Ollama — endpoint doesn't exist, try old API
                 resp = await client.post(
                     f"{host}/api/embeddings",
                     json={"model": model, "prompt": text},
@@ -86,13 +97,12 @@ class OllamaClient:
         model = model or settings.EMBED_MODEL
         host = await self._get_working_host()
         async with httpx.AsyncClient(timeout=self.timeout) as client:
-            # Try modern /api/embed first, fallback to legacy /api/embeddings (sequential)
             resp = await client.post(
                 f"{host}/api/embed",
                 json={"model": model, "input": texts},
             )
-            if resp.status_code == 404:
-                # Legacy Ollama doesn't support batch — fall back to sequential single embeds
+            if self._is_endpoint_not_found(resp):
+                # Legacy Ollama — sequential single embeds
                 results = []
                 for text in texts:
                     r = await client.post(

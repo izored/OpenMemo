@@ -51,14 +51,10 @@ interface AppState {
 }
 
 const persist = (partial: Partial<AppState>) => {
-  const toSave = {
-    theme: partial.theme,
-  };
-  if (toSave.theme) {
-    localStorage.setItem('openmemo_settings', JSON.stringify({
-      theme: partial.theme ?? saved.theme ?? 'light',
-    }));
-  }
+  localStorage.setItem('openmemo_settings', JSON.stringify({
+    theme: partial.theme ?? saved.theme ?? 'light',
+    chatModel: partial.chatModel ?? saved.chatModel ?? '',
+  }));
 };
 
 // Dark mode is manual-toggle only until fully polished.
@@ -80,8 +76,11 @@ export const useAppStore = create<AppState>((set) => ({
 
   activeChatSession: null,
   setActiveChatSession: (id) => set({ activeChatSession: id }),
-  chatModel: 'qwen2.5:7b',
-  setChatModel: (model) => set({ chatModel: model }),
+  chatModel: saved.chatModel || '',
+  setChatModel: (model) => {
+    set({ chatModel: model });
+    persist({ chatModel: model });
+  },
 
   addModalOpen: false,
   setAddModalOpen: (open) => set({ addModalOpen: open }),
