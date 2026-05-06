@@ -67,7 +67,7 @@ export function MemoCard({ memo, dragHandleProps }: MemoCardProps) {
     <span
       {...(dragHandleProps?.attributes || {})}
       {...(dragHandleProps?.listeners || {})}
-      className="absolute top-3 left-3 z-10 p-2 rounded-lg bg-[var(--color-dark)]/80 hover:bg-[var(--color-dark)] text-[var(--color-bg)] backdrop-blur-sm cursor-grab active:cursor-grabbing opacity-0 group-hover:opacity-100 transition-opacity shadow-lg"
+      className="absolute top-3 left-3 z-10 p-2 rounded-lg bg-[var(--color-dark)]/80 hover:bg-[var(--color-dark)] text-[var(--color-bg)] cursor-grab active:cursor-grabbing opacity-0 group-hover:opacity-100 transition-opacity shadow-lg"
       onClick={(e) => e.stopPropagation()}
       title="Drag to collection"
     >
