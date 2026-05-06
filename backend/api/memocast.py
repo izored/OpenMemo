@@ -11,6 +11,7 @@ from pydantic import BaseModel
 from backend.config import settings
 from backend.db.database import get_db, AsyncSessionLocal
 from backend.db.models import Memo, MemoCast
+from backend.core.security import sanitize_workspace_id
 
 router = APIRouter(prefix="/api/memocast", tags=["memocast"])
 
@@ -29,7 +30,7 @@ async def list_memocasts(
     """List all memocast episodes."""
     query = select(MemoCast).order_by(MemoCast.created_at.desc())
     if workspace_id:
-        query = query.where(MemoCast.workspace_id == workspace_id)
+        query = query.where(MemoCast.workspace_id == sanitize_workspace_id(workspace_id))
     
     result = await db.execute(query)
     episodes = result.scalars().all()
@@ -74,7 +75,7 @@ async def create_memocast(
     """Create a new memocast episode."""
     from backend.core.rag import generate_memocast_script
     
-    workspace_id = data.workspace_id or "default"
+    workspace_id = sanitize_workspace_id(data.workspace_id)
     
     # Get memos
     if data.memo_ids:

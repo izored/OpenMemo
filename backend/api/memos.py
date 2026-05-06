@@ -11,6 +11,7 @@ from pydantic import BaseModel
 
 from backend.db.database import get_db
 from backend.db.models import Memo, Collection, Tag, memo_collections, memo_tags
+from backend.core.security import sanitize_workspace_id
 
 router = APIRouter(prefix="/api/memos", tags=["memos"])
 
@@ -76,6 +77,8 @@ async def list_memos(
     limit: int = 50,
     db: AsyncSession = Depends(get_db),
 ):
+    if workspace_id:
+        workspace_id = sanitize_workspace_id(workspace_id)
     """List memos with filtering and pagination."""
     query = select(Memo).options(
         selectinload(Memo.collections),
@@ -175,7 +178,7 @@ async def create_memo(data: MemoCreate, db: AsyncSession = Depends(get_db)):
     """Create a new memo."""
     memo = Memo(
         id=str(uuid.uuid4()),
-        workspace_id=data.workspace_id or "default",
+        workspace_id=sanitize_workspace_id(data.workspace_id),
         type=data.type,
         title=data.title,
         description=data.description,

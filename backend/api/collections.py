@@ -10,6 +10,7 @@ from pydantic import BaseModel
 
 from backend.db.database import get_db
 from backend.db.models import Collection, memo_collections
+from backend.core.security import sanitize_workspace_id
 
 router = APIRouter(prefix="/api/collections", tags=["collections"])
 
@@ -39,7 +40,7 @@ async def list_collections(
     """List all collections."""
     query = select(Collection).order_by(Collection.pinned.desc(), Collection.sort_order)
     if workspace_id:
-        query = query.where(Collection.workspace_id == workspace_id)
+        query = query.where(Collection.workspace_id == sanitize_workspace_id(workspace_id))
     
     result = await db.execute(query)
     collections = result.scalars().all()
@@ -64,7 +65,7 @@ async def create_collection(data: CollectionCreate, db: AsyncSession = Depends(g
     """Create a new collection."""
     collection = Collection(
         id=str(uuid.uuid4()),
-        workspace_id=data.workspace_id or "default",
+        workspace_id=sanitize_workspace_id(data.workspace_id),
         name=data.name,
         emoji=data.emoji,
         description=data.description,

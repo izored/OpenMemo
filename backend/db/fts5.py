@@ -66,7 +66,7 @@ def _escape_fts5(query: str) -> str:
 
 async def search_fts5(query: str, workspace_id: str, limit: int = 20) -> list[dict]:
     """Search memos using FTS5. Returns list of {memo_id, rank}."""
-    escaped = _escape_fts5(query)
+    escaped = escape_fts5_query(query)
     if not escaped:
         return []
     
