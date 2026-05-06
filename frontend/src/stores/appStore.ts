@@ -61,10 +61,9 @@ const persist = (partial: Partial<AppState>) => {
   }
 };
 
-// Apply dark class on initial load based on saved theme
-if (saved.theme === 'dark') {
-  document.documentElement.classList.add('dark');
-}
+// Dark mode is manual-toggle only until fully polished.
+// Do NOT auto-apply on load — prevents half-baked dark mode flash.
+// The toggle in SettingsPage handles adding/removing the .dark class.
 
 export const useAppStore = create<AppState>((set) => ({
   sidebarOpen: false,
