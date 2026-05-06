@@ -35,24 +35,24 @@ function DroppableCollectionItem({
       className={cn(
         'group w-full flex items-center gap-2.5 px-3.5 py-2.5 rounded-full text-[14px] transition-colors font-medium',
         isOver
-          ? 'bg-[#ea2804]/10 text-[#ea2804] ring-1 ring-[#ea2804]/30'
+          ? 'bg-[var(--color-brand)]/10 text-[var(--color-brand)] ring-1 ring-[var(--color-brand)]/30'
           : activeCollection === col.id
-            ? 'bg-[#202020] text-white'
-            : 'text-[#646464] hover:bg-[#EDE8E0]'
+            ? 'bg-[var(--color-bg-active)] text-[var(--color-text-active)]'
+            : 'text-[var(--color-text-secondary)] hover:bg-[var(--color-bg-hover)]'
       )}
     >
       <span className="text-base leading-none flex-shrink-0">
         {col.emoji || '📁'}
       </span>
       <span className="truncate flex-1 text-left">{col.name}</span>
-      {col.pinned && <Pin size={11} className="text-[#8d8d8d] flex-shrink-0" />}
+      {col.pinned && <Pin size={11} className="text-[var(--color-text-muted)] flex-shrink-0" />}
       <span
         onClick={onEdit}
         className={cn(
           'p-1 rounded-full opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0',
           activeCollection === col.id
             ? 'hover:bg-white/20 text-white/70'
-            : 'hover:bg-[#E5E0D8] text-[#8d8d8d]'
+            : 'hover:bg-[var(--color-border)] text-[var(--color-text-muted)]'
         )}
         title="Edit collection"
       >
@@ -98,7 +98,7 @@ export function Sidebar() {
           className="flex items-center gap-2.5 cursor-pointer"
           onClick={() => navigate('/')}
         >
-          <div className="w-8 h-8 rounded-full bg-[#ea2804] flex items-center justify-center">
+          <div className="w-8 h-8 rounded-full bg-[var(--color-brand)] flex items-center justify-center">
             <span className="text-white font-bold text-sm">O</span>
           </div>
           <span className="font-bold text-[var(--color-text)] tracking-tight text-[15px]">
@@ -107,7 +107,7 @@ export function Sidebar() {
         </div>
         <button
           onClick={toggleSidebar}
-          className="p-1.5 rounded-full hover:bg-[#EDE8E0] text-[#8d8d8d] transition-colors"
+          className="p-1.5 rounded-full hover:bg-[var(--color-bg-hover)] text-[var(--color-text-muted)] transition-colors"
         >
           <ChevronLeft size={16} />
         </button>
@@ -125,8 +125,8 @@ export function Sidebar() {
             className={cn(
               'w-full flex items-center gap-3 px-3.5 py-2.5 rounded-full text-[14px] transition-colors font-medium',
               location.pathname === item.path && !activeCollection
-                ? 'bg-[#202020] text-white'
-                : 'text-[#646464] hover:bg-[#EDE8E0]'
+                ? 'bg-[var(--color-bg-active)] text-[var(--color-text-active)]'
+                : 'text-[var(--color-text-secondary)] hover:bg-[var(--color-bg-hover)]'
             )}
           >
             <item.icon size={17} strokeWidth={2} />
@@ -137,12 +137,12 @@ export function Sidebar() {
         {/* Collections */}
         <div className="pt-6">
           <div className="flex items-center justify-between px-3.5 mb-3">
-            <span className="text-[11px] font-bold text-[#8d8d8d] uppercase tracking-widest">
+            <span className="text-[11px] font-bold text-[var(--color-text-muted)] uppercase tracking-widest">
               Collections
             </span>
             <button
               onClick={openCreateModal}
-              className="p-1 rounded-full hover:bg-[#EDE8E0] text-[#8d8d8d] transition-colors"
+              className="p-1 rounded-full hover:bg-[var(--color-bg-hover)] text-[var(--color-text-muted)] transition-colors"
               title="New collection"
             >
               <Plus size={13} />

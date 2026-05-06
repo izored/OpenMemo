@@ -79,14 +79,14 @@ export function AddCollectionModal() {
       <div className="absolute inset-0 bg-black/40" onClick={close} />
 
       {/* Modal */}
-      <div className="relative bg-white rounded-2xl shadow-xl w-full max-w-md mx-4 overflow-hidden border border-[#e5e5e5]">
+      <div className="relative bg-[var(--color-bg-card)] rounded-2xl shadow-xl w-full max-w-md mx-4 overflow-hidden border border-[var(--color-border)]">
         {/* Header */}
-        <div className="flex items-center justify-between px-6 py-4 border-b border-[#e5e5e5]">
-          <h2 className="text-lg font-semibold text-[#202020] tracking-tight">
+        <div className="flex items-center justify-between px-6 py-4 border-b border-[var(--color-border)]">
+          <h2 className="text-lg font-semibold text-[var(--color-text)] tracking-tight">
             {isEditing ? 'Edit Collection' : 'New Collection'}
           </h2>
-          <button onClick={close} className="p-1.5 rounded-full hover:bg-[#f5f5f5] transition-colors">
-            <X size={18} className="text-[#646464]" />
+          <button onClick={close} className="p-1.5 rounded-full hover:bg-[var(--color-bg-hover)] transition-colors">
+            <X size={18} className="text-[var(--color-text-secondary)]" />
           </button>
         </div>
 
@@ -101,23 +101,23 @@ export function AddCollectionModal() {
           {/* Name + Emoji row */}
           <div className="flex gap-3">
             <div className="flex-shrink-0">
-              <label className="block text-sm font-semibold text-[#202020] mb-1.5">Emoji</label>
+              <label className="block text-sm font-semibold text-[var(--color-text)] mb-1.5">Emoji</label>
               <input
                 type="text"
                 value={emoji}
                 onChange={(e) => setEmoji(e.target.value)}
-                className="w-14 h-11 text-center text-xl border border-[#e5e5e5] rounded-xl focus:outline-none focus:border-[#202020] transition-colors"
+                className="w-14 h-11 text-center text-xl border border-[var(--color-border)] rounded-xl focus:outline-none focus:border-[var(--color-text)] transition-colors bg-[var(--color-bg-card)]"
                 maxLength={2}
               />
             </div>
             <div className="flex-1">
-              <label className="block text-sm font-semibold text-[#202020] mb-1.5">Name</label>
+              <label className="block text-sm font-semibold text-[var(--color-text)] mb-1.5">Name</label>
               <input
                 type="text"
                 value={name}
                 onChange={(e) => setName(e.target.value)}
                 placeholder="Collection name"
-                className="w-full px-4 py-2.5 border border-[#e5e5e5] rounded-full text-sm focus:outline-none focus:border-[#202020] transition-colors"
+                className="w-full px-4 py-2.5 border border-[var(--color-border)] rounded-full text-sm focus:outline-none focus:border-[var(--color-text)] transition-colors bg-[var(--color-bg-card)]"
                 onKeyDown={(e) => e.key === 'Enter' && handleSubmit()}
               />
             </div>
@@ -125,19 +125,19 @@ export function AddCollectionModal() {
 
           {/* Description */}
           <div>
-            <label className="block text-sm font-semibold text-[#202020] mb-1.5">Description</label>
+            <label className="block text-sm font-semibold text-[var(--color-text)] mb-1.5">Description</label>
             <textarea
               value={description}
               onChange={(e) => setDescription(e.target.value)}
               placeholder="Optional description..."
               rows={3}
-              className="w-full px-4 py-2.5 border border-[#e5e5e5] rounded-xl text-sm focus:outline-none focus:border-[#202020] resize-none transition-colors"
+              className="w-full px-4 py-2.5 border border-[var(--color-border)] rounded-xl text-sm focus:outline-none focus:border-[var(--color-text)] resize-none transition-colors bg-[var(--color-bg-card)]"
             />
           </div>
 
           {/* Color */}
           <div>
-            <label className="block text-sm font-semibold text-[#202020] mb-2">Color</label>
+            <label className="block text-sm font-semibold text-[var(--color-text)] mb-2">Color</label>
             <div className="flex gap-2 flex-wrap">
               {presetColors.map((c) => (
                 <button
@@ -145,7 +145,7 @@ export function AddCollectionModal() {
                   onClick={() => setColor(c)}
                   className={cn(
                     'w-8 h-8 rounded-full border-2 transition-all',
-                    color === c ? 'border-[#202020] scale-110' : 'border-transparent hover:scale-105'
+                    color === c ? 'border-[var(--color-text)] scale-110' : 'border-transparent hover:scale-105'
                   )}
                   style={{ backgroundColor: c }}
                 />
@@ -157,7 +157,7 @@ export function AddCollectionModal() {
           <button
             onClick={handleSubmit}
             disabled={loading || !name.trim()}
-            className="w-full py-2.5 bg-[#202020] text-white rounded-full text-sm font-semibold hover:bg-black disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center gap-2 transition-colors"
+            className="w-full py-2.5 bg-[var(--color-bg-active)] text-[var(--color-text-active)] rounded-full text-sm font-semibold hover:bg-[var(--color-text)] disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center gap-2 transition-colors"
           >
             {loading && <Loader2 size={16} className="animate-spin" />}
             {isEditing ? 'Save Changes' : 'Create Collection'}

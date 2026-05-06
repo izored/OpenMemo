@@ -20,6 +20,22 @@
   --color-bg-input: #ffffff;
   --color-bg-active: #202020;
   --color-text-active: #ffffff;
+
+  /* Type-specific card backgrounds */
+  --color-type-note-bg: #FEF3C7;
+  --color-type-note-text: #92400E;
+  --color-type-article-bg: #EFF6FF;
+  --color-type-article-text: #1E40AF;
+  --color-type-video-bg: #FEF2F2;
+  --color-type-video-text: #991B1B;
+  --color-type-image-bg: #FAF5FF;
+  --color-type-image-text: #6B21A8;
+  --color-type-audio-bg: #ECFDF5;
+  --color-type-audio-text: #065F46;
+  --color-type-document-bg: #F9FAFB;
+  --color-type-document-text: #374151;
+  --color-type-link-bg: #EFF6FF;
+  --color-type-link-text: #1E40AF;
 }
 
 body {
@@ -50,12 +66,12 @@ body {
 }
 
 ::-webkit-scrollbar-thumb {
-  background: #d1d1d1;
+  background: var(--color-text-link);
   border-radius: 9999px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: #a0a0a0;
+  background: var(--color-text-muted);
 }
 
 /* Dotted underline links — Replicate signature */
@@ -83,6 +99,22 @@ html.dark {
   --color-bg-input: #2a2a2a;
   --color-bg-active: #f0f0f0;
   --color-text-active: #0f0f0f;
+
+  /* Type-specific dark mode */
+  --color-type-note-bg: #2a2510;
+  --color-type-note-text: #d97706;
+  --color-type-article-bg: #0f1f3d;
+  --color-type-article-text: #60a5fa;
+  --color-type-video-bg: #2a1010;
+  --color-type-video-text: #f87171;
+  --color-type-image-bg: #1f102a;
+  --color-type-image-text: #c084fc;
+  --color-type-audio-bg: #0a2a1a;
+  --color-type-audio-text: #34d399;
+  --color-type-document-bg: #1a1a1a;
+  --color-type-document-text: #9ca3af;
+  --color-type-link-bg: #0f1f3d;
+  --color-type-link-text: #60a5fa;
 }
 
 html.dark body {
@@ -94,4 +126,9 @@ html.dark body {
 ::selection {
   background: var(--color-brand-light);
   color: var(--color-brand);
+}
+
+html.dark ::selection {
+  background: rgba(234, 40, 4, 0.4);
+  color: #fff;
 }

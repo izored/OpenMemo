@@ -137,10 +137,10 @@ export function Dashboard() {
           <div
             className={cn(
               'flex items-center gap-3 px-5 py-3 bg-[var(--color-bg-card)] rounded-full text-[15px] text-[var(--color-text-secondary)] transition-all shadow-sm',
-              searchFocused ? 'ring-2 ring-[#202020] w-80' : 'hover:bg-white w-64'
+              searchFocused ? 'ring-2 ring-[var(--color-text)] w-80' : 'hover:bg-[var(--color-bg-card)] w-64'
             )}
           >
-            <Search size={17} className="text-[#8d8d8d] flex-shrink-0" />
+            <Search size={17} className="text-[var(--color-text-muted)] flex-shrink-0" />
             <input
               ref={searchInputRef}
               type="text"
@@ -160,7 +160,7 @@ export function Dashboard() {
             />
             {searchQuery ? (
               <button onClick={() => { setSearchQuery(''); setSearchResults([]); }}>
-                <X size={14} className="text-[#8d8d8d]" />
+                <X size={14} className="text-[var(--color-text-muted)]" />
               </button>
             ) : (
               <kbd className="hidden sm:inline-block text-[11px] px-2 py-0.5 bg-[var(--color-bg-hover)] rounded-md font-mono border border-[var(--color-border)] flex-shrink-0">
@@ -184,16 +184,16 @@ export function Dashboard() {
                   <button
                     key={result.id}
                     onMouseDown={() => handleResultClick(result.id)}
-                    className="w-full flex items-center gap-3 px-4 py-3 hover:bg-[#f5f5f5] text-left transition-colors"
+                    className="w-full flex items-center gap-3 px-4 py-3 hover:bg-[var(--color-bg-hover)] text-left transition-colors"
                   >
-                    <Icon size={15} className="text-[#646464] flex-shrink-0" />
+                    <Icon size={15} className="text-[var(--color-text-secondary)] flex-shrink-0" />
                     <div className="flex-1 min-w-0">
                       <p className="text-sm font-medium text-[var(--color-text)] truncate">{result.title}</p>
                       {result.description && (
                         <p className="text-xs text-[var(--color-text-secondary)] truncate">{result.description}</p>
                       )}
                     </div>
-                    <span className="text-[11px] text-[#8d8d8d] font-mono">{result.source_domain}</span>
+                    <span className="text-[11px] text-[var(--color-text-muted)] font-mono">{result.source_domain}</span>
                   </button>
                 );
               })}
@@ -231,7 +231,7 @@ export function Dashboard() {
       <div className="flex-1 overflow-y-auto pb-16">
         {isLoading ? (
           <div className="flex items-center justify-center py-32">
-            <div className="w-10 h-10 border-[2.5px] border-[#202020] border-t-transparent rounded-full animate-spin" />
+            <div className="w-10 h-10 border-[2.5px] border-[var(--color-text)] border-t-transparent rounded-full animate-spin" />
           </div>
         ) : (
           <MemoGrid memos={data?.items || []} />

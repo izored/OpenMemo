@@ -48,19 +48,15 @@ interface AppState {
   // Theme & appearance
   theme: 'light' | 'dark';
   setTheme: (theme: 'light' | 'dark') => void;
-  bgColor: string;
-  setBgColor: (color: string) => void;
 }
 
 const persist = (partial: Partial<AppState>) => {
   const toSave = {
     theme: partial.theme,
-    bgColor: partial.bgColor,
   };
-  if (toSave.theme || toSave.bgColor) {
+  if (toSave.theme) {
     localStorage.setItem('openmemo_settings', JSON.stringify({
       theme: partial.theme ?? saved.theme ?? 'light',
-      bgColor: partial.bgColor ?? saved.bgColor ?? '#F5F0E8',
     }));
   }
 };
@@ -105,10 +101,5 @@ export const useAppStore = create<AppState>((set) => ({
     } else {
       document.documentElement.classList.remove('dark');
     }
-  },
-  bgColor: saved.bgColor || '#F5F0E8',
-  setBgColor: (bgColor) => {
-    set({ bgColor });
-    persist({ bgColor });
   },
 }));

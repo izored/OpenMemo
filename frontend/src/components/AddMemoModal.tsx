@@ -105,17 +105,17 @@ export function AddMemoModal() {
       <div className="absolute inset-0 bg-black/40" onClick={close} />
 
       {/* Modal */}
-      <div className="relative bg-white rounded-2xl shadow-xl w-full max-w-lg mx-4 overflow-hidden border border-[#e5e5e5]">
+      <div className="relative bg-[var(--color-bg-card)] rounded-2xl shadow-xl w-full max-w-lg mx-4 overflow-hidden border border-[var(--color-border)]">
         {/* Header */}
-        <div className="flex items-center justify-between px-6 py-4 border-b border-[#e5e5e5]">
-          <h2 className="text-lg font-semibold text-[#202020] tracking-tight">Add New Memo</h2>
-          <button onClick={close} className="p-1.5 rounded-full hover:bg-[#f5f5f5] transition-colors">
-            <X size={18} className="text-[#646464]" />
+        <div className="flex items-center justify-between px-6 py-4 border-b border-[var(--color-border)]">
+          <h2 className="text-lg font-semibold text-[var(--color-text)] tracking-tight">Add New Memo</h2>
+          <button onClick={close} className="p-1.5 rounded-full hover:bg-[var(--color-bg-hover)] transition-colors">
+            <X size={18} className="text-[var(--color-text-secondary)]" />
           </button>
         </div>
 
         {/* Tabs */}
-        <div className="flex border-b border-[#e5e5e5]">
+        <div className="flex border-b border-[var(--color-border)]">
           {tabs.map((tab) => (
             <button
               key={tab.id}
@@ -123,8 +123,8 @@ export function AddMemoModal() {
               className={cn(
                 'flex-1 flex items-center justify-center gap-2 px-4 py-3 text-sm font-medium transition-colors',
                 activeTab === tab.id
-                  ? 'text-[#ea2804] border-b-2 border-[#ea2804]'
-                  : 'text-[#646464] hover:text-[#202020]'
+                  ? 'text-[var(--color-brand)] border-b-2 border-[var(--color-brand)]'
+                  : 'text-[var(--color-text-secondary)] hover:text-[var(--color-text)]'
               )}
             >
               <tab.icon size={15} />
@@ -145,20 +145,20 @@ export function AddMemoModal() {
           {activeTab === 'link' && (
             <div className="space-y-4">
               <div>
-                <label className="block text-sm font-semibold text-[#202020] mb-1.5">URL</label>
+                <label className="block text-sm font-semibold text-[var(--color-text)] mb-1.5">URL</label>
                 <input
                   type="url"
                   value={url}
                   onChange={(e) => setUrl(e.target.value)}
                   placeholder="https://example.com/article"
-                  className="w-full px-4 py-2.5 border border-[#e5e5e5] rounded-full text-sm focus:outline-none focus:border-[#202020] transition-colors"
+                  className="w-full px-4 py-2.5 border border-[var(--color-border)] rounded-full text-sm focus:outline-none focus:border-[var(--color-text)] transition-colors bg-[var(--color-bg-card)]"
                   onKeyDown={(e) => e.key === 'Enter' && handleSaveLink()}
                 />
               </div>
               <button
                 onClick={handleSaveLink}
                 disabled={loading || !url.trim()}
-                className="w-full py-2.5 bg-[#202020] text-white rounded-full text-sm font-semibold hover:bg-black disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center gap-2 transition-colors"
+                className="w-full py-2.5 bg-[var(--color-bg-active)] text-[var(--color-text-active)] rounded-full text-sm font-semibold hover:bg-[var(--color-text)] disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center gap-2 transition-colors"
               >
                 {loading && <Loader2 size={16} className="animate-spin" />}
                 Save Link
@@ -170,29 +170,29 @@ export function AddMemoModal() {
           {activeTab === 'note' && (
             <div className="space-y-4">
               <div>
-                <label className="block text-sm font-semibold text-[#202020] mb-1.5">Title</label>
+                <label className="block text-sm font-semibold text-[var(--color-text)] mb-1.5">Title</label>
                 <input
                   type="text"
                   value={noteTitle}
                   onChange={(e) => setNoteTitle(e.target.value)}
                   placeholder="My note title"
-                  className="w-full px-4 py-2.5 border border-[#e5e5e5] rounded-full text-sm focus:outline-none focus:border-[#202020] transition-colors"
+                  className="w-full px-4 py-2.5 border border-[var(--color-border)] rounded-full text-sm focus:outline-none focus:border-[var(--color-text)] transition-colors bg-[var(--color-bg-card)]"
                 />
               </div>
               <div>
-                <label className="block text-sm font-semibold text-[#202020] mb-1.5">Content</label>
+                <label className="block text-sm font-semibold text-[var(--color-text)] mb-1.5">Content</label>
                 <textarea
                   value={noteContent}
                   onChange={(e) => setNoteContent(e.target.value)}
                   placeholder="Write your note here... (Markdown supported)"
                   rows={6}
-                  className="w-full px-4 py-2.5 border border-[#e5e5e5] rounded-xl text-sm focus:outline-none focus:border-[#202020] resize-none transition-colors"
+                  className="w-full px-4 py-2.5 border border-[var(--color-border)] rounded-xl text-sm focus:outline-none focus:border-[var(--color-text)] resize-none transition-colors bg-[var(--color-bg-card)]"
                 />
               </div>
               <button
                 onClick={handleSaveNote}
                 disabled={loading || !noteTitle.trim()}
-                className="w-full py-2.5 bg-[#202020] text-white rounded-full text-sm font-semibold hover:bg-black disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center gap-2 transition-colors"
+                className="w-full py-2.5 bg-[var(--color-bg-active)] text-[var(--color-text-active)] rounded-full text-sm font-semibold hover:bg-[var(--color-text)] disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center gap-2 transition-colors"
               >
                 {loading && <Loader2 size={16} className="animate-spin" />}
                 Save Note
@@ -210,14 +210,14 @@ export function AddMemoModal() {
                 onClick={() => fileInputRef.current?.click()}
                 className={cn(
                   'border-2 border-dashed rounded-2xl p-8 text-center cursor-pointer transition-colors',
-                  dragOver ? 'border-[#ea2804] bg-[#FEE4E0]' : 'border-[#e5e5e5] hover:border-[#202020]'
+                  dragOver ? 'border-[var(--color-brand)] bg-[var(--color-brand-light)]' : 'border-[var(--color-border)] hover:border-[var(--color-text)]'
                 )}
               >
-                <Upload size={32} className="mx-auto mb-3 text-[#8d8d8d]" />
-                <p className="text-sm font-semibold text-[#202020]">
+                <Upload size={32} className="mx-auto mb-3 text-[var(--color-text-muted)]" />
+                <p className="text-sm font-semibold text-[var(--color-text)]">
                   Drop files here or click to browse
                 </p>
-                <p className="text-xs text-[#8d8d8d] mt-1">
+                <p className="text-xs text-[var(--color-text-muted)] mt-1">
                   PDF, DOC, XLSX, Images, Audio (up to 50MB)
                 </p>
               </div>
@@ -230,7 +230,7 @@ export function AddMemoModal() {
                 onChange={(e) => handleFileUpload(e.target.files)}
               />
               {loading && (
-                <div className="flex items-center justify-center gap-2 text-sm text-[#646464]">
+                <div className="flex items-center justify-center gap-2 text-sm text-[var(--color-text-secondary)]">
                   <Loader2 size={16} className="animate-spin" />
                   Uploading...
                 </div>
