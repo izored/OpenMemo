@@ -50,8 +50,8 @@ chrome-extension/icons/*.png
 
 docker-compose.override.yml
 
-# Release notes (internal working doc)
+# Release / admin tooling (local only, not part of the app)
+bump-version.ps1
+docs/RELEASE_PROCEDURE.md
 RELEASE_NOTES.md
-
-# Temporary changelog
-TEMP_CHANGELOG_1.7.1.md
+TEMP_CHANGELOG_v*.md
