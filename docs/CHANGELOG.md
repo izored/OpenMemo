@@ -89,7 +89,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 ### Infrastructure
 
 - **Environment-driven config** — Removed all hardcoded personal paths/domains. `docker-compose.yml` is clean; local overrides go in `docker-compose.override.yml` (gitignored)
-- **Chrome extension config** — API URL is now configurable via an options page (`options.html`) reading from `chrome.storage.sync`. Default: `http://localhost/api`
+- **Chrome extension config** — API URL is now configurable via an options page (`options.html`) reading from `chrome.storage.sync`. Default: `http://openmemo.local/api`
 - **CORS override** — `CORS_ORIGINS` accepts comma-separated env var override for custom domains
 - **Demo data seeding** — `seed_data.py` generates 19 rich memos across 4 collections for fresh installs
 

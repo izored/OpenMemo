@@ -1,6 +1,6 @@
 // OpenMemo Side Panel - Shows AI summary of current page
 
-const DEFAULT_API_BASE = 'http://localhost/api';
+const DEFAULT_API_BASE = 'http://openmemo.local/api';
 
 async function getApiBase() {
   const stored = await chrome.storage.sync.get('apiBase');

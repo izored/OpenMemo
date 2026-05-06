@@ -15,7 +15,7 @@
 <body>
   <h2>OpenMemo Extension Settings</h2>
   <label for="apiBase">OpenMemo API URL</label>
-  <input type="url" id="apiBase" placeholder="http://localhost/api" />
+  <input type="url" id="apiBase" placeholder="http://openmemo.local/api" />
   <button id="save">Save</button>
   <p class="status" id="status"></p>
 
@@ -25,11 +25,11 @@
 
     // Load saved value
     chrome.storage.sync.get('apiBase', (data) => {
-      input.value = data.apiBase || 'http://localhost/api';
+      input.value = data.apiBase || 'http://openmemo.local/api';
     });
 
     document.getElementById('save').addEventListener('click', () => {
-      const url = input.value.trim() || 'http://localhost/api';
+      const url = input.value.trim() || 'http://openmemo.local/api';
       chrome.storage.sync.set({ apiBase: url }, () => {
         status.textContent = 'Saved!';
         setTimeout(() => status.textContent = '', 2000);

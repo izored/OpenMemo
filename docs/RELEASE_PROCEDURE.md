@@ -139,7 +139,7 @@ This script:
 | Tag exists on remote | `git ls-remote --tags origin \| grep vX.Y.Z` |
 | Release exists on GitHub | `gh release view vX.Y.Z` |
 | Release has only this version | `gh release view vX.Y.Z --json body -q .body \| head -5` |
-| Version API returns correctly | `curl http://localhost/api/health` |
+| Version API returns correctly | `curl http://openmemo.local/api/health` |
 
 ---
 
