@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "OpenMemo",
-  "version": "1.6.6",
+  "version": "1.7.0",
   "description": "Save anything to your local AI knowledge base",
   "permissions": [
     "activeTab",
@@ -18,9 +18,7 @@
   "action": {
     "default_popup": "popup.html",
     "default_icon": {
-      "16": "icons/icon16.png",
-      "48": "icons/icon48.png",
-      "128": "icons/icon128.png"
+      "16": "icons/icon16.png"
     }
   },
   "side_panel": {
@@ -35,8 +33,6 @@
     }
   ],
   "icons": {
-    "16": "icons/icon16.png",
-    "48": "icons/icon48.png",
-    "128": "icons/icon128.png"
+    "16": "icons/icon16.png"
   }
 }
