@@ -1,7 +1,7 @@
 import { DndContext, useSensor, useSensors, PointerSensor, DragOverlay, type DragEndEvent } from '@dnd-kit/core';
 import { SortableContext, rectSortingStrategy, useSortable, arrayMove } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { MemoCard } from './MemoCard';
 import { collectionApi, memoApi } from '@/lib/api';
 import { useQueryClient } from '@tanstack/react-query';
@@ -34,9 +34,17 @@ function SortableMemoCard({ memo }: { memo: Memo }) {
   );
 }
 
-export function MemoGrid({ memos }: MemoGridProps) {
+export function MemoGrid({ memos: serverMemos }: MemoGridProps) {
   const queryClient = useQueryClient();
   const [activeId, setActiveId] = useState<string | null>(null);
+  const [localMemos, setLocalMemos] = useState(serverMemos);
+
+  // Sync server data when not dragging
+  useEffect(() => {
+    if (!activeId) {
+      setLocalMemos(serverMemos);
+    }
+  }, [serverMemos, activeId]);
 
   const sensors = useSensors(
     useSensor(PointerSensor, {
@@ -44,7 +52,7 @@ export function MemoGrid({ memos }: MemoGridProps) {
     })
   );
 
-  const handleDragEnd = async (event: DragEndEvent) => {
+  const handleDragEnd = (event: DragEndEvent) => {
     const { active, over } = event;
     setActiveId(null);
 
@@ -56,35 +64,37 @@ export function MemoGrid({ memos }: MemoGridProps) {
     if (overId.startsWith('col-')) {
       const collectionId = overId.replace('col-', '');
       const memoId = String(active.id);
-      try {
-        await collectionApi.addMemo(collectionId, memoId);
-        queryClient.invalidateQueries({ queryKey: ['collections'] });
-        queryClient.invalidateQueries({ queryKey: ['memos'] });
-      } catch (e) {
-        console.error('Failed to add memo to collection:', e);
-      }
+      collectionApi.addMemo(collectionId, memoId)
+        .then(() => {
+          queryClient.invalidateQueries({ queryKey: ['collections'] });
+          queryClient.invalidateQueries({ queryKey: ['memos'] });
+        })
+        .catch((e) => console.error('Failed to add memo to collection:', e));
       return;
     }
 
     // Sort reorder within grid
-    const oldIndex = memos.findIndex((m) => m.id === active.id);
-    const newIndex = memos.findIndex((m) => m.id === over.id);
+    const oldIndex = localMemos.findIndex((m) => m.id === active.id);
+    const newIndex = localMemos.findIndex((m) => m.id === over.id);
     if (oldIndex === -1 || newIndex === -1) return;
 
-    const newMemos = arrayMove(memos, oldIndex, newIndex);
-    try {
-      await Promise.all(
-        newMemos.map((m, i) => memoApi.updateSort(m.id, newMemos.length - i))
-      );
+    const newMemos = arrayMove(localMemos, oldIndex, newIndex);
+    setLocalMemos(newMemos); // instant visual update, no waiting for API
+
+    Promise.all(
+      newMemos.map((m, i) => memoApi.updateSort(m.id, newMemos.length - i))
+    ).then(() => {
       queryClient.invalidateQueries({ queryKey: ['memos'] });
-    } catch (e) {
+    }).catch((e) => {
       console.error('Failed to reorder memos:', e);
-    }
+      setLocalMemos(serverMemos); // revert on error
+      queryClient.invalidateQueries({ queryKey: ['memos'] });
+    });
   };
 
-  const activeMemo = activeId ? memos.find((m) => m.id === activeId) : null;
+  const activeMemo = activeId ? localMemos.find((m) => m.id === activeId) : null;
 
-  if (memos.length === 0) {
+  if (localMemos.length === 0) {
     return (
       <div className="flex flex-col items-center justify-center py-32 text-center">
         <div className="w-24 h-24 rounded-full bg-[var(--color-brand-light)] flex items-center justify-center mb-6">
@@ -107,10 +117,10 @@ export function MemoGrid({ memos }: MemoGridProps) {
       onDragStart={(e) => setActiveId(String(e.active.id))}
       onDragEnd={handleDragEnd}
     >
-      <SortableContext items={memos.map((m) => m.id)} strategy={rectSortingStrategy}>
+      <SortableContext items={localMemos.map((m) => m.id)} strategy={rectSortingStrategy}>
         <div className="max-w-[1280px] mx-auto">
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-8">
-            {memos.map((memo) => (
+            {localMemos.map((memo) => (
               <SortableMemoCard key={memo.id} memo={memo} />
             ))}
           </div>

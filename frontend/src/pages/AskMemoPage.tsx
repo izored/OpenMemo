@@ -26,6 +26,14 @@ export function AskMemoPage() {
     queryFn: systemApi.models,
   });
 
+  // Auto-select first available model if none chosen or saved model no longer exists
+  useEffect(() => {
+    const available = (modelsData?.models || []).map((m: any) => m.name);
+    if (available.length > 0 && (!chatModel || !available.includes(chatModel))) {
+      setChatModel(available[0]);
+    }
+  }, [modelsData]);
+
   useEffect(() => {
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: 'smooth' });
   }, [messages]);
@@ -48,6 +56,11 @@ export function AskMemoPage() {
         model: chatModel,
       });
 
+      if (!resp.ok) {
+        const err = await resp.json().catch(() => ({ detail: `HTTP ${resp.status}` }));
+        throw new Error(err.detail || `HTTP ${resp.status}`);
+      }
+
       const reader = resp.body?.getReader();
       const decoder = new TextDecoder();
 
@@ -63,29 +76,30 @@ export function AskMemoPage() {
 
           for (const line of lines) {
             if (!line.startsWith('data: ')) continue;
-            const json = line.slice(6);
-            try {
-              const data = JSON.parse(json);
-              if (data.type === 'token') {
-                setMessages((prev) => {
-                  const last = prev[prev.length - 1];
-                  if (last.role === 'assistant') {
-                    return [...prev.slice(0, -1), { ...last, content: last.content + data.data }];
-                  }
-                  return prev;
-                });
-              } else if (data.type === 'sources') {
-                setMessages((prev) => {
-                  const last = prev[prev.length - 1];
-                  if (last.role === 'assistant') {
-                    return [...prev.slice(0, -1), { ...last, sources: data.data }];
-                  }
-                  return prev;
-                });
-              } else if (data.type === 'done') {
-                setSessionId(data.session_id);
-              }
-            } catch {}
+            let data: any;
+            try { data = JSON.parse(line.slice(6)); } catch { continue; }
+
+            if (data.type === 'token') {
+              setMessages((prev) => {
+                const last = prev[prev.length - 1];
+                if (last.role === 'assistant') {
+                  return [...prev.slice(0, -1), { ...last, content: last.content + data.data }];
+                }
+                return prev;
+              });
+            } else if (data.type === 'sources') {
+              setMessages((prev) => {
+                const last = prev[prev.length - 1];
+                if (last.role === 'assistant') {
+                  return [...prev.slice(0, -1), { ...last, sources: data.data }];
+                }
+                return prev;
+              });
+            } else if (data.type === 'error') {
+              throw new Error(data.data || 'Ollama error');
+            } else if (data.type === 'done') {
+              setSessionId(data.session_id);
+            }
           }
         }
       }

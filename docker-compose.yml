@@ -22,6 +22,7 @@ services:
     environment:
       - OLLAMA_HOST=http://host.docker.internal:11434
       - 'OLLAMA_HOSTS=["http://host.docker.internal:11434", "http://host.docker.internal:11435"]'
+      - EMBED_MODEL=nomic-embed-text-v2-moe:latest
       - DATABASE_URL=sqlite+aiosqlite:///./data/openmemo.db
       - CHROMA_PERSIST_DIR=./data/chroma
       - FILES_DIR=./files
