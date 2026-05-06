@@ -52,3 +52,6 @@ docker-compose.override.yml
 
 # Release notes (internal working doc)
 RELEASE_NOTES.md
+
+# Temporary changelog
+TEMP_CHANGELOG_1.7.1.md
