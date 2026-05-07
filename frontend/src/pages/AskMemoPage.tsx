@@ -1,8 +1,9 @@
-import { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { Send, Bot, User, Loader2, Sparkles, Globe } from 'lucide-react';
 import { useAppStore } from '@/stores/appStore';
 import { chatApi, systemApi } from '@/lib/api';
+import type { ChatSource, OllamaModel } from '@/types';
 import { cn } from '@/lib/utils';
 import ReactMarkdown from 'react-markdown';
 
@@ -10,7 +11,7 @@ interface Message {
   id: string;
   role: 'user' | 'assistant';
   content: string;
-  sources?: any[];
+  sources?: ChatSource[];
 }
 
 export function AskMemoPage() {
@@ -28,11 +29,11 @@ export function AskMemoPage() {
 
   // Auto-select first available model if none chosen or saved model no longer exists
   useEffect(() => {
-    const available = (modelsData?.models || []).map((m: any) => m.name);
+    const available = (modelsData?.models || []).map((m: OllamaModel) => m.name);
     if (available.length > 0 && (!chatModel || !available.includes(chatModel))) {
       setChatModel(available[0]);
     }
-  }, [modelsData]);
+  }, [modelsData]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: 'smooth' });
@@ -76,7 +77,7 @@ export function AskMemoPage() {
 
           for (const line of lines) {
             if (!line.startsWith('data: ')) continue;
-            let data: any;
+            let data: Record<string, unknown>;
             try { data = JSON.parse(line.slice(6)); } catch { continue; }
 
             if (data.type === 'token') {
@@ -91,24 +92,24 @@ export function AskMemoPage() {
               setMessages((prev) => {
                 const last = prev[prev.length - 1];
                 if (last.role === 'assistant') {
-                  return [...prev.slice(0, -1), { ...last, sources: data.data }];
+                  return [...prev.slice(0, -1), { ...last, sources: data.data as ChatSource[] }];
                 }
                 return prev;
               });
             } else if (data.type === 'error') {
-              throw new Error(data.data || 'Ollama error');
+              throw new Error((data.data as string) || 'Ollama error');
             } else if (data.type === 'done') {
-              setSessionId(data.session_id);
+              setSessionId(data.session_id as string | null);
             }
           }
         }
       }
-    } catch (e: any) {
+    } catch (e) {
       setMessages((prev) => {
         const updated = [...prev];
         const last = updated[updated.length - 1];
         if (last.role === 'assistant') {
-          last.content = 'Error: ' + (e.message || 'Failed to get response');
+          last.content = 'Error: ' + ((e as Error).message || 'Failed to get response');
         }
         return [...updated];
       });
@@ -131,7 +132,7 @@ export function AskMemoPage() {
             onChange={(e) => setChatModel(e.target.value)}
             className="px-3 py-1.5 border border-[var(--color-border)] rounded-full text-sm text-[var(--color-text)] bg-[var(--color-bg-card)] font-mono text-xs focus:outline-none focus:border-[var(--color-text)]"
           >
-            {(modelsData?.models || []).map((m: any) => (
+            {(modelsData?.models || []).map((m: OllamaModel) => (
               <option key={m.name} value={m.name}>{m.name}</option>
             ))}
             {(!modelsData?.models || modelsData.models.length === 0) && (
@@ -176,11 +177,11 @@ export function AskMemoPage() {
               {msg.role === 'assistant' ? (
                 <div className="prose prose-sm max-w-none">
                   <ReactMarkdown components={{
-                    code: ({node, inline, className, children, ...props}: any) => (
+                    code: ({ inline, children }: { inline?: boolean; children?: React.ReactNode }) => (
                       inline ? (
-                        <code className="bg-[var(--color-bg-code)] text-white px-1 py-0.5 rounded text-[11px] font-mono" {...props}>{children}</code>
+                        <code className="bg-[var(--color-bg-code)] text-white px-1 py-0.5 rounded text-[11px] font-mono">{children}</code>
                       ) : (
-                        <pre className="bg-[var(--color-bg-code)] text-white p-3 rounded-xl overflow-x-auto font-mono text-[11px] my-2" {...props}>
+                        <pre className="bg-[var(--color-bg-code)] text-white p-3 rounded-xl overflow-x-auto font-mono text-[11px] my-2">
                           <code>{children}</code>
                         </pre>
                       )
@@ -192,7 +193,7 @@ export function AskMemoPage() {
               )}
               {msg.sources && msg.sources.length > 0 && (
                 <div className="mt-3 pt-2 border-t border-[var(--color-border)] flex flex-wrap gap-1.5">
-                  {msg.sources.map((s: any, i: number) => (
+                  {msg.sources.map((s, i) => (
                     <span
                       key={i}
                       className="inline-flex items-center gap-1 px-2.5 py-0.5 bg-[var(--color-bg-card)] rounded-full text-[11px] text-[var(--color-text-secondary)] border border-[var(--color-border)] font-mono"

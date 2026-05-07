@@ -1,4 +1,4 @@
-import { useState, useRef, useCallback } from 'react';
+import React, { useState, useRef, useCallback, useEffect } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { X, Link2, FileText, Upload, Loader2 } from 'lucide-react';
 import { useAppStore } from '@/stores/appStore';
@@ -8,9 +8,12 @@ import { cn } from '@/lib/utils';
 type Tab = 'link' | 'note' | 'file' | 'voice';
 
 export function AddMemoModal() {
-  const { addModalOpen, setAddModalOpen } = useAppStore();
+  const { addModalOpen, setAddModalOpen, addModalTab } = useAppStore();
   const queryClient = useQueryClient();
   const [activeTab, setActiveTab] = useState<Tab>('link');
+
+  // Sync tab when modal opens (set by SpeedDialFAB before opening)
+  useEffect(() => { if (addModalOpen) setActiveTab(addModalTab as Tab); }, [addModalOpen]); // eslint-disable-line react-hooks/set-state-in-effect, react-hooks/exhaustive-deps
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
@@ -46,8 +49,8 @@ export function AddMemoModal() {
       await ingestApi.url(url.trim());
       queryClient.invalidateQueries({ queryKey: ['memos'] });
       close();
-    } catch (e: any) {
-      setError(e.message || 'Failed to save link');
+    } catch (e) {
+      setError((e as Error).message || 'Failed to save link');
     } finally {
       setLoading(false);
     }
@@ -61,8 +64,8 @@ export function AddMemoModal() {
       await ingestApi.note(noteTitle.trim(), noteContent);
       queryClient.invalidateQueries({ queryKey: ['memos'] });
       close();
-    } catch (e: any) {
-      setError(e.message || 'Failed to save note');
+    } catch (e) {
+      setError((e as Error).message || 'Failed to save note');
     } finally {
       setLoading(false);
     }
@@ -78,8 +81,8 @@ export function AddMemoModal() {
       }
       queryClient.invalidateQueries({ queryKey: ['memos'] });
       close();
-    } catch (e: any) {
-      setError(e.message || 'Failed to upload file');
+    } catch (e) {
+      setError((e as Error).message || 'Failed to upload file');
     } finally {
       setLoading(false);
     }
@@ -89,11 +92,11 @@ export function AddMemoModal() {
     e.preventDefault();
     setDragOver(false);
     handleFileUpload(e.dataTransfer.files);
-  }, []);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   if (!addModalOpen) return null;
 
-  const tabs: { id: Tab; label: string; icon: any }[] = [
+  const tabs: { id: Tab; label: string; icon: React.ElementType }[] = [
     { id: 'link', label: 'Link', icon: Link2 },
     { id: 'note', label: 'Note', icon: FileText },
     { id: 'file', label: 'File', icon: Upload },

@@ -22,6 +22,7 @@ export function AddCollectionModal() {
 
   const isEditing = !!editingCollection;
 
+  /* eslint-disable react-hooks/set-state-in-effect */
   useEffect(() => {
     if (editingCollection) {
       setName(editingCollection.name);
@@ -36,6 +37,7 @@ export function AddCollectionModal() {
     }
     setError('');
   }, [editingCollection, collectionModalOpen]);
+  /* eslint-enable react-hooks/set-state-in-effect */
 
   const close = () => {
     setCollectionModalOpen(false);
@@ -64,8 +66,8 @@ export function AddCollectionModal() {
       }
       queryClient.invalidateQueries({ queryKey: ['collections'] });
       close();
-    } catch (e: any) {
-      setError(e.message || 'Failed to save collection');
+    } catch (e) {
+      setError((e as Error).message || 'Failed to save collection');
     } finally {
       setLoading(false);
     }

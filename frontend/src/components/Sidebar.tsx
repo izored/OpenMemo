@@ -13,6 +13,7 @@ import {
 } from 'lucide-react';
 import { collectionApi } from '@/lib/api';
 import { useAppStore } from '@/stores/appStore';
+import type { Collection } from '@/types';
 import { cn } from '@/lib/utils';
 
 function DroppableCollectionItem({
@@ -21,7 +22,7 @@ function DroppableCollectionItem({
   onNavigate,
   onEdit,
 }: {
-  col: any;
+  col: Collection;
   activeCollection: string | null;
   onNavigate: () => void;
   onEdit: (e: React.MouseEvent) => void;
@@ -84,7 +85,7 @@ export function Sidebar() {
     setCollectionModalOpen(true);
   };
 
-  const openEditModal = (e: React.MouseEvent, col: any) => {
+  const openEditModal = (e: React.MouseEvent, col: Collection) => {
     e.stopPropagation();
     setEditingCollection(col);
     setCollectionModalOpen(true);
@@ -148,7 +149,7 @@ export function Sidebar() {
               <Plus size={13} />
             </button>
           </div>
-          {collections.map((col: any) => (
+          {collections.map((col) => (
             <DroppableCollectionItem
               key={col.id}
               col={col}
