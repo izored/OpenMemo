@@ -451,14 +451,13 @@ export function MemoDetail() {
                     {showExtracted && (
                       <div className="mt-3 p-5 bg-[var(--color-bg-card)] rounded-2xl border border-[var(--color-border)] prose prose-sm max-w-none text-[var(--color-text)]">
                         <ReactMarkdown remarkPlugins={[remarkGfm]} components={{
-                          code: ({ inline, children }: { inline?: boolean; children?: React.ReactNode }) => (
-                            inline ? (
-                              <code className="bg-[var(--color-bg-code)] text-white px-1 py-0.5 rounded text-[11px] font-mono">{children}</code>
-                            ) : (
-                              <pre className="bg-[var(--color-bg-code)] text-white p-4 rounded-xl overflow-x-auto font-mono text-[12px] my-3">
-                                <code>{children}</code>
-                              </pre>
-                            )
+                          code: ({ children, className }: { children?: React.ReactNode; className?: string }) => (
+                            <code className={`bg-[var(--color-bg-code)] text-white px-1 py-0.5 rounded text-[11px] font-mono ${className || ''}`}>{children}</code>
+                          ),
+                          pre: ({ children }: { children?: React.ReactNode }) => (
+                            <pre className="bg-[var(--color-bg-code)] text-white p-4 rounded-xl overflow-x-auto font-mono text-[12px] my-3 [&_code]:bg-transparent [&_code]:p-0">
+                              {children}
+                            </pre>
                           )
                         }}>{memo.content_raw || memo.content_text}</ReactMarkdown>
                       </div>
@@ -488,14 +487,13 @@ export function MemoDetail() {
             {memo.type === 'document' && !isEditing && memo.content_text && (
               <div className="prose prose-sm max-w-none text-[var(--color-text)]">
                 <ReactMarkdown remarkPlugins={[remarkGfm]} components={{
-                  code: ({ inline, children }: { inline?: boolean; children?: React.ReactNode }) => (
-                    inline ? (
-                      <code className="bg-[var(--color-bg-code)] text-white px-1 py-0.5 rounded text-[11px] font-mono">{children}</code>
-                    ) : (
-                      <pre className="bg-[var(--color-bg-code)] text-white p-4 rounded-xl overflow-x-auto font-mono text-[12px] my-3">
-                        <code>{children}</code>
-                      </pre>
-                    )
+                  code: ({ children, className }: { children?: React.ReactNode; className?: string }) => (
+                    <code className={`bg-[var(--color-bg-code)] text-white px-1 py-0.5 rounded text-[11px] font-mono ${className || ''}`}>{children}</code>
+                  ),
+                  pre: ({ children }: { children?: React.ReactNode }) => (
+                    <pre className="bg-[var(--color-bg-code)] text-white p-4 rounded-xl overflow-x-auto font-mono text-[12px] my-3 [&_code]:bg-transparent [&_code]:p-0">
+                      {children}
+                    </pre>
                   )
                 }}>{memo.content_raw || memo.content_text}</ReactMarkdown>
               </div>
