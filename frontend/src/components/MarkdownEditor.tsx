@@ -10,6 +10,7 @@ import {
   linkDialogPlugin,
   tablePlugin,
   codeBlockPlugin,
+  codeMirrorPlugin,
   frontmatterPlugin,
   toolbarPlugin,
   UndoRedo,
@@ -54,6 +55,7 @@ export function MarkdownEditor({
   viewFirst = false,
 }: MarkdownEditorProps) {
   const ref = useRef<MDXEditorMethods>(null);
+  const wrapperRef = useRef<HTMLDivElement>(null);
   // Only tracks explicit user click-to-edit. Derived `editing` below is the source of truth.
   const [clickedToEdit, setClickedToEdit] = useState(false);
   const [focused, setFocused] = useState(false);
@@ -118,6 +120,30 @@ export function MarkdownEditor({
     if (viewFirst) setClickedToEdit(false);
   }, [saveIfDirty, viewFirst]);
 
+  // Intercept paste in MDXEditor: treat plain-text paste as markdown so syntax (#, **, >, lists)
+  // becomes proper nodes instead of being escaped as literal text.
+  useEffect(() => {
+    if (!editing || readOnly) return;
+    const wrapper = wrapperRef.current;
+    if (!wrapper) return;
+
+    const onPaste = (e: ClipboardEvent) => {
+      const cd = e.clipboardData;
+      if (!cd) return;
+      const text = cd.getData('text/plain');
+      if (!text || !ref.current) return;
+      // Always treat clipboard plain text as markdown so syntax (#, **, fenced code, tables)
+      // becomes proper nodes instead of literal text.
+      e.preventDefault();
+      e.stopPropagation();
+      ref.current.insertMarkdown(text);
+      dirtyRef.current = true;
+    };
+
+    wrapper.addEventListener('paste', onPaste, true);
+    return () => wrapper.removeEventListener('paste', onPaste, true);
+  }, [editing, readOnly]);
+
   const handleViewClick = (e: React.MouseEvent) => {
     if (readOnly) return;
     if ((e.target as HTMLElement).closest('a')) return;
@@ -132,18 +158,18 @@ export function MarkdownEditor({
     return (
       <div className={cn('relative', className)} onClick={handleViewClick}>
         {value ? (
-          <div className="prose prose-lg dark:prose-invert max-w-none text-[var(--color-text)] cursor-text">
+          <div className="prose prose-sm dark:prose-invert max-w-none text-[var(--color-text)] cursor-text prose-p:my-2 prose-headings:mt-4 prose-headings:mb-2 prose-li:my-0.5 prose-ul:my-2 prose-ol:my-2 prose-blockquote:my-2 prose-pre:my-2">
             <ReactMarkdown
               remarkPlugins={[remarkGfm]}
               components={{
-                code: ({ inline, children }: { inline?: boolean; children?: ReactNode }) =>
-                  inline ? (
-                    <code className="bg-[var(--color-bg-code)] text-white px-1 py-0.5 rounded text-[12px] font-mono">{children}</code>
-                  ) : (
-                    <pre className="bg-[var(--color-bg-code)] text-white p-4 rounded-xl overflow-x-auto font-mono text-[12px] my-3">
-                      <code>{children}</code>
-                    </pre>
-                  ),
+                code: ({ children, className }: { children?: ReactNode; className?: string }) => (
+                  <code className={cn('bg-[var(--color-bg-code)] text-white px-1 py-0.5 rounded text-[12px] font-mono', className)}>{children}</code>
+                ),
+                pre: ({ children }: { children?: ReactNode }) => (
+                  <pre className="bg-[var(--color-bg-code)] text-white p-4 rounded-xl overflow-x-auto font-mono text-[12px] my-3 [&_code]:bg-transparent [&_code]:p-0">
+                    {children}
+                  </pre>
+                ),
                 table: ({ children }: { children?: ReactNode }) => (
                   <div className="overflow-x-auto my-4">
                     <table className="min-w-full border-collapse border border-[var(--color-border)]">{children}</table>
@@ -175,6 +201,7 @@ export function MarkdownEditor({
   // Edit mode: MDXEditor with toolbar
   return (
     <div
+      ref={wrapperRef}
       className={cn(
         'relative rounded-2xl transition-all',
         focused
@@ -202,6 +229,31 @@ export function MarkdownEditor({
           linkDialogPlugin(),
           tablePlugin(),
           codeBlockPlugin({ defaultCodeBlockLanguage: 'txt' }),
+          codeMirrorPlugin({
+            codeBlockLanguages: {
+              txt: 'Plain Text',
+              js: 'JavaScript',
+              jsx: 'JSX',
+              ts: 'TypeScript',
+              tsx: 'TSX',
+              python: 'Python',
+              py: 'Python',
+              bash: 'Bash',
+              sh: 'Shell',
+              json: 'JSON',
+              yaml: 'YAML',
+              yml: 'YAML',
+              html: 'HTML',
+              css: 'CSS',
+              sql: 'SQL',
+              md: 'Markdown',
+              go: 'Go',
+              rust: 'Rust',
+              java: 'Java',
+              c: 'C',
+              cpp: 'C++',
+            },
+          }),
           frontmatterPlugin(),
           markdownShortcutPlugin(),
           toolbarPlugin({
