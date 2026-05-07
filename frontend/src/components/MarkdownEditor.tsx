@@ -6,8 +6,21 @@ import {
   quotePlugin,
   thematicBreakPlugin,
   markdownShortcutPlugin,
+  linkPlugin,
+  linkDialogPlugin,
+  tablePlugin,
+  codeBlockPlugin,
+  frontmatterPlugin,
   toolbarPlugin,
+  UndoRedo,
   BoldItalicUnderlineToggles,
+  BlockTypeSelect,
+  ListsToggle,
+  CreateLink,
+  InsertTable,
+  InsertCodeBlock,
+  InsertThematicBreak,
+  Separator,
 } from '@mdxeditor/editor';
 import { cn } from '@/lib/utils';
 import '@mdxeditor/editor/style.css';
@@ -19,6 +32,8 @@ interface MarkdownEditorProps {
   placeholder?: string;
   className?: string;
   readOnly?: boolean;
+  /** Compact toolbar (inline notes scratchpad). Default false = full toolbar. */
+  compact?: boolean;
 }
 
 export function MarkdownEditor({
@@ -28,6 +43,7 @@ export function MarkdownEditor({
   placeholder = 'Click to edit...',
   className,
   readOnly = false,
+  compact = false,
 }: MarkdownEditorProps) {
   const ref = useRef<MDXEditorMethods>(null);
   const [focused, setFocused] = useState(false);
@@ -56,7 +72,6 @@ export function MarkdownEditor({
     if (onSave && ref.current) {
       const current = ref.current.getMarkdown();
       onSave(current);
-      // Flash saved indicator
       setSavedFlash(true);
       setTimeout(() => setSavedFlash(false), 1500);
     }
@@ -87,18 +102,39 @@ export function MarkdownEditor({
           listsPlugin(),
           quotePlugin(),
           thematicBreakPlugin(),
+          linkPlugin(),
+          linkDialogPlugin(),
+          tablePlugin(),
+          codeBlockPlugin({ defaultCodeBlockLanguage: 'txt' }),
+          frontmatterPlugin(),
           markdownShortcutPlugin(),
           toolbarPlugin({
             toolbarContents: () => (
-              <div className="flex gap-1 px-2 py-1.5 border-b border-[var(--color-border)]">
-                <BoldItalicUnderlineToggles />
+              <div className="flex flex-wrap items-center gap-1 px-2 py-1.5 border-b border-[var(--color-border)]">
+                {compact ? (
+                  <BoldItalicUnderlineToggles />
+                ) : (
+                  <>
+                    <UndoRedo />
+                    <Separator />
+                    <BlockTypeSelect />
+                    <Separator />
+                    <BoldItalicUnderlineToggles />
+                    <Separator />
+                    <ListsToggle />
+                    <Separator />
+                    <CreateLink />
+                    <InsertTable />
+                    <InsertCodeBlock />
+                    <InsertThematicBreak />
+                  </>
+                )}
               </div>
             ),
           }),
         ]}
       />
 
-      {/* Saved indicator */}
       {savedFlash && (
         <div className="absolute bottom-2 right-3 text-[11px] font-medium text-[var(--color-status)] animate-in fade-in slide-in-from-bottom-1 duration-300">
           Saved ✓

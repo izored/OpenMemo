@@ -19,6 +19,7 @@ import { MarkdownEditor } from '@/components/MarkdownEditor';
 import { memoApi, collectionApi } from '@/lib/api';
 import { AskMemoPanel } from '@/components/AskMemoPanel';
 import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
 import type { Memo, Collection } from '@/types';
 
 function getYouTubeVideoId(url: string): string | null {
@@ -43,6 +44,8 @@ export function MemoDetail() {
   const [chatOpen, setChatOpen] = useState(false);
   const [generatingSummary, setGeneratingSummary] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
+  const [noteEditMode, setNoteEditMode] = useState(false);
+  const [noteDraft, setNoteDraft] = useState('');
   const [showExtracted, setShowExtracted] = useState(false);
   const [saving, setSaving] = useState(false);
 
@@ -365,7 +368,7 @@ export function MemoDetail() {
                       <span className="text-sm font-semibold text-[var(--color-text)]">AI Summary</span>
                     </div>
                     <div className="text-sm text-[var(--color-text)] prose prose-sm max-w-none">
-                      <ReactMarkdown>{memo.ai_summary}</ReactMarkdown>
+                      <ReactMarkdown remarkPlugins={[remarkGfm]}>{memo.ai_summary}</ReactMarkdown>
                     </div>
                   </div>
                 ) : (
@@ -447,7 +450,7 @@ export function MemoDetail() {
                     </button>
                     {showExtracted && (
                       <div className="mt-3 p-5 bg-[var(--color-bg-card)] rounded-2xl border border-[var(--color-border)] prose prose-sm max-w-none text-[var(--color-text)]">
-                        <ReactMarkdown components={{
+                        <ReactMarkdown remarkPlugins={[remarkGfm]} components={{
                           code: ({ inline, children }: { inline?: boolean; children?: React.ReactNode }) => (
                             inline ? (
                               <code className="bg-[var(--color-bg-code)] text-white px-1 py-0.5 rounded text-[11px] font-mono">{children}</code>
@@ -465,19 +468,93 @@ export function MemoDetail() {
               </div>
             )}
 
-            {/* Content body for note/document */}
+            {/* Content body for note — rendered view by default, click to edit */}
             {memo.type === 'note' && !isEditing && (
               <div className="mb-6">
-                <MarkdownEditor
-                  value={memo.content_raw || memo.content_text || ''}
-                  onSave={(val) => memoApi.update(memo.id, { content_raw: val, content_text: val })}
-                  placeholder="Click anywhere to edit your note..."
-                />
+                {noteEditMode ? (
+                  <div>
+                    <div className="flex items-center justify-end gap-2 mb-2">
+                      <button
+                        onClick={async () => {
+                          await memoApi.update(memo.id, { content_raw: noteDraft, content_text: noteDraft });
+                          queryClient.invalidateQueries({ queryKey: ['memo', id] });
+                          queryClient.invalidateQueries({ queryKey: ['memos'] });
+                          setNoteEditMode(false);
+                        }}
+                        className="flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium text-[var(--color-text-active)] bg-[var(--color-bg-active)] rounded-full transition-colors"
+                      >
+                        <Save size={14} />
+                        Done
+                      </button>
+                      <button
+                        onClick={() => setNoteEditMode(false)}
+                        className="flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium text-[var(--color-text-secondary)] hover:text-[var(--color-text)] hover:bg-[var(--color-bg-hover)] rounded-full transition-colors"
+                      >
+                        <X size={14} />
+                        Cancel
+                      </button>
+                    </div>
+                    <MarkdownEditor
+                      value={memo.content_raw || memo.content_text || ''}
+                      onChange={(val) => setNoteDraft(val)}
+                      placeholder="Write your note in markdown..."
+                    />
+                  </div>
+                ) : (
+                  <div className="group relative">
+                    <button
+                      onClick={() => {
+                        setNoteDraft(memo.content_raw || memo.content_text || '');
+                        setNoteEditMode(true);
+                      }}
+                      className="absolute top-0 right-0 flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium text-[var(--color-text-secondary)] hover:text-[var(--color-text)] hover:bg-[var(--color-bg-hover)] rounded-full transition-all opacity-0 group-hover:opacity-100"
+                    >
+                      <Pencil size={14} />
+                      Edit
+                    </button>
+                    {memo.content_raw || memo.content_text ? (
+                      <div className="prose prose-lg dark:prose-invert max-w-none text-[var(--color-text)]">
+                        <ReactMarkdown remarkPlugins={[remarkGfm]} components={{
+                          code: ({ inline, children }: { inline?: boolean; children?: React.ReactNode }) => (
+                            inline ? (
+                              <code className="bg-[var(--color-bg-code)] text-white px-1 py-0.5 rounded text-[12px] font-mono">{children}</code>
+                            ) : (
+                              <pre className="bg-[var(--color-bg-code)] text-white p-4 rounded-xl overflow-x-auto font-mono text-[12px] my-3">
+                                <code>{children}</code>
+                              </pre>
+                            )
+                          ),
+                          table: ({ children }: { children?: React.ReactNode }) => (
+                            <div className="overflow-x-auto my-4">
+                              <table className="min-w-full border-collapse border border-[var(--color-border)]">{children}</table>
+                            </div>
+                          ),
+                          th: ({ children }: { children?: React.ReactNode }) => (
+                            <th className="border border-[var(--color-border)] bg-[var(--color-bg-hover)] px-3 py-2 text-left font-semibold">{children}</th>
+                          ),
+                          td: ({ children }: { children?: React.ReactNode }) => (
+                            <td className="border border-[var(--color-border)] px-3 py-2">{children}</td>
+                          ),
+                        }}>{memo.content_raw || memo.content_text}</ReactMarkdown>
+                      </div>
+                    ) : (
+                      <button
+                        onClick={() => {
+                          setNoteDraft('');
+                          setNoteEditMode(true);
+                        }}
+                        className="w-full text-left px-4 py-6 text-[var(--color-text-muted)] italic border border-dashed border-[var(--color-border)] rounded-2xl hover:bg-[var(--color-bg-hover)] transition-colors"
+                      >
+                        Click to write your note...
+                      </button>
+                    )}
+                  </div>
+                )}
               </div>
             )}
             {memo.type === 'document' && !isEditing && memo.content_text && (
               <div className="prose prose-sm max-w-none text-[var(--color-text)]">
-                <ReactMarkdown components={{
+                <ReactMarkdown remarkPlugins={[remarkGfm]} components={{
                   code: ({ inline, children }: { inline?: boolean; children?: React.ReactNode }) => (
                     inline ? (
                       <code className="bg-[var(--color-bg-code)] text-white px-1 py-0.5 rounded text-[11px] font-mono">{children}</code>
