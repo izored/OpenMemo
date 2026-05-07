@@ -110,4 +110,11 @@ export const searchApi = {
 export const systemApi = {
   health: () => fetchJSON<{ status: string; ollama_connected: boolean; version: string }>('/health'),
   models: () => fetchJSON<{ models: any[] }>('/models'),
+  stats: () => fetchJSON<{
+    total_memos: number;
+    total_collections: number;
+    total_tags: number;
+    memos_this_week: number;
+    by_type: Record<string, number>;
+  }>('/stats'),
 };

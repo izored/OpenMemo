@@ -3,12 +3,13 @@ import uuid
 from contextlib import asynccontextmanager
 from pathlib import Path
 
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Depends
+from sqlalchemy.ext.asyncio import AsyncSession
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 
 from backend.config import settings
-from backend.db.database import init_db, AsyncSessionLocal
+from backend.db.database import init_db, AsyncSessionLocal, get_db
 from backend.db.models import User, Workspace
 from backend.core.security import SafePath
 
@@ -112,6 +113,36 @@ app.include_router(ingest_router)
 app.include_router(export_router)
 app.include_router(memocast_router)
 app.include_router(search_router)
+
+
+@app.get("/api/stats")
+async def get_stats(db: AsyncSession = Depends(get_db)):
+    """Aggregate stats for the settings dashboard."""
+    from sqlalchemy import func, select, and_
+    from backend.db.models import Memo, Collection, Tag
+    from datetime import datetime, timedelta
+
+    total_memos = (await db.execute(select(func.count()).select_from(Memo))).scalar() or 0
+    total_collections = (await db.execute(select(func.count()).select_from(Collection))).scalar() or 0
+    total_tags = (await db.execute(select(func.count()).select_from(Tag))).scalar() or 0
+
+    week_ago = datetime.utcnow() - timedelta(days=7)
+    memos_this_week = (
+        await db.execute(select(func.count()).select_from(Memo).where(Memo.created_at >= week_ago))
+    ).scalar() or 0
+
+    by_type_rows = (
+        await db.execute(select(Memo.type, func.count()).group_by(Memo.type))
+    ).all()
+    by_type = {row[0]: row[1] for row in by_type_rows}
+
+    return {
+        "total_memos": total_memos,
+        "total_collections": total_collections,
+        "total_tags": total_tags,
+        "memos_this_week": memos_this_week,
+        "by_type": by_type,
+    }
 
 
 @app.get("/api/health")
