@@ -35,9 +35,22 @@ Single source of truth for all planned work. Versioned milestones + unversioned 
 - [x] Card clip fix at grid bottom
 - [x] Optimistic reorder drag & drop fix
 
+### v1.7.3 — Settings Page Redesign & New Cards *(shipped early from v1.8.5 + v1.11.0)*
+
+- [x] **[J] Stats card** — full-width bento card with live memo/collection/tag counts from `/api/stats`; by-type emoji pills; "this week" counter
+- [x] **[G] Feedback card** — "Send Feedback" mailto card (`dev@izo.red`) with pre-filled subject
+- [x] Chrome Extension card — "Save from anywhere" with View on GitHub link
+- [x] Keyboard Shortcuts card — collapsible 3-col grid of 6 shortcuts
+- [x] Danger Zone card — Export all memos button + disabled Clear all with warning copy
+- [x] **[I] Creator card** — "Made By Reda Izo" with portrait photo, bio, 4 social link pills (izo.red, GitHub, X, Threads)
+- [x] Built With ❤️ card — mosaic grid of 11 open-source dependencies with one-line descriptions
+- [x] Version footer — replaces About card; O logo + `v{version}` from `/api/health`
+- [x] Full 2-column bento grid layout for Settings page
+- [x] `/api/stats` backend endpoint — counts by type, weekly activity
+
 ---
 
-## v1.7.3 — UX Quick Wins + P1 Fixes *(NEXT — IN PROGRESS)*
+## v1.7.4 — UX Quick Wins + P1 Fixes *(NEXT — IN PROGRESS)*
 
 **P1 fixes (this session):**
 - [ ] **[L] Note markdown render in MemoDetail** — Pasting markdown should render visually on save (no raw syntax). Audit `<MarkdownEditor>` wiring to `content_raw`. *(High priority, regression)*
@@ -87,7 +100,7 @@ Single source of truth for all planned work. Versioned milestones + unversioned 
 - [ ] **[C] Bento grid + card size library** — `CardSize` type (`1x1`/`2x1`/`1x2`/`2x2`/`3x1`/`1x3`), `card_size` DB column migration, content-aware defaults per memo type, hover resize handle popover, MemoCard layout adapts to size, DnD preserved. Full spec in [Bento Grid spec section](#bento-grid-spec)
 - [ ] **[M] Sub-memo system** — `sub_memos` table (`parent_memo_id`, `type`, `content`, `created_at`), endpoints `POST/GET /api/memos/{id}/sub-memos`, `DELETE /api/sub-memos/{id}`, max 30 enforced both sides. iMessage-style input bar at bottom of MemoDetail, vertical card list. Replaces "My Notes" textarea
 - [ ] **[V] Tagging system** — `/tags` page with tag list + memo counts, click-to-filter, autocomplete in edit mode, sidebar tag cloud (top 10)
-- [ ] **[J] Stats dashboard** — `GET /api/stats` returning total memos (by type), total collections, storage bytes, top tags, memos this week. Settings grid of stat cards
+- [x] **[J] Stats dashboard** — `GET /api/stats` returning total memos (by type), total collections, storage bytes, top tags, memos this week. Settings grid of stat cards *(shipped in v1.7.3)*
 
 ---
 
@@ -124,9 +137,9 @@ Single source of truth for all planned work. Versioned milestones + unversioned 
 
 ## v1.11.0 — Settings & Identity *(P5)*
 
-- [ ] **[G] Feature request flow** — "Send Feedback / Feature Request" button in Settings; pre-filled `mailto:dev@izo.red` with `[OpenMemo Feature Request]` subject + body template. Zero infra
+- [x] **[G] Feature request flow** — "Send Feedback / Feature Request" button in Settings; pre-filled `mailto:dev@izo.red` with `[OpenMemo Feature Request]` subject + body template. Zero infra *(shipped in v1.7.3)*
 - [ ] **[H] Inspiration & credits** — Visual section listing concept inspirations: Milanote, Notion, Readwise Reader, Obsidian, Raindrop.io. Logo + name + one-sentence description per entry
-- [ ] **[I] Creator card** — "Made by Reda Izo" card with title (Creative Director), brief why-built statement, GitHub link (`https://github.com/izored`), avatar placeholder (`RI` initials in brand color)
+- [x] **[I] Creator card** — "Made by Reda Izo" card with title (Creative Director), brief why-built statement, GitHub link (`https://github.com/izored`), avatar placeholder (`RI` initials in brand color) *(shipped in v1.7.3)*
 
 ---
 

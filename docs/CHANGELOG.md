@@ -4,6 +4,29 @@ All notable changes to OpenMemo are documented here.
 
 ---
 
+## [1.7.3] - 2026-05-07
+
+### Added
+
+- 📊 **Stats card** — full-width bento card showing live memo, collection, and tag counts from `/api/stats`; by-type emoji breakdown; "added this week" counter
+- 📣 **Feedback card** — "Send Feedback" mailto link pre-filled with `[OpenMemo Feedback]` subject; zero infra
+- 🧩 **Chrome Extension card** — "Save from anywhere" card with View on GitHub link
+- ⌨️ **Keyboard Shortcuts card** — collapsible 3-column grid showing 6 core shortcuts
+- 🔴 **Danger Zone card** — Export all memos (JSON download) + disabled Clear all data with warning copy
+- 👤 **Creator card** — "Made By Reda Izo" with portrait photo, bio, and 4 social link pills (izo.red, GitHub, X, Threads)
+- ❤️ **Built With card** — mosaic grid of 11 open-source dependencies, each with a one-line description
+- 🔖 **Version footer** — replaces About card; small O logo + `v{version}` pulled from `/api/health`
+- 🗄️ **`/api/stats` endpoint** — returns `total_memos`, `total_collections`, `total_tags`, `memos_this_week`, `by_type` breakdown
+
+### Changed
+
+- 📐 Settings page layout switched from single-column sections to a **2-column bento grid**
+- 📐 Appearance + Ollama cards are now side-by-side
+- 📐 Feedback + Chrome Extension cards are now side-by-side
+- 📐 Creator (Made By) + Built With cards are now side-by-side at the bottom
+
+---
+
 ## [1.7.2] - 2026-05-07
 
 ### Fixed
