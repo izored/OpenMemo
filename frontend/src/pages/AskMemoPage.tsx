@@ -177,14 +177,13 @@ export function AskMemoPage() {
               {msg.role === 'assistant' ? (
                 <div className="prose prose-sm max-w-none">
                   <ReactMarkdown components={{
-                    code: ({ inline, children }: { inline?: boolean; children?: React.ReactNode }) => (
-                      inline ? (
-                        <code className="bg-[var(--color-bg-code)] text-white px-1 py-0.5 rounded text-[11px] font-mono">{children}</code>
-                      ) : (
-                        <pre className="bg-[var(--color-bg-code)] text-white p-3 rounded-xl overflow-x-auto font-mono text-[11px] my-2">
-                          <code>{children}</code>
-                        </pre>
-                      )
+                    code: ({ children, className }: { children?: React.ReactNode; className?: string }) => (
+                      <code className={`bg-[var(--color-bg-code)] text-white px-1 py-0.5 rounded text-[11px] font-mono ${className || ''}`}>{children}</code>
+                    ),
+                    pre: ({ children }: { children?: React.ReactNode }) => (
+                      <pre className="bg-[var(--color-bg-code)] text-white p-3 rounded-xl overflow-x-auto font-mono text-[11px] my-2 [&_code]:bg-transparent [&_code]:p-0">
+                        {children}
+                      </pre>
                     )
                   }}>{msg.content || (streaming ? '...' : '')}</ReactMarkdown>
                 </div>

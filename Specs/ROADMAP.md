@@ -54,6 +54,7 @@ Single source of truth for all planned work. Versioned milestones + unversioned 
 
 **P1 fixes (this session):**
 - [x] **[L] Note markdown render in MemoDetail** — `MarkdownEditor` now derives `editing` from `viewFirst` prop instead of fragile `useState(!viewFirst)` + sync effect. ReactMarkdown renders on load; MDXEditor opens only on user click. *(Regression fixed)*
+- [x] **[L2] Markdown paste + render full fix** — Plain-text paste now routes through `insertMarkdown()` so syntax (`#`, `**`, fenced code, tables) becomes proper nodes instead of escaped literals. Added `codeMirrorPlugin` so fenced code blocks (Python/Bash/JSON/etc.) actually paste and render. Added `@tailwindcss/typography` plugin so `prose` classes style headings/lists/blockquotes. Updated `code` component for react-markdown v10 (`inline` prop removed) across 4 files. Tightened note view spacing (`prose-sm` + custom margins).
 - [ ] **[A] Note card content preview** — `MemoCard` for `type === 'note'` shows only title; render 3–4 line snippet from `content_text` / `content_raw`. *(Visible regression)*
 
 **UX quick wins:**
