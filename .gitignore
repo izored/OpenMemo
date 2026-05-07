@@ -5,8 +5,10 @@ CLAUDE.local.md
 *.local.md
 *.local.json
 
-# Specs folder (local planning docs)
-Specs/
+# Specs folder (local planning docs) — except public-facing roadmap + linked specs
+Specs/*
+!Specs/ROADMAP.md
+!Specs/multimedia-icon-animation.md
 .env
 secrets/
 
