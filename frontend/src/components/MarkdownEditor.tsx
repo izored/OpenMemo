@@ -54,25 +54,24 @@ export function MarkdownEditor({
   viewFirst = false,
 }: MarkdownEditorProps) {
   const ref = useRef<MDXEditorMethods>(null);
-  const [editing, setEditing] = useState(!viewFirst);
+  // Only tracks explicit user click-to-edit. Derived `editing` below is the source of truth.
+  const [clickedToEdit, setClickedToEdit] = useState(false);
   const [focused, setFocused] = useState(false);
   const [savedFlash, setSavedFlash] = useState(false);
   const lastSyncedRef = useRef<string>(value ?? '');
   const dirtyRef = useRef(false);
   const justClickedRef = useRef(false);
-  // Always holds the latest value prop without needing it as a dep
   const valueRef = useRef(value);
   valueRef.current = value;
 
-  // Sync editing state when viewFirst prop changes (global edit mode toggle)
+  // When viewFirst flips back to true (e.g. global edit mode off), return to rendered view.
   useEffect(() => {
-    const shouldEdit = !viewFirst;
-    setEditing(shouldEdit);
-    if (shouldEdit) {
-      lastSyncedRef.current = valueRef.current ?? '';
-      dirtyRef.current = false;
-    }
+    if (viewFirst) setClickedToEdit(false);
   }, [viewFirst]);
+
+  // editing is derived — cannot be accidentally flipped by effects on mount.
+  // viewFirst=false → always in edit mode. viewFirst=true → only if user clicked.
+  const editing = !viewFirst || clickedToEdit;
 
   // Auto-focus MDXEditor when user clicks into view mode
   useEffect(() => {
@@ -91,7 +90,6 @@ export function MarkdownEditor({
   );
 
   // Sync external value into editor when not focused (late-loading async data).
-  // Guard on editing so this never runs in view mode (ref.current would be null anyway).
   useEffect(() => {
     if (!ref.current || focused || !editing) return;
     const current = ref.current.getMarkdown();
@@ -117,21 +115,20 @@ export function MarkdownEditor({
   const handleBlur = useCallback(() => {
     setFocused(false);
     saveIfDirty();
-    if (viewFirst) setEditing(false);
+    if (viewFirst) setClickedToEdit(false);
   }, [saveIfDirty, viewFirst]);
 
   const handleViewClick = (e: React.MouseEvent) => {
     if (readOnly) return;
-    // Don't intercept link clicks
     if ((e.target as HTMLElement).closest('a')) return;
     lastSyncedRef.current = valueRef.current ?? '';
     dirtyRef.current = false;
     justClickedRef.current = true;
-    setEditing(true);
+    setClickedToEdit(true);
   };
 
   // View mode: rendered ReactMarkdown, click to edit
-  if (viewFirst && !editing) {
+  if (viewFirst && !clickedToEdit) {
     return (
       <div className={cn('relative', className)} onClick={handleViewClick}>
         {value ? (
