@@ -114,6 +114,7 @@ async def list_memos(
                 "type": m.type,
                 "title": m.title,
                 "description": m.description,
+                "content_text": (m.content_text[:400] if m.content_text else None),
                 "source_url": m.source_url,
                 "source_domain": m.source_domain,
                 "source_favicon": m.source_favicon,

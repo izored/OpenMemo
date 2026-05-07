@@ -104,7 +104,7 @@ export function MemoCard({ memo, dragHandleProps }: MemoCardProps) {
           {memo.title}
         </h3>
         {(memo.content_text || memo.content_raw || memo.description) && (
-          <p className="text-[15px] line-clamp-5 leading-relaxed opacity-75 mb-6" style={{ color: config.cssText }}>
+          <p className="text-[15px] line-clamp-4 leading-relaxed opacity-75 mb-6 whitespace-pre-line" style={{ color: config.cssText }}>
             {memo.content_text || memo.content_raw || memo.description}
           </p>
         )}

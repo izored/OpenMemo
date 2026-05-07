@@ -1,4 +1,4 @@
-import { useRef, useState, useCallback } from 'react';
+import { useRef, useState, useCallback, useEffect } from 'react';
 import { MDXEditor, type MDXEditorMethods } from '@mdxeditor/editor';
 import {
   headingsPlugin,
@@ -39,6 +39,17 @@ export function MarkdownEditor({
     },
     [onChange]
   );
+
+  // Sync external value changes into the editor (e.g. when memo loads async after mount).
+  // MDXEditor's `markdown` prop only seeds initial state — without this, late-arriving
+  // data leaves the editor empty and pasted/saved markdown never re-renders on revisit.
+  useEffect(() => {
+    if (!ref.current || focused) return;
+    const current = ref.current.getMarkdown();
+    if (current !== value) {
+      ref.current.setMarkdown(value ?? '');
+    }
+  }, [value, focused]);
 
   const handleBlur = useCallback(() => {
     setFocused(false);
