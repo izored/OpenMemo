@@ -40,7 +40,7 @@ Single source of truth for all planned work. Versioned milestones + unversioned 
 - [x] **[J] Stats card** — full-width bento card with live memo/collection/tag counts from `/api/stats`; by-type emoji pills; "this week" counter
 - [x] **[G] Feedback card** — "Send Feedback" mailto card (`dev@izo.red`) with pre-filled subject
 - [x] Chrome Extension card — "Save from anywhere" with View on GitHub link
-- [x] Keyboard Shortcuts card — collapsible 3-col grid of 6 shortcuts
+- [x] Keyboard Shortcuts card — always-visible 3-col grid of 6 shortcuts
 - [x] Danger Zone card — Export all memos button + disabled Clear all with warning copy
 - [x] **[I] Creator card** — "Made By Reda Izo" with portrait photo, bio, 4 social link pills (izo.red, GitHub, X, Threads)
 - [x] Built With ❤️ card — mosaic grid of 11 open-source dependencies with one-line descriptions
@@ -53,7 +53,7 @@ Single source of truth for all planned work. Versioned milestones + unversioned 
 ## v1.7.4 — UX Quick Wins + P1 Fixes *(NEXT — IN PROGRESS)*
 
 **P1 fixes (this session):**
-- [ ] **[L] Note markdown render in MemoDetail** — Pasting markdown should render visually on save (no raw syntax). Audit `<MarkdownEditor>` wiring to `content_raw`. *(High priority, regression)*
+- [x] **[L] Note markdown render in MemoDetail** — `MarkdownEditor` now derives `editing` from `viewFirst` prop instead of fragile `useState(!viewFirst)` + sync effect. ReactMarkdown renders on load; MDXEditor opens only on user click. *(Regression fixed)*
 - [ ] **[A] Note card content preview** — `MemoCard` for `type === 'note'` shows only title; render 3–4 line snippet from `content_text` / `content_raw`. *(Visible regression)*
 
 **UX quick wins:**
