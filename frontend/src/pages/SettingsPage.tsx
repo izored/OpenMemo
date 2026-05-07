@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import {
   Settings, Moon, Sun, Loader2, Wifi, WifiOff,
-  ChevronDown, ChevronUp, Globe, Keyboard, AlertTriangle,
+  ChevronDown, ChevronUp, Globe, AlertTriangle,
   Download, Puzzle, Mail,
 } from 'lucide-react';
 import { useAppStore } from '@/stores/appStore';
@@ -32,7 +32,6 @@ export function SettingsPage() {
   const [modelsExpanded, setModelsExpanded] = useState(false);
   const [avatarError, setAvatarError] = useState(false);
   const [stats, setStats] = useState<Stats | null>(null);
-  const [shortcutsExpanded, setShortcutsExpanded] = useState(false);
 
   useEffect(() => {
     systemApi.health()
@@ -291,22 +290,17 @@ export function SettingsPage() {
 
       {/* ── Keyboard Shortcuts — full width ── */}
       <div className="bg-[var(--color-bg-card)] rounded-3xl p-7 shadow-sm mb-5">
-        <div className="flex items-center justify-between mb-5">
-          {label('Keyboard Shortcuts')}
-          <button
-            onClick={() => setShortcutsExpanded((v) => !v)}
-            className="text-[13px] text-[var(--color-text-muted)] hover:text-[var(--color-brand)] transition-colors font-medium flex items-center gap-1.5 -mt-5"
-          >
-            <Keyboard size={14} />
-            {shortcutsExpanded ? 'Hide' : 'Show all'}
-            {shortcutsExpanded ? <ChevronUp size={13} /> : <ChevronDown size={13} />}
-          </button>
-        </div>
-        <div className={cn('grid grid-cols-3 gap-3', !shortcutsExpanded && 'grid-rows-1 overflow-hidden max-h-[52px]')}>
+        {label('Keyboard Shortcuts')}
+        <div className="grid grid-cols-3 gap-3">
           {shortcuts.map((s) => (
-            <div key={s.key} className="flex items-center justify-between px-4 py-2.5 rounded-2xl bg-[var(--color-bg-hover)]">
+            <div
+              key={s.key}
+              className="flex items-center justify-between px-4 py-2.5 rounded-2xl bg-[var(--color-bg-hover)]"
+            >
               <span className="text-[13px] text-[var(--color-text-secondary)]">{s.desc}</span>
-              <kbd className="px-2 py-0.5 rounded-lg bg-[var(--color-bg-card)] border border-[var(--color-border)] text-[12px] font-mono text-[var(--color-text)] shadow-sm">{s.key}</kbd>
+              <kbd className="px-2 py-0.5 rounded-lg bg-[var(--color-bg-card)] border border-[var(--color-border)] text-[12px] font-mono text-[var(--color-text)] shadow-sm">
+                {s.key}
+              </kbd>
             </div>
           ))}
         </div>
