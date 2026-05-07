@@ -213,7 +213,7 @@ export function SettingsPage() {
         </div>
       </section>
 
-      {/* Open Source Credits */}
+      {/* Open Source Credits — keep in sync with README.md "Credits & Open Source" section */}
       <section className="mt-12">
         <h2 className="text-sm font-bold text-[var(--color-text-muted)] uppercase tracking-widest mb-6">
           Built With
@@ -230,6 +230,7 @@ export function SettingsPage() {
               { name: 'TanStack Query', url: 'https://tanstack.com/query', desc: 'Data fetching' },
               { name: 'Zustand', url: 'https://github.com/pmndrs/zustand', desc: 'State management' },
               { name: 'dnd-kit', url: 'https://dndkit.com', desc: 'Drag & drop' },
+              { name: 'Lucide', url: 'https://lucide.dev', desc: 'Open-source icons' },
             ].map((dep) => (
               <a
                 key={dep.name}

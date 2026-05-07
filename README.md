@@ -213,6 +213,7 @@ We love contributions! See [`CONTRIBUTING.md`](CONTRIBUTING.md) for setup, codin
 ---
 
 ## Credits & Open Source
+<!-- Keep in sync with SettingsPage.tsx "Open Source Credits" section -->
 
 OpenMemo stands on the shoulders of incredible open-source projects:
 
@@ -221,6 +222,7 @@ OpenMemo stands on the shoulders of incredible open-source projects:
 - **[ChromaDB](https://chromadb.dev)** — Vector database for semantic search.
 - **[TanStack Query](https://tanstack.com/query)** — Elegant data fetching and caching.
 - **[Zustand](https://github.com/pmndrs/zustand)** — Minimal, powerful state management.
+- **[Lucide](https://lucide.dev)** — Beautiful, consistent open-source icons. ISC license.
 - **[dnd-kit](https://dndkit.com)** — Accessible, modern drag-and-drop primitives.
 - **[FastAPI](https://fastapi.tiangolo.com)** — Async Python web framework.
 - **[React](https://react.dev)** + **[Vite](https://vitejs.dev)** + **[Tailwind CSS](https://tailwindcss.com)** — Frontend stack.
