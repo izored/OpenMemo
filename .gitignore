@@ -9,6 +9,7 @@ CLAUDE.local.md
 Specs/*
 !Specs/ROADMAP.md
 !Specs/multimedia-icon-animation.md
+!Specs/worktree-dev-setup-issues.md
 .env
 secrets/
 

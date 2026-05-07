@@ -44,8 +44,7 @@ export function MemoDetail() {
   const [chatOpen, setChatOpen] = useState(false);
   const [generatingSummary, setGeneratingSummary] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
-  const [noteEditMode, setNoteEditMode] = useState(false);
-  const [noteDraft, setNoteDraft] = useState('');
+  const [noteContent, setNoteContent] = useState('');
   const [showExtracted, setShowExtracted] = useState(false);
   const [saving, setSaving] = useState(false);
 
@@ -85,6 +84,7 @@ export function MemoDetail() {
       setEditNotes(memo.notes || '');
       setEditTags(memo.tags || []);
       setEditCollectionIds(memo.collections?.map((c: { id: string }) => c.id) || []);
+      setNoteContent(memo.content_raw || memo.content_text || '');
     }
   }, [memo]);
   /* eslint-enable react-hooks/set-state-in-effect */
@@ -468,88 +468,21 @@ export function MemoDetail() {
               </div>
             )}
 
-            {/* Content body for note — rendered view by default, click to edit */}
+            {/* Content body for note — ReactMarkdown by default, click to edit */}
             {memo.type === 'note' && !isEditing && (
               <div className="mb-6">
-                {noteEditMode ? (
-                  <div>
-                    <div className="flex items-center justify-end gap-2 mb-2">
-                      <button
-                        onClick={async () => {
-                          await memoApi.update(memo.id, { content_raw: noteDraft, content_text: noteDraft });
-                          queryClient.invalidateQueries({ queryKey: ['memo', id] });
-                          queryClient.invalidateQueries({ queryKey: ['memos'] });
-                          setNoteEditMode(false);
-                        }}
-                        className="flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium text-[var(--color-text-active)] bg-[var(--color-bg-active)] rounded-full transition-colors"
-                      >
-                        <Save size={14} />
-                        Done
-                      </button>
-                      <button
-                        onClick={() => setNoteEditMode(false)}
-                        className="flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium text-[var(--color-text-secondary)] hover:text-[var(--color-text)] hover:bg-[var(--color-bg-hover)] rounded-full transition-colors"
-                      >
-                        <X size={14} />
-                        Cancel
-                      </button>
-                    </div>
-                    <MarkdownEditor
-                      value={memo.content_raw || memo.content_text || ''}
-                      onChange={(val) => setNoteDraft(val)}
-                      placeholder="Write your note in markdown..."
-                    />
-                  </div>
-                ) : (
-                  <div className="group relative">
-                    <button
-                      onClick={() => {
-                        setNoteDraft(memo.content_raw || memo.content_text || '');
-                        setNoteEditMode(true);
-                      }}
-                      className="absolute top-0 right-0 flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium text-[var(--color-text-secondary)] hover:text-[var(--color-text)] hover:bg-[var(--color-bg-hover)] rounded-full transition-all opacity-0 group-hover:opacity-100"
-                    >
-                      <Pencil size={14} />
-                      Edit
-                    </button>
-                    {memo.content_raw || memo.content_text ? (
-                      <div className="prose prose-lg dark:prose-invert max-w-none text-[var(--color-text)]">
-                        <ReactMarkdown remarkPlugins={[remarkGfm]} components={{
-                          code: ({ inline, children }: { inline?: boolean; children?: React.ReactNode }) => (
-                            inline ? (
-                              <code className="bg-[var(--color-bg-code)] text-white px-1 py-0.5 rounded text-[12px] font-mono">{children}</code>
-                            ) : (
-                              <pre className="bg-[var(--color-bg-code)] text-white p-4 rounded-xl overflow-x-auto font-mono text-[12px] my-3">
-                                <code>{children}</code>
-                              </pre>
-                            )
-                          ),
-                          table: ({ children }: { children?: React.ReactNode }) => (
-                            <div className="overflow-x-auto my-4">
-                              <table className="min-w-full border-collapse border border-[var(--color-border)]">{children}</table>
-                            </div>
-                          ),
-                          th: ({ children }: { children?: React.ReactNode }) => (
-                            <th className="border border-[var(--color-border)] bg-[var(--color-bg-hover)] px-3 py-2 text-left font-semibold">{children}</th>
-                          ),
-                          td: ({ children }: { children?: React.ReactNode }) => (
-                            <td className="border border-[var(--color-border)] px-3 py-2">{children}</td>
-                          ),
-                        }}>{memo.content_raw || memo.content_text}</ReactMarkdown>
-                      </div>
-                    ) : (
-                      <button
-                        onClick={() => {
-                          setNoteDraft('');
-                          setNoteEditMode(true);
-                        }}
-                        className="w-full text-left px-4 py-6 text-[var(--color-text-muted)] italic border border-dashed border-[var(--color-border)] rounded-2xl hover:bg-[var(--color-bg-hover)] transition-colors"
-                      >
-                        Click to write your note...
-                      </button>
-                    )}
-                  </div>
-                )}
+                <MarkdownEditor
+                  viewFirst
+                  value={noteContent}
+                  onSave={(val) => {
+                    setNoteContent(val);
+                    memoApi.update(memo.id, { content_raw: val, content_text: val }).then(() => {
+                      queryClient.invalidateQueries({ queryKey: ['memo', id] });
+                      queryClient.invalidateQueries({ queryKey: ['memos'] });
+                    });
+                  }}
+                  placeholder="Click to write your note..."
+                />
               </div>
             )}
             {memo.type === 'document' && !isEditing && memo.content_text && (
@@ -568,15 +501,14 @@ export function MemoDetail() {
               </div>
             )}
 
-            {/* Edit: Content textarea */}
+            {/* Edit: Content — rich markdown editor */}
             {isEditing && (
               <div className="mb-6">
                 <label className="text-xs font-semibold text-[var(--color-text-muted)] uppercase tracking-wider mb-2 block">Content</label>
-                <textarea
+                <MarkdownEditor
                   value={editContent}
-                  onChange={(e) => setEditContent(e.target.value)}
-                  rows={12}
-                  className="w-full p-4 rounded-2xl border border-[var(--color-border)] text-sm text-[var(--color-text)] outline-none focus:border-[var(--color-text)] resize-y font-mono"
+                  onChange={(val) => setEditContent(val)}
+                  placeholder="Write content..."
                 />
               </div>
             )}
@@ -591,11 +523,14 @@ export function MemoDetail() {
                 {notesSaving && <Loader2 size={14} className="animate-spin text-[var(--color-text-muted)]" />}
               </div>
               <MarkdownEditor
+                viewFirst={!isEditing}
                 value={isEditing ? editNotes : notesDraft}
                 onChange={isEditing ? (val) => setEditNotes(val) : (val) => setNotesDraft(val)}
                 onSave={(val) => {
                   if (isEditing) return;
-                  memoApi.update(memo.id, { notes: val });
+                  memoApi.update(memo.id, { notes: val }).then(() => {
+                    queryClient.invalidateQueries({ queryKey: ['memo', id] });
+                  });
                 }}
                 placeholder="Click to add your thoughts, annotations, or highlights..."
               />
