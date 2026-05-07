@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import type { Memo, Collection, MemoType, ChatSession } from '@/types';
+import type { Collection } from '@/types';
 
 // Load persisted settings from localStorage
 const loadSettings = () => {
@@ -38,6 +38,8 @@ interface AppState {
   // Add modal
   addModalOpen: boolean;
   setAddModalOpen: (open: boolean) => void;
+  addModalTab: 'link' | 'note' | 'file';
+  setAddModalTab: (tab: 'link' | 'note' | 'file') => void;
 
   // Collection modal
   collectionModalOpen: boolean;
@@ -84,6 +86,8 @@ export const useAppStore = create<AppState>((set) => ({
 
   addModalOpen: false,
   setAddModalOpen: (open) => set({ addModalOpen: open }),
+  addModalTab: 'link',
+  setAddModalTab: (tab) => set({ addModalTab: tab }),
 
   collectionModalOpen: false,
   setCollectionModalOpen: (open) => set({ collectionModalOpen: open }),

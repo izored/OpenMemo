@@ -3,13 +3,14 @@ import { Settings, Moon, Sun, Loader2, Wifi, WifiOff, ChevronDown, ChevronUp } f
 import { useAppStore } from '@/stores/appStore';
 import { cn } from '@/lib/utils';
 import { systemApi } from '@/lib/api';
+import type { OllamaModel } from '@/types';
 
 export function SettingsPage() {
   const { theme, setTheme } = useAppStore();
   const [version, setVersion] = useState<string>('');
   const [versionLoading, setVersionLoading] = useState(true);
   const [ollamaConnected, setOllamaConnected] = useState<boolean | null>(null);
-  const [ollamaModels, setOllamaModels] = useState<any[]>([]);
+  const [ollamaModels, setOllamaModels] = useState<OllamaModel[]>([]);
   const [ollamaLoading, setOllamaLoading] = useState(true);
   const [modelsExpanded, setModelsExpanded] = useState(false);
 
@@ -153,7 +154,7 @@ export function SettingsPage() {
 
               {modelsExpanded && ollamaModels.length > 0 && (
                 <div className="mt-4 space-y-2">
-                  {ollamaModels.map((m: any) => (
+                  {ollamaModels.map((m) => (
                     <div
                       key={m.name}
                       className="flex items-center justify-between px-4 py-2.5 rounded-2xl bg-[var(--color-bg-hover)]"

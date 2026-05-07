@@ -3,11 +3,12 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Radio, Play, Pause, Loader2, Clock, FileText } from 'lucide-react';
 import { memocastApi } from '@/lib/api';
 import ReactMarkdown from 'react-markdown';
+import type { MemoCastEpisode } from '@/types';
 
 export function MemoCastPage() {
   const queryClient = useQueryClient();
   const [creating, setCreating] = useState(false);
-  const [selectedEpisode, setSelectedEpisode] = useState<any>(null);
+  const [selectedEpisode, setSelectedEpisode] = useState<MemoCastEpisode | null>(null);
   const [playing, setPlaying] = useState(false);
   const [progress, setProgress] = useState(0);
   const [currentTime, setCurrentTime] = useState(0);
@@ -95,7 +96,7 @@ export function MemoCastPage() {
             </div>
           ) : (
             <div className="divide-y divide-[var(--color-border)]">
-              {episodes.map((ep: any) => (
+              {episodes.map((ep) => (
                 <button
                   key={ep.id}
                   onClick={() => setSelectedEpisode(ep)}

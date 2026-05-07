@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import {
@@ -7,7 +7,6 @@ import {
   Loader2,
   ExternalLink,
   Pencil,
-  Check,
   X,
   ChevronDown,
   ChevronUp,
@@ -20,6 +19,7 @@ import { MarkdownEditor } from '@/components/MarkdownEditor';
 import { memoApi, collectionApi } from '@/lib/api';
 import { AskMemoPanel } from '@/components/AskMemoPanel';
 import ReactMarkdown from 'react-markdown';
+import type { Memo, Collection } from '@/types';
 
 function getYouTubeVideoId(url: string): string | null {
   try {
@@ -61,7 +61,7 @@ export function MemoDetail() {
     enabled: !!id,
   });
 
-  const { data: related = [] } = useQuery({
+  const { data: related = [] } = useQuery<Memo[]>({
     queryKey: ['memo-related', id],
     queryFn: () => memoApi.related(id!),
     enabled: !!id,
@@ -72,6 +72,7 @@ export function MemoDetail() {
     queryFn: collectionApi.list,
   });
 
+  /* eslint-disable react-hooks/set-state-in-effect */
   // Initialize edit form when memo loads
   useEffect(() => {
     if (memo) {
@@ -80,9 +81,10 @@ export function MemoDetail() {
       setEditContent(memo.content_raw || memo.content_text || '');
       setEditNotes(memo.notes || '');
       setEditTags(memo.tags || []);
-      setEditCollectionIds(memo.collections?.map((c: any) => c.id) || []);
+      setEditCollectionIds(memo.collections?.map((c: { id: string }) => c.id) || []);
     }
   }, [memo]);
+  /* eslint-enable react-hooks/set-state-in-effect */
 
   const handleGenerateSummary = async () => {
     if (!id) return;
@@ -145,7 +147,7 @@ export function MemoDetail() {
   const [notesSaving, setNotesSaving] = useState(false);
 
   useEffect(() => {
-    if (memo?.notes !== undefined) setNotesDraft(memo.notes || '');
+    if (memo?.notes !== undefined) setNotesDraft(memo.notes || ''); // eslint-disable-line react-hooks/set-state-in-effect
   }, [memo?.notes]);
 
   const saveNotes = useCallback(async () => {
@@ -336,7 +338,7 @@ export function MemoDetail() {
                   <span className="text-xs font-semibold text-[var(--color-text-muted)] uppercase tracking-wider">Collections</span>
                 </div>
                 <div className="flex flex-wrap gap-2">
-                  {collections.map((col: any) => (
+                  {collections.map((col: Collection) => (
                     <button
                       key={col.id}
                       onClick={() => toggleCollection(col.id)}
@@ -446,11 +448,11 @@ export function MemoDetail() {
                     {showExtracted && (
                       <div className="mt-3 p-5 bg-[var(--color-bg-card)] rounded-2xl border border-[var(--color-border)] prose prose-sm max-w-none text-[var(--color-text)]">
                         <ReactMarkdown components={{
-                          code: ({node, inline, className, children, ...props}: any) => (
+                          code: ({ inline, children }: { inline?: boolean; children?: React.ReactNode }) => (
                             inline ? (
-                              <code className="bg-[var(--color-bg-code)] text-white px-1 py-0.5 rounded text-[11px] font-mono" {...props}>{children}</code>
+                              <code className="bg-[var(--color-bg-code)] text-white px-1 py-0.5 rounded text-[11px] font-mono">{children}</code>
                             ) : (
-                              <pre className="bg-[var(--color-bg-code)] text-white p-4 rounded-xl overflow-x-auto font-mono text-[12px] my-3" {...props}>
+                              <pre className="bg-[var(--color-bg-code)] text-white p-4 rounded-xl overflow-x-auto font-mono text-[12px] my-3">
                                 <code>{children}</code>
                               </pre>
                             )
@@ -476,11 +478,11 @@ export function MemoDetail() {
             {memo.type === 'document' && !isEditing && memo.content_text && (
               <div className="prose prose-sm max-w-none text-[var(--color-text)]">
                 <ReactMarkdown components={{
-                  code: ({node, inline, className, children, ...props}: any) => (
+                  code: ({ inline, children }: { inline?: boolean; children?: React.ReactNode }) => (
                     inline ? (
-                      <code className="bg-[var(--color-bg-code)] text-white px-1 py-0.5 rounded text-[11px] font-mono" {...props}>{children}</code>
+                      <code className="bg-[var(--color-bg-code)] text-white px-1 py-0.5 rounded text-[11px] font-mono">{children}</code>
                     ) : (
-                      <pre className="bg-[var(--color-bg-code)] text-white p-4 rounded-xl overflow-x-auto font-mono text-[12px] my-3" {...props}>
+                      <pre className="bg-[var(--color-bg-code)] text-white p-4 rounded-xl overflow-x-auto font-mono text-[12px] my-3">
                         <code>{children}</code>
                       </pre>
                     )
@@ -527,7 +529,7 @@ export function MemoDetail() {
               <div className="mt-10 pt-6 border-t border-[var(--color-border)]">
                 <h3 className="text-xs font-semibold text-[var(--color-text-muted)] uppercase tracking-wider mb-3">Related Memos</h3>
                 <div className="flex gap-3 overflow-x-auto pb-2">
-                  {related.map((r: any) => (
+                  {related.map((r) => (
                     <button
                       key={r.id}
                       onClick={() => navigate(`/memo/${r.id}`)}

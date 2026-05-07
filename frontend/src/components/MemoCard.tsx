@@ -1,5 +1,7 @@
+import React from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useQueryClient } from '@tanstack/react-query';
+import type { DraggableAttributes } from '@dnd-kit/core';
 import {
   FileText,
   Globe,
@@ -18,7 +20,7 @@ import type { Memo, MemoType } from '@/types';
 
 const typeConfig: Record<
   MemoType,
-  { icon: any; label: string; cssBg: string; cssText: string }
+  { icon: React.ElementType; label: string; cssBg: string; cssText: string }
 > = {
   note: { icon: FileText, label: 'Notes', cssBg: 'var(--color-type-note-bg)', cssText: 'var(--color-type-note-text)' },
   article: { icon: Globe, label: 'Article', cssBg: 'var(--color-type-article-bg)', cssText: 'var(--color-type-article-text)' },
@@ -32,8 +34,8 @@ const typeConfig: Record<
 interface MemoCardProps {
   memo: Memo;
   dragHandleProps?: {
-    attributes: Record<string, any>;
-    listeners?: Record<string, any>;
+    attributes: DraggableAttributes;
+    listeners?: Record<string, unknown>;
   };
 }
 
@@ -58,12 +60,12 @@ export function MemoCard({ memo, dragHandleProps }: MemoCardProps) {
     try {
       await memoApi.delete(memo.id);
       queryClient.invalidateQueries({ queryKey: ['memos'] });
-    } catch (err) {
+    } catch {
       alert('Failed to delete memo');
     }
   };
 
-  const DragHandle = () => (
+  const renderDragHandle = () => (
     <span
       {...(dragHandleProps?.attributes || {})}
       {...(dragHandleProps?.listeners || {})}
@@ -75,7 +77,7 @@ export function MemoCard({ memo, dragHandleProps }: MemoCardProps) {
     </span>
   );
 
-  const DeleteButton = () => (
+  const renderDeleteButton = () => (
     <button
       onClick={handleDelete}
       className={cn(
@@ -96,8 +98,8 @@ export function MemoCard({ memo, dragHandleProps }: MemoCardProps) {
         className="group relative rounded-[28px] p-8 cursor-pointer transition-all duration-300 hover:shadow-xl hover:-translate-y-1 min-h-[320px] flex flex-col"
         style={{ backgroundColor: config.cssBg }}
       >
-        <DragHandle />
-        <DeleteButton />
+        {renderDragHandle()}
+        {renderDeleteButton()}
         <h3 className="text-lg font-bold line-clamp-3 leading-snug mb-4 pr-6" style={{ color: config.cssText }}>
           {memo.title}
         </h3>
@@ -128,8 +130,8 @@ export function MemoCard({ memo, dragHandleProps }: MemoCardProps) {
         onClick={handleClick}
         className="group relative bg-[var(--color-bg-card)] rounded-[28px] overflow-hidden cursor-pointer shadow-sm hover:shadow-xl transition-all duration-300 hover:-translate-y-1"
       >
-        <DragHandle />
-        <DeleteButton />
+        {renderDragHandle()}
+        {renderDeleteButton()}
         {memo.thumbnail_path || memo.file_path ? (
           <div className="aspect-square overflow-hidden">
             <img
@@ -167,8 +169,8 @@ export function MemoCard({ memo, dragHandleProps }: MemoCardProps) {
         onClick={handleClick}
         className="group relative bg-[var(--color-bg-card)] rounded-[28px] overflow-hidden cursor-pointer shadow-sm hover:shadow-xl transition-all duration-300 hover:-translate-y-1"
       >
-        <DragHandle />
-        <DeleteButton />
+        {renderDragHandle()}
+        {renderDeleteButton()}
         {memo.thumbnail_path ? (
           <div className="aspect-[4/3] overflow-hidden relative">
             <img
@@ -219,8 +221,8 @@ export function MemoCard({ memo, dragHandleProps }: MemoCardProps) {
         onClick={handleClick}
         className="group relative bg-[var(--color-bg-card)] rounded-[28px] overflow-hidden cursor-pointer shadow-sm hover:shadow-xl transition-all duration-300 hover:-translate-y-1"
       >
-        <DragHandle />
-        <DeleteButton />
+        {renderDragHandle()}
+        {renderDeleteButton()}
         {memo.thumbnail_path ? (
           <div className="aspect-[4/3] overflow-hidden bg-[var(--color-bg-hover)]">
             <img src={memo.thumbnail_path} alt="" className="w-full h-full object-cover"
@@ -258,8 +260,8 @@ export function MemoCard({ memo, dragHandleProps }: MemoCardProps) {
       onClick={handleClick}
       className="group relative bg-[var(--color-bg-card)] rounded-[28px] overflow-hidden cursor-pointer shadow-sm hover:shadow-xl transition-all duration-300 hover:-translate-y-1"
     >
-      <DragHandle />
-      <DeleteButton />
+      {renderDragHandle()}
+      {renderDeleteButton()}
       {memo.thumbnail_path ? (
         <div className="aspect-[4/3] overflow-hidden relative">
           <img

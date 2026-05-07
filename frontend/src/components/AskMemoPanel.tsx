@@ -1,14 +1,15 @@
-import { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { Send, Bot, Loader2, Globe } from 'lucide-react';
 import { chatApi } from '@/lib/api';
 import { useAppStore } from '@/stores/appStore';
+import type { ChatSource } from '@/types';
 import ReactMarkdown from 'react-markdown';
 
 interface Message {
   id: string;
   role: 'user' | 'assistant';
   content: string;
-  sources?: any[];
+  sources?: ChatSource[];
 }
 
 interface AskMemoPanelProps {
@@ -82,15 +83,15 @@ export function AskMemoPanel({ memoId, collectionId }: AskMemoPanelProps) {
               } else if (data.type === 'done') {
                 setSessionId(data.session_id);
               }
-            } catch {}
+            } catch { /* malformed SSE line */ }
           }
         }
       }
-    } catch (e: any) {
+    } catch (e) {
       setMessages((prev) => {
         const updated = [...prev];
         const last = updated[updated.length - 1];
-        if (last.role === 'assistant') last.content = 'Error: ' + (e.message || 'Failed');
+        if (last.role === 'assistant') last.content = 'Error: ' + ((e as Error).message || 'Failed');
         return [...updated];
       });
     } finally {
@@ -124,11 +125,11 @@ export function AskMemoPanel({ memoId, collectionId }: AskMemoPanelProps) {
               {msg.role === 'assistant' ? (
                 <div className="prose prose-xs max-w-none">
                   <ReactMarkdown components={{
-                    code: ({node, inline, className, children, ...props}: any) => (
+                    code: ({ inline, children }: { inline?: boolean; children?: React.ReactNode }) => (
                       inline ? (
-                        <code className="bg-[var(--color-bg-code)] text-white px-1 py-0.5 rounded text-[11px] font-mono" {...props}>{children}</code>
+                        <code className="bg-[var(--color-bg-code)] text-white px-1 py-0.5 rounded text-[11px] font-mono">{children}</code>
                       ) : (
-                        <pre className="bg-[var(--color-bg-code)] text-white p-3 rounded-xl overflow-x-auto font-mono text-[11px] my-2" {...props}>
+                        <pre className="bg-[var(--color-bg-code)] text-white p-3 rounded-xl overflow-x-auto font-mono text-[11px] my-2">
                           <code>{children}</code>
                         </pre>
                       )
@@ -140,7 +141,7 @@ export function AskMemoPanel({ memoId, collectionId }: AskMemoPanelProps) {
               )}
               {msg.sources && msg.sources.length > 0 && (
                 <div className="mt-2 flex flex-wrap gap-1">
-                  {msg.sources.map((s: any, i: number) => (
+                  {msg.sources.map((s, i) => (
                     <span key={i} className="inline-flex items-center gap-0.5 px-2 py-0.5 bg-[var(--color-bg-card)] rounded-full text-[10px] text-[var(--color-text-secondary)] border border-[var(--color-border)]">
                       <Globe size={8} /> [{i + 1}]
                     </span>

@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { Search, X, FileText, Globe, Image as ImageIcon, Video, Mic, File, Link2 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
@@ -6,6 +6,7 @@ import { MemoGrid } from '@/components/MemoGrid';
 import { useAppStore } from '@/stores/appStore';
 import { memoApi, searchApi } from '@/lib/api';
 import { cn } from '@/lib/utils';
+import type { Memo } from '@/types';
 
 const filterTabs = [
   { id: 'all', label: 'All' },
@@ -16,7 +17,7 @@ const filterTabs = [
   { id: 'document', label: 'Files' },
 ];
 
-const typeIcons: Record<string, any> = {
+const typeIcons: Record<string, React.ElementType> = {
   note: FileText,
   article: Globe,
   image: ImageIcon,
@@ -61,7 +62,7 @@ export function Dashboard() {
   } = useAppStore();
 
   const [searchQuery, setSearchQuery] = useState('');
-  const [searchResults, setSearchResults] = useState<any[]>([]);
+  const [searchResults, setSearchResults] = useState<Memo[]>([]);
   const [searchLoading, setSearchLoading] = useState(false);
   const [searchFocused, setSearchFocused] = useState(false);
   const [greeting] = useState(() => getDailyGreeting());
@@ -101,6 +102,7 @@ export function Dashboard() {
   }, []);
 
   // Debounced search
+  /* eslint-disable react-hooks/set-state-in-effect */
   useEffect(() => {
     if (!searchQuery.trim()) {
       setSearchResults([]);
@@ -120,6 +122,7 @@ export function Dashboard() {
     }, 300);
     return () => clearTimeout(timer);
   }, [searchQuery]);
+  /* eslint-enable react-hooks/set-state-in-effect */
 
   const handleResultClick = useCallback((id: string) => {
     navigate(`/memo/${id}`);
@@ -174,7 +177,7 @@ export function Dashboard() {
               {!searchLoading && searchResults.length === 0 && searchQuery.trim() && (
                 <div className="px-4 py-6 text-center text-sm text-[var(--color-text-secondary)]">No results found</div>
               )}
-              {!searchLoading && searchResults.map((result: any) => {
+              {!searchLoading && searchResults.map((result) => {
                 const Icon = typeIcons[result.type] || FileText;
                 return (
                   <button
