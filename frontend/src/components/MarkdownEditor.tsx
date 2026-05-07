@@ -48,12 +48,19 @@ export function MarkdownEditor({
   const ref = useRef<MDXEditorMethods>(null);
   const [focused, setFocused] = useState(false);
   const [savedFlash, setSavedFlash] = useState(false);
+  // Track the markdown the editor was last seeded with so blur can tell whether
+  // the user actually changed anything. Without this, blur re-serializes via
+  // MDXEditor's markdown emitter and accumulates `\*`, `\#`, `&#x20;` escapes
+  // each visit — corrupting saved content on every page open.
+  const lastSyncedRef = useRef<string>(value ?? '');
+  const dirtyRef = useRef(false);
 
   const handleChange = useCallback(
     (md: string) => {
+      if (focused) dirtyRef.current = true;
       onChange?.(md);
     },
-    [onChange]
+    [onChange, focused]
   );
 
   // Sync external value changes into the editor (e.g. when memo loads async after mount).
@@ -65,16 +72,21 @@ export function MarkdownEditor({
     if (current !== value) {
       ref.current.setMarkdown(value ?? '');
     }
+    lastSyncedRef.current = value ?? '';
+    dirtyRef.current = false;
   }, [value, focused]);
 
   const handleBlur = useCallback(() => {
     setFocused(false);
-    if (onSave && ref.current) {
-      const current = ref.current.getMarkdown();
-      onSave(current);
-      setSavedFlash(true);
-      setTimeout(() => setSavedFlash(false), 1500);
-    }
+    if (!onSave || !ref.current) return;
+    if (!dirtyRef.current) return;
+    const current = ref.current.getMarkdown();
+    if (current === lastSyncedRef.current) return;
+    onSave(current);
+    lastSyncedRef.current = current;
+    dirtyRef.current = false;
+    setSavedFlash(true);
+    setTimeout(() => setSavedFlash(false), 1500);
   }, [onSave]);
 
   return (
