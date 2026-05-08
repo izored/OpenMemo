@@ -58,9 +58,10 @@ Single source of truth for all planned work. Versioned milestones + unversioned 
 - [ ] **[A] Note card content preview** — `MemoCard` for `type === 'note'` shows only title; render 3–4 line snippet from `content_text` / `content_raw`. *(Visible regression)*
 
 **UX quick wins:**
-- [ ] **Filters on search bar line** — Move type filters (All / Image / Links / Videos / Notes / Files) to same line as search box; FAB-dial ease-in animation on click/hover
-- [ ] **Greeting left-align** — Left-justify greeting, same line as search box
-- [ ] **Remove MemoCast** — Remove from sidebar nav, Speed Dial FAB, routing; archive `backend/core/tts.py` and `MemoCastPage` (do not delete)
+- [x] **Filters on search bar line** — Type filters (All / Image / Links / Videos / Notes / Files) moved to same line as search box, compact pill style
+- [x] **FAB-dial** ease-in animation on hover; main FAB click opens note directly
+- [x] **Greeting left-align** — Left-justified greeting on same header row as filters + search
+- [x] **Remove MemoCast** — Removed from sidebar nav and routing; `MemoCastPage.tsx` archived to `_archived/`; `backend/core/tts.py` archived to `_archived/`; memocast router disabled in `main.py`
 
 ---
 
@@ -170,7 +171,7 @@ Single source of truth for all planned work. Versioned milestones + unversioned 
 
 ## Archived / Cancelled
 
-- ~~**MemoCast**~~ — Podcast-style audio episode generation via Coqui TTS. Removed in v1.7.3. Backend code preserved in `backend/core/tts.py` but not exposed via API.
+- ~~**MemoCast**~~ — Podcast-style audio episode generation via Coqui TTS. Fully removed in v1.7.4. Code archived: `frontend/src/pages/_archived/MemoCastPage.tsx`, `backend/core/_archived/tts.py`.
 - ~~**v1.7.1 Public Sandbox**~~ — Live demo instance resetting nightly. Deprioritized indefinitely.
 
 ---
