@@ -82,7 +82,7 @@ export function MemoCard({ memo, dragHandleProps }: MemoCardProps) {
       onClick={handleDelete}
       className={cn(
         'absolute top-3 right-3 z-10 w-7 h-7 rounded-full bg-[var(--color-brand)]/90 hover:bg-[var(--color-brand)] text-white flex items-center justify-center opacity-0 group-hover:opacity-100 transition-all shadow-lg',
-        'delay-[3000ms] duration-300'
+        'delay-[300ms] duration-300'
       )}
       title="Delete memo"
     >
@@ -100,22 +100,22 @@ export function MemoCard({ memo, dragHandleProps }: MemoCardProps) {
       >
         {renderDragHandle()}
         {renderDeleteButton()}
-        <h3 className="text-lg font-bold line-clamp-3 leading-snug mb-4 pr-6" style={{ color: config.cssText }}>
+        <h3 className="text-[15px] font-bold line-clamp-3 leading-snug mb-4 pr-6" style={{ color: config.cssText }}>
           {memo.title}
         </h3>
         {(memo.content_text || memo.content_raw || memo.description) && (
-          <p className="text-[15px] line-clamp-4 leading-relaxed opacity-75 mb-6 whitespace-pre-line" style={{ color: config.cssText }}>
+          <p className="text-[10px] line-clamp-9 leading-relaxed opacity-75 mb-1 whitespace-normal" style={{ color: config.cssText }}>
             {memo.content_text || memo.content_raw || memo.description}
           </p>
         )}
         <div className="mt-auto pt-5 border-t border-black/5 flex items-center justify-between">
           <div className="flex items-center gap-2.5">
-            <Icon size={16} style={{ color: config.cssText }} />
-            <span className="text-sm font-semibold" style={{ color: config.cssText }}>
+            <Icon size={13} style={{ color: config.cssText }} />
+            <span className="text-[10px] font-semibold" style={{ color: config.cssText }}>
               {config.label}
             </span>
           </div>
-          <span className="text-[13px] opacity-50 font-medium" style={{ color: config.cssText }}>
+          <span className="text-[10px] opacity-50 font-medium" style={{ color: config.cssText }}>
             {formattedDate}
           </span>
         </div>
@@ -147,15 +147,15 @@ export function MemoCard({ memo, dragHandleProps }: MemoCardProps) {
           </div>
         )}
         <div className="p-7">
-          <h3 className="text-[17px] font-bold text-[var(--color-text)] line-clamp-2 leading-snug">
+          <h3 className="text-[10px] font-semibold text-[var(--color-text)] line-clamp-2 leading-snug">
             {memo.title}
           </h3>
           <div className="flex items-center justify-between mt-6">
             <div className="flex items-center gap-2.5">
-              <Icon size={16} className="text-[var(--color-text-muted)]" />
-              <span className="text-sm text-[var(--color-text-muted)] font-semibold">{config.label}</span>
+              <Icon size={13} className="text-[var(--color-text-muted)]" />
+              <span className="text-[10px] text-[var(--color-text-muted)] font-semibold">{config.label}</span>
             </div>
-            <span className="text-[13px] text-[var(--color-text-muted)] font-medium">{formattedDate}</span>
+            <span className="text-[10px] text-[var(--color-text-muted)] font-medium">{formattedDate}</span>
           </div>
         </div>
       </div>
@@ -192,22 +192,22 @@ export function MemoCard({ memo, dragHandleProps }: MemoCardProps) {
           </div>
         )}
         <div className="p-7">
-          <h3 className="text-[17px] font-bold text-[var(--color-text)] line-clamp-2 leading-snug">
+          <h3 className="text-[13px] font-semibold text-[var(--color-text)] line-clamp-2 leading-[1.25]">
             {memo.title}
           </h3>
-          <div className="flex items-center justify-between mt-6 pt-4 border-t border-[var(--color-border)]">
+          <div className="flex items-center justify-between mt-3 pt-4 border-t border-[var(--color-border)]">
             <div className="flex items-center gap-3">
               {memo.source_favicon ? (
-                <img src={memo.source_favicon} alt="" className="w-5 h-5 rounded-full"
+                <img src={memo.source_favicon} alt="" className="w-4 h-4 rounded-full"
                   onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }} />
               ) : (
                 <Icon size={17} className="text-[var(--color-text-muted)]" />
               )}
-              <span className="text-[15px] text-[var(--color-text-secondary)] font-semibold truncate max-w-[150px]">
+              <span className="text-[10px] text-[var(--color-text-secondary)] font-semibold truncate max-w-[150px]">
                 {memo.source_domain || config.label}
               </span>
             </div>
-            <span className="text-[13px] text-[var(--color-text-muted)] font-medium">{formattedDate}</span>
+            <span className="text-[10px] text-[var(--color-text-muted)] font-medium">{formattedDate}</span>
           </div>
         </div>
       </div>
@@ -234,20 +234,20 @@ export function MemoCard({ memo, dragHandleProps }: MemoCardProps) {
           </div>
         )}
         <div className="p-7">
-          <h3 className="text-[17px] font-bold text-[var(--color-text)] line-clamp-2 leading-snug">
+          <h3 className="text-[13px] font-semibold text-[var(--color-text)] line-clamp-2 leading-snug">
             {memo.title}
           </h3>
           {memo.description && (
-            <p className="text-[15px] text-[var(--color-text-secondary)] line-clamp-2 mt-3 leading-relaxed">
+            <p className="text-[13px] text-[var(--color-text-secondary)] line-clamp-2 mt-3 leading-relaxed">
               {memo.description}
             </p>
           )}
           <div className="flex items-center justify-between mt-6 pt-4 border-t border-[var(--color-border)]">
             <div className="flex items-center gap-2.5">
-              <Icon size={16} className="text-[var(--color-text-muted)]" />
-              <span className="text-sm text-[var(--color-text-muted)] font-semibold">{config.label}</span>
+              <Icon size={13} className="text-[var(--color-text-muted)]" />
+              <span className="text-[10px] text-[var(--color-text-muted)] font-semibold">{config.label}</span>
             </div>
-            <span className="text-[13px] text-[var(--color-text-muted)] font-medium">{formattedDate}</span>
+            <span className="text-[10px] text-[var(--color-text-muted)] font-medium">{formattedDate}</span>
           </div>
         </div>
       </div>
@@ -284,27 +284,27 @@ export function MemoCard({ memo, dragHandleProps }: MemoCardProps) {
       )}
 
       <div className="p-7">
-        <h3 className="text-[17px] font-bold text-[var(--color-text)] line-clamp-2 leading-snug">
+        <h3 className="text-[13px] font-semibold text-(--color-text) line-clamp-3 leading-light">
           {memo.title}
         </h3>
         {memo.description && (
-          <p className="text-[15px] text-[var(--color-text-secondary)] line-clamp-2 mt-3 leading-relaxed">
+          <p className="text-[12px] text-[var(--color-text-secondary)] line-clamp-3 mt-3 leading-relaxed">
             {memo.description}
           </p>
         )}
-        <div className="flex items-center justify-between mt-7 pt-4 border-t border-[var(--color-border)]">
+        <div className="flex items-center justify-between mt-3 pt-4 border-t border-[var(--color-border)]">
           <div className="flex items-center gap-3">
             {memo.source_favicon ? (
-              <img src={memo.source_favicon} alt="" className="w-5 h-5 rounded-full"
+              <img src={memo.source_favicon} alt="" className="w-4 h-4 rounded-full"
                 onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }} />
             ) : (
-              <Icon size={17} className="text-[var(--color-text-muted)]" />
+              <Icon size={13} className="text-(--color-text-muted)" />
             )}
-            <span className="text-[15px] text-[var(--color-text-secondary)] font-semibold truncate max-w-[150px]">
+            <span className="text-[10px] text-(--color-text-muted) font-semibold truncate max-w-37.5">
               {memo.source_domain || config.label}
             </span>
           </div>
-          <span className="text-[13px] text-[var(--color-text-muted)] font-medium">{formattedDate}</span>
+          <span className="text-[10px] text-(--color-text-muted) font-medium">{formattedDate}</span>
         </div>
       </div>
     </div>
