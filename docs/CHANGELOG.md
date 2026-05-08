@@ -8,12 +8,15 @@ All notable changes to OpenMemo are documented here.
 
 ### Added
 
-- 📐 **Inline header bar** — Dashboard header is now a single row: greeting (left-aligned) + compact filter pills + search box (right). Removes two separate stacked sections above the grid.
+- 📐 **Unified top bar** — Dashboard header is one flex row: hamburger (left) + greeting + centered filter pills + search box (right). Hamburger integrated directly in dashboard; Layout's floating hamburger hidden on `/`.
+- 🖱️ **FAB cursor** — Speed Dial main button and dial items show `cursor-pointer` on hover.
 
 ### Changed
 
 - ⚡ **FAB click** — Main Speed Dial FAB button now opens the new-note modal directly on click. Hover still opens the full dial (Note / Link / Multimedia) with ease-in animation.
+- 📐 **Filter pills centered** — Type filters (All / Image / Links / Videos / Notes / Files) are centered within the header flex row.
 - 🗑️ **MemoCast removed** — Removed from sidebar nav and frontend routing. Backend memocast router disabled. Code preserved at `frontend/src/pages/_archived/MemoCastPage.tsx` and `backend/core/_archived/tts.py`.
+- 🔲 **5-column memo grid** — Dashboard grid is now `grid-cols-5` at `xl` breakpoint (was 4). Gap reduced to `gap-6`.
 
 ### Fixed
 
