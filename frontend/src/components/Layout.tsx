@@ -5,6 +5,7 @@ import { AddMemoModal } from './AddMemoModal';
 import { AddCollectionModal } from './AddCollectionModal';
 import { SpeedDialFAB } from './SpeedDialFAB';
 import { useAppStore } from '@/stores/appStore';
+import { cn } from '@/lib/utils';
 
 const ADD_NEW_ROUTES = ['/'];
 
@@ -12,6 +13,7 @@ export function Layout() {
   const sidebarOpen = useAppStore((s) => s.sidebarOpen);
   const toggleSidebar = useAppStore((s) => s.toggleSidebar);
   const location = useLocation();
+  const isDashboard = location.pathname === '/';
 
   const showAddNew = ADD_NEW_ROUTES.includes(location.pathname);
 
@@ -35,16 +37,19 @@ export function Layout() {
           className="absolute inset-0 z-30 bg-black/10 transition-opacity duration-200 pointer-events-none"
           style={{ opacity: sidebarOpen ? 1 : 0, pointerEvents: sidebarOpen ? 'auto' : 'none' }}
         />
-        <main className="h-full overflow-y-auto px-8 md:px-16 lg:px-20 py-6 bg-[var(--color-bg)]">
+        <main className={cn(
+          "h-full overflow-y-auto px-8 md:px-16 lg:px-20 pb-6 bg-[var(--color-bg)]",
+          isDashboard ? 'pt-0' : 'pt-6'
+        )}>
           <Outlet />
         </main>
       </div>
 
-      {/* Hamburger — hidden behind sidebar when open */}
+      {/* Hamburger — hidden on dashboard (dashboard header owns it) and when sidebar open */}
       <button
         onClick={toggleSidebar}
-        className="fixed top-5 left-5 z-50 p-2.5 rounded-full hover:bg-[var(--color-bg-hover)] transition-all duration-150"
-        style={{ opacity: sidebarOpen ? 0 : 1, pointerEvents: sidebarOpen ? 'none' : 'auto' }}
+        className="fixed top-4 left-4 z-50 p-2.5 rounded-full hover:bg-[var(--color-bg-hover)] transition-all duration-150 cursor-pointer"
+        style={{ opacity: (sidebarOpen || isDashboard) ? 0 : 1, pointerEvents: (sidebarOpen || isDashboard) ? 'none' : 'auto' }}
         title="Open sidebar"
       >
         <Menu size={20} className="text-[var(--color-text-secondary)]" />
