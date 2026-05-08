@@ -49,7 +49,7 @@ export function SpeedDialFAB() {
     >
       {ITEMS.map((item, i) => {
         const isHovered = hoveredIdx === i;
-        const delay = isOpen ? i * 50 : 0;
+        const delay = isOpen ? i * 40 : 0;
         const Icon = item.icon;
 
         return (
@@ -59,15 +59,15 @@ export function SpeedDialFAB() {
             style={{
               transform: isOpen
                 ? `translate(0, ${item.ty}) scale(1)`
-                : 'translate(0, 0) scale(0)',
+                : 'translate(0, 0) scale(0.6)',
               opacity: isOpen ? 1 : 0,
-              transition: `transform 300ms cubic-bezier(0.34,1.56,0.64,1) ${delay}ms, opacity 200ms ease ${delay}ms`,
+              transition: `transform 220ms ease-in ${delay}ms, opacity 180ms ease-in ${delay}ms`,
               pointerEvents: isOpen ? 'auto' : 'none',
             }}
             onMouseEnter={() => { clearTimeout(closeTimer.current); setHoveredIdx(i); }}
             onMouseLeave={() => { setHoveredIdx(null); closeFab(); }}
           >
-            {/* Label — left of each button, no overlap possible in a vertical stack */}
+            {/* Label — left of each button */}
             <span
               className="absolute right-full mr-2 top-1/2 -translate-y-1/2 whitespace-nowrap text-xs font-semibold px-2 py-1 rounded-full pointer-events-none"
               style={{
@@ -97,10 +97,11 @@ export function SpeedDialFAB() {
         );
       })}
 
-      {/* Main FAB */}
+      {/* Main FAB — click opens note directly; hover opens dial */}
       <button
         className="absolute inset-0 w-14 h-14 rounded-full flex items-center justify-center shadow-xl"
         style={{ backgroundColor: 'var(--color-dark)', color: 'var(--color-bg)' }}
+        onClick={() => handleItemClick('note')}
         onMouseEnter={openFab}
         onMouseLeave={closeFab}
       >
@@ -108,7 +109,7 @@ export function SpeedDialFAB() {
           size={24}
           style={{
             transform: isOpen ? 'rotate(45deg)' : 'rotate(0deg)',
-            transition: 'transform 200ms cubic-bezier(0.34,1.56,0.64,1)',
+            transition: 'transform 200ms ease-in',
           }}
         />
       </button>

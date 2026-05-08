@@ -103,7 +103,6 @@ from backend.api.chat import router as chat_router
 from backend.api.collections import router as collections_router
 from backend.api.ingest import router as ingest_router
 from backend.api.export import router as export_router
-from backend.api.memocast import router as memocast_router
 from backend.api.search import router as search_router
 
 app.include_router(memos_router)
@@ -111,7 +110,6 @@ app.include_router(chat_router)
 app.include_router(collections_router)
 app.include_router(ingest_router)
 app.include_router(export_router)
-app.include_router(memocast_router)
 app.include_router(search_router)
 
 

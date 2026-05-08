@@ -134,9 +134,33 @@ export function Dashboard() {
 
   return (
     <div className="h-full flex flex-col">
-      {/* Top bar */}
-      <header className="flex items-center justify-end pt-4 pb-4">
-        <div className="relative">
+      {/* Top bar — greeting + filters + search all on one line */}
+      <header className="flex items-center gap-3 pt-4 pb-4">
+        {/* Greeting — left-aligned */}
+        <h2 className="text-lg font-bold text-[var(--color-text)] tracking-tight whitespace-nowrap flex-shrink-0">
+          {greeting}
+        </h2>
+
+        {/* Filter tabs — inline, compact */}
+        <div className="flex gap-1.5 flex-1 flex-wrap">
+          {filterTabs.map((tab) => (
+            <button
+              key={tab.id}
+              onClick={() => setActiveFilter(tab.id)}
+              className={cn(
+                'px-3 py-1.5 rounded-full text-sm font-semibold transition-all whitespace-nowrap',
+                activeFilter === tab.id
+                  ? 'bg-[var(--color-bg-active)] text-[var(--color-text-active)] shadow-md'
+                  : 'bg-[var(--color-bg-card)]/70 text-[var(--color-text-secondary)] hover:bg-[var(--color-bg-card)] shadow-sm'
+              )}
+            >
+              {tab.label}
+            </button>
+          ))}
+        </div>
+
+        {/* Search — right-aligned */}
+        <div className="relative flex-shrink-0">
           <div
             className={cn(
               'flex items-center gap-3 px-5 py-3 bg-[var(--color-bg-card)] rounded-full text-[15px] text-[var(--color-text-secondary)] transition-all shadow-sm',
@@ -200,31 +224,6 @@ export function Dashboard() {
           )}
         </div>
       </header>
-
-      {/* Greeting */}
-      <div className="pt-2 pb-4 text-center">
-        <h2 className="text-2xl font-bold text-[var(--color-text)] tracking-tight">{greeting}</h2>
-      </div>
-
-      {/* Filter tabs */}
-      <div className="pt-4 pb-14">
-        <div className="flex gap-3 flex-wrap justify-center">
-          {filterTabs.map((tab) => (
-            <button
-              key={tab.id}
-              onClick={() => setActiveFilter(tab.id)}
-              className={cn(
-                'px-6 py-3 rounded-full text-base font-semibold transition-all',
-                activeFilter === tab.id
-                  ? 'bg-[var(--color-bg-active)] text-[var(--color-text-active)] shadow-md'
-                  : 'bg-[var(--color-bg-card)]/70 text-[var(--color-text-secondary)] hover:bg-[var(--color-bg-card)] shadow-sm'
-              )}
-            >
-              {tab.label}
-            </button>
-          ))}
-        </div>
-      </div>
 
       {/* Content */}
       <div className="flex-1 overflow-y-auto pb-16">

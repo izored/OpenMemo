@@ -4,7 +4,6 @@ import { useDroppable } from '@dnd-kit/core';
 import {
   Home,
   MessageSquare,
-  Radio,
   Plus,
   Pin,
   ChevronLeft,
@@ -76,7 +75,6 @@ export function Sidebar() {
   const navItems = [
     { icon: Home, label: 'All Memos', path: '/' },
     { icon: MessageSquare, label: 'AskMemo', path: '/ask' },
-    { icon: Radio, label: 'MemoCast', path: '/memocast' },
     { icon: Settings, label: 'Settings', path: '/settings' },
   ];
 
