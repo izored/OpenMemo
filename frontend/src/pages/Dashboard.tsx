@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { Search, X, FileText, Globe, Image as ImageIcon, Video, Mic, File, Link2 } from 'lucide-react';
+import { Search, X, FileText, Globe, Image as ImageIcon, Video, Mic, File, Link2, Menu } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { MemoGrid } from '@/components/MemoGrid';
 import { useAppStore } from '@/stores/appStore';
@@ -59,6 +59,8 @@ export function Dashboard() {
     activeFilter,
     setActiveFilter,
     activeCollection,
+    sidebarOpen,
+    toggleSidebar,
   } = useAppStore();
 
   const [searchQuery, setSearchQuery] = useState('');
@@ -134,21 +136,31 @@ export function Dashboard() {
 
   return (
     <div className="h-full flex flex-col">
-      {/* Top bar — greeting + filters + search all on one line */}
+      {/* Top bar — hamburger + greeting + filters(centered) + search, all on one line */}
       <header className="flex items-center gap-3 pt-4 pb-4">
+        {/* Hamburger — owns this slot on dashboard; Layout's hamburger is hidden on '/' */}
+        <button
+          onClick={toggleSidebar}
+          className="p-2.5 rounded-full hover:bg-[var(--color-bg-hover)] transition-all duration-150 cursor-pointer flex-shrink-0"
+          style={{ opacity: sidebarOpen ? 0 : 1, pointerEvents: sidebarOpen ? 'none' : 'auto' }}
+          title="Open sidebar"
+        >
+          <Menu size={20} className="text-[var(--color-text-secondary)]" />
+        </button>
+
         {/* Greeting — left-aligned */}
         <h2 className="text-lg font-bold text-[var(--color-text)] tracking-tight whitespace-nowrap flex-shrink-0">
           {greeting}
         </h2>
 
-        {/* Filter tabs — inline, compact */}
-        <div className="flex gap-1.5 flex-1 flex-wrap">
+        {/* Filter tabs — centered within remaining space */}
+        <div className="flex gap-1.5 flex-1 justify-center flex-wrap">
           {filterTabs.map((tab) => (
             <button
               key={tab.id}
               onClick={() => setActiveFilter(tab.id)}
               className={cn(
-                'px-3 py-1.5 rounded-full text-sm font-semibold transition-all whitespace-nowrap',
+                'px-3 py-1.5 rounded-full text-sm font-semibold transition-all whitespace-nowrap cursor-pointer',
                 activeFilter === tab.id
                   ? 'bg-[var(--color-bg-active)] text-[var(--color-text-active)] shadow-md'
                   : 'bg-[var(--color-bg-card)]/70 text-[var(--color-text-secondary)] hover:bg-[var(--color-bg-card)] shadow-sm'

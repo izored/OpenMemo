@@ -82,7 +82,7 @@ export function SpeedDialFAB() {
 
             <button
               onClick={() => handleItemClick(item.tab)}
-              className="w-14 h-14 rounded-full flex items-center justify-center shadow-md"
+              className="w-14 h-14 rounded-full flex items-center justify-center shadow-md cursor-pointer"
               style={{
                 backgroundColor: isHovered ? 'var(--color-dark)' : 'var(--color-bg-card)',
                 color: isHovered ? 'var(--color-bg)' : 'var(--color-text)',
@@ -99,7 +99,7 @@ export function SpeedDialFAB() {
 
       {/* Main FAB — click opens note directly; hover opens dial */}
       <button
-        className="absolute inset-0 w-14 h-14 rounded-full flex items-center justify-center shadow-xl"
+        className="absolute inset-0 w-14 h-14 rounded-full flex items-center justify-center shadow-xl cursor-pointer"
         style={{ backgroundColor: 'var(--color-dark)', color: 'var(--color-bg)' }}
         onClick={() => handleItemClick('note')}
         onMouseEnter={openFab}
