@@ -4,6 +4,25 @@ All notable changes to OpenMemo are documented here.
 
 ---
 
+## [1.7.4] - Unreleased
+
+### Added
+
+- 📐 **Inline header bar** — Dashboard header is now a single row: greeting (left-aligned) + compact filter pills + search box (right). Removes two separate stacked sections above the grid.
+
+### Changed
+
+- ⚡ **FAB click** — Main Speed Dial FAB button now opens the new-note modal directly on click. Hover still opens the full dial (Note / Link / Multimedia) with ease-in animation.
+- 🗑️ **MemoCast removed** — Removed from sidebar nav and frontend routing. Backend memocast router disabled. Code preserved at `frontend/src/pages/_archived/MemoCastPage.tsx` and `backend/core/_archived/tts.py`.
+
+### Fixed
+
+- ⌨️ **Settings keyboard shortcuts** — Shortcuts grid is always visible; removed broken collapse/expand toggle that left it in an inconsistent state.
+- 📝 **MarkdownEditor `viewFirst`** — `editing` state is now derived from the `viewFirst` prop instead of a fragile `useState(!viewFirst)` + sync effect. ReactMarkdown renders on load; MDXEditor opens only on user click.
+- 📝 **Markdown paste + render (full fix)** — Plain-text paste now routes through `insertMarkdown()` so syntax (`#`, `**`, fenced code, tables) becomes proper nodes instead of escaped literals. Added `codeMirrorPlugin` for fenced code block rendering. Added `@tailwindcss/typography` so `prose` classes style headings/lists/blockquotes. Updated `code` component for react-markdown v10 (`inline` prop removed). Tightened note view spacing (`prose-sm` + custom margins).
+
+---
+
 ## [1.7.3] - 2026-05-07
 
 ### Added
