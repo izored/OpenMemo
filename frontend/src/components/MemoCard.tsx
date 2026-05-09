@@ -100,7 +100,7 @@ export function MemoCard({ memo, dragHandleProps }: MemoCardProps) {
       >
         {renderDragHandle()}
         {renderDeleteButton()}
-        <h3 className="text-[15px] font-bold line-clamp-3 leading-snug mb-4 pr-6" style={{ color: config.cssText }}>
+        <h3 className="text-[15px] font-bold line-clamp-2 leading-snug mb-4 pr-6" style={{ color: config.cssText }}>
           {memo.title}
         </h3>
         {(memo.content_text || memo.content_raw || memo.description) && (
@@ -284,7 +284,7 @@ export function MemoCard({ memo, dragHandleProps }: MemoCardProps) {
       )}
 
       <div className="p-7">
-        <h3 className="text-[13px] font-semibold text-(--color-text) line-clamp-3 leading-light">
+        <h3 className="text-[13px] font-semibold text-(--color-text) line-clamp-2 leading-light">
           {memo.title}
         </h3>
         {memo.description && (

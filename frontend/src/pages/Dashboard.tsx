@@ -137,7 +137,7 @@ export function Dashboard() {
   return (
     <div className="h-full flex flex-col">
       {/* Top bar — hamburger + greeting + filters(centered) + search, all on one line */}
-      <header className="flex items-center gap-3 pt-4 pb-4">
+      <header className="flex items-center gap-3 pt-4 pb-4 sticky top-0 z-10 bg-[var(--color-bg)]">
         {/* Hamburger — owns this slot on dashboard; Layout's hamburger is hidden on '/' */}
         <button
           onClick={toggleSidebar}

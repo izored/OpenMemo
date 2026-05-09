@@ -1,6 +1,7 @@
 import { DndContext, useSensor, useSensors, PointerSensor, DragOverlay, type DragEndEvent } from '@dnd-kit/core';
-import { SortableContext, rectSortingStrategy, useSortable, arrayMove } from '@dnd-kit/sortable';
+import { SortableContext, verticalListSortingStrategy, useSortable, arrayMove } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
+import Masonry from 'react-masonry-css';
 import { useState, useEffect, useRef } from 'react';
 import { MemoCard } from './MemoCard';
 import { collectionApi, memoApi } from '@/lib/api';
@@ -33,6 +34,13 @@ function SortableMemoCard({ memo }: { memo: Memo }) {
     </div>
   );
 }
+
+const breakpointColumnsObj = {
+  default: 5,
+  1280: 4,
+  1024: 3,
+  640: 2,
+};
 
 export function MemoGrid({ memos: serverMemos }: MemoGridProps) {
   const queryClient = useQueryClient();
@@ -121,13 +129,17 @@ export function MemoGrid({ memos: serverMemos }: MemoGridProps) {
       onDragStart={(e) => setActiveId(String(e.active.id))}
       onDragEnd={handleDragEnd}
     >
-      <SortableContext items={localMemos.map((m) => m.id)} strategy={rectSortingStrategy}>
+      <SortableContext items={localMemos.map((m) => m.id)} strategy={verticalListSortingStrategy}>
         <div className="max-w-[1280px] mx-auto pb-4">
-          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-6">
-            {localMemos.map((memo) => (
-              <SortableMemoCard key={memo.id} memo={memo} />
-            ))}
-          </div>
+         <Masonry
+          breakpointCols={breakpointColumnsObj}
+          className="flex gap-4 w-full"
+          columnClassName="flex flex-col gap-4"
+        >
+          {localMemos.map((memo) => (
+            <SortableMemoCard key={memo.id} memo={memo} />
+          ))}
+         </Masonry>
         </div>
       </SortableContext>
 
