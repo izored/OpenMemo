@@ -74,15 +74,6 @@ export function SettingsPage() {
     </a>
   );
 
-  const shortcuts = [
-    { key: '/', desc: 'Focus search' },
-    { key: 'N', desc: 'New memo' },
-    { key: 'Esc', desc: 'Close panel / modal' },
-    { key: '⌘ K', desc: 'Command palette' },
-    { key: '⌘ /', desc: 'Toggle sidebar' },
-    { key: '⌘ D', desc: 'Toggle dark mode' },
-  ];
-
   const label = (text: string) => (
     <p className="text-[11px] font-bold text-[var(--color-text-muted)] uppercase tracking-widest mb-5">{text}</p>
   );
@@ -327,58 +318,8 @@ export function SettingsPage() {
         </div>
       </div>
 
-      {/* ── Keyboard Shortcuts — full width ── */}
-      <div className="bg-[var(--color-bg-card)] rounded-3xl p-7 shadow-sm mb-5">
-        {label('Keyboard Shortcuts')}
-        <div className="grid grid-cols-3 gap-3">
-          {shortcuts.map((s) => (
-            <div
-              key={s.key}
-              className="flex items-center justify-between px-4 py-2.5 rounded-2xl bg-[var(--color-bg-hover)]"
-            >
-              <span className="text-[13px] text-[var(--color-text-secondary)]">{s.desc}</span>
-              <kbd className="px-2 py-0.5 rounded-lg bg-[var(--color-bg-card)] border border-[var(--color-border)] text-[12px] font-mono text-[var(--color-text)] shadow-sm">
-                {s.key}
-              </kbd>
-            </div>
-          ))}
-        </div>
-      </div>
-
-      {/* ── Danger Zone — full width ── */}
-      <div className="bg-[var(--color-bg-card)] rounded-3xl p-7 shadow-sm border border-red-500/10 mb-5">
-        {label('Danger Zone')}
-        <div className="flex items-start gap-4">
-          <div className="w-10 h-10 rounded-2xl bg-red-500/10 flex items-center justify-center flex-shrink-0">
-            <AlertTriangle size={18} className="text-red-500" />
-          </div>
-          <div className="flex-1">
-            <p className="text-[13px] text-[var(--color-text-secondary)] mb-5 leading-relaxed">
-              Export a backup before making any destructive changes.
-            </p>
-            <div className="flex gap-3">
-              <a
-                href="/api/export/markdown"
-                target="_blank"
-                rel="noopener noreferrer"
-                className="inline-flex items-center gap-2 px-4 py-2 rounded-full border border-[var(--color-border)] text-[13px] font-semibold text-[var(--color-text-secondary)] hover:text-[var(--color-brand)] hover:border-[var(--color-brand)]/40 transition-colors"
-              >
-                <Download size={13} /> Export all memos
-              </a>
-              <button
-                disabled
-                title="Coming soon"
-                className="inline-flex items-center gap-2 px-4 py-2 rounded-full border border-red-500/20 text-[13px] font-semibold text-red-400/50 cursor-not-allowed"
-              >
-                Clear all data
-              </button>
-            </div>
-          </div>
-        </div>
-      </div>
-
       {/* ── Bottom row: Made By + Built With ── */}
-      <div className="grid grid-cols-2 gap-5 mb-5 items-start">
+      <div className="grid grid-cols-[2.05fr_3.5fr] gap-5 mb-5 items-start">
 
         {/* Made By */}
         <div className="bg-[var(--color-bg-card)] rounded-3xl p-7 shadow-sm">
@@ -400,7 +341,7 @@ export function SettingsPage() {
               <h3 className="text-base font-bold text-[var(--color-text)]">Reda Izo</h3>
               <p className="text-[12px] text-[var(--color-text-muted)] mb-3">Creative Director · Photography + CGI & Motion</p>
               <p className="text-[13px] text-[var(--color-text-secondary)] leading-relaxed mb-4">
-                As a creative director I collect constantly — references, articles, links, ideas. I kept losing things I'd already found. OpenMemo is the memory system I wanted to exist. Also, I just wanted to build an app for once.
+                As a creative director I collect constantly, references, articles, links, ideas. I kept losing things I'd already found. I just wanted to build an app for once, OpenMemo came to be.
               </p>
               <div className="flex flex-wrap gap-2">
                 {socialLink('https://izo.red', <Globe size={12} />, 'izo.red')}
@@ -453,11 +394,41 @@ export function SettingsPage() {
         </div>
       </div>
 
-      {/* ── Footer: version ── */}
-      <div className="flex items-center justify-center gap-2 py-6 text-[12px] text-[var(--color-text-muted)]">
-        <div className="w-5 h-5 rounded-full bg-[var(--color-brand)] flex items-center justify-center">
-          <span className="text-white font-bold text-[10px]">O</span>
+ {/* ── Danger Zone — full width ── */}
+      <div className="bg-[var(--color-bg-card)] rounded-3xl p-7 shadow-sm border border-red-500/10 mb-1">
+        {label('Danger Zone')}
+        <div className="flex items-start gap-3">
+          <div className="w-10 h-10 rounded-2xl bg-red-500/10 flex items-center justify-center flex-shrink-0">
+            <AlertTriangle size={18} className="text-red-500" />
+          </div>
+          <div className="flex-1">
+            <p className="text-[13px] text-[var(--color-text-secondary)] mb-2 leading-relaxed">
+              Export a backup before making any destructive changes.
+            </p>
+            <div className="flex gap-3">
+              <a
+                href="/api/export/markdown"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-2 px-4 py-2 rounded-full border border-[var(--color-border)] text-[13px] font-semibold text-[var(--color-text-secondary)] hover:text-[var(--color-brand)] hover:border-[var(--color-brand)]/40 transition-colors"
+              >
+                <Download size={13} /> Export all memos
+              </a>
+              <button
+                disabled
+                title="Coming soon"
+                className="inline-flex items-center gap-2 px-4 py-2 rounded-full border border-red-500/20 text-[13px] font-semibold text-red-400/50 cursor-not-allowed"
+              >
+                Clear all data
+              </button>
+            </div>
+          </div>
         </div>
+      </div>
+
+      {/* ── Footer: version ── */}
+      <div className="flex items-center justify-center gap-2 py-6 text-[12px] font-bold text-[var(--color-text-muted)]">
+        
         <span>OpenMemo</span>
         <span>·</span>
         {versionLoading ? <Loader2 size={11} className="animate-spin" /> : <span>v{version || '—'}</span>}
