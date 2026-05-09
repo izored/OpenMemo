@@ -6,7 +6,9 @@ const loadSettings = () => {
   try {
     const raw = localStorage.getItem('openmemo_settings');
     if (raw) return JSON.parse(raw);
-  } catch { /* ignore */ }
+  } catch {
+    /* ignore */
+  }
   return {};
 };
 
@@ -50,12 +52,16 @@ interface AppState {
   // Theme & appearance
   theme: 'light' | 'dark';
   setTheme: (theme: 'light' | 'dark') => void;
+
+  dashboardGridColumns: 4 | 5;
+  setDashboardGridColumns: (cols: 4 | 5) => void;
 }
 
 const persist = (partial: Partial<AppState>) => {
   localStorage.setItem('openmemo_settings', JSON.stringify({
     theme: partial.theme ?? saved.theme ?? 'light',
     chatModel: partial.chatModel ?? saved.chatModel ?? '',
+    dashboardGridColumns: Number(partial.dashboardGridColumns ?? saved.dashboardGridColumns ?? 5) === 4 ? 4 : 5,
   }));
 };
 
@@ -103,5 +109,11 @@ export const useAppStore = create<AppState>((set) => ({
     } else {
       document.documentElement.classList.remove('dark');
     }
+  },
+
+  dashboardGridColumns: Number(saved.dashboardGridColumns) === 4 ? 4 : 5,
+  setDashboardGridColumns: (cols) => {
+    set({ dashboardGridColumns: cols });
+    persist({ dashboardGridColumns: cols });
   },
 }));

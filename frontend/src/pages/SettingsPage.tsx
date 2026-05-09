@@ -23,7 +23,7 @@ const TYPE_EMOJI: Record<string, string> = {
 };
 
 export function SettingsPage() {
-  const { theme, setTheme } = useAppStore();
+  const { theme, setTheme, dashboardGridColumns, setDashboardGridColumns } = useAppStore();
   const [version, setVersion] = useState<string>('');
   const [versionLoading, setVersionLoading] = useState(true);
   const [ollamaConnected, setOllamaConnected] = useState<boolean | null>(null);
@@ -144,14 +144,17 @@ export function SettingsPage() {
       {/* ── Row: Appearance + Ollama ── */}
       <div className="grid grid-cols-2 gap-5 mb-5">
 
+      
         {/* Appearance */}
         <div className="bg-[var(--color-bg-card)] rounded-3xl p-7 shadow-sm">
           {label('Appearance')}
+
           <div className="flex items-center justify-between">
             <div>
               <h3 className="text-base font-bold text-[var(--color-text)] mb-0.5">Theme</h3>
               <p className="text-[13px] text-[var(--color-text-secondary)]">Light or dark mode</p>
             </div>
+
             <div className="flex gap-2 bg-[var(--color-bg-hover)] rounded-full p-1">
               <button
                 onClick={() => setTheme('light')}
@@ -164,6 +167,7 @@ export function SettingsPage() {
               >
                 <Sun size={15} /> Light
               </button>
+
               <button
                 onClick={() => setTheme('dark')}
                 className={cn(
@@ -174,6 +178,41 @@ export function SettingsPage() {
                 )}
               >
                 <Moon size={15} /> Dark
+              </button>
+            </div>
+          </div>
+
+          <div className="mt-6 pt-6 border-t border-[var(--color-border)] flex items-start justify-between gap-4">
+            <div className="flex-1 min-w-0 pr-2">
+              <h3 className="text-base font-bold text-[var(--color-text)] mb-0.5">Dashboard grid</h3>
+              <p className="text-[13px] text-[var(--color-text-secondary)]">
+                Choose how many memo cards <br /> show per row on large screens
+              </p>
+            </div>
+
+            <div className="flex-shrink-0 flex gap-2 bg-[var(--color-bg-hover)] rounded-full p-1 min-w-[96px] justify-center">
+              <button
+                onClick={() => setDashboardGridColumns(4)}
+                className={cn(
+                  'w-10 h-10 flex items-center justify-center rounded-full text-sm font-semibold transition-all',
+                  dashboardGridColumns === 4
+                    ? 'bg-[var(--color-bg-card)] text-[var(--color-text)] shadow-sm'
+                    : 'text-[var(--color-text-secondary)] hover:text-[var(--color-text)]'
+                )}
+              >
+                4
+              </button>
+
+              <button
+                onClick={() => setDashboardGridColumns(5)}
+                className={cn(
+                  'w-10 h-10 flex items-center justify-center rounded-full text-sm font-semibold transition-all',
+                  dashboardGridColumns === 5
+                    ? 'bg-[var(--color-bg-card)] text-[var(--color-text)] shadow-sm'
+                    : 'text-[var(--color-text-secondary)] hover:text-[var(--color-text)]'
+                )}
+              >
+                5
               </button>
             </div>
           </div>
@@ -265,15 +304,15 @@ export function SettingsPage() {
 
         {/* Chrome Extension */}
         <div className="bg-[var(--color-bg-card)] rounded-3xl p-7 shadow-sm">
-          {label('Chrome Extension')}
+          {label('Save from anywhere')}
           <div className="flex items-start gap-4">
             <div className="w-10 h-10 rounded-2xl bg-[var(--color-bg-hover)] flex items-center justify-center flex-shrink-0">
               <Puzzle size={18} className="text-[var(--color-text-secondary)]" />
             </div>
             <div className="flex-1">
-              <h3 className="text-base font-bold text-[var(--color-text)] mb-1">Save from anywhere</h3>
+              <h3 className="text-base font-bold text-[var(--color-text)] mb-1">Chrome Extension</h3>
               <p className="text-[13px] text-[var(--color-text-secondary)] mb-4 leading-relaxed">
-                Clip articles, links, and pages to OpenMemo directly from Chrome.
+                Clip articles, links, and pages to OpenMemo <br /> Directly from Chrome.
               </p>
               <a
                 href="https://github.com/izored/openmemo"

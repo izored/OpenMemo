@@ -1,3 +1,4 @@
+// File: frontend/src/components/SpeedDialFAB.tsx
 import React, { useState, useRef } from 'react';
 import { Plus, FileText, Link2, File } from 'lucide-react';
 import { useAppStore } from '@/stores/appStore';
@@ -6,23 +7,21 @@ type ModalTab = 'link' | 'note' | 'file';
 
 const FAB_SIZE = 56;
 const GAP = 10;
-const SLOT = FAB_SIZE + GAP; // 66px per step
+const SLOT = FAB_SIZE + GAP;
 
-// Simple vertical column above the FAB, same right edge.
-// Note closest, Multimedia furthest. All tooltips go left.
 const ITEMS: { tab: ModalTab; icon: React.ElementType; label: string; ty: string }[] = [
-  { tab: 'note', icon: FileText, label: 'Note',      ty: `${-SLOT}px`     },
-  { tab: 'link', icon: Link2,   label: 'Link',       ty: `${-SLOT * 2}px` },
-  { tab: 'file', icon: File,    label: 'Multimedia', ty: `${-SLOT * 3}px` },
+  { tab: 'note', icon: FileText, label: 'Note', ty: `${SLOT}px` },
+  { tab: 'link', icon: Link2, label: 'Link', ty: `${SLOT * 2}px` },
+  { tab: 'file', icon: File, label: 'Multimedia', ty: `${SLOT * 3}px` },
 ];
 
-export function SpeedDialFAB() {
+export function SpeedDialFAB({ inline = false }: { inline?: boolean }) {
   const [isOpen, setIsOpen] = useState(false);
   const [hoveredIdx, setHoveredIdx] = useState<number | null>(null);
   const closeTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
 
   const setAddModalOpen = useAppStore(s => s.setAddModalOpen);
-  const setAddModalTab  = useAppStore(s => s.setAddModalTab);
+  const setAddModalTab = useAppStore(s => s.setAddModalTab);
 
   const openFab = () => {
     clearTimeout(closeTimer.current);
@@ -42,9 +41,10 @@ export function SpeedDialFAB() {
     setAddModalOpen(true);
   };
 
+  // File: frontend/src/components/SpeedDialFAB.tsx
   return (
     <div
-      className="fixed bottom-8 right-8 z-50"
+      className={inline ? 'relative flex-shrink-0' : 'fixed bottom-8 right-8 z-50'}
       style={{ width: FAB_SIZE, height: FAB_SIZE }}
     >
       {ITEMS.map((item, i) => {
@@ -55,19 +55,24 @@ export function SpeedDialFAB() {
         return (
           <div
             key={item.label}
-            className="absolute inset-0"
+            className="absolute left-1/2 top-1/2"
             style={{
               transform: isOpen
-                ? `translate(0, ${item.ty}) scale(1)`
-                : 'translate(0, 0) scale(0.6)',
+                ? `translate(-50%, calc(-50% + ${item.ty})) scale(1)`
+                : 'translate(-50%, -50%) scale(0.6)',
               opacity: isOpen ? 1 : 0,
               transition: `transform 220ms ease-in ${delay}ms, opacity 180ms ease-in ${delay}ms`,
               pointerEvents: isOpen ? 'auto' : 'none',
             }}
-            onMouseEnter={() => { clearTimeout(closeTimer.current); setHoveredIdx(i); }}
-            onMouseLeave={() => { setHoveredIdx(null); closeFab(); }}
+            onMouseEnter={() => {
+              clearTimeout(closeTimer.current);
+              setHoveredIdx(i);
+            }}
+            onMouseLeave={() => {
+              setHoveredIdx(null);
+              closeFab();
+            }}
           >
-            {/* Label — left of each button */}
             <span
               className="absolute right-full mr-2 top-1/2 -translate-y-1/2 whitespace-nowrap text-xs font-semibold px-2 py-1 rounded-full pointer-events-none"
               style={{
@@ -82,24 +87,32 @@ export function SpeedDialFAB() {
 
             <button
               onClick={() => handleItemClick(item.tab)}
-              className="w-14 h-14 rounded-full flex items-center justify-center shadow-md cursor-pointer"
+              className="w-11 h-11 rounded-full flex items-center justify-center cursor-pointer"
               style={{
-                backgroundColor: isHovered ? 'var(--color-dark)' : 'var(--color-bg-card)',
-                color: isHovered ? 'var(--color-bg)' : 'var(--color-text)',
-                border: '1px solid var(--color-border)',
-                transform: isHovered ? 'scale(1.08)' : 'scale(1)',
-                transition: 'background-color 150ms, color 150ms, transform 150ms',
+                backgroundColor: 'transparent',
+                border: 'none',
+                padding: 0,
               }}
             >
-              <Icon size={20} />
+              <div
+                className="w-11 h-11 rounded-full flex items-center justify-center shadow-md"
+                style={{
+                  backgroundColor: isHovered ? 'var(--color-dark)' : 'var(--color-bg-card)',
+                  color: isHovered ? 'var(--color-bg)' : 'var(--color-text)',
+                  border: '1px solid var(--color-border)',
+                  transform: isHovered ? 'scale(1.08)' : 'scale(1)',
+                  transition: 'background-color 150ms, color 150ms, transform 150ms',
+                }}
+              >
+                <Icon size={20} />
+              </div>
             </button>
           </div>
         );
       })}
 
-      {/* Main FAB — click opens note directly; hover opens dial */}
       <button
-        className="absolute inset-0 w-14 h-14 rounded-full flex items-center justify-center shadow-xl cursor-pointer"
+        className="absolute left-1/2 top-1/2 w-11 h-11 -translate-x-1/2 -translate-y-1/2 rounded-full flex items-center justify-center shadow-xl cursor-pointer"
         style={{ backgroundColor: 'var(--color-dark)', color: 'var(--color-bg)' }}
         onClick={() => handleItemClick('note')}
         onMouseEnter={openFab}
@@ -108,7 +121,7 @@ export function SpeedDialFAB() {
         <Plus
           size={24}
           style={{
-            transform: isOpen ? 'rotate(45deg)' : 'rotate(0deg)',
+            transform: isOpen ? 'rotate(-45deg)' : 'rotate(0deg)',
             transition: 'transform 200ms ease-in',
           }}
         />
