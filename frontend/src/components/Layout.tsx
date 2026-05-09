@@ -3,19 +3,14 @@ import { Menu } from 'lucide-react';
 import { Sidebar } from './Sidebar';
 import { AddMemoModal } from './AddMemoModal';
 import { AddCollectionModal } from './AddCollectionModal';
-import { SpeedDialFAB } from './SpeedDialFAB';
 import { useAppStore } from '@/stores/appStore';
 import { cn } from '@/lib/utils';
-
-const ADD_NEW_ROUTES = ['/'];
 
 export function Layout() {
   const sidebarOpen = useAppStore((s) => s.sidebarOpen);
   const toggleSidebar = useAppStore((s) => s.toggleSidebar);
   const location = useLocation();
   const isDashboard = location.pathname === '/';
-
-  const showAddNew = ADD_NEW_ROUTES.includes(location.pathname);
 
   return (
     <div className="flex h-screen overflow-hidden bg-[var(--color-bg)]">
@@ -54,9 +49,6 @@ export function Layout() {
       >
         <Menu size={20} className="text-[var(--color-text-secondary)]" />
       </button>
-
-      {showAddNew && <SpeedDialFAB />}
-
       <AddMemoModal />
       <AddCollectionModal />
     </div>

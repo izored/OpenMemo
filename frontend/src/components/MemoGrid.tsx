@@ -1,3 +1,4 @@
+// File: frontend/src/components/MemoGrid.tsx
 import { DndContext, useSensor, useSensors, PointerSensor, DragOverlay, type DragEndEvent } from '@dnd-kit/core';
 import { SortableContext, verticalListSortingStrategy, useSortable, arrayMove } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
@@ -7,6 +8,7 @@ import { MemoCard } from './MemoCard';
 import { collectionApi, memoApi } from '@/lib/api';
 import { useQueryClient } from '@tanstack/react-query';
 import type { Memo } from '@/types';
+import { useAppStore } from '@/stores/appStore';
 
 interface MemoGridProps {
   memos: Memo[];
@@ -35,20 +37,20 @@ function SortableMemoCard({ memo }: { memo: Memo }) {
   );
 }
 
-const breakpointColumnsObj = {
-  default: 5,
-  1280: 4,
-  1024: 3,
-  640: 2,
-};
-
 export function MemoGrid({ memos: serverMemos }: MemoGridProps) {
   const queryClient = useQueryClient();
+  const dashboardGridColumns = useAppStore((s) => s.dashboardGridColumns);
   const [activeId, setActiveId] = useState<string | null>(null);
   const [localMemos, setLocalMemos] = useState(serverMemos);
   const reorderingRef = useRef(false);
 
-  // Sync server data when not dragging and no pending reorder
+  const breakpointColumnsObj = {
+    default: dashboardGridColumns,
+    1280: dashboardGridColumns === 5 ? 4 : 3,
+    1024: 3,
+    640: 2,
+  };
+
   useEffect(() => {
     if (!activeId && !reorderingRef.current) {
       setLocalMemos(serverMemos);
@@ -69,7 +71,6 @@ export function MemoGrid({ memos: serverMemos }: MemoGridProps) {
 
     const overId = String(over.id);
 
-    // Check if dropped on a collection (sidebar droppable)
     if (overId.startsWith('col-')) {
       const collectionId = overId.replace('col-', '');
       const memoId = String(active.id);
@@ -82,7 +83,6 @@ export function MemoGrid({ memos: serverMemos }: MemoGridProps) {
       return;
     }
 
-    // Sort reorder within grid
     const oldIndex = localMemos.findIndex((m) => m.id === active.id);
     const newIndex = localMemos.findIndex((m) => m.id === over.id);
     if (oldIndex === -1 || newIndex === -1) return;
@@ -116,8 +116,7 @@ export function MemoGrid({ memos: serverMemos }: MemoGridProps) {
           No memos yet
         </h3>
         <p className="text-[15px] text-[var(--color-text-secondary)] max-w-sm leading-relaxed">
-          Start by saving your first article, note, or file. Use the &quot;Add New&quot;
-          button below.
+          Start by saving your first article, note, or file. Use the &quot;Add New&quot; button below.
         </p>
       </div>
     );
@@ -131,15 +130,15 @@ export function MemoGrid({ memos: serverMemos }: MemoGridProps) {
     >
       <SortableContext items={localMemos.map((m) => m.id)} strategy={verticalListSortingStrategy}>
         <div className="max-w-[1280px] mx-auto pb-4">
-         <Masonry
-          breakpointCols={breakpointColumnsObj}
-          className="flex gap-4 w-full"
-          columnClassName="flex flex-col gap-4"
-        >
-          {localMemos.map((memo) => (
-            <SortableMemoCard key={memo.id} memo={memo} />
-          ))}
-         </Masonry>
+          <Masonry
+            breakpointCols={breakpointColumnsObj}
+            className="flex gap-4 w-full"
+            columnClassName="flex flex-col gap-4"
+          >
+            {localMemos.map((memo) => (
+              <SortableMemoCard key={memo.id} memo={memo} />
+            ))}
+          </Masonry>
         </div>
       </SortableContext>
 

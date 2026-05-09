@@ -1,8 +1,10 @@
+// File: frontend/src/pages/Dashboard.tsx
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { Search, X, FileText, Globe, Image as ImageIcon, Video, Mic, File, Link2, Menu } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { MemoGrid } from '@/components/MemoGrid';
+import { SpeedDialFAB } from '@/components/SpeedDialFAB';
 import { useAppStore } from '@/stores/appStore';
 import { memoApi, searchApi } from '@/lib/api';
 import { cn } from '@/lib/utils';
@@ -91,7 +93,6 @@ export function Dashboard() {
     gcTime: 10 * 60 * 1000,
   });
 
-  // Keyboard shortcut: Ctrl+K focuses search
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
       if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
@@ -103,7 +104,6 @@ export function Dashboard() {
     return () => window.removeEventListener('keydown', handler);
   }, []);
 
-  // Debounced search
   /* eslint-disable react-hooks/set-state-in-effect */
   useEffect(() => {
     if (!searchQuery.trim()) {
@@ -136,9 +136,9 @@ export function Dashboard() {
 
   return (
     <div className="h-full flex flex-col">
-      {/* Top bar — hamburger + greeting + filters(centered) + search, all on one line */}
       <header className="flex items-center gap-3 pt-4 pb-4 sticky top-0 z-10 bg-[var(--color-bg)]">
-        {/* Hamburger — owns this slot on dashboard; Layout's hamburger is hidden on '/' */}
+
+        {/* Hamburger */}
         <button
           onClick={toggleSidebar}
           className="p-2.5 rounded-full hover:bg-[var(--color-bg-hover)] transition-all duration-150 cursor-pointer flex-shrink-0"
@@ -148,12 +148,12 @@ export function Dashboard() {
           <Menu size={20} className="text-[var(--color-text-secondary)]" />
         </button>
 
-        {/* Greeting — left-aligned */}
+        {/* Greeting */}
         <h2 className="text-lg font-bold text-[var(--color-text)] tracking-tight whitespace-nowrap flex-shrink-0">
           {greeting}
         </h2>
 
-        {/* Filter tabs — centered within remaining space */}
+        {/* Filter tabs */}
         <div className="flex gap-1.5 flex-1 justify-center flex-wrap">
           {filterTabs.map((tab) => (
             <button
@@ -171,70 +171,74 @@ export function Dashboard() {
           ))}
         </div>
 
-        {/* Search — right-aligned */}
-        <div className="relative flex-shrink-0">
-          <div
-            className={cn(
-              'flex items-center gap-3 px-5 py-3 bg-[var(--color-bg-card)] rounded-full text-[15px] text-[var(--color-text-secondary)] transition-all shadow-sm',
-              searchFocused ? 'ring-2 ring-[var(--color-text)] w-80' : 'hover:bg-[var(--color-bg-card)] w-64'
-            )}
-          >
-            <Search size={17} className="text-[var(--color-text-muted)] flex-shrink-0" />
-            <input
-              ref={searchInputRef}
-              type="text"
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              onFocus={() => setSearchFocused(true)}
-              onBlur={() => setTimeout(() => setSearchFocused(false), 200)}
-              onKeyDown={(e) => {
-                if (e.key === 'Escape') {
-                  setSearchQuery('');
-                  setSearchResults([]);
-                  searchInputRef.current?.blur();
-                }
-              }}
-              placeholder="Search memos…  Ctrl+K"
-              className="flex-1 bg-transparent outline-none placeholder:text-[var(--color-text-muted)] text-[var(--color-text)] text-sm"
-            />
-            {searchQuery && (
-              <button onClick={() => { setSearchQuery(''); setSearchResults([]); }}>
-                <X size={14} className="text-[var(--color-text-muted)]" />
-              </button>
-            )}
-          </div>
-
-          {/* Search results dropdown */}
-          {showResults && (
-            <div className="absolute top-full left-0 right-0 mt-2 bg-[var(--color-bg-card)] rounded-2xl shadow-xl border border-[var(--color-border)] overflow-hidden z-50">
-              {searchLoading && (
-                <div className="px-4 py-3 text-sm text-[var(--color-text-secondary)]">Searching...</div>
+        {/* FAB + Search */}
+        <div className="flex items-center gap-2 flex-shrink-0">
+          <SpeedDialFAB inline />
+          <div className="relative">
+            <div
+              className={cn(
+                'flex items-center gap-3 px-5 py-3 bg-[var(--color-bg-card)] rounded-full text-[15px] text-[var(--color-text-secondary)] transition-all shadow-sm',
+                searchFocused ? 'ring-2 ring-[var(--color-text)] w-80' : 'hover:bg-[var(--color-bg-card)] w-64'
               )}
-              {!searchLoading && searchResults.length === 0 && searchQuery.trim() && (
-                <div className="px-4 py-6 text-center text-sm text-[var(--color-text-secondary)]">No results found</div>
+            >
+              <Search size={17} className="text-[var(--color-text-muted)] flex-shrink-0" />
+              <input
+                ref={searchInputRef}
+                type="text"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                onFocus={() => setSearchFocused(true)}
+                onBlur={() => setTimeout(() => setSearchFocused(false), 200)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Escape') {
+                    setSearchQuery('');
+                    setSearchResults([]);
+                    searchInputRef.current?.blur();
+                  }
+                }}
+                placeholder="Search memos…  Ctrl+K"
+                className="flex-1 bg-transparent outline-none placeholder:text-[var(--color-text-muted)] text-[var(--color-text)] text-sm"
+              />
+              {searchQuery && (
+                <button onClick={() => { setSearchQuery(''); setSearchResults([]); }}>
+                  <X size={14} className="text-[var(--color-text-muted)]" />
+                </button>
               )}
-              {!searchLoading && searchResults.map((result) => {
-                const Icon = typeIcons[result.type] || FileText;
-                return (
-                  <button
-                    key={result.id}
-                    onMouseDown={() => handleResultClick(result.id)}
-                    className="w-full flex items-center gap-3 px-4 py-3 hover:bg-[var(--color-bg-hover)] text-left transition-colors"
-                  >
-                    <Icon size={15} className="text-[var(--color-text-secondary)] flex-shrink-0" />
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm font-medium text-[var(--color-text)] truncate">{result.title}</p>
-                      {result.description && (
-                        <p className="text-xs text-[var(--color-text-secondary)] truncate">{result.description}</p>
-                      )}
-                    </div>
-                    <span className="text-[11px] text-[var(--color-text-muted)] font-mono">{result.source_domain}</span>
-                  </button>
-                );
-              })}
             </div>
-          )}
-        </div>
+
+            {/* Search results dropdown */}
+            {showResults && (
+              <div className="absolute top-full left-0 right-0 mt-2 bg-[var(--color-bg-card)] rounded-2xl shadow-xl border border-[var(--color-border)] overflow-hidden z-50">
+                {searchLoading && (
+                  <div className="px-4 py-3 text-sm text-[var(--color-text-secondary)]">Searching...</div>
+                )}
+                {!searchLoading && searchResults.length === 0 && searchQuery.trim() && (
+                  <div className="px-4 py-6 text-center text-sm text-[var(--color-text-secondary)]">No results found</div>
+                )}
+                {!searchLoading && searchResults.map((result) => {
+                  const Icon = typeIcons[result.type] || FileText;
+                  return (
+                    <button
+                      key={result.id}
+                      onMouseDown={() => handleResultClick(result.id)}
+                      className="w-full flex items-center gap-3 px-4 py-3 hover:bg-[var(--color-bg-hover)] text-left transition-colors"
+                    >
+                      <Icon size={15} className="text-[var(--color-text-secondary)] flex-shrink-0" />
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-medium text-[var(--color-text)] truncate">{result.title}</p>
+                        {result.description && (
+                          <p className="text-xs text-[var(--color-text-secondary)] truncate">{result.description}</p>
+                        )}
+                      </div>
+                      <span className="text-[11px] text-[var(--color-text-muted)] font-mono">{result.source_domain}</span>
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+          </div>{/* end relative search wrapper */}
+        </div>{/* end FAB+Search row */}
+
       </header>
 
       {/* Content */}
