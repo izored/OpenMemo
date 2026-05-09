@@ -75,6 +75,16 @@ Single source of truth for all planned work. Versioned milestones + unversioned 
 - [ ] **[F] Speed Dial main `+` button** — Tapping the `+` (without hovering child) opens default Add Memo modal (Link tab)
 
 ---
+## v1.7.42 — UX Quick Wins + P1 Fixes *(completed)*
+
+- [x] Note markdown render in MemoDetail
+- [x] Markdown paste + render full fix
+- [x] Note card content preview
+- [x] Filters on search bar line
+- [x] FAB-dial animation and click behavior
+- [x] Greeting left-align
+- [x] **[DG] Settings dashboard grid control** — added user-facing 4/5 memo-card selector in Settings Appearance; MemoGrid reads saved preference instead of hardcoded desktop columns
+---
 
 ## v1.8.0 — Collections, Notes, Detail Polish *(P3 + P4)*
 
