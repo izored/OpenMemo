@@ -8,7 +8,7 @@
 
 A local-first, open-source toolkit designed to structure scattered resources. Use [Ollama](https://ollama.ai) to query and summarize your findings without ever leaving your hardware.<br>No cloud. No subscriptions. No API keys.
 
-[![Version](https://img.shields.io/badge/version-1.7.4-202020?style=flat-square&logo=github)](docs/CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-1.7.42-202020?style=flat-square&logo=github)](docs/CHANGELOG.md)
 [![License](https://img.shields.io/badge/license-MIT-ea2804?style=flat-square)](LICENSE)
 [![Docker](https://img.shields.io/badge/docker-ready-2496ED?style=flat-square&logo=docker)](docs/INSTALL.md)
 
@@ -34,7 +34,17 @@ Drop a PDF. Paste a URL. Jot a quick note. Record a voice memo. The Chrome Exten
 
 ---
 
-## Chat With Everything You've Ever Saved
+## 🤖 Built With AI
+
+OpenMemo was my first serious attempt at building something useful for myself with AI.
+
+It began with **Kimi 2.6 Pro**, then **Claude Code (Opus 4.7 / Sonnet 4.6)**, and later **Perplexity** for quick fixes and release help.
+
+Most of the code is AI-assisted, and this project is also a learning record — a messy, useful discovery step into AI-powered software building.
+
+---
+
+## Chat With Everything You've Ever Saved (workinprogress bare with me)
 
 Ask natural-language questions. Get answers grounded in *your* actual content — with clickable citations back to the source.
 
