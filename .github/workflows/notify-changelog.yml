@@ -1,0 +1,32 @@
+name: Notify izored Changelog
+
+on:
+  release:
+    types: [published]
+
+jobs:
+  notify:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Dispatch to izored/izored
+        uses: actions/github-script@v7
+        with:
+          github-token: ${{ secrets.CHANGELOG_TOKEN }}
+          script: |
+            const release = context.payload.release;
+            const repoName = context.repo.repo;
+            await github.rest.repos.createDispatchEvent({
+              owner: 'izored',
+              repo: 'izored',
+              event_type: 'release-published',
+              client_payload: {
+                repo: repoName,
+                version: release.tag_name,
+                title: release.name || release.tag_name,
+                description: release.body
+                  ? release.body.trim().slice(0, 500)
+                  : `${release.tag_name} released`,
+                date: release.published_at.split('T')[0],
+                projectUrl: `https://github.com/izored/${repoName}`,
+              },
+            });
