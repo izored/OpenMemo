@@ -15,18 +15,23 @@ jobs:
           script: |
             const release = context.payload.release;
             const repoName = context.repo.repo;
+            const owner = context.repo.owner;
+            const version = release.tag_name;
             await github.rest.repos.createDispatchEvent({
               owner: 'izored',
               repo: 'izored',
               event_type: 'release-published',
               client_payload: {
                 repo: repoName,
-                version: release.tag_name,
-                title: release.name || release.tag_name,
+                version,
+                title: release.name || version,
                 description: release.body
                   ? release.body.trim().slice(0, 500)
-                  : `${release.tag_name} released`,
+                  : `${version} released`,
                 date: release.published_at.split('T')[0],
-                projectUrl: `https://github.com/izored/${repoName}`,
+                type: 'launch',
+                emoji: '🚀',
+                projectUrl: `https://github.com/${owner}/${repoName}`,
+                releaseUrl: `https://github.com/${owner}/${repoName}/releases/tag/${version}`,
               },
             });
