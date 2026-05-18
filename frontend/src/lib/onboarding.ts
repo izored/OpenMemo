@@ -19,7 +19,7 @@ export const TOUR_STEPS: TourStep[] = [
   {
     id: 'add',
     title: 'Capture anything',
-    body: 'This is the New memo panel — save a link, note, file, or voice memo. Open it anytime with the + button or by pressing N.',
+    body: 'This is the New Memo panel. Save a link, note, file, or voice memo. Open it anytime with the + button or by pressing N.',
     target: '.om-add-panel',
     placement: 'left',
     action: 'openAdd',
@@ -27,21 +27,21 @@ export const TOUR_STEPS: TourStep[] = [
   {
     id: 'search',
     title: 'Find it fast',
-    body: 'Search across everything with ⌘K — titles, content, and domains.',
+    body: 'Search across everything with ⌘K. Titles, content, and domains.',
     target: '.om-sidebar-search',
     placement: 'right',
   },
   {
     id: 'collections',
     title: 'Organise with collections',
-    body: 'Group memos into collections. Drag a card onto one in the sidebar to file it.',
+    body: 'Group Memos into collections. Drag a card onto one in the sidebar to file it.',
     target: '.om-sidebar-nav',
     placement: 'right',
   },
   {
     id: 'settings',
     title: 'Make it yours',
-    body: 'Open Settings → Appearance to tune theme, accent, layout, and background — live.',
+    body: 'Open Settings, then Appearance, to tune theme, accent, layout, and background. Changes apply live.',
     target: '.om-sidebar-foot',
     placement: 'right',
   },

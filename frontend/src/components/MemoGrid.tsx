@@ -128,8 +128,8 @@ export function MemoGrid({ memos: serverMemos }: MemoGridProps) {
           <Icon name="sparkles" size={26} />
         </div>
         <span className="mono om-greet-eyebrow">Nothing here yet</span>
-        <h2>No memos</h2>
-        <p>Tap the + button to save your first link, note, or file.</p>
+        <h2>No Memos yet</h2>
+        <p>Hit the + button to save your first link, note, file, or video.</p>
       </div>
     );
   }

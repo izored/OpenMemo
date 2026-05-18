@@ -104,7 +104,7 @@ export function SettingsPage() {
       <div className="om-settings-head">
         <span className="om-greet-eyebrow mono">Workspace · Personal</span>
         <h1 className="om-greet-title">Settings</h1>
-        <p className="om-greet-sub">Tune the studio. Everything here is stored locally on your device.</p>
+        <p className="om-greet-sub">Everything here is stored on your machine. No cloud, no account.</p>
       </div>
 
       <div className="om-settings-grid">
@@ -123,7 +123,7 @@ export function SettingsPage() {
                 </span>
               </div>
               <span className="om-appearance-cta-sub">
-                Tweak theme, accent, card style, density, columns, and background — changes apply instantly.
+                Tweak theme, accent, card style, layout, columns and background. Changes apply instantly.
               </span>
             </div>
             <span className="om-appearance-cta-arrow">
@@ -285,7 +285,7 @@ export function SettingsPage() {
           <div className="om-danger-grid">
             <div className="om-setting-row">
               <div className="om-setting-row-text">
-                <p>Export all memos</p>
+                <p>Export all Memos</p>
                 <span className="mono">JSON · Markdown bundle</span>
               </div>
               <a
@@ -328,8 +328,8 @@ export function SettingsPage() {
               <button
                 className="om-btn-secondary danger"
                 onClick={async () => {
-                  if (!confirm('Permanently delete ALL memos, collections, tags, chats and files? This cannot be undone.')) return;
-                  if (!confirm('Final confirmation — reset the entire workspace?')) return;
+                  if (!confirm('Permanently delete ALL Memos, collections, tags, chats and files? This cannot be undone.')) return;
+                  if (!confirm('Final confirmation. Reset the entire workspace?')) return;
                   try {
                     await maintenanceApi.reset();
                     alert('Workspace reset. Reloading.');
@@ -351,10 +351,10 @@ export function SettingsPage() {
           </div>
           <div className="om-setting-body">
             <p className="om-creator-name">Reda Izo</p>
-            <span className="om-creator-role">Creative Director · OpenMemo</span>
+            <span className="om-creator-role">Creative Director · openMemo</span>
             <p className="om-creator-bio">
-              Building tools I want to use. OpenMemo is my second brain — links,
-              notes, files, all local-first.
+              I build tools I want to use. openMemo keeps the links, files,
+              notes and videos worth saving. On your machine.
             </p>
             <div className="om-creator-links">
               <a className="om-creator-link" href="https://dev.izo.red" target="_blank" rel="noopener noreferrer">
@@ -376,7 +376,7 @@ export function SettingsPage() {
       <div className="om-settings-footer">
         <a
           className="om-creator-link"
-          href="mailto:dev@izo.red?subject=[OpenMemo Feedback]&body=Hi Reda,%0A%0A"
+          href="mailto:dev@izo.red?subject=[openMemo Feedback]&body=Hi Reda,%0A%0A"
         >
           <Icon name="message" size={12} /> Feedback
         </a>
@@ -386,7 +386,7 @@ export function SettingsPage() {
           onClick={() => setChangelogOpen(true)}
           title={showUpdateDot ? 'Update available' : 'Up to date'}
         >
-          OpenMemo · v{version || '—'}
+          openMemo · v{version || '...'}
           {showUpdateDot && <span className="om-update-dot" />}
         </button>
 

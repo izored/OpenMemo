@@ -60,14 +60,14 @@ export function SearchOverlay() {
   return (
     <>
       <div className="om-backdrop" onClick={() => setOpen(false)} />
-      <div className="om-modal" role="dialog" aria-label="Search memos">
+      <div className="om-modal" role="dialog" aria-label="Search Memos">
         <div className="om-url-input" style={{ margin: 18, marginBottom: 0 }}>
           <Icon name="search" size={15} />
           <input
             ref={inputRef}
             value={q}
             onChange={(e) => setQ(e.target.value)}
-            placeholder="Search across your memos…"
+            placeholder="Search across your Memos…"
           />
           <span className="om-kbd mono">esc</span>
         </div>

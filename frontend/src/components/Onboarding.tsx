@@ -86,8 +86,8 @@ export function Onboarding() {
         </div>
         <div className="om-intro-copy">
           <span className="mono om-greet-eyebrow">Welcome to</span>
-          <h1 className="om-intro-title">OpenMemo</h1>
-          <p className="om-intro-sub">Your second brain — links, notes, files, all local-first.</p>
+          <h1 className="om-intro-title">openMemo</h1>
+          <p className="om-intro-sub">One place for everything worth saving. On your machine. Free.</p>
           <div className="om-intro-actions">
             <button className="om-add-foot-btn primary" onClick={() => setPhase('tour')}>
               <span>Take the tour</span>

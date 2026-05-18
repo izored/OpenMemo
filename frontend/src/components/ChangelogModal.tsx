@@ -99,8 +99,8 @@ export function ChangelogModal({
                 />
                 <span style={{ fontSize: 13 }}>
                   {updateAvailable
-                    ? `Update available — v${latest} (you're on v${current})`
-                    : `You're up to date — v${current}`}
+                    ? `Update available: v${latest} (you're on v${current})`
+                    : `You're up to date on v${current}`}
                 </span>
               </div>
 
