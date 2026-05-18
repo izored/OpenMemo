@@ -1,4 +1,5 @@
 import { useQuery } from '@tanstack/react-query';
+import { motion } from 'framer-motion';
 import { MemoGrid } from '@/components/MemoGrid';
 import { Icon } from '@/components/Icon';
 import { useAppStore } from '@/stores/appStore';
@@ -63,8 +64,16 @@ export function Dashboard() {
                 key={f.id}
                 className={cn('om-filter-tab', activeFilter === f.id && 'active')}
                 onClick={() => setActiveFilter(f.id)}
+                style={{ position: 'relative' }}
               >
-                {f.label}
+                {activeFilter === f.id && (
+                  <motion.span
+                    layoutId="om-filter-pill"
+                    className="om-filter-pill"
+                    transition={{ type: 'spring', stiffness: 480, damping: 38 }}
+                  />
+                )}
+                <span style={{ position: 'relative', zIndex: 1 }}>{f.label}</span>
               </button>
             ))}
           </div>

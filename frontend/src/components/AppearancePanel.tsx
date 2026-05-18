@@ -22,8 +22,32 @@ export function AppearancePanel() {
   const onPickImage = (e: React.ChangeEvent<HTMLInputElement>) => {
     const f = e.target.files?.[0];
     if (!f) return;
+    if (f.size > 5 * 1024 * 1024) {
+      alert('Image too large. Max 5 MB — it will be blurred anyway, so a small file is fine.');
+      e.target.value = '';
+      return;
+    }
     const r = new FileReader();
-    r.onload = () => setTweak({ bgImage: r.result as string, bgMode: 'image' });
+    r.onload = () => {
+      const img = new Image();
+      img.onload = () => {
+        // Downscale + recompress: the bg is blurred 64px, so a 1280px JPEG is
+        // plenty and keeps localStorage small.
+        const max = 1280;
+        const scale = Math.min(1, max / Math.max(img.width, img.height));
+        const c = document.createElement('canvas');
+        c.width = Math.round(img.width * scale);
+        c.height = Math.round(img.height * scale);
+        const ctx = c.getContext('2d');
+        if (!ctx) {
+          setTweak({ bgImage: r.result as string, bgMode: 'image' });
+          return;
+        }
+        ctx.drawImage(img, 0, 0, c.width, c.height);
+        setTweak({ bgImage: c.toDataURL('image/jpeg', 0.72), bgMode: 'image' });
+      };
+      img.src = r.result as string;
+    };
     r.readAsDataURL(f);
   };
 
@@ -287,6 +311,24 @@ export function AppearancePanel() {
               </div>
             )}
           </div>
+        </div>
+
+        {/* Background fade — veils the gradient/image toward the base color */}
+        <div className="om-ap-row">
+          <div className="om-ap-label">
+            <p>Background fade</p>
+            <span className="mono">{Math.round((t.bgFade ?? 0) * 100)}%</span>
+          </div>
+          <input
+            type="range"
+            min={0}
+            max={1}
+            step={0.01}
+            value={t.bgFade ?? 0}
+            onChange={(e) => setTweak('bgFade', parseFloat(e.target.value))}
+            className="om-ap-range"
+            aria-label="Background fade"
+          />
         </div>
       </div>
 

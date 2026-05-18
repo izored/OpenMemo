@@ -69,6 +69,7 @@ export function Sidebar() {
 
   const navItems = [
     { id: 'home', label: 'All memos', icon: 'home', path: '/' },
+    { id: 'collections', label: 'Collections', icon: 'layers', path: '/collections' },
     { id: 'ask', label: 'Ask memo', icon: 'sparkles', path: '/ask' },
   ];
 
