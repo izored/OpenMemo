@@ -27,7 +27,7 @@ jobs:
                 version,
                 title: release ? (release.name || version) : version,
                 description: release?.body
-                  ? release.body.trim().slice(0, 500)
+                  ? release.body.trim()
                   : `${version} released`,
                 date: release ? release.published_at.split('T')[0] : new Date().toISOString().split('T')[0],
                 type: 'launch',
