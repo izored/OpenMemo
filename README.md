@@ -183,7 +183,7 @@ openmemo/
 **v1.9** — AI-suggested collections, similar memos, smart summaries, dark mode
 **v2.0** — Multi-user workspaces, Notion/Obsidian import, plugin system
 
-See [`MEMORY.md`](MEMORY.md) for the full roadmap, architectural findings, and contributor guide.
+See [`Specs/ROADMAP.md`](Specs/ROADMAP.md) for the full roadmap, architectural findings, and contributor guide.
 
 ---
 
