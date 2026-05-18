@@ -174,16 +174,16 @@ export function MemoDetail() {
 
   if (isLoading) {
     return (
-      <div className="flex items-center justify-center h-full">
-        <div className="w-8 h-8 border-2 border-[var(--color-brand)] border-t-transparent rounded-full animate-spin" />
+      <div className="om-detail-loading">
+        <div className="om-detail-spinner" />
       </div>
     );
   }
 
   if (!memo) {
     return (
-      <div className="flex items-center justify-center h-full">
-        <p className="text-[var(--color-text-secondary)]">Memo not found</p>
+      <div className="om-detail-loading">
+        <p className="om-detail-desc">Memo not found</p>
       </div>
     );
   }
@@ -192,19 +192,19 @@ export function MemoDetail() {
   const isWebType = memo.type === 'article' || memo.type === 'link';
 
   return (
-    <div className="h-full flex">
+    <div className="om-detail-page">
       {/* Content pane */}
-      <div className="flex-1 flex flex-col overflow-hidden">
+      <div className="om-detail-pane">
         {/* Header */}
-        <header className="flex items-center justify-between px-6 py-3 pl-6 border-b border-[var(--color-border)]">
-          <div className="flex items-center gap-3 flex-1">
-            <span className="text-xs font-semibold uppercase tracking-wider text-[var(--color-text-muted)]">{memo.type}</span>
+        <header className="om-detail-top">
+          <div style={{ flex: 1, display: 'flex', alignItems: 'center', gap: '12px' }}>
+            <span className="om-section-h">{memo.type}</span>
           </div>
-          <div className="flex items-center gap-1">
+          <div className="om-detail-actions">
             {!isEditing ? (
               <button
                 onClick={() => setIsEditing(true)}
-                className="flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium text-[var(--color-text-secondary)] hover:text-[var(--color-text)] hover:bg-[var(--color-bg-hover)] rounded-full transition-colors"
+                className="om-btn-ghost om-btn-pill"
               >
                 <Pencil size={14} />
                 Edit
@@ -214,14 +214,15 @@ export function MemoDetail() {
                 <button
                   onClick={handleSave}
                   disabled={saving}
-                  className="flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium text-[var(--color-text-active)] bg-[var(--color-bg-active)] rounded-full transition-colors disabled:opacity-50"
+                  className="om-btn-primary om-btn-pill"
+                  style={saving ? { opacity: 0.5 } : undefined}
                 >
-                  {saving ? <Loader2 size={14} className="animate-spin" /> : <Save size={14} />}
+                  {saving ? <Loader2 size={14} className="om-spin" /> : <Save size={14} />}
                   Save
                 </button>
                 <button
                   onClick={() => setIsEditing(false)}
-                  className="flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium text-[var(--color-text-secondary)] hover:text-[var(--color-text)] hover:bg-[var(--color-bg-hover)] rounded-full transition-colors"
+                  className="om-btn-ghost om-btn-pill"
                 >
                   <X size={14} />
                   Cancel
@@ -233,7 +234,7 @@ export function MemoDetail() {
                 href={memo.source_url}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium text-[var(--color-text-secondary)] hover:text-[var(--color-text)] hover:bg-[var(--color-bg-hover)] rounded-full transition-colors"
+                className="om-btn-ghost om-btn-pill"
               >
                 <ExternalLink size={14} />
                 Open Original
@@ -241,7 +242,7 @@ export function MemoDetail() {
             )}
             <button
               onClick={() => setChatOpen(!chatOpen)}
-              className={`p-2 rounded-full transition-colors ${chatOpen ? 'bg-[var(--color-brand-light)] text-[var(--color-brand)]' : 'hover:bg-[var(--color-bg-hover)] text-[var(--color-text-secondary)]'}`}
+              className={`om-icon-btn${chatOpen ? ' active' : ''}`}
             >
               <MessageSquare size={16} />
             </button>
@@ -249,37 +250,40 @@ export function MemoDetail() {
         </header>
 
         {/* Content */}
-        <div className="flex-1 overflow-y-auto p-6">
-          <div className="max-w-3xl mx-auto">
-            {/* Title */}
+        <div className="om-detail-scroll">
+          <div className="om-detail-content">
             {/* Back button */}
-            <div className="mb-3">
+            <div style={{ marginBottom: '12px' }}>
               <BackButton />
             </div>
 
+            {/* Title */}
             {isEditing ? (
               <input
                 value={editTitle}
                 onChange={(e) => setEditTitle(e.target.value)}
-                className="w-full text-2xl font-bold text-[var(--color-text)] mb-2 tracking-tight bg-transparent border-b-2 border-[var(--color-border)] focus:border-[var(--color-text)] outline-none pb-2"
+                className="om-detail-title-input"
+                style={{ marginBottom: '8px' }}
               />
             ) : (
-              <h1 className="text-2xl font-bold text-[var(--color-text)] mb-2 tracking-tight">{memo.title}</h1>
+              <h1 className="om-detail-title" style={{ marginBottom: '8px' }}>{memo.title}</h1>
             )}
 
             {/* Meta */}
-            <div className="flex items-center gap-3 text-sm text-[var(--color-text-secondary)] mb-6 flex-wrap">
-              <span className="font-mono text-[11px]">{new Date(memo.created_at).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })}</span>
+            <div className="om-detail-meta" style={{ marginBottom: '24px' }}>
+              <span className="mono" style={{ fontSize: '11px', color: 'var(--text-4)' }}>
+                {new Date(memo.created_at).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })}
+              </span>
               {memo.source_domain && !isEditing && (
                 <>
-                  <span>•</span>
+                  <span style={{ color: 'var(--text-4)' }}>•</span>
                   <a
                     href={memo.source_url}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="flex items-center gap-1 hover:text-[var(--color-brand)] transition-colors link-dotted"
+                    className="om-source link-dotted"
                   >
-                    {memo.source_favicon && <img src={memo.source_favicon} alt="" className="w-4 h-4 rounded-full" />}
+                    {memo.source_favicon && <img src={memo.source_favicon} alt="" style={{ width: '16px', height: '16px', borderRadius: '50%' }} />}
                     {memo.source_domain}
                     <ExternalLink size={12} />
                   </a>
@@ -287,21 +291,21 @@ export function MemoDetail() {
               )}
               {isEditing && (
                 <>
-                  <span>•</span>
+                  <span style={{ color: 'var(--text-4)' }}>•</span>
                   <input
                     value={editSourceUrl}
                     onChange={(e) => setEditSourceUrl(e.target.value)}
                     placeholder="Source URL"
-                    className="flex-1 min-w-[200px] bg-transparent border-b border-[var(--color-border)] focus:border-[var(--color-text)] outline-none text-sm"
+                    className="om-detail-url-input"
                   />
                 </>
               )}
               {!isEditing && memo.tags?.length > 0 && (
                 <>
-                  <span>•</span>
-                  <div className="flex gap-1 flex-wrap">
+                  <span style={{ color: 'var(--text-4)' }}>•</span>
+                  <div style={{ display: 'flex', gap: '4px', flexWrap: 'wrap' }}>
                     {memo.tags.map((tag: string) => (
-                      <span key={tag} className="px-2 py-0.5 bg-[var(--color-bg-hover)] rounded-full text-[11px] font-semibold uppercase tracking-wide">{tag}</span>
+                      <span key={tag} className="om-tag">{tag}</span>
                     ))}
                   </div>
                 </>
@@ -310,46 +314,44 @@ export function MemoDetail() {
 
             {/* Edit: Tags */}
             {isEditing && (
-              <div className="mb-6">
-                <div className="flex items-center gap-2 mb-2">
-                  <Tag size={14} className="text-[var(--color-text-muted)]" />
-                  <span className="text-xs font-semibold text-[var(--color-text-muted)] uppercase tracking-wider">Tags</span>
+              <div style={{ marginBottom: '24px' }}>
+                <div className="om-notes-label" style={{ marginBottom: '8px' }}>
+                  <Tag size={14} className="om-section-icon" />
+                  <span className="om-section-h">Tags</span>
                 </div>
-                <div className="flex flex-wrap gap-2 items-center">
+                <div className="om-detail-tags">
                   {editTags.map((tag) => (
-                    <span key={tag} className="inline-flex items-center gap-1 px-2.5 py-1 bg-[var(--color-bg-hover)] rounded-full text-xs font-semibold">
+                    <span key={tag} className="om-tag-edit">
                       {tag}
-                      <button onClick={() => removeTag(tag)} className="hover:text-[var(--color-brand)]"><X size={12} /></button>
+                      <button onClick={() => removeTag(tag)}><X size={12} /></button>
                     </span>
                   ))}
-                  <input
-                    value={editTagInput}
-                    onChange={(e) => setEditTagInput(e.target.value)}
-                    onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); addTag(); } }}
-                    placeholder="Add tag..."
-                    className="px-2 py-1 text-xs border border-[var(--color-border)] rounded-full outline-none focus:border-[var(--color-text)]"
-                  />
+                  <span className="om-tag-add">
+                    <input
+                      value={editTagInput}
+                      onChange={(e) => setEditTagInput(e.target.value)}
+                      onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); addTag(); } }}
+                      placeholder="Add tag..."
+                      style={{ background: 'none', border: 0, outline: 'none', font: 'inherit', color: 'inherit', minWidth: '80px' }}
+                    />
+                  </span>
                 </div>
               </div>
             )}
 
             {/* Edit: Collections */}
             {isEditing && (
-              <div className="mb-6">
-                <div className="flex items-center gap-2 mb-2">
-                  <Folder size={14} className="text-[var(--color-text-muted)]" />
-                  <span className="text-xs font-semibold text-[var(--color-text-muted)] uppercase tracking-wider">Collections</span>
+              <div style={{ marginBottom: '24px' }}>
+                <div className="om-notes-label" style={{ marginBottom: '8px' }}>
+                  <Folder size={14} className="om-section-icon" />
+                  <span className="om-section-h">Collections</span>
                 </div>
-                <div className="flex flex-wrap gap-2">
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
                   {collections.map((col: Collection) => (
                     <button
                       key={col.id}
                       onClick={() => toggleCollection(col.id)}
-                      className={`px-3 py-1.5 rounded-full text-xs font-semibold transition-colors ${
-                        editCollectionIds.includes(col.id)
-                          ? 'bg-[var(--color-bg-active)] text-[var(--color-text-active)]'
-                          : 'bg-[var(--color-bg-hover)] text-[var(--color-text-secondary)] hover:bg-[var(--color-border)]'
-                      }`}
+                      className={`om-coll-chip${editCollectionIds.includes(col.id) ? ' active' : ''}`}
                     >
                       {col.emoji} {col.name}
                     </button>
@@ -362,12 +364,12 @@ export function MemoDetail() {
             {!isEditing && (
               <>
                 {memo.ai_summary ? (
-                  <div className="mb-6 p-5 rounded-2xl border border-[#ea2804]/20 bg-[var(--color-brand-light)]">
-                    <div className="flex items-center gap-2 mb-2">
-                      <Sparkles size={16} className="text-[var(--color-brand)]" />
-                      <span className="text-sm font-semibold text-[var(--color-text)]">AI Summary</span>
+                  <div className="om-ai-summary" style={{ marginBottom: '24px' }}>
+                    <div className="om-ai-summary-head">
+                      <Sparkles size={16} className="om-accent-icon" />
+                      <span className="om-ai-summary-label">AI Summary</span>
                     </div>
-                    <div className="text-sm text-[var(--color-text)] prose prose-sm max-w-none">
+                    <div className="prose prose-sm max-w-none">
                       <ReactMarkdown remarkPlugins={[remarkGfm]}>{memo.ai_summary}</ReactMarkdown>
                     </div>
                   </div>
@@ -375,9 +377,10 @@ export function MemoDetail() {
                   <button
                     onClick={handleGenerateSummary}
                     disabled={generatingSummary}
-                    className="mb-6 flex items-center gap-2 px-5 py-2 border border-[var(--color-text)] text-[var(--color-text)] rounded-full text-sm font-semibold hover:bg-[var(--color-bg-hover)] disabled:opacity-40 transition-colors"
+                    className="om-btn-ghost om-btn-pill"
+                    style={{ marginBottom: '24px', opacity: generatingSummary ? 0.4 : undefined }}
                   >
-                    {generatingSummary ? <Loader2 size={14} className="animate-spin" /> : <Sparkles size={14} />}
+                    {generatingSummary ? <Loader2 size={14} className="om-spin" /> : <Sparkles size={14} />}
                     Generate AI Summary
                   </button>
                 )}
@@ -386,17 +389,16 @@ export function MemoDetail() {
 
             {/* Thumbnail / Image */}
             {memo.type === 'image' && memo.file_path && !isEditing && (
-              <div className="mb-6 rounded-2xl overflow-hidden border border-[var(--color-border)]">
-                <img src={`/api/files/${memo.file_path}`} alt={memo.title} className="w-full" />
+              <div className="om-image-memo" style={{ marginBottom: '24px' }}>
+                <img src={`/api/files/${memo.file_path}`} alt={memo.title} />
               </div>
             )}
 
             {/* Video */}
             {youtubeId && !isEditing && (
-              <div className="mb-6 aspect-video rounded-2xl overflow-hidden bg-[var(--color-bg-active)]">
+              <div className="om-video-embed" style={{ marginBottom: '24px' }}>
                 <iframe
                   src={`https://www.youtube.com/embed/${youtubeId}`}
-                  className="w-full h-full"
                   allowFullScreen
                   title={memo.title}
                 />
@@ -405,32 +407,32 @@ export function MemoDetail() {
 
             {/* Rich Web Preview for article/link */}
             {isWebType && !isEditing && (
-              <div className="mb-6">
-                {/* Rich preview card */}
-                <div className="bg-[var(--color-bg-card)] rounded-2xl border border-[var(--color-border)] overflow-hidden shadow-sm">
+              <div style={{ marginBottom: '24px' }}>
+                <div className="om-web-card">
                   {memo.thumbnail_path && (
-                    <div className="aspect-[16/9] overflow-hidden">
-                      <img src={memo.thumbnail_path} alt="" className="w-full h-full object-cover" />
+                    <div className="om-web-card-thumb">
+                      <img src={memo.thumbnail_path} alt="" />
                     </div>
                   )}
-                  <div className="p-6">
-                    <div className="flex items-center gap-2 mb-3">
+                  <div className="om-web-card-body">
+                    <div className="om-web-card-source">
                       {memo.source_favicon ? (
-                        <img src={memo.source_favicon} alt="" className="w-5 h-5 rounded-full" />
+                        <img src={memo.source_favicon} alt="" style={{ width: '20px', height: '20px', borderRadius: '50%' }} />
                       ) : (
-                        <GlobeIcon size={18} className="text-[var(--color-text-muted)]" />
+                        <GlobeIcon size={18} className="om-section-icon" />
                       )}
-                      <span className="text-sm font-semibold text-[var(--color-text-secondary)]">{memo.source_domain || 'Website'}</span>
+                      <span className="om-web-card-domain">{memo.source_domain || 'Website'}</span>
                     </div>
-                    <h2 className="text-lg font-bold text-[var(--color-text)] mb-2">{memo.title}</h2>
+                    <h2 className="om-web-card-title">{memo.title}</h2>
                     {memo.description && (
-                      <p className="text-sm text-[var(--color-text-secondary)] line-clamp-3 mb-4">{memo.description}</p>
+                      <p className="om-web-card-desc">{memo.description}</p>
                     )}
                     <a
                       href={memo.source_url}
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="inline-flex items-center gap-2 px-5 py-2.5 bg-[var(--color-bg-active)] text-[var(--color-text-active)] rounded-full text-sm font-semibold hover:bg-[var(--color-text)] transition-colors"
+                      className="om-btn-primary om-btn-pill"
+                      style={{ alignSelf: 'flex-start' }}
                     >
                       Open Original
                       <ExternalLink size={14} />
@@ -440,24 +442,22 @@ export function MemoDetail() {
 
                 {/* Collapsible extracted content */}
                 {(memo.content_text || memo.content_raw) && (
-                  <div className="mt-4">
+                  <div style={{ marginTop: '16px' }}>
                     <button
                       onClick={() => setShowExtracted(!showExtracted)}
-                      className="flex items-center gap-2 text-sm font-semibold text-[var(--color-text-secondary)] hover:text-[var(--color-text)] transition-colors"
+                      className="om-extracted-toggle"
                     >
                       {showExtracted ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
                       {showExtracted ? 'Hide extracted content' : 'Show extracted content'}
                     </button>
                     {showExtracted && (
-                      <div className="mt-3 p-5 bg-[var(--color-bg-card)] rounded-2xl border border-[var(--color-border)] prose prose-sm max-w-none text-[var(--color-text)]">
+                      <div className="om-extracted-body prose prose-sm max-w-none">
                         <ReactMarkdown remarkPlugins={[remarkGfm]} components={{
                           code: ({ children, className }: { children?: React.ReactNode; className?: string }) => (
-                            <code className={`bg-[var(--color-bg-code)] text-white px-1 py-0.5 rounded text-[11px] font-mono ${className || ''}`}>{children}</code>
+                            <code className={`om-code-inline ${className || ''}`}>{children}</code>
                           ),
                           pre: ({ children }: { children?: React.ReactNode }) => (
-                            <pre className="bg-[var(--color-bg-code)] text-white p-4 rounded-xl overflow-x-auto font-mono text-[12px] my-3 [&_code]:bg-transparent [&_code]:p-0">
-                              {children}
-                            </pre>
+                            <pre className="om-code-block">{children}</pre>
                           )
                         }}>{memo.content_raw || memo.content_text}</ReactMarkdown>
                       </div>
@@ -467,9 +467,9 @@ export function MemoDetail() {
               </div>
             )}
 
-            {/* Content body for note — ReactMarkdown by default, click to edit */}
+            {/* Content body for note */}
             {memo.type === 'note' && !isEditing && (
-              <div className="mb-6">
+              <div style={{ marginBottom: '24px' }}>
                 <MarkdownEditor
                   viewFirst
                   value={noteContent}
@@ -484,25 +484,25 @@ export function MemoDetail() {
                 />
               </div>
             )}
+
+            {/* Document content */}
             {memo.type === 'document' && !isEditing && memo.content_text && (
-              <div className="prose prose-sm max-w-none text-[var(--color-text)]">
+              <div className="prose prose-sm max-w-none">
                 <ReactMarkdown remarkPlugins={[remarkGfm]} components={{
                   code: ({ children, className }: { children?: React.ReactNode; className?: string }) => (
-                    <code className={`bg-[var(--color-bg-code)] text-white px-1 py-0.5 rounded text-[11px] font-mono ${className || ''}`}>{children}</code>
+                    <code className={`om-code-inline ${className || ''}`}>{children}</code>
                   ),
                   pre: ({ children }: { children?: React.ReactNode }) => (
-                    <pre className="bg-[var(--color-bg-code)] text-white p-4 rounded-xl overflow-x-auto font-mono text-[12px] my-3 [&_code]:bg-transparent [&_code]:p-0">
-                      {children}
-                    </pre>
+                    <pre className="om-code-block">{children}</pre>
                   )
                 }}>{memo.content_raw || memo.content_text}</ReactMarkdown>
               </div>
             )}
 
-            {/* Edit: Content — rich markdown editor */}
+            {/* Edit: Content */}
             {isEditing && (
-              <div className="mb-6">
-                <label className="text-xs font-semibold text-[var(--color-text-muted)] uppercase tracking-wider mb-2 block">Content</label>
+              <div style={{ marginBottom: '24px' }}>
+                <label className="om-field-label-block">Content</label>
                 <MarkdownEditor
                   value={editContent}
                   onChange={(val) => setEditContent(val)}
@@ -512,13 +512,13 @@ export function MemoDetail() {
             )}
 
             {/* Notes section */}
-            <div className="mt-8 pt-6 border-t border-[var(--color-border)]">
-              <div className="flex items-center justify-between mb-3">
-                <div className="flex items-center gap-2">
-                  <Pencil size={16} className="text-[var(--color-text-muted)]" />
-                  <h3 className="text-sm font-bold text-[var(--color-text-muted)] uppercase tracking-wider">My Notes</h3>
+            <div className="om-notes-section">
+              <div className="om-notes-head">
+                <div className="om-notes-label">
+                  <Pencil size={16} className="om-section-icon" />
+                  <h3 className="om-section-h">My Notes</h3>
                 </div>
-                {notesSaving && <Loader2 size={14} className="animate-spin text-[var(--color-text-muted)]" />}
+                {notesSaving && <Loader2 size={14} className="om-section-icon om-spin" />}
               </div>
               <MarkdownEditor
                 viewFirst={!isEditing}
@@ -536,17 +536,17 @@ export function MemoDetail() {
 
             {/* Related memos */}
             {!isEditing && related.length > 0 && (
-              <div className="mt-10 pt-6 border-t border-[var(--color-border)]">
-                <h3 className="text-xs font-semibold text-[var(--color-text-muted)] uppercase tracking-wider mb-3">Related Memos</h3>
-                <div className="flex gap-3 overflow-x-auto pb-2">
+              <div className="om-related">
+                <h3 className="om-section-h">Related Memos</h3>
+                <div className="om-related-strip">
                   {related.map((r) => (
                     <button
                       key={r.id}
                       onClick={() => navigate(`/memo/${r.id}`)}
-                      className="flex-shrink-0 w-48 p-3 border border-[var(--color-border)] rounded-2xl hover:border-[var(--color-text)] text-left transition-colors"
+                      className="om-related-card"
                     >
-                      <p className="text-sm font-semibold text-[var(--color-text)] line-clamp-2">{r.title}</p>
-                      <p className="text-[11px] text-[var(--color-text-muted)] mt-1 font-mono">{r.source_domain || r.type}</p>
+                      <p className="om-related-card-title">{r.title}</p>
+                      <p className="om-related-card-meta">{r.source_domain || r.type}</p>
                     </button>
                   ))}
                 </div>
@@ -558,7 +558,7 @@ export function MemoDetail() {
 
       {/* Chat pane */}
       {chatOpen && (
-        <div className="w-96 border-l border-[var(--color-border)] flex flex-col">
+        <div className="om-detail-chat">
           <AskMemoPanel memoId={id!} />
         </div>
       )}

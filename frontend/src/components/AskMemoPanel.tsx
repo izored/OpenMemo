@@ -100,38 +100,36 @@ export function AskMemoPanel({ memoId, collectionId }: AskMemoPanelProps) {
   };
 
   return (
-    <div className="h-full flex flex-col bg-[var(--color-bg-card)]">
-      <div className="px-4 py-3 border-b border-[var(--color-border)]">
-        <h3 className="text-sm font-semibold text-[var(--color-text)]">
+    <div className="om-ask-panel">
+      <div className="om-ask-panel-head">
+        <h3 className="om-ask-panel-title">
           AskMemo {memoId ? '(this memo)' : collectionId ? '(collection)' : ''}
         </h3>
       </div>
 
-      <div ref={scrollRef} className="flex-1 overflow-y-auto p-4 space-y-4">
+      <div ref={scrollRef} className="om-ask-panel-thread">
         {messages.length === 0 && (
-          <div className="text-center py-8">
-            <Bot size={24} className="mx-auto mb-2 text-[var(--color-brand)]" />
-            <p className="text-xs text-[var(--color-text-secondary)]">Ask questions about this content</p>
+          <div className="om-ask-panel-empty">
+            <Bot size={24} className="om-accent-icon" />
+            <p className="om-ask-panel-empty-hint">Ask questions about this content</p>
           </div>
         )}
         {messages.map((msg) => (
-          <div key={msg.id} className={`flex gap-2 ${msg.role === 'user' ? 'justify-end' : ''}`}>
+          <div key={msg.id} className={`om-panel-msg${msg.role === 'user' ? ' user' : ''}`}>
             {msg.role === 'assistant' && (
-              <div className="w-6 h-6 rounded-full bg-[var(--color-brand-light)] flex items-center justify-center flex-shrink-0 mt-0.5">
-                <Bot size={12} className="text-[var(--color-brand)]" />
+              <div className="om-panel-msg-avatar">
+                <Bot size={12} className="om-accent-icon" />
               </div>
             )}
-            <div className={`max-w-[85%] rounded-2xl px-3.5 py-2.5 text-sm ${msg.role === 'user' ? 'bg-[var(--color-bg-active)] text-[var(--color-text-active)]' : 'bg-[var(--color-bg-hover)] text-[var(--color-text)]'}`}>
+            <div className={`om-panel-bubble ${msg.role === 'user' ? 'user' : 'assistant'}`}>
               {msg.role === 'assistant' ? (
                 <div className="prose prose-xs max-w-none">
                   <ReactMarkdown components={{
                     code: ({ children, className }: { children?: React.ReactNode; className?: string }) => (
-                      <code className={`bg-[var(--color-bg-code)] text-white px-1 py-0.5 rounded text-[11px] font-mono ${className || ''}`}>{children}</code>
+                      <code className={`om-code-inline ${className || ''}`}>{children}</code>
                     ),
                     pre: ({ children }: { children?: React.ReactNode }) => (
-                      <pre className="bg-[var(--color-bg-code)] text-white p-3 rounded-xl overflow-x-auto font-mono text-[11px] my-2 [&_code]:bg-transparent [&_code]:p-0">
-                        {children}
-                      </pre>
+                      <pre className="om-code-block">{children}</pre>
                     )
                   }}>{msg.content || '...'}</ReactMarkdown>
                 </div>
@@ -139,9 +137,9 @@ export function AskMemoPanel({ memoId, collectionId }: AskMemoPanelProps) {
                 msg.content
               )}
               {msg.sources && msg.sources.length > 0 && (
-                <div className="mt-2 flex flex-wrap gap-1">
+                <div style={{ marginTop: '8px', display: 'flex', flexWrap: 'wrap', gap: '4px' }}>
                   {msg.sources.map((s, i) => (
-                    <span key={i} className="inline-flex items-center gap-0.5 px-2 py-0.5 bg-[var(--color-bg-card)] rounded-full text-[10px] text-[var(--color-text-secondary)] border border-[var(--color-border)]">
+                    <span key={i} className="om-citation-chip">
                       <Globe size={8} /> [{i + 1}]
                     </span>
                   ))}
@@ -152,24 +150,22 @@ export function AskMemoPanel({ memoId, collectionId }: AskMemoPanelProps) {
         ))}
       </div>
 
-      <div className="p-3 border-t border-[var(--color-border)]">
-        <div className="flex gap-2">
-          <input
-            value={input}
-            onChange={(e) => setInput(e.target.value)}
-            onKeyDown={(e) => e.key === 'Enter' && handleSend()}
-            placeholder="Ask a question..."
-            className="flex-1 px-4 py-2 border border-[var(--color-border)] rounded-full text-sm focus:outline-none focus:border-[var(--color-text)] bg-[var(--color-bg-card)] transition-colors"
-            disabled={streaming}
-          />
-          <button
-            onClick={handleSend}
-            disabled={!input.trim() || streaming}
-            className="p-2.5 bg-[var(--color-bg-active)] text-[var(--color-text-active)] rounded-full disabled:opacity-40 hover:bg-[var(--color-text)] transition-colors"
-          >
-            {streaming ? <Loader2 size={14} className="animate-spin" /> : <Send size={14} />}
-          </button>
-        </div>
+      <div className="om-ask-panel-composer">
+        <input
+          value={input}
+          onChange={(e) => setInput(e.target.value)}
+          onKeyDown={(e) => e.key === 'Enter' && handleSend()}
+          placeholder="Ask a question..."
+          className="om-ask-panel-input"
+          disabled={streaming}
+        />
+        <button
+          onClick={handleSend}
+          disabled={!input.trim() || streaming}
+          className="om-ask-panel-send"
+        >
+          {streaming ? <Loader2 size={14} className="om-spin" /> : <Send size={14} />}
+        </button>
       </div>
     </div>
   );
