@@ -19,6 +19,7 @@ export function AddCollectionModal() {
   const [color, setColor] = useState('#D97706');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [confirmDelete, setConfirmDelete] = useState(false);
 
   const isEditing = !!editingCollection;
 
@@ -36,12 +37,29 @@ export function AddCollectionModal() {
       setColor('#D97706');
     }
     setError('');
+    setConfirmDelete(false);
   }, [editingCollection, collectionModalOpen]);
   /* eslint-enable react-hooks/set-state-in-effect */
 
   const close = () => {
     setCollectionModalOpen(false);
     setEditingCollection(null);
+  };
+
+  const handleDelete = async () => {
+    if (!editingCollection) return;
+    setLoading(true);
+    setError('');
+    try {
+      await collectionApi.delete(editingCollection.id);
+      queryClient.invalidateQueries({ queryKey: ['collections'] });
+      queryClient.invalidateQueries({ queryKey: ['memos'] });
+      close();
+    } catch (e) {
+      setError((e as Error).message || 'Failed to delete collection');
+    } finally {
+      setLoading(false);
+    }
   };
 
   const handleSubmit = async () => {
@@ -164,6 +182,43 @@ export function AddCollectionModal() {
             {loading && <Loader2 size={16} className="animate-spin" />}
             {isEditing ? 'Save Changes' : 'Create Collection'}
           </button>
+
+          {isEditing && (
+            <div className="pt-4 mt-1 border-t border-[var(--color-border)]">
+              {!confirmDelete ? (
+                <button
+                  onClick={() => setConfirmDelete(true)}
+                  className="w-full py-2.5 rounded-full text-sm font-semibold text-red-600 border border-red-500/30 hover:bg-red-500/10 transition-colors"
+                >
+                  Delete collection
+                </button>
+              ) : (
+                <div className="space-y-2.5">
+                  <p className="text-[12px] text-[var(--color-text-secondary)] leading-relaxed">
+                    Delete <b>{editingCollection?.name}</b>? Memos are kept, only the
+                    collection is removed. Consider exporting a backup first
+                    (Settings → Danger zone → Export).
+                  </p>
+                  <div className="flex gap-2">
+                    <button
+                      onClick={() => setConfirmDelete(false)}
+                      className="flex-1 py-2.5 rounded-full text-sm font-semibold border border-[var(--color-border)] hover:bg-[var(--color-bg-hover)] transition-colors"
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      onClick={handleDelete}
+                      disabled={loading}
+                      className="flex-1 py-2.5 rounded-full text-sm font-semibold text-white bg-red-600 hover:bg-red-700 disabled:opacity-50 flex items-center justify-center gap-2 transition-colors"
+                    >
+                      {loading && <Loader2 size={16} className="animate-spin" />}
+                      Delete forever
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
         </div>
       </div>
     </div>

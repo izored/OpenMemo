@@ -35,6 +35,8 @@ export function AskMemoPage() {
   const [input, setInput] = useState('');
   const [streaming, setStreaming] = useState(false);
   const [sessionId, setSessionId] = useState<string | null>(null);
+  const [historyOpen, setHistoryOpen] = useState(false);
+  const [modelOpen, setModelOpen] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
 
   const { data: modelsData } = useQuery({ queryKey: ['models'], queryFn: systemApi.models });
@@ -165,25 +167,40 @@ export function AskMemoPage() {
         autoFocus
       />
       {(modelsData?.models || []).length > 0 && (
-        <select
-          value={chatModel}
-          onChange={(e) => setChatModel(e.target.value)}
-          className="mono"
-          style={{
-            background: 'var(--surface)',
-            border: '1px solid var(--border)',
-            borderRadius: 8,
-            color: 'var(--text-2)',
-            fontSize: 11,
-            padding: '4px 6px',
-          }}
-        >
-          {(modelsData?.models || []).map((m: OllamaModel) => (
-            <option key={m.name} value={m.name}>
-              {m.name}
-            </option>
-          ))}
-        </select>
+        <div style={{ position: 'relative' }}>
+          <button
+            type="button"
+            className="om-model-btn mono"
+            onClick={() => setModelOpen((v) => !v)}
+            title="Model"
+          >
+            <span>{chatModel || 'model'}</span>
+            <Icon name="chevronDown" size={10} />
+          </button>
+          {modelOpen && (
+            <>
+              <div
+                style={{ position: 'fixed', inset: 0, zIndex: 9 }}
+                onClick={() => setModelOpen(false)}
+              />
+              <div className="om-model-menu">
+                {(modelsData?.models || []).map((m: OllamaModel) => (
+                  <button
+                    key={m.name}
+                    className={cn('om-sort-opt mono', chatModel === m.name && 'active')}
+                    onClick={() => {
+                      setChatModel(m.name);
+                      setModelOpen(false);
+                    }}
+                  >
+                    {m.name}
+                    {chatModel === m.name && <Icon name="check" size={11} />}
+                  </button>
+                ))}
+              </div>
+            </>
+          )}
+        </div>
       )}
       <button className="om-send" onClick={() => handleSend()} disabled={streaming}>
         <Icon name="send" size={13} />
@@ -192,29 +209,18 @@ export function AskMemoPage() {
   );
 
   return (
-    <div className="om-ask-shell">
-      <aside className="om-ask-history">
-        <button className="om-ask-newchat" onClick={newChat}>
-          <Icon name="plus" size={13} />
-          <span>New chat</span>
-        </button>
-        <div className="om-ask-history-list">
-          {sessions.length === 0 && <p className="om-hint-readable" style={{ padding: '4px 8px' }}>No chats yet.</p>}
-          {sessions.map((s) => (
-            <button
-              key={s.id}
-              className={cn('om-ask-history-item', sessionId === s.id && 'active')}
-              onClick={() => loadSession(s.id)}
-              title={s.title}
-            >
-              <Icon name="message" size={12} />
-              <span>{s.title || 'Untitled chat'}</span>
-            </button>
-          ))}
-        </div>
-      </aside>
-
+    <div className={cn('om-ask-shell', historyOpen && 'history-open')}>
       <div className="om-ask-main">
+        <div className="om-ask-topbar">
+          <button
+            className={cn('om-ask-histtoggle', historyOpen && 'active')}
+            onClick={() => setHistoryOpen((v) => !v)}
+            title="Chat history"
+          >
+            <Icon name="clock" size={13} />
+            <span>History</span>
+          </button>
+        </div>
         {!hasThread ? (
           <div className="om-ask-hero">
             <span className="om-ask-eyebrow mono">
@@ -288,6 +294,33 @@ export function AskMemoPage() {
           </>
         )}
       </div>
+
+      {historyOpen && (
+        <aside className="om-ask-history">
+          <button className="om-ask-newchat" onClick={newChat}>
+            <Icon name="plus" size={13} />
+            <span>New chat</span>
+          </button>
+          <div className="om-ask-history-list">
+            {sessions.length === 0 && (
+              <p className="om-hint-readable" style={{ padding: '4px 8px' }}>
+                No chats yet.
+              </p>
+            )}
+            {sessions.map((s) => (
+              <button
+                key={s.id}
+                className={cn('om-ask-history-item', sessionId === s.id && 'active')}
+                onClick={() => loadSession(s.id)}
+                title={s.title}
+              >
+                <Icon name="message" size={12} />
+                <span>{s.title || 'Untitled chat'}</span>
+              </button>
+            ))}
+          </div>
+        </aside>
+      )}
     </div>
   );
 }

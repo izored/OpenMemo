@@ -11,15 +11,18 @@ export interface TourStep {
   /** CSS selector to anchor the popup to. Omit → centered. */
   target?: string;
   placement?: 'right' | 'left' | 'top' | 'bottom' | 'center';
+  /** Side-effect run when the step becomes active. */
+  action?: 'openAdd';
 }
 
 export const TOUR_STEPS: TourStep[] = [
   {
     id: 'add',
     title: 'Capture anything',
-    body: 'Hit the + button (or press N) to save a link, note, file, or voice memo. Links auto-fetch a preview.',
-    target: '.om-fab',
+    body: 'This is the New memo panel — save a link, note, file, or voice memo. Open it anytime with the + button or by pressing N.',
+    target: '.om-add-panel',
     placement: 'left',
+    action: 'openAdd',
   },
   {
     id: 'search',

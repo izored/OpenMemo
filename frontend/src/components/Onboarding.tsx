@@ -1,6 +1,7 @@
 import { useEffect, useState, useLayoutEffect, useRef } from 'react';
 import { Icon } from './Icon';
 import { TOUR_STEPS, ONBOARDING_KEY } from '@/lib/onboarding';
+import { useAppStore } from '@/stores/appStore';
 
 type Phase = 'intro' | 'tour' | 'done';
 
@@ -29,6 +30,7 @@ function useAnchorRect(selector?: string, active?: boolean) {
 export function Onboarding() {
   const [phase, setPhase] = useState<Phase>('done');
   const [step, setStep] = useState(0);
+  const setAddPanelOpen = useAppStore((s) => s.setAddPanelOpen);
 
   useEffect(() => {
     if (!localStorage.getItem(ONBOARDING_KEY)) setPhase('intro');
@@ -42,10 +44,18 @@ export function Onboarding() {
 
   const finish = () => {
     localStorage.setItem(ONBOARDING_KEY, String(Date.now()));
+    setAddPanelOpen(false);
     setPhase('done');
   };
 
   const current = TOUR_STEPS[step];
+
+  // Run a step's side-effect (e.g. open the add panel so the spotlight can
+  // animate to it). Keep the panel open only while that step is active.
+  useEffect(() => {
+    if (phase !== 'tour') return;
+    setAddPanelOpen(current?.action === 'openAdd');
+  }, [phase, step, current?.action, setAddPanelOpen]);
   const rect = useAnchorRect(current?.target, phase === 'tour');
   const cardRef = useRef<HTMLDivElement>(null);
   const [cardSize, setCardSize] = useState({ w: 320, h: 210 });
