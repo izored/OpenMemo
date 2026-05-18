@@ -168,3 +168,15 @@ Built after the initial recreation, on the same branch:
   is bento (cards fit content, no equal-height stretch); tighter page bottoms.
 - **Backup / restore system** — structure-only + full-volume, manual +
   auto-trigger, one-click restore: scoped out to its own task (large).
+
+### Even-later v1.8 follow-ups
+- **Collections edit mode** — top-right Edit toggle (replaces per-card hover
+  pen); in edit mode cards are draggable and reorder persists to
+  `collection.sort_order`; default view is calm (no chrome).
+- **Standard page frame** — `.om-settings/.om-colls/.om-page` share one
+  `--page-max` width token (Boxed/Full aware) and one header rhythm
+  (`.om-*-head`), so Dashboard / Collections / Settings / future pages line up.
+- **Bento Settings grid** — switched to CSS multi-column so cards pack upward
+  and never leave fillable empty space.
+- **Brand-voice copy pass** — applied `openMemo` naming, capital-M "Memo",
+  zero em dashes, removed "second brain"; see `openmemo-brand.md`.

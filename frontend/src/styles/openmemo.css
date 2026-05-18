@@ -1852,16 +1852,48 @@ input, textarea { font: inherit; color: inherit; }
 }
 .om-suggest:hover { background: var(--surface-2); color: var(--text); }
 
-/* Bento: cards fit their content, align to top of each row */
-.om-settings-grid { align-items: start; }
+/* ─ Standard page frame ─────────────────────────────────────────────────────
+   One shared width + header rhythm for every page (and future ones). Boxed
+   honors a single --page-max; Full removes the cap. */
+:root { --page-max: 1180px; }
+[data-layout="full"] { --page-max: none; }
+.om-settings, .om-colls, .om-page {
+  max-width: var(--page-max);
+  margin: 0 auto;
+  padding: 40px 0 24px;
+}
+.om-settings-head, .om-colls-head, .om-page-head {
+  display: flex; flex-direction: column; gap: 6px;
+  margin-bottom: 28px; max-width: 720px;
+}
+
+/* Bento: masonry columns so cards pack upward with no empty gaps */
+.om-settings-grid {
+  display: block;
+  column-count: 2;
+  column-gap: 16px;
+}
+.om-settings-grid > .om-setting-card {
+  break-inside: avoid;
+  margin-bottom: 16px;
+  display: inline-block;
+  width: 100%;
+}
+@media (max-width: 1100px) { .om-settings-grid { column-count: 1; } }
 .om-settings-bottom { align-items: start; }
 .om-danger-grid { align-items: start; }
-/* Tighter page bottoms */
 .om-settings { padding-bottom: 24px; }
 .om-settings-footer { padding-bottom: 4px; }
-/* Collections page header — align with other pages (was hugging the top) */
-.om-colls { padding-top: 40px; }
-.om-colls-head { margin-bottom: 28px; }
+
+/* Collections header row — title block + Edit toggle on the right */
+.om-colls-headrow {
+  display: flex; align-items: flex-start; justify-content: space-between;
+  gap: 16px; margin-bottom: 28px;
+}
+.om-colls-headrow .om-colls-head { margin-bottom: 0; }
+.om-btn-secondary.active { background: var(--accent-soft); color: var(--accent); border-color: color-mix(in oklab, var(--accent) 30%, transparent); }
+.om-coll-edit.visible { opacity: 1; }
+.om-colls-headrow .om-btn-secondary { flex-shrink: 0; }
 
 /* ─ Type scale standardisation ──────────────────────────────────────────────
    Lighter, smaller headings; readable minimum body/caption size. */

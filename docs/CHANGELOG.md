@@ -24,6 +24,9 @@ All notable changes to OpenMemo are documented here.
 - 🖼️ **Local thumbnail cache** — remote preview images are downloaded once on ingest and served from `/api/files/thumb/…` instead of being re-fetched every load.
 - 🧹 **Maintenance endpoints** — `Clear cached previews` and `Reset workspace` are now real, guarded actions.
 - 📓 **Changelog & update check** — Settings footer surfaces the version with a pulsing dot when a newer GitHub release exists; the changelog modal shows release notes + update steps.
+- 🗂️ **Collections edit mode** — a top-right Edit toggle turns on per-card edit + drag-to-reorder (persisted to `sort_order`); calmer default view with no hover chrome.
+- 📐 **Standard page frame** — one shared width + header rhythm across Dashboard, Collections, Settings (and future pages); a single `--page-max` token, Boxed/Full aware.
+- 🧱 **Bento Settings grid** — masonry columns so cards pack upward with no dead space.
 
 ### Changed
 
@@ -32,6 +35,7 @@ All notable changes to OpenMemo are documented here.
 - 🧑‍🎨 **Settings reflow** — Identity replaced by a slimmer **Creator** card (`dev.izo.red`), Danger zone laid out 3/4 with Creator at 1/4 so it no longer over-pads; Appearance link navigates home then animates the panel in.
 - 🎯 **Density removed** — spacing locked to `roomy`.
 - 🔤 **Menu text colour** — option/menu text stays the text colour; the accent is reserved for icons and indicators only.
+- ✒️ **Brand voice pass** — name rendered as `openMemo`; "Memo/Memos" always capital M; em dashes removed from all UI copy; dropped "second brain" framing; intro / creator / settings copy rewritten to the brand voice.
 
 ### Fixed
 

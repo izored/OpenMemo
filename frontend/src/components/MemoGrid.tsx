@@ -156,11 +156,7 @@ export function MemoGrid({ memos: serverMemos }: MemoGridProps) {
       <SortableContext items={localMemos.map((m) => m.id)} strategy={verticalListSortingStrategy}>
         <div
           className="om-grid-wrap"
-          style={
-            tweaks.layout === 'boxed'
-              ? { maxWidth: 1240, marginInline: 'auto' }
-              : undefined
-          }
+          style={{ maxWidth: 'var(--page-max)', marginInline: 'auto' }}
         >
           <Masonry
             breakpointCols={breakpointCols}
