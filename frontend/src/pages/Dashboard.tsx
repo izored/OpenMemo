@@ -1,3 +1,4 @@
+import { useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { motion } from 'framer-motion';
 import { MemoGrid } from '@/components/MemoGrid';
@@ -5,7 +6,15 @@ import { Icon } from '@/components/Icon';
 import { useAppStore } from '@/stores/appStore';
 import { memoApi, collectionApi } from '@/lib/api';
 import { cn } from '@/lib/utils';
-import type { Collection } from '@/types';
+import type { Collection, Memo } from '@/types';
+
+const SORTS = [
+  { id: 'recent', label: 'Recent' },
+  { id: 'oldest', label: 'Oldest' },
+  { id: 'title', label: 'Title' },
+  { id: 'custom', label: 'Custom order' },
+] as const;
+type SortId = (typeof SORTS)[number]['id'];
 
 const FILTERS = [
   { id: 'all', label: 'All' },
@@ -18,6 +27,8 @@ const FILTERS = [
 
 export function Dashboard() {
   const { activeFilter, setActiveFilter, activeCollection } = useAppStore();
+  const [sort, setSort] = useState<SortId>('recent');
+  const [sortMenu, setSortMenu] = useState(false);
 
   const { data: collections = [] } = useQuery({
     queryKey: ['collections'],
@@ -36,9 +47,21 @@ export function Dashboard() {
     gcTime: 10 * 60 * 1000,
   });
 
+  const sortedMemos = useMemo(() => {
+    const items: Memo[] = [...(data?.items || [])];
+    if (sort === 'recent')
+      items.sort((a, b) => +new Date(b.created_at) - +new Date(a.created_at));
+    else if (sort === 'oldest')
+      items.sort((a, b) => +new Date(a.created_at) - +new Date(b.created_at));
+    else if (sort === 'title')
+      items.sort((a, b) => a.title.localeCompare(b.title));
+    return items;
+  }, [data, sort]);
+
   const collection = activeCollection
     ? collections.find((c: Collection) => c.id === activeCollection)
     : null;
+  const sortLabel = SORTS.find((s) => s.id === sort)?.label ?? 'Recent';
   const today = new Date().toLocaleDateString('en-US', {
     weekday: 'long',
     month: 'long',
@@ -77,11 +100,36 @@ export function Dashboard() {
               </button>
             ))}
           </div>
-          <button className="om-sort-btn">
-            <span className="mono om-sort-label">Sort</span>
-            <span>Recent</span>
-            <Icon name="chevronDown" size={10} />
-          </button>
+          <div style={{ position: 'relative' }}>
+            <button className="om-sort-btn" onClick={() => setSortMenu((v) => !v)}>
+              <span className="mono om-sort-label">Sort</span>
+              <span>{sortLabel}</span>
+              <Icon name="chevronDown" size={10} />
+            </button>
+            {sortMenu && (
+              <>
+                <div
+                  style={{ position: 'fixed', inset: 0, zIndex: 9 }}
+                  onClick={() => setSortMenu(false)}
+                />
+                <div className="om-sort-menu">
+                  {SORTS.map((s) => (
+                    <button
+                      key={s.id}
+                      className={cn('om-sort-opt', sort === s.id && 'active')}
+                      onClick={() => {
+                        setSort(s.id);
+                        setSortMenu(false);
+                      }}
+                    >
+                      {s.label}
+                      {sort === s.id && <Icon name="check" size={11} />}
+                    </button>
+                  ))}
+                </div>
+              </>
+            )}
+          </div>
         </div>
       </header>
 
@@ -93,7 +141,7 @@ export function Dashboard() {
           <p>Loading memos…</p>
         </div>
       ) : (
-        <MemoGrid memos={data?.items || []} />
+        <MemoGrid memos={sortedMemos} />
       )}
     </>
   );

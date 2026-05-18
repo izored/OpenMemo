@@ -11,7 +11,15 @@ type Stats = {
   total_tags: number;
   memos_this_week: number;
   by_type: Record<string, number>;
+  storage?: { db_bytes: number; files_bytes: number; cache_bytes: number; total_bytes: number };
 };
+
+function fmtBytes(n: number): string {
+  if (!n) return '0 B';
+  const u = ['B', 'KB', 'MB', 'GB', 'TB'];
+  const i = Math.min(u.length - 1, Math.floor(Math.log(n) / Math.log(1024)));
+  return `${(n / 1024 ** i).toFixed(i ? 1 : 0)} ${u[i]}`;
+}
 
 function SettingCard({
   title,
@@ -147,26 +155,65 @@ export function SettingsPage() {
           </div>
         </SettingCard>
 
-        <SettingCard title="Profile" eyebrow="Identity">
-          <div className="om-profile-row">
-            <div className="om-avatar lg">RI</div>
-            <div className="om-profile-info">
-              <p className="om-profile-name">Reda Izo</p>
-              <span className="mono om-profile-handle">@reda · izo.studio</span>
+        <SettingCard title="Storage" eyebrow="Local-first">
+          {stats?.storage ? (
+            <>
+              <div className="om-setting-row">
+                <div className="om-setting-row-text">
+                  <p>Total on disk</p>
+                  <span className="mono">database · files · cache</span>
+                </div>
+                <span className="mono om-setting-val">{fmtBytes(stats.storage.total_bytes)}</span>
+              </div>
+              <div className="om-storage-bar" aria-hidden>
+                <span
+                  className="a"
+                  style={{
+                    width: `${(stats.storage.files_bytes / Math.max(1, stats.storage.total_bytes)) * 100}%`,
+                  }}
+                />
+                <span
+                  className="b"
+                  style={{
+                    width: `${(stats.storage.cache_bytes / Math.max(1, stats.storage.total_bytes)) * 100}%`,
+                  }}
+                />
+              </div>
+              <div className="om-storage-legend mono">
+                <span><i className="a" /> Files · {fmtBytes(stats.storage.files_bytes)}</span>
+                <span><i className="b" /> Cache · {fmtBytes(stats.storage.cache_bytes)}</span>
+                <span>DB · {fmtBytes(stats.storage.db_bytes)}</span>
+              </div>
+            </>
+          ) : (
+            <p className="om-add-hint mono">Loading storage…</p>
+          )}
+        </SettingCard>
+
+        <SettingCard title="Browser extension" eyebrow="Capture">
+          <div className="om-setting-row">
+            <div className="om-setting-row-text">
+              <p>Clip from anywhere</p>
+              <span className="mono">Chromium · save links & pages</span>
             </div>
             <a
               className="om-btn-secondary"
-              style={{ marginLeft: 'auto' }}
-              href="https://izo.red"
+              href="https://github.com/izored/openmemo/tree/main/chrome-extension"
               target="_blank"
               rel="noopener noreferrer"
             >
-              izo.red
+              Install
             </a>
           </div>
+          <p className="om-add-hint mono" style={{ paddingTop: 2 }}>
+            Load unpacked from <code>chrome-extension/</code> in the repo, or grab it from GitHub.
+          </p>
         </SettingCard>
 
-        <SettingCard title="Danger zone" eyebrow="Careful" wide>
+      </div>
+
+      <div className="om-settings-bottom">
+        <SettingCard title="Danger zone" eyebrow="Careful">
           <div className="om-danger-grid">
             <div className="om-setting-row">
               <div className="om-setting-row-text">
@@ -184,27 +231,39 @@ export function SettingsPage() {
             </div>
             <div className="om-setting-row">
               <div className="om-setting-row-text">
-                <p>Browser extension</p>
-                <span className="mono">Clip from anywhere</span>
+                <p>Reset workspace</p>
+                <span className="mono">Cannot be undone</span>
               </div>
-              <a
-                className="om-btn-secondary"
-                href="https://github.com/izored/openmemo"
-                target="_blank"
-                rel="noopener noreferrer"
-              >
-                GitHub
-              </a>
+              <button className="om-btn-secondary danger" disabled title="Coming soon">
+                Reset
+              </button>
             </div>
-            <div className="om-setting-row">
-              <div className="om-setting-row-text">
-                <p>Feedback</p>
-                <span className="mono">Bug or idea?</span>
-              </div>
-              <a className="om-btn-secondary" href="mailto:dev@izo.red?subject=[OpenMemo Feedback]">
-                Email
-              </a>
-            </div>
+          </div>
+        </SettingCard>
+
+        <SettingCard title="Creator" eyebrow="Made by">
+          <div className="om-profile-info">
+            <p className="om-profile-name">Reda Izo</p>
+            <span className="mono om-profile-handle">Creative Director</span>
+          </div>
+          <div className="om-creator-links">
+            <a className="om-creator-link" href="https://dev.izo.red" target="_blank" rel="noopener noreferrer">
+              <Icon name="globe" size={12} /> dev.izo.red
+            </a>
+            <a
+              className="om-creator-link"
+              href="https://github.com/izored/openmemo"
+              target="_blank"
+              rel="noopener noreferrer"
+            >
+              <Icon name="github" size={12} /> GitHub
+            </a>
+            <a
+              className="om-creator-link"
+              href="mailto:dev@izo.red?subject=[OpenMemo Feedback]&body=Hi Reda,%0A%0A"
+            >
+              <Icon name="message" size={12} /> Feedback
+            </a>
           </div>
         </SettingCard>
       </div>

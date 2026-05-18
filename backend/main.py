@@ -119,6 +119,7 @@ async def get_stats(db: AsyncSession = Depends(get_db)):
     from sqlalchemy import func, select, and_
     from backend.db.models import Memo, Collection, Tag
     from datetime import datetime, timedelta
+    from pathlib import Path
 
     total_memos = (await db.execute(select(func.count()).select_from(Memo))).scalar() or 0
     total_collections = (await db.execute(select(func.count()).select_from(Collection))).scalar() or 0
@@ -134,12 +135,39 @@ async def get_stats(db: AsyncSession = Depends(get_db)):
     ).all()
     by_type = {row[0]: row[1] for row in by_type_rows}
 
+    def _size(path: Path) -> int:
+        if not path.exists():
+            return 0
+        if path.is_file():
+            try:
+                return path.stat().st_size
+            except OSError:
+                return 0
+        total = 0
+        for p in path.rglob("*"):
+            if p.is_file():
+                try:
+                    total += p.stat().st_size
+                except OSError:
+                    pass
+        return total
+
+    db_bytes = _size(settings.DATA_DIR / "openmemo.db")
+    files_bytes = _size(settings.FILES_DIR)
+    cache_bytes = _size(Path(settings.CHROMA_PERSIST_DIR))
+
     return {
         "total_memos": total_memos,
         "total_collections": total_collections,
         "total_tags": total_tags,
         "memos_this_week": memos_this_week,
         "by_type": by_type,
+        "storage": {
+            "db_bytes": db_bytes,
+            "files_bytes": files_bytes,
+            "cache_bytes": cache_bytes,
+            "total_bytes": db_bytes + files_bytes + cache_bytes,
+        },
     }
 
 
