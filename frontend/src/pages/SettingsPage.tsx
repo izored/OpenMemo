@@ -1,10 +1,10 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Icon } from '@/components/Icon';
 import { ChangelogModal, cmpVersion } from '@/components/ChangelogModal';
 import { ONBOARDING_KEY } from '@/lib/onboarding';
 import { useAppStore } from '@/stores/appStore';
-import { systemApi, maintenanceApi } from '@/lib/api';
+import { systemApi, maintenanceApi, backupApi } from '@/lib/api';
 import type { OllamaModel } from '@/types';
 
 const BUILT_WITH = [
@@ -73,6 +73,9 @@ export function SettingsPage() {
   const [stats, setStats] = useState<Stats | null>(null);
   const [changelogOpen, setChangelogOpen] = useState(false);
   const [updateAvailable, setUpdateAvailable] = useState(false);
+  const [backing, setBacking] = useState<'structure' | 'full' | null>(null);
+  const [restoring, setRestoring] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     systemApi
@@ -95,6 +98,39 @@ export function SettingsPage() {
     systemApi.models().then((d) => setOllamaModels(d.models || [])).catch(() => setOllamaModels([]));
     systemApi.stats().then(setStats).catch(() => setStats(null));
   }, []);
+
+  const handleBackup = async (scope: 'structure' | 'full') => {
+    setBacking(scope);
+    try {
+      await backupApi.download(scope);
+    } catch (err: any) {
+      alert(`Backup failed: ${err.message}`);
+    } finally {
+      setBacking(null);
+    }
+  };
+
+  const handleRestoreClick = () => {
+    if (!confirm('Restore will overwrite all current data from the backup file. This cannot be undone. Continue?')) return;
+    if (!confirm('Final confirmation: restore workspace from this backup?')) return;
+    fileInputRef.current?.click();
+  };
+
+  const handleFileSelected = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setRestoring(true);
+    try {
+      await backupApi.restore(file);
+      alert('Restore complete. Reloading.');
+      location.reload();
+    } catch (err: any) {
+      alert(`Restore failed: ${err.message}`);
+    } finally {
+      setRestoring(false);
+      e.target.value = '';
+    }
+  };
 
   // Always pulse in dev so the update flow is visible while building.
   const showUpdateDot = updateAvailable || import.meta.env.DEV;
@@ -260,6 +296,55 @@ export function SettingsPage() {
           ) : (
             <p className="om-add-hint mono">Loading storage…</p>
           )}
+        </SettingCard>
+
+        <SettingCard title="Backup & Restore" eyebrow="Data safety">
+          <div className="om-setting-row">
+            <div className="om-setting-row-text">
+              <p>Structure backup</p>
+              <span className="mono">DB, collections, tags, chats — no uploaded files</span>
+            </div>
+            <button
+              className="om-btn-secondary"
+              onClick={() => handleBackup('structure')}
+              disabled={!!backing || restoring}
+            >
+              {backing === 'structure' ? 'Preparing…' : 'Download'}
+            </button>
+          </div>
+          <div className="om-setting-row">
+            <div className="om-setting-row-text">
+              <p>Full backup</p>
+              <span className="mono">DB + all uploaded files</span>
+            </div>
+            <button
+              className="om-btn-secondary"
+              onClick={() => handleBackup('full')}
+              disabled={!!backing || restoring}
+            >
+              {backing === 'full' ? 'Preparing…' : 'Download'}
+            </button>
+          </div>
+          <div className="om-setting-row" style={{ borderTop: '1px solid var(--border)', marginTop: 8, paddingTop: 8 }}>
+            <div className="om-setting-row-text">
+              <p>Restore from backup</p>
+              <span className="mono">Upload a .zip — overwrites current data</span>
+            </div>
+            <button
+              className="om-btn-secondary danger"
+              onClick={handleRestoreClick}
+              disabled={!!backing || restoring}
+            >
+              {restoring ? 'Restoring…' : 'Restore'}
+            </button>
+            <input
+              type="file"
+              ref={fileInputRef}
+              accept=".zip"
+              style={{ display: 'none' }}
+              onChange={handleFileSelected}
+            />
+          </div>
         </SettingCard>
 
         <SettingCard title="Built with" eyebrow="Open source">
