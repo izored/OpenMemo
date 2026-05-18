@@ -138,7 +138,7 @@ export function Dashboard() {
           <div className="om-empty-mark">
             <Icon name="refresh" size={24} />
           </div>
-          <p>Loading memos…</p>
+          <p>Loading Memos…</p>
         </div>
       ) : (
         <MemoGrid memos={sortedMemos} />

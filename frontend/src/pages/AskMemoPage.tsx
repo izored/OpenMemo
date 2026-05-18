@@ -162,7 +162,7 @@ export function AskMemoPage() {
         value={input}
         onChange={(e) => setInput(e.target.value)}
         onKeyDown={(e) => e.key === 'Enter' && !e.shiftKey && handleSend()}
-        placeholder="Ask anything across your memos…"
+        placeholder="Ask anything across your Memos…"
         disabled={streaming}
         autoFocus
       />
@@ -249,7 +249,7 @@ export function AskMemoPage() {
                   </div>
                   <div className="om-msg-body">
                     <span className="om-msg-meta mono">
-                      {msg.role === 'assistant' ? 'OpenMemo' : 'You'}
+                      {msg.role === 'assistant' ? 'openMemo' : 'You'}
                     </span>
                     {msg.role === 'assistant' ? (
                       <div

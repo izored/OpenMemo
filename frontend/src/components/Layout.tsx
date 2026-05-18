@@ -61,8 +61,8 @@ export function Layout() {
       <button
         className={cn('om-fab', addPanelOpen && 'open')}
         onClick={() => setAddPanelOpen(!addPanelOpen)}
-        title={addPanelOpen ? 'Close' : 'New memo · N'}
-        aria-label="New memo"
+        title={addPanelOpen ? 'Close' : 'New Memo · N'}
+        aria-label="New Memo"
       >
         <span className="om-fab-icon">
           <Icon name={addPanelOpen ? 'x' : 'plus'} size={18} />

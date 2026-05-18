@@ -180,7 +180,7 @@ export function AddMemoPanel() {
     <aside className={cn('om-add-panel', open && 'open')} aria-hidden={!open}>
       <div className="om-add-head">
         <div className="om-add-head-l">
-          <b>New memo</b>
+          <b>New Memo</b>
           <span className="om-add-kbd mono">N</span>
         </div>
         <button className="om-add-x" onClick={close} aria-label="Close">
@@ -251,7 +251,7 @@ export function AddMemoPanel() {
                 className="om-add-textarea"
                 value={note}
                 onChange={(e) => setNote(e.target.value)}
-                placeholder="Start writing. Markdown supported — # ** [[ ]]"
+                placeholder="Start writing. Markdown supported: # ** [[ ]]"
                 rows={6}
               />
               <div className="om-add-note-meta mono">
@@ -305,7 +305,7 @@ export function AddMemoPanel() {
 
           {tab === 'voice' && (
             <div className="om-add-tab-pane">
-              <div className="om-add-sect mono">Voice memo</div>
+              <div className="om-add-sect mono">Voice Memo</div>
               <div className="om-add-voice">
                 <div className="om-add-wave">
                   {Array.from({ length: 28 }).map((_, i) => (

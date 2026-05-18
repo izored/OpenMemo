@@ -46,7 +46,7 @@ export function CollectionsPage() {
       <div className="om-colls-head">
         <span className="om-greet-eyebrow mono">Collections · {collections.length}</span>
         <h1 className="om-greet-title">Your collections</h1>
-        <p className="om-greet-sub">Folders, but with a memory. Drop a memo onto one in the sidebar to file it.</p>
+        <p className="om-greet-sub">Folders, but with a memory. Drop a Memo onto one in the sidebar to file it.</p>
       </div>
 
       <div className="om-colls-grid">
@@ -77,7 +77,7 @@ export function CollectionsPage() {
                   <div className="om-coll-meta">
                     {c.pinned && <Icon name="pin" size={11} />}
                     <span className="mono">
-                      {total} memo{total === 1 ? '' : 's'}
+                      {total} Memo{total === 1 ? '' : 's'}
                     </span>
                   </div>
                   <h3 className="om-coll-title">

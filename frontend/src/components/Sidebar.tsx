@@ -68,9 +68,9 @@ export function Sidebar() {
   });
 
   const navItems = [
-    { id: 'home', label: 'All memos', icon: 'home', path: '/' },
+    { id: 'home', label: 'All Memos', icon: 'home', path: '/' },
     { id: 'collections', label: 'Collections', icon: 'layers', path: '/collections' },
-    { id: 'ask', label: 'Ask memo', icon: 'sparkles', path: '/ask' },
+    { id: 'ask', label: 'Ask Memo', icon: 'sparkles', path: '/ask' },
   ];
 
   const pinned = collections.filter((c: Collection) => c.pinned);
@@ -101,7 +101,7 @@ export function Sidebar() {
           <span className="om-avatar" style={{ width: 26, height: 26, borderRadius: 8, fontSize: 11 }}>
             O
           </span>
-          {!sidebarCollapsed && <span className="om-brand-name">OpenMemo</span>}
+          {!sidebarCollapsed && <span className="om-brand-name">openMemo</span>}
         </button>
         {!sidebarCollapsed && (
           <button className="om-icon-btn" onClick={toggleSidebarCollapsed} title="Collapse">
@@ -202,7 +202,7 @@ export function Sidebar() {
               <div className="om-foot-info">
                 <span className="om-foot-name">Reda Izo</span>
                 <span className="om-foot-meta mono">
-                  {stats ? `${stats.total_memos.toLocaleString()} memos` : 'OpenMemo'}
+                  {stats ? `${stats.total_memos.toLocaleString()} Memos` : 'openMemo'}
                 </span>
               </div>
               <Icon name="settings" size={18} />

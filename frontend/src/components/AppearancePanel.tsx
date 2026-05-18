@@ -23,7 +23,7 @@ export function AppearancePanel() {
     const f = e.target.files?.[0];
     if (!f) return;
     if (f.size > 5 * 1024 * 1024) {
-      alert('Image too large. Max 5 MB — it will be blurred anyway, so a small file is fine.');
+      alert('Image too large. Max 5 MB. It gets blurred anyway, so a small file is fine.');
       e.target.value = '';
       return;
     }
@@ -180,7 +180,7 @@ export function AppearancePanel() {
         <div className="om-ap-row">
           <div className="om-ap-label">
             <p>Card style</p>
-            <span className="mono">How memos render in the grid</span>
+            <span className="mono">How Memos render in the grid</span>
           </div>
           <div className="om-add-segment" role="tablist">
             {[

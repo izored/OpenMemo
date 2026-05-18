@@ -74,7 +74,7 @@ export function FullscreenWriter() {
             onClick={handleSave}
             disabled={busy}
           >
-            <span>{busy ? 'Saving…' : 'Save memo'}</span>
+            <span>{busy ? 'Saving…' : 'Save Memo'}</span>
             <span className="mono om-add-kbd-inv">⌘⏎</span>
           </button>
         </div>
@@ -91,7 +91,7 @@ export function FullscreenWriter() {
           className="om-writer-body"
           value={body}
           onChange={(e) => setBody(e.target.value)}
-          placeholder={'Begin where you are.\n\nMarkdown supported — # heading, ** bold, [[ link ]] another memo.'}
+          placeholder={'Begin where you are.\n\nMarkdown supported: # heading, ** bold, [[ link ]] another Memo.'}
         />
       </div>
       <div className="om-writer-foot mono">
