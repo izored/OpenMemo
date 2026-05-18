@@ -1,4 +1,4 @@
-import { useEffect, useState, useLayoutEffect } from 'react';
+import { useEffect, useState, useLayoutEffect, useRef } from 'react';
 import { Icon } from './Icon';
 import { TOUR_STEPS, ONBOARDING_KEY } from '@/lib/onboarding';
 
@@ -41,6 +41,19 @@ export function Onboarding() {
 
   const current = TOUR_STEPS[step];
   const rect = useAnchorRect(current?.target, phase === 'tour');
+  const cardRef = useRef<HTMLDivElement>(null);
+  const [cardSize, setCardSize] = useState({ w: 320, h: 210 });
+
+  useLayoutEffect(() => {
+    if (phase !== 'tour') return;
+    const el = cardRef.current;
+    if (el) {
+      const r = el.getBoundingClientRect();
+      if (r.width && r.height && (r.width !== cardSize.w || r.height !== cardSize.h)) {
+        setCardSize({ w: r.width, h: r.height });
+      }
+    }
+  }, [phase, step, rect, cardSize.w, cardSize.h]);
 
   if (phase === 'done') return null;
 
@@ -77,30 +90,34 @@ export function Onboarding() {
   const last = step === TOUR_STEPS.length - 1;
   const place = current.placement || 'center';
 
-  let cardStyle: React.CSSProperties = {
-    position: 'fixed',
-    left: '50%',
-    top: '50%',
-    transform: 'translate(-50%, -50%)',
-  };
-  if (rect && place !== 'center') {
-    const gap = 16;
-    const pos: React.CSSProperties = { position: 'fixed', transform: 'none' };
-    if (place === 'right') {
-      pos.left = rect.right + gap;
-      pos.top = Math.max(16, rect.top);
-    } else if (place === 'left') {
-      pos.right = window.innerWidth - rect.left + gap;
-      pos.top = Math.max(16, rect.top - 40);
-    } else if (place === 'top') {
-      pos.left = rect.left;
-      pos.bottom = window.innerHeight - rect.top + gap;
-    } else {
-      pos.left = rect.left;
-      pos.top = rect.bottom + gap;
-    }
-    cardStyle = pos;
+  const gap = 16;
+  const M = 16; // viewport margin
+  const vw = window.innerWidth;
+  const vh = window.innerHeight;
+  const { w: cw, h: ch } = cardSize;
+
+  let x: number;
+  let y: number;
+  if (!rect || place === 'center') {
+    x = (vw - cw) / 2;
+    y = (vh - ch) / 2;
+  } else if (place === 'right') {
+    x = rect.right + gap;
+    y = rect.top;
+  } else if (place === 'left') {
+    x = rect.left - cw - gap;
+    y = rect.top;
+  } else if (place === 'top') {
+    x = rect.left;
+    y = rect.top - ch - gap;
+  } else {
+    x = rect.left;
+    y = rect.bottom + gap;
   }
+  // Clamp fully inside the viewport so edge anchors (FAB, sidebar foot) never clip.
+  x = Math.min(Math.max(M, x), Math.max(M, vw - cw - M));
+  y = Math.min(Math.max(M, y), Math.max(M, vh - ch - M));
+  const cardStyle: React.CSSProperties = { position: 'fixed', left: x, top: y, transform: 'none' };
 
   return (
     <div className="om-coach-layer">
@@ -116,7 +133,7 @@ export function Onboarding() {
           }}
         />
       )}
-      <div className="om-coach-card" style={cardStyle}>
+      <div ref={cardRef} className="om-coach-card" style={cardStyle}>
         <span className="mono om-greet-eyebrow">
           {step + 1} / {TOUR_STEPS.length}
         </span>
