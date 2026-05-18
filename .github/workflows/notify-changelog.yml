@@ -3,6 +3,7 @@ name: Notify izored Changelog
 on:
   release:
     types: [published]
+  workflow_dispatch:
 
 jobs:
   notify:
@@ -16,7 +17,7 @@ jobs:
             const release = context.payload.release;
             const repoName = context.repo.repo;
             const owner = context.repo.owner;
-            const version = release.tag_name;
+            const version = release ? release.tag_name : 'v1.7.43';
             await github.rest.repos.createDispatchEvent({
               owner: 'izored',
               repo: 'izored',
@@ -24,11 +25,11 @@ jobs:
               client_payload: {
                 repo: repoName,
                 version,
-                title: release.name || version,
-                description: release.body
+                title: release ? (release.name || version) : version,
+                description: release?.body
                   ? release.body.trim().slice(0, 500)
                   : `${version} released`,
-                date: release.published_at.split('T')[0],
+                date: release ? release.published_at.split('T')[0] : new Date().toISOString().split('T')[0],
                 type: 'launch',
                 emoji: '🚀',
                 projectUrl: `https://github.com/${owner}/${repoName}`,
