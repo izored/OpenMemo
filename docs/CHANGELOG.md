@@ -44,6 +44,13 @@ All notable changes to OpenMemo are documented here.
 - 📏 **Over-wide cards** — tightened masonry column max-width for image and text-only memos.
 
 ---
+## [1.8.2] - 2026-05-19
+
+### Added
+
+- 💾 **Backup & Restore** — `POST /api/backup?scope=structure` downloads a hot SQLite snapshot (memos, collections, tags, chats, memocasts) as a zip; `scope=full` also bundles all uploaded files (thumbnail cache excluded). `POST /api/backup/restore` accepts the zip, disposes the SQLAlchemy pool atomically, replaces the database, and restores files for full-scope backups. Settings page gains a **Backup & Restore** card with Download buttons for each scope and a double-confirmed Restore flow.
+
+---
 ## [1.8.1] - 2026-05-19
 
 ### Changed
