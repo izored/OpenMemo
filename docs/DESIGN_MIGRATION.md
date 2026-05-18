@@ -153,3 +153,18 @@ Built after the initial recreation, on the same branch:
 - **User-uploaded collection thumbnail** — frontend reads
   `collection.thumbnail_path` if present, but there's no DB column / upload
   endpoint yet. Latest-memo cover works in the meantime.
+
+### Later v1.8 follow-ups
+- Collection **delete** with red double-confirm + "export a backup first" note
+  (in the edit modal).
+- Ask memo: chat **history moved to the right**, toggled by a top-right
+  "History" button; **branded custom model dropdown** (native `<select>`
+  options can't be themed).
+- Backend: real `clear-cache` + `reset` (confirm-guarded); thumbnails cached
+  locally on ingest and served from `/api/files/thumb/…`.
+- Onboarding: app input **locked** during the tour (only Skip/Back/Next);
+  step 1 auto-opens the New-memo panel so the spotlight animates onto it.
+- Page polish: collections header top-aligned with other pages; settings grid
+  is bento (cards fit content, no equal-height stretch); tighter page bottoms.
+- **Backup / restore system** — structure-only + full-volume, manual +
+  auto-trigger, one-click restore: scoped out to its own task (large).
