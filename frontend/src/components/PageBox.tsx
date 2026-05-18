@@ -9,7 +9,7 @@ export function PageBox({ children, className }: PageBoxProps) {
   return (
     <div
       className={cn(
-        'h-full flex flex-col bg-[var(--color-bg-card)] rounded-2xl overflow-hidden shadow-sm',
+        'h-full flex flex-col bg-[var(--surface)] rounded-2xl overflow-hidden shadow-sm',
         className
       )}
     >

@@ -108,12 +108,12 @@ export function AddMemoModal() {
       <div className="absolute inset-0 bg-black/40" onClick={close} />
 
       {/* Modal */}
-      <div className="relative bg-[var(--color-bg-card)] rounded-2xl shadow-xl w-full max-w-lg mx-4 overflow-hidden border border-[var(--color-border)]">
+      <div className="relative bg-[var(--surface)] rounded-2xl shadow-xl w-full max-w-lg mx-4 overflow-hidden border border-[var(--color-border)]">
         {/* Header */}
         <div className="flex items-center justify-between px-6 py-4 border-b border-[var(--color-border)]">
           <h2 className="text-lg font-semibold text-[var(--color-text)] tracking-tight">Add New Memo</h2>
-          <button onClick={close} className="p-1.5 rounded-full hover:bg-[var(--color-bg-hover)] transition-colors">
-            <X size={18} className="text-[var(--color-text-secondary)]" />
+          <button onClick={close} className="p-1.5 rounded-full hover:bg-[var(--surface-2)] transition-colors">
+            <X size={18} className="text-[var(--text-2)]" />
           </button>
         </div>
 
@@ -126,8 +126,8 @@ export function AddMemoModal() {
               className={cn(
                 'flex-1 flex items-center justify-center gap-2 px-4 py-3 text-sm font-medium transition-colors',
                 activeTab === tab.id
-                  ? 'text-[var(--color-brand)] border-b-2 border-[var(--color-brand)]'
-                  : 'text-[var(--color-text-secondary)] hover:text-[var(--color-text)]'
+                  ? 'text-[var(--accent)] border-b-2 border-[var(--accent)]'
+                  : 'text-[var(--text-2)] hover:text-[var(--color-text)]'
               )}
             >
               <tab.icon size={15} />
@@ -154,14 +154,14 @@ export function AddMemoModal() {
                   value={url}
                   onChange={(e) => setUrl(e.target.value)}
                   placeholder="https://example.com/article"
-                  className="w-full px-4 py-2.5 border border-[var(--color-border)] rounded-full text-sm focus:outline-none focus:border-[var(--color-text)] transition-colors bg-[var(--color-bg-card)]"
+                  className="w-full px-4 py-2.5 border border-[var(--color-border)] rounded-full text-sm focus:outline-none focus:border-[var(--color-text)] transition-colors bg-[var(--surface)]"
                   onKeyDown={(e) => e.key === 'Enter' && handleSaveLink()}
                 />
               </div>
               <button
                 onClick={handleSaveLink}
                 disabled={loading || !url.trim()}
-                className="w-full py-2.5 bg-[var(--color-bg-active)] text-[var(--color-text-active)] rounded-full text-sm font-semibold hover:bg-[var(--color-text)] disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center gap-2 transition-colors"
+                className="w-full py-2.5 bg-[var(--text)] text-[var(--bg)] rounded-full text-sm font-semibold hover:bg-[var(--color-text)] disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center gap-2 transition-colors"
               >
                 {loading && <Loader2 size={16} className="animate-spin" />}
                 Save Link
@@ -179,7 +179,7 @@ export function AddMemoModal() {
                   value={noteTitle}
                   onChange={(e) => setNoteTitle(e.target.value)}
                   placeholder="My note title"
-                  className="w-full px-4 py-2.5 border border-[var(--color-border)] rounded-full text-sm focus:outline-none focus:border-[var(--color-text)] transition-colors bg-[var(--color-bg-card)]"
+                  className="w-full px-4 py-2.5 border border-[var(--color-border)] rounded-full text-sm focus:outline-none focus:border-[var(--color-text)] transition-colors bg-[var(--surface)]"
                 />
               </div>
               <div>
@@ -189,13 +189,13 @@ export function AddMemoModal() {
                   onChange={(e) => setNoteContent(e.target.value)}
                   placeholder="Write your note here... (Markdown supported)"
                   rows={6}
-                  className="w-full px-4 py-2.5 border border-[var(--color-border)] rounded-xl text-sm focus:outline-none focus:border-[var(--color-text)] resize-none transition-colors bg-[var(--color-bg-card)]"
+                  className="w-full px-4 py-2.5 border border-[var(--color-border)] rounded-xl text-sm focus:outline-none focus:border-[var(--color-text)] resize-none transition-colors bg-[var(--surface)]"
                 />
               </div>
               <button
                 onClick={handleSaveNote}
                 disabled={loading || !noteTitle.trim()}
-                className="w-full py-2.5 bg-[var(--color-bg-active)] text-[var(--color-text-active)] rounded-full text-sm font-semibold hover:bg-[var(--color-text)] disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center gap-2 transition-colors"
+                className="w-full py-2.5 bg-[var(--text)] text-[var(--bg)] rounded-full text-sm font-semibold hover:bg-[var(--color-text)] disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center gap-2 transition-colors"
               >
                 {loading && <Loader2 size={16} className="animate-spin" />}
                 Save Note
@@ -213,14 +213,14 @@ export function AddMemoModal() {
                 onClick={() => fileInputRef.current?.click()}
                 className={cn(
                   'border-2 border-dashed rounded-2xl p-8 text-center cursor-pointer transition-colors',
-                  dragOver ? 'border-[var(--color-brand)] bg-[var(--color-brand-light)]' : 'border-[var(--color-border)] hover:border-[var(--color-text)]'
+                  dragOver ? 'border-[var(--accent)] bg-[color-mix(in_oklab,var(--accent)_8%,var(--surface))]' : 'border-[var(--color-border)] hover:border-[var(--color-text)]'
                 )}
               >
-                <Upload size={32} className="mx-auto mb-3 text-[var(--color-text-muted)]" />
+                <Upload size={32} className="mx-auto mb-3 text-[var(--text-4)]" />
                 <p className="text-sm font-semibold text-[var(--color-text)]">
                   Drop files here or click to browse
                 </p>
-                <p className="text-xs text-[var(--color-text-muted)] mt-1">
+                <p className="text-xs text-[var(--text-4)] mt-1">
                   PDF, DOC, XLSX, Images, Audio (up to 50MB)
                 </p>
               </div>
@@ -233,7 +233,7 @@ export function AddMemoModal() {
                 onChange={(e) => handleFileUpload(e.target.files)}
               />
               {loading && (
-                <div className="flex items-center justify-center gap-2 text-sm text-[var(--color-text-secondary)]">
+                <div className="flex items-center justify-center gap-2 text-sm text-[var(--text-2)]">
                   <Loader2 size={16} className="animate-spin" />
                   Uploading...
                 </div>

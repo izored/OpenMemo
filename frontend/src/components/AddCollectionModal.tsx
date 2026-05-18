@@ -99,14 +99,14 @@ export function AddCollectionModal() {
       <div className="absolute inset-0 bg-black/40" onClick={close} />
 
       {/* Modal */}
-      <div className="relative bg-[var(--color-bg-card)] rounded-2xl shadow-xl w-full max-w-md mx-4 overflow-hidden border border-[var(--color-border)]">
+      <div className="relative bg-[var(--surface)] rounded-2xl shadow-xl w-full max-w-md mx-4 overflow-hidden border border-[var(--color-border)]">
         {/* Header */}
         <div className="flex items-center justify-between px-6 py-4 border-b border-[var(--color-border)]">
           <h2 className="text-lg font-semibold text-[var(--color-text)] tracking-tight">
             {isEditing ? 'Edit Collection' : 'New Collection'}
           </h2>
-          <button onClick={close} className="p-1.5 rounded-full hover:bg-[var(--color-bg-hover)] transition-colors">
-            <X size={18} className="text-[var(--color-text-secondary)]" />
+          <button onClick={close} className="p-1.5 rounded-full hover:bg-[var(--surface-2)] transition-colors">
+            <X size={18} className="text-[var(--text-2)]" />
           </button>
         </div>
 
@@ -126,7 +126,7 @@ export function AddCollectionModal() {
                 type="text"
                 value={emoji}
                 onChange={(e) => setEmoji(e.target.value)}
-                className="w-14 h-11 text-center text-xl border border-[var(--color-border)] rounded-xl focus:outline-none focus:border-[var(--color-text)] transition-colors bg-[var(--color-bg-card)]"
+                className="w-14 h-11 text-center text-xl border border-[var(--color-border)] rounded-xl focus:outline-none focus:border-[var(--color-text)] transition-colors bg-[var(--surface)]"
                 maxLength={2}
               />
             </div>
@@ -137,7 +137,7 @@ export function AddCollectionModal() {
                 value={name}
                 onChange={(e) => setName(e.target.value)}
                 placeholder="Collection name"
-                className="w-full px-4 py-2.5 border border-[var(--color-border)] rounded-full text-sm focus:outline-none focus:border-[var(--color-text)] transition-colors bg-[var(--color-bg-card)]"
+                className="w-full px-4 py-2.5 border border-[var(--color-border)] rounded-full text-sm focus:outline-none focus:border-[var(--color-text)] transition-colors bg-[var(--surface)]"
                 onKeyDown={(e) => e.key === 'Enter' && handleSubmit()}
               />
             </div>
@@ -151,7 +151,7 @@ export function AddCollectionModal() {
               onChange={(e) => setDescription(e.target.value)}
               placeholder="Optional description..."
               rows={3}
-              className="w-full px-4 py-2.5 border border-[var(--color-border)] rounded-xl text-sm focus:outline-none focus:border-[var(--color-text)] resize-none transition-colors bg-[var(--color-bg-card)]"
+              className="w-full px-4 py-2.5 border border-[var(--color-border)] rounded-xl text-sm focus:outline-none focus:border-[var(--color-text)] resize-none transition-colors bg-[var(--surface)]"
             />
           </div>
 
@@ -177,7 +177,7 @@ export function AddCollectionModal() {
           <button
             onClick={handleSubmit}
             disabled={loading || !name.trim()}
-            className="w-full py-2.5 bg-[var(--color-bg-active)] text-[var(--color-text-active)] rounded-full text-sm font-semibold hover:bg-[var(--color-text)] disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center gap-2 transition-colors"
+            className="w-full py-2.5 bg-[var(--text)] text-[var(--bg)] rounded-full text-sm font-semibold hover:bg-[var(--color-text)] disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center gap-2 transition-colors"
           >
             {loading && <Loader2 size={16} className="animate-spin" />}
             {isEditing ? 'Save Changes' : 'Create Collection'}
@@ -194,7 +194,7 @@ export function AddCollectionModal() {
                 </button>
               ) : (
                 <div className="space-y-2.5">
-                  <p className="text-[12px] text-[var(--color-text-secondary)] leading-relaxed">
+                  <p className="text-[12px] text-[var(--text-2)] leading-relaxed">
                     Delete <b>{editingCollection?.name}</b>? Memos are kept, only the
                     collection is removed. Consider exporting a backup first
                     (Settings → Danger zone → Export).
@@ -202,7 +202,7 @@ export function AddCollectionModal() {
                   <div className="flex gap-2">
                     <button
                       onClick={() => setConfirmDelete(false)}
-                      className="flex-1 py-2.5 rounded-full text-sm font-semibold border border-[var(--color-border)] hover:bg-[var(--color-bg-hover)] transition-colors"
+                      className="flex-1 py-2.5 rounded-full text-sm font-semibold border border-[var(--color-border)] hover:bg-[var(--surface-2)] transition-colors"
                     >
                       Cancel
                     </button>

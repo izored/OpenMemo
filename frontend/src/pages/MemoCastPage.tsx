@@ -64,17 +64,17 @@ export function MemoCastPage() {
   };
 
   return (
-    <div className="h-full flex flex-col bg-[var(--color-bg-card)] rounded-2xl overflow-hidden">
+    <div className="h-full flex flex-col bg-[var(--surface)] rounded-2xl overflow-hidden">
       {/* Header */}
       <header className="flex items-center justify-between px-6 py-4 pl-14 border-b border-[var(--color-border)]">
         <div className="flex items-center gap-2.5">
-          <Radio size={20} className="text-[var(--color-brand)]" />
+          <Radio size={20} className="text-[var(--accent)]" />
           <h1 className="text-xl font-semibold text-[var(--color-text)] tracking-tight">MemoCast</h1>
         </div>
         <button
           onClick={handleCreate}
           disabled={creating}
-          className="flex items-center gap-2 px-5 py-2 bg-[var(--color-bg-active)] text-[var(--color-text-active)] rounded-full text-sm font-semibold hover:bg-[var(--color-text)] disabled:opacity-40 transition-colors"
+          className="flex items-center gap-2 px-5 py-2 bg-[var(--text)] text-[var(--bg)] rounded-full text-sm font-semibold hover:bg-[var(--color-text)] disabled:opacity-40 transition-colors"
         >
           {creating ? <Loader2 size={16} className="animate-spin" /> : <Radio size={16} />}
           Generate Episode
@@ -86,13 +86,13 @@ export function MemoCastPage() {
         <div className="w-80 border-r border-[var(--color-border)] overflow-y-auto">
           {isLoading ? (
             <div className="flex items-center justify-center py-10">
-              <Loader2 size={20} className="animate-spin text-[var(--color-brand)]" />
+              <Loader2 size={20} className="animate-spin text-[var(--accent)]" />
             </div>
           ) : episodes.length === 0 ? (
             <div className="p-6 text-center">
-              <Radio size={32} className="mx-auto mb-3 text-[var(--color-text-muted)]" />
-              <p className="text-sm text-[var(--color-text-secondary)]">No episodes yet</p>
-              <p className="text-xs text-[var(--color-text-muted)] mt-1">Generate your first MemoCast from recent saves</p>
+              <Radio size={32} className="mx-auto mb-3 text-[var(--text-4)]" />
+              <p className="text-sm text-[var(--text-2)]">No episodes yet</p>
+              <p className="text-xs text-[var(--text-4)] mt-1">Generate your first MemoCast from recent saves</p>
             </div>
           ) : (
             <div className="divide-y divide-[var(--color-border)]">
@@ -100,10 +100,10 @@ export function MemoCastPage() {
                 <button
                   key={ep.id}
                   onClick={() => setSelectedEpisode(ep)}
-                  className={`w-full text-left p-4 hover:bg-[var(--color-bg-hover)] transition-colors ${selectedEpisode?.id === ep.id ? 'bg-[var(--color-brand-light)]' : ''}`}
+                  className={`w-full text-left p-4 hover:bg-[var(--surface-2)] transition-colors ${selectedEpisode?.id === ep.id ? 'bg-[color-mix(in_oklab,var(--accent)_8%,var(--surface))]' : ''}`}
                 >
                   <p className="text-sm font-semibold text-[var(--color-text)] line-clamp-2">{ep.title}</p>
-                  <div className="flex items-center gap-2 mt-1.5 text-xs text-[var(--color-text-muted)] font-mono">
+                  <div className="flex items-center gap-2 mt-1.5 text-xs text-[var(--text-4)] font-mono">
                     <Clock size={12} />
                     <span>{ep.duration ? `${Math.floor(ep.duration / 60)}:${(ep.duration % 60).toString().padStart(2, '0')}` : 'Generating...'}</span>
                     <span>•</span>
@@ -120,9 +120,9 @@ export function MemoCastPage() {
           {selectedEpisode ? (
             <div className="max-w-2xl mx-auto">
               {/* Player card */}
-              <div className="bg-[var(--color-bg-active)] rounded-2xl p-6 mb-6 text-[var(--color-text-active)]">
+              <div className="bg-[var(--text)] rounded-2xl p-6 mb-6 text-[var(--bg)]">
                 <h2 className="text-lg font-semibold mb-2 tracking-tight">{selectedEpisode.title}</h2>
-                <div className="flex items-center gap-3 text-sm text-[var(--color-text-muted)] font-mono">
+                <div className="flex items-center gap-3 text-sm text-[var(--text-4)] font-mono">
                   <span>{new Date(selectedEpisode.created_at).toLocaleDateString()}</span>
                   {selectedEpisode.duration && (
                     <span>{Math.floor(selectedEpisode.duration / 60)}:{(selectedEpisode.duration % 60).toString().padStart(2, '0')}</span>
@@ -139,17 +139,17 @@ export function MemoCastPage() {
                   <button
                     onClick={togglePlay}
                     disabled={!selectedEpisode.audio_path}
-                    className="w-12 h-12 rounded-full bg-[var(--color-brand)] text-white flex items-center justify-center hover:bg-[var(--color-brand)]/80 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                    className="w-12 h-12 rounded-full bg-[var(--accent)] text-white flex items-center justify-center hover:bg-[var(--accent)]/80 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
                   >
                     {playing ? <Pause size={20} /> : <Play size={20} className="ml-0.5" />}
                   </button>
-                  <div className="flex-1 h-1.5 bg-[var(--color-text-muted)] rounded-full">
+                  <div className="flex-1 h-1.5 bg-[var(--text-4)] rounded-full">
                     <div
-                      className="h-full bg-[var(--color-brand)] rounded-full transition-all"
+                      className="h-full bg-[var(--accent)] rounded-full transition-all"
                       style={{ width: `${progress}%` }}
                     />
                   </div>
-                  <span className="text-xs text-[var(--color-text-muted)] font-mono">
+                  <span className="text-xs text-[var(--text-4)] font-mono">
                     {selectedEpisode.audio_path
                       ? `${Math.floor(currentTime / 60)}:${(Math.floor(currentTime) % 60).toString().padStart(2, '0')} / ${Math.floor(duration / 60)}:${(Math.floor(duration) % 60).toString().padStart(2, '0')}`
                       : 'Generating...'}
@@ -161,10 +161,10 @@ export function MemoCastPage() {
               {selectedEpisode.script_text && (
                 <div>
                   <div className="flex items-center gap-2 mb-3">
-                    <FileText size={16} className="text-[var(--color-text-secondary)]" />
+                    <FileText size={16} className="text-[var(--text-2)]" />
                     <h3 className="text-sm font-semibold text-[var(--color-text)]">Transcript</h3>
                   </div>
-                  <div className="prose prose-sm max-w-none text-[var(--color-text)] bg-[var(--color-bg-hover)] rounded-2xl p-5 border border-[var(--color-border)]">
+                  <div className="prose prose-sm max-w-none text-[var(--color-text)] bg-[var(--surface-2)] rounded-2xl p-5 border border-[var(--color-border)]">
                     <ReactMarkdown>{selectedEpisode.script_text}</ReactMarkdown>
                   </div>
                 </div>
@@ -173,7 +173,7 @@ export function MemoCastPage() {
           ) : (
             <div className="flex flex-col items-center justify-center h-full text-center">
               <Radio size={40} className="text-[var(--color-border)] mb-4" />
-              <p className="text-sm text-[var(--color-text-secondary)]">Select an episode or generate a new one</p>
+              <p className="text-sm text-[var(--text-2)]">Select an episode or generate a new one</p>
             </div>
           )}
         </div>
