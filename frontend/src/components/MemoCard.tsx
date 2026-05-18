@@ -2,57 +2,119 @@ import React from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useQueryClient } from '@tanstack/react-query';
 import type { DraggableAttributes } from '@dnd-kit/core';
-import {
-  FileText,
-  Globe,
-  Image,
-  Video,
-  Mic,
-  File,
-  Link2,
-  Play,
-  GripVertical,
-  X,
-} from 'lucide-react';
+import { Icon } from './Icon';
 import { cn } from '@/lib/utils';
 import { memoApi } from '@/lib/api';
 import type { Memo, MemoType } from '@/types';
 
-const typeConfig: Record<
-  MemoType,
-  { icon: React.ElementType; label: string; cssBg: string; cssText: string }
-> = {
-  note: { icon: FileText, label: 'Notes', cssBg: 'var(--color-type-note-bg)', cssText: 'var(--color-type-note-text)' },
-  article: { icon: Globe, label: 'Article', cssBg: 'var(--color-type-article-bg)', cssText: 'var(--color-type-article-text)' },
-  video: { icon: Video, label: 'Video', cssBg: 'var(--color-type-video-bg)', cssText: 'var(--color-type-video-text)' },
-  image: { icon: Image, label: 'Image', cssBg: 'var(--color-type-image-bg)', cssText: 'var(--color-type-image-text)' },
-  audio: { icon: Mic, label: 'Audio', cssBg: 'var(--color-type-audio-bg)', cssText: 'var(--color-type-audio-text)' },
-  document: { icon: File, label: 'File', cssBg: 'var(--color-type-document-bg)', cssText: 'var(--color-type-document-text)' },
-  link: { icon: Link2, label: 'Link', cssBg: 'var(--color-type-link-bg)', cssText: 'var(--color-type-link-text)' },
-};
+// Warm tint palette for cards without media (notes / plain docs).
+const NOTE_TINTS = [
+  { bg: '#E8DCC4', text: '#3B2F1E' },
+  { bg: '#D9C9A8', text: '#3B2F1E' },
+  { bg: '#E0D7CB', text: '#3A322A' },
+  { bg: '#2A2622', text: '#E8DCC4' },
+];
+const TINT_FALLBACK = ['#E8D9B8', '#E8C7A0', '#D9B89C', '#C7A88E', '#BFAA9A'];
 
-interface MemoCardProps {
-  memo: Memo;
-  dragHandleProps?: {
-    attributes: DraggableAttributes;
-    listeners?: Record<string, unknown>;
-  };
+function hashId(id: string): number {
+  let h = 0;
+  for (const c of id) h = (h * 31 + c.charCodeAt(0)) >>> 0;
+  return h;
 }
 
-export function MemoCard({ memo, dragHandleProps }: MemoCardProps) {
+function typeIcon(t: MemoType) {
+  return (
+    { note: 'fileText', link: 'link', article: 'globe', image: 'image', video: 'video', document: 'file', audio: 'mic' } as Record<string, string>
+  )[t] || 'file';
+}
+function typeLabel(t: MemoType) {
+  return (
+    { note: 'Note', link: 'Link', article: 'Article', image: 'Image', video: 'Video', document: 'File', audio: 'Audio' } as Record<string, string>
+  )[t] || 'Memo';
+}
+
+function mediaSrc(memo: Memo): string | null {
+  if (memo.thumbnail_path) return memo.thumbnail_path;
+  if (memo.type === 'image' && memo.file_path) return `/api/files/${memo.file_path}`;
+  return null;
+}
+
+interface DragProps {
+  attributes: DraggableAttributes;
+  listeners?: Record<string, unknown>;
+}
+
+function Chrome({
+  memo,
+  className,
+  style,
+  dragHandleProps,
+  onDelete,
+  children,
+}: {
+  memo: Memo;
+  className?: string;
+  style?: React.CSSProperties;
+  dragHandleProps?: DragProps;
+  onDelete: (e: React.MouseEvent) => void;
+  children: React.ReactNode;
+}) {
   const navigate = useNavigate();
+  return (
+    <div
+      className={cn('om-card om-card-hover', className)}
+      style={style}
+      onClick={() => navigate(`/memo/${memo.id}`)}
+    >
+      <span
+        {...(dragHandleProps?.attributes || {})}
+        {...(dragHandleProps?.listeners || {})}
+        className="om-drag"
+        onClick={(e) => e.stopPropagation()}
+        title="Drag to reorder / collection"
+        aria-label="Drag handle"
+      >
+        <Icon name="grip" size={15} />
+      </span>
+      <div className="om-card-actions">
+        <button className="om-action" onClick={onDelete} title="Delete">
+          <Icon name="x" size={15} />
+        </button>
+      </div>
+      {children}
+    </div>
+  );
+}
+
+function Meta({ memo }: { memo: Memo }) {
+  const date = new Date(memo.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+  return (
+    <div className="om-meta">
+      <div className="om-meta-left">
+        {memo.source_favicon ? (
+          <img
+            src={memo.source_favicon}
+            alt=""
+            className="om-favicon"
+            onError={(e) => ((e.target as HTMLImageElement).style.display = 'none')}
+          />
+        ) : (
+          <Icon name={typeIcon(memo.type)} size={11} />
+        )}
+        <span className="om-meta-domain">{memo.source_domain || typeLabel(memo.type)}</span>
+      </div>
+      <span className="om-meta-date mono">{date}</span>
+    </div>
+  );
+}
+
+interface CardProps {
+  memo: Memo;
+  dragHandleProps?: DragProps;
+}
+
+export function MemoCard({ memo, dragHandleProps }: CardProps) {
   const queryClient = useQueryClient();
-  const config = typeConfig[memo.type] || typeConfig.note;
-  const Icon = config.icon;
-
-  const formattedDate = new Date(memo.created_at).toLocaleDateString('en-US', {
-    month: 'short',
-    day: 'numeric',
-  });
-
-  const handleClick = () => {
-    navigate(`/memo/${memo.id}`);
-  };
 
   const handleDelete = async (e: React.MouseEvent) => {
     e.stopPropagation();
@@ -65,248 +127,135 @@ export function MemoCard({ memo, dragHandleProps }: MemoCardProps) {
     }
   };
 
-  const renderDragHandle = () => (
-    <span
-      {...(dragHandleProps?.attributes || {})}
-      {...(dragHandleProps?.listeners || {})}
-      className="absolute top-3 left-3 z-10 p-2 rounded-lg bg-[var(--color-dark)]/80 hover:bg-[var(--color-dark)] text-[var(--color-bg)] cursor-grab active:cursor-grabbing opacity-0 group-hover:opacity-100 transition-opacity shadow-lg"
-      onClick={(e) => e.stopPropagation()}
-      title="Drag to collection"
-    >
-      <GripVertical size={14} />
-    </span>
-  );
+  const src = mediaSrc(memo);
+  const fallbackTint = TINT_FALLBACK[hashId(memo.id) % TINT_FALLBACK.length];
+  const heroBg = `linear-gradient(135deg, ${fallbackTint} 0%, color-mix(in oklab, ${fallbackTint} 55%, #1a1a18) 100%)`;
 
-  const renderDeleteButton = () => (
-    <button
-      onClick={handleDelete}
-      className={cn(
-        'absolute top-3 right-3 z-10 w-7 h-7 rounded-full bg-[var(--color-brand)]/90 hover:bg-[var(--color-brand)] text-white flex items-center justify-center opacity-0 group-hover:opacity-100 transition-all shadow-lg',
-        'delay-[300ms] duration-300'
-      )}
-      title="Delete memo"
-    >
-      <X size={13} strokeWidth={3} />
-    </button>
-  );
-
-  // ─── Sticky Note ───
+  // ── Note ──
   if (memo.type === 'note') {
+    const tint = NOTE_TINTS[hashId(memo.id) % NOTE_TINTS.length];
+    const body = memo.content_text || memo.content_raw || memo.description || '';
     return (
-      <div
-        onClick={handleClick}
-        className="group relative rounded-[28px] p-8 cursor-pointer transition-all duration-300 hover:shadow-xl hover:-translate-y-1 min-h-[320px] flex flex-col"
-        style={{ backgroundColor: config.cssBg }}
+      <Chrome
+        memo={memo}
+        dragHandleProps={dragHandleProps}
+        onDelete={handleDelete}
+        className="om-card-note"
+        style={{ background: tint.bg, color: tint.text }}
       >
-        {renderDragHandle()}
-        {renderDeleteButton()}
-        <h3 className="text-[15px] font-bold line-clamp-2 leading-snug mb-4 pr-6" style={{ color: config.cssText }}>
-          {memo.title}
-        </h3>
-        {(memo.content_text || memo.content_raw || memo.description) && (
-          <p className="text-[10px] line-clamp-9 leading-relaxed opacity-75 mb-1 whitespace-normal" style={{ color: config.cssText }}>
-            {memo.content_text || memo.content_raw || memo.description}
-          </p>
-        )}
-        <div className="mt-auto pt-5 border-t border-black/5 flex items-center justify-between">
-          <div className="flex items-center gap-2.5">
-            <Icon size={13} style={{ color: config.cssText }} />
-            <span className="text-[10px] font-semibold" style={{ color: config.cssText }}>
-              {config.label}
-            </span>
+        <div className="om-note-body">
+          <h3 className="om-note-title">{memo.title}</h3>
+          {body && <p className="om-note-text">{body}</p>}
+        </div>
+        <div className="om-meta" style={{ color: tint.text, opacity: 0.62 }}>
+          <div className="om-meta-left">
+            <Icon name="fileText" size={11} />
+            <span className="om-meta-domain">Note</span>
           </div>
-          <span className="text-[10px] opacity-50 font-medium" style={{ color: config.cssText }}>
-            {formattedDate}
+          <span className="om-meta-date mono">
+            {new Date(memo.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
           </span>
         </div>
-      </div>
+      </Chrome>
     );
   }
 
-  // ─── Image Card ───
+  // ── Image ──
   if (memo.type === 'image') {
     return (
-      <div
-        onClick={handleClick}
-        className="group relative bg-[var(--color-bg-card)] rounded-[28px] overflow-hidden cursor-pointer shadow-sm hover:shadow-xl transition-all duration-300 hover:-translate-y-1"
-      >
-        {renderDragHandle()}
-        {renderDeleteButton()}
-        {memo.thumbnail_path || memo.file_path ? (
-          <div className="aspect-square overflow-hidden">
+      <Chrome memo={memo} dragHandleProps={dragHandleProps} onDelete={handleDelete} className="om-card-image">
+        <div className="om-image-frame" style={{ background: src ? undefined : heroBg }}>
+          {src ? (
             <img
-              src={memo.thumbnail_path || `/api/files/${memo.file_path}`}
+              src={src}
               alt=""
-              className="w-full h-full object-cover transition-transform duration-500 hover:scale-105"
-              onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
+              style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+              onError={(e) => ((e.target as HTMLImageElement).style.display = 'none')}
             />
-          </div>
-        ) : (
-          <div className="aspect-square flex items-center justify-center" style={{ backgroundColor: config.cssBg }}>
-            <Icon size={64} className="text-[var(--color-text-muted)] opacity-20" />
-          </div>
-        )}
-        <div className="p-7">
-          <h3 className="text-[10px] font-semibold text-[var(--color-text)] line-clamp-2 leading-snug">
-            {memo.title}
-          </h3>
-          <div className="flex items-center justify-between mt-6">
-            <div className="flex items-center gap-2.5">
-              <Icon size={13} className="text-[var(--color-text-muted)]" />
-              <span className="text-[10px] text-[var(--color-text-muted)] font-semibold">{config.label}</span>
-            </div>
-            <span className="text-[10px] text-[var(--color-text-muted)] font-medium">{formattedDate}</span>
-          </div>
+          ) : (
+            <div className="om-hero-noise" />
+          )}
         </div>
-      </div>
+        <div className="om-card-body tight">
+          <h3 className="om-card-title small">{memo.title}</h3>
+          <Meta memo={memo} />
+        </div>
+      </Chrome>
     );
   }
 
-  // ─── Video Card ───
+  // ── Video ──
   if (memo.type === 'video') {
     return (
-      <div
-        onClick={handleClick}
-        className="group relative bg-[var(--color-bg-card)] rounded-[28px] overflow-hidden cursor-pointer shadow-sm hover:shadow-xl transition-all duration-300 hover:-translate-y-1"
-      >
-        {renderDragHandle()}
-        {renderDeleteButton()}
-        {memo.thumbnail_path ? (
-          <div className="aspect-[4/3] overflow-hidden relative">
+      <Chrome memo={memo} dragHandleProps={dragHandleProps} onDelete={handleDelete} className="om-card-video">
+        <div className="om-video-frame" style={{ background: src ? undefined : heroBg }}>
+          {src ? (
             <img
-              src={memo.thumbnail_path}
+              src={src}
               alt=""
-              className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
-              onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
+              style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+              onError={(e) => ((e.target as HTMLImageElement).style.display = 'none')}
             />
-            <div className="absolute inset-0 bg-black/20 flex items-center justify-center group-hover:bg-black/30 transition-colors">
-              <div className="w-16 h-16 rounded-full bg-white/90 flex items-center justify-center shadow-xl">
-                <Play size={26} className="text-[var(--color-text)] ml-0.5" fill="currentColor" />
-              </div>
-            </div>
-
-          </div>
-        ) : (
-          <div className="aspect-[4/3] flex items-center justify-center relative" style={{ backgroundColor: config.cssBg }}>
-            <Icon size={64} className="text-[var(--color-text-muted)] opacity-20" />
-          </div>
-        )}
-        <div className="p-7">
-          <h3 className="text-[13px] font-semibold text-[var(--color-text)] line-clamp-2 leading-[1.25]">
-            {memo.title}
-          </h3>
-          <div className="flex items-center justify-between mt-3 pt-4 border-t border-[var(--color-border)]">
-            <div className="flex items-center gap-3">
-              {memo.source_favicon ? (
-                <img src={memo.source_favicon} alt="" className="w-4 h-4 rounded-full"
-                  onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }} />
-              ) : (
-                <Icon size={17} className="text-[var(--color-text-muted)]" />
-              )}
-              <span className="text-[10px] text-[var(--color-text-secondary)] font-semibold truncate max-w-[150px]">
-                {memo.source_domain || config.label}
-              </span>
-            </div>
-            <span className="text-[10px] text-[var(--color-text-muted)] font-medium">{formattedDate}</span>
+          ) : (
+            <div className="om-hero-noise" />
+          )}
+          <div className="om-play">
+            <Icon name="play" size={16} stroke={0} style={{ fill: 'currentColor' }} />
           </div>
         </div>
-      </div>
+        <div className="om-card-body">
+          <h3 className="om-card-title">{memo.title}</h3>
+          <Meta memo={memo} />
+        </div>
+      </Chrome>
     );
   }
 
-  // ─── Document Card ───
+  // ── Document ──
   if (memo.type === 'document') {
     return (
-      <div
-        onClick={handleClick}
-        className="group relative bg-[var(--color-bg-card)] rounded-[28px] overflow-hidden cursor-pointer shadow-sm hover:shadow-xl transition-all duration-300 hover:-translate-y-1"
-      >
-        {renderDragHandle()}
-        {renderDeleteButton()}
-        {memo.thumbnail_path ? (
-          <div className="aspect-[4/3] overflow-hidden bg-[var(--color-bg-hover)]">
-            <img src={memo.thumbnail_path} alt="" className="w-full h-full object-cover"
-              onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }} />
-          </div>
-        ) : (
-          <div className="aspect-[4/3] flex items-center justify-center" style={{ backgroundColor: config.cssBg }}>
-            <Icon size={64} className="text-[var(--color-text-muted)] opacity-20" />
-          </div>
-        )}
-        <div className="p-7">
-          <h3 className="text-[13px] font-semibold text-[var(--color-text)] line-clamp-2 leading-snug">
-            {memo.title}
-          </h3>
-          {memo.description && (
-            <p className="text-[13px] text-[var(--color-text-secondary)] line-clamp-2 mt-3 leading-relaxed">
-              {memo.description}
-            </p>
-          )}
-          <div className="flex items-center justify-between mt-6 pt-4 border-t border-[var(--color-border)]">
-            <div className="flex items-center gap-2.5">
-              <Icon size={13} className="text-[var(--color-text-muted)]" />
-              <span className="text-[10px] text-[var(--color-text-muted)] font-semibold">{config.label}</span>
-            </div>
-            <span className="text-[10px] text-[var(--color-text-muted)] font-medium">{formattedDate}</span>
+      <Chrome memo={memo} dragHandleProps={dragHandleProps} onDelete={handleDelete} className="om-card-doc">
+        <div className="om-doc-frame">
+          <div className="om-doc-stack">
+            <span className="om-doc-page" />
+            <span className="om-doc-page" />
+            <span className="om-doc-page front">
+              <span className="om-doc-line" style={{ width: '70%' }} />
+              <span className="om-doc-line" style={{ width: '90%' }} />
+              <span className="om-doc-line" style={{ width: '60%' }} />
+              <span className="om-doc-line" style={{ width: '80%' }} />
+            </span>
           </div>
         </div>
-      </div>
+        <div className="om-card-body">
+          <h3 className="om-card-title">{memo.title}</h3>
+          {memo.description && <p className="om-card-desc">{memo.description}</p>}
+          <Meta memo={memo} />
+        </div>
+      </Chrome>
     );
   }
 
-  // ─── Link / Article / Audio / Fallback ───
+  // ── Link / Article / Audio / fallback ──
   return (
-    <div
-      onClick={handleClick}
-      className="group relative bg-[var(--color-bg-card)] rounded-[28px] overflow-hidden cursor-pointer shadow-sm hover:shadow-xl transition-all duration-300 hover:-translate-y-1"
-    >
-      {renderDragHandle()}
-      {renderDeleteButton()}
-      {memo.thumbnail_path ? (
-        <div className="aspect-[4/3] overflow-hidden relative">
+    <Chrome memo={memo} dragHandleProps={dragHandleProps} onDelete={handleDelete} className="om-card-link">
+      <div className="om-card-hero" style={{ background: src ? undefined : heroBg }}>
+        {src ? (
           <img
-            src={memo.thumbnail_path}
+            src={src}
             alt=""
-            className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
-            onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
+            style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+            onError={(e) => ((e.target as HTMLImageElement).style.display = 'none')}
           />
-
-        </div>
-      ) : (
-        <div className="aspect-[4/3] flex items-center justify-center relative" style={{ backgroundColor: config.cssBg }}>
-          {memo.source_favicon ? (
-            <img src={memo.source_favicon} alt="" className="w-20 h-20 rounded-2xl"
-              onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }} />
-          ) : (
-            <Icon size={64} className="text-[var(--color-text-muted)] opacity-20" />
-          )}
-        </div>
-      )}
-
-      <div className="p-7">
-        <h3 className="text-[13px] font-semibold text-(--color-text) line-clamp-2 leading-light">
-          {memo.title}
-        </h3>
-        {memo.description && (
-          <p className="text-[12px] text-[var(--color-text-secondary)] line-clamp-3 mt-3 leading-relaxed">
-            {memo.description}
-          </p>
+        ) : (
+          <div className="om-hero-noise" />
         )}
-        <div className="flex items-center justify-between mt-3 pt-4 border-t border-[var(--color-border)]">
-          <div className="flex items-center gap-3">
-            {memo.source_favicon ? (
-              <img src={memo.source_favicon} alt="" className="w-4 h-4 rounded-full"
-                onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }} />
-            ) : (
-              <Icon size={13} className="text-(--color-text-muted)" />
-            )}
-            <span className="text-[10px] text-(--color-text-muted) font-semibold truncate max-w-37.5">
-              {memo.source_domain || config.label}
-            </span>
-          </div>
-          <span className="text-[10px] text-(--color-text-muted) font-medium">{formattedDate}</span>
-        </div>
       </div>
-    </div>
+      <div className="om-card-body">
+        <h3 className="om-card-title">{memo.title}</h3>
+        {memo.description && <p className="om-card-desc">{memo.description}</p>}
+        <Meta memo={memo} />
+      </div>
+    </Chrome>
   );
 }

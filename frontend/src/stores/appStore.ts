@@ -1,5 +1,16 @@
 import { create } from 'zustand';
 import type { Collection } from '@/types';
+import { DEFAULT_TWEAKS, applyTweaks, type Tweaks } from '@/lib/appearance';
+
+const loadTweaks = (): Tweaks => {
+  try {
+    const raw = localStorage.getItem('openmemo_tweaks');
+    if (raw) return { ...DEFAULT_TWEAKS, ...JSON.parse(raw), density: 'roomy' as const };
+  } catch {
+    /* ignore */
+  }
+  return { ...DEFAULT_TWEAKS };
+};
 
 // Load persisted settings from localStorage
 const loadSettings = () => {
@@ -49,25 +60,36 @@ interface AppState {
   editingCollection: Collection | null;
   setEditingCollection: (collection: Collection | null) => void;
 
-  // Theme & appearance
-  theme: 'light' | 'dark';
-  setTheme: (theme: 'light' | 'dark') => void;
+  // Add memo panel (design FAB panel)
+  addPanelOpen: boolean;
+  setAddPanelOpen: (open: boolean) => void;
 
-  dashboardGridColumns: 4 | 5;
-  setDashboardGridColumns: (cols: 4 | 5) => void;
+  // Appearance live-preview panel
+  appearancePanelOpen: boolean;
+  setAppearancePanelOpen: (open: boolean) => void;
+
+  // Fullscreen writer
+  writerOpen: boolean;
+  setWriterOpen: (open: boolean) => void;
+
+  // Sidebar collapse
+  sidebarCollapsed: boolean;
+  toggleSidebarCollapsed: () => void;
+
+  // Search overlay
+  searchOpen: boolean;
+  setSearchOpen: (open: boolean) => void;
+
+  // Appearance tweaks (theme / accent / card / density / grid / background)
+  tweaks: Tweaks;
+  setTweak: (keyOrPatch: keyof Tweaks | Partial<Tweaks>, value?: unknown) => void;
 }
 
-const persist = (partial: Partial<AppState>) => {
+const persist = (partial: { chatModel?: string }) => {
   localStorage.setItem('openmemo_settings', JSON.stringify({
-    theme: partial.theme ?? saved.theme ?? 'light',
     chatModel: partial.chatModel ?? saved.chatModel ?? '',
-    dashboardGridColumns: Number(partial.dashboardGridColumns ?? saved.dashboardGridColumns ?? 5) === 4 ? 4 : 5,
   }));
 };
-
-// Dark mode is manual-toggle only until fully polished.
-// Do NOT auto-apply on load — prevents half-baked dark mode flash.
-// The toggle in SettingsPage handles adding/removing the .dark class.
 
 export const useAppStore = create<AppState>((set) => ({
   sidebarOpen: false,
@@ -100,20 +122,31 @@ export const useAppStore = create<AppState>((set) => ({
   editingCollection: null,
   setEditingCollection: (collection) => set({ editingCollection: collection }),
 
-  theme: saved.theme || 'light',
-  setTheme: (theme) => {
-    set({ theme });
-    persist({ theme });
-    if (theme === 'dark') {
-      document.documentElement.classList.add('dark');
-    } else {
-      document.documentElement.classList.remove('dark');
-    }
-  },
+  addPanelOpen: false,
+  setAddPanelOpen: (open) => set({ addPanelOpen: open }),
 
-  dashboardGridColumns: Number(saved.dashboardGridColumns) === 4 ? 4 : 5,
-  setDashboardGridColumns: (cols) => {
-    set({ dashboardGridColumns: cols });
-    persist({ dashboardGridColumns: cols });
-  },
+  appearancePanelOpen: false,
+  setAppearancePanelOpen: (open) => set({ appearancePanelOpen: open }),
+
+  writerOpen: false,
+  setWriterOpen: (open) => set({ writerOpen: open }),
+
+  sidebarCollapsed: false,
+  toggleSidebarCollapsed: () => set((s) => ({ sidebarCollapsed: !s.sidebarCollapsed })),
+
+  searchOpen: false,
+  setSearchOpen: (open) => set({ searchOpen: open }),
+
+  tweaks: loadTweaks(),
+  setTweak: (keyOrPatch, value) =>
+    set((s) => {
+      const patch =
+        typeof keyOrPatch === 'object'
+          ? keyOrPatch
+          : ({ [keyOrPatch]: value } as Partial<Tweaks>);
+      const tweaks = { ...s.tweaks, ...patch };
+      localStorage.setItem('openmemo_tweaks', JSON.stringify(tweaks));
+      applyTweaks(tweaks);
+      return { tweaks };
+    }),
 }));

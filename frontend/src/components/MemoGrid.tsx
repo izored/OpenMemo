@@ -1,10 +1,19 @@
-// File: frontend/src/components/MemoGrid.tsx
-import { DndContext, useSensor, useSensors, PointerSensor, DragOverlay, pointerWithin, type DragEndEvent, type DragOverEvent } from '@dnd-kit/core';
+import {
+  DndContext,
+  useSensor,
+  useSensors,
+  PointerSensor,
+  DragOverlay,
+  pointerWithin,
+  type DragEndEvent,
+  type DragOverEvent,
+} from '@dnd-kit/core';
 import { SortableContext, verticalListSortingStrategy, useSortable, arrayMove } from '@dnd-kit/sortable';
 import { motion } from 'framer-motion';
 import Masonry from 'react-masonry-css';
 import { useState, useEffect, useRef } from 'react';
 import { MemoCard } from './MemoCard';
+import { Icon } from './Icon';
 import { collectionApi, memoApi } from '@/lib/api';
 import { useQueryClient } from '@tanstack/react-query';
 import type { Memo } from '@/types';
@@ -16,8 +25,6 @@ interface MemoGridProps {
 
 function SortableMemoCard({ memo, anyDragActive }: { memo: Memo; anyDragActive: boolean }) {
   const { attributes, listeners, setNodeRef, isDragging } = useSortable({ id: memo.id });
-
-  // No dnd-kit transforms — array reorder controls positions, DragOverlay shows floating card
   return (
     <motion.div
       ref={setNodeRef}
@@ -31,33 +38,40 @@ function SortableMemoCard({ memo, anyDragActive }: { memo: Memo; anyDragActive: 
   );
 }
 
+function useViewportColumns(userCols: number): number {
+  const [cap, setCap] = useState(5);
+  useEffect(() => {
+    const calc = () => {
+      const w = window.innerWidth;
+      if (w < 900) setCap(2);
+      else if (w < 1280) setCap(3);
+      else if (w < 1500) setCap(4);
+      else setCap(5);
+    };
+    calc();
+    window.addEventListener('resize', calc);
+    return () => window.removeEventListener('resize', calc);
+  }, []);
+  return Math.min(userCols, cap);
+}
+
 export function MemoGrid({ memos: serverMemos }: MemoGridProps) {
   const queryClient = useQueryClient();
-  const dashboardGridColumns = useAppStore((s) => s.dashboardGridColumns);
+  const tweaks = useAppStore((s) => s.tweaks);
+  const columns = useViewportColumns(tweaks.gridColumns || 4);
+  const gap = tweaks.density === 'compact' ? 12 : tweaks.density === 'roomy' ? 28 : 20;
+
   const [activeId, setActiveId] = useState<string | null>(null);
   const [localMemos, setLocalMemos] = useState(serverMemos);
   const reorderingRef = useRef(false);
-  const dragOrderRef = useRef<Memo[]>([]);  // synchronously updated during drag
+  const dragOrderRef = useRef<Memo[]>([]);
   const lastOverIdRef = useRef<string | null>(null);
 
-  const breakpointColumnsObj = {
-    default: dashboardGridColumns,
-    1280: dashboardGridColumns === 5 ? 4 : 3,
-    1024: 3,
-    640: 2,
-  };
-
   useEffect(() => {
-    if (!activeId && !reorderingRef.current) {
-      setLocalMemos(serverMemos);
-    }
+    if (!activeId && !reorderingRef.current) setLocalMemos(serverMemos);
   }, [serverMemos, activeId]);
 
-  const sensors = useSensors(
-    useSensor(PointerSensor, {
-      activationConstraint: { distance: 8 },
-    })
-  );
+  const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 8 } }));
 
   const handleDragOver = (event: DragOverEvent) => {
     const { active, over } = event;
@@ -78,10 +92,10 @@ export function MemoGrid({ memos: serverMemos }: MemoGridProps) {
     setActiveId(null);
     lastOverIdRef.current = null;
 
-    // collection drop — check first
     if (over && String(over.id).startsWith('col-')) {
       const collectionId = String(over.id).replace('col-', '');
-      collectionApi.addMemo(collectionId, String(active.id))
+      collectionApi
+        .addMemo(collectionId, String(active.id))
         .then(() => {
           queryClient.invalidateQueries({ queryKey: ['collections'] });
           queryClient.invalidateQueries({ queryKey: ['memos'] });
@@ -90,40 +104,42 @@ export function MemoGrid({ memos: serverMemos }: MemoGridProps) {
       return;
     }
 
-    // always persist — swaps already happened in onDragOver
     const finalMemos = dragOrderRef.current;
     if (!finalMemos.length) return;
     reorderingRef.current = true;
-
-    Promise.all(
-      finalMemos.map((m, i) => memoApi.updateSort(m.id, finalMemos.length - i))
-    ).then(() => {
-      reorderingRef.current = false;
-      queryClient.invalidateQueries({ queryKey: ['memos'] });
-    }).catch((e) => {
-      console.error('Failed to reorder memos:', e);
-      reorderingRef.current = false;
-      setLocalMemos(serverMemos);
-    });
+    Promise.all(finalMemos.map((m, i) => memoApi.updateSort(m.id, finalMemos.length - i)))
+      .then(() => {
+        reorderingRef.current = false;
+        queryClient.invalidateQueries({ queryKey: ['memos'] });
+      })
+      .catch((e) => {
+        console.error('Failed to reorder memos:', e);
+        reorderingRef.current = false;
+        setLocalMemos(serverMemos);
+      });
   };
 
   const activeMemo = activeId ? localMemos.find((m) => m.id === activeId) : null;
 
   if (localMemos.length === 0) {
     return (
-      <div className="flex flex-col items-center justify-center py-32 text-center">
-        <div className="w-24 h-24 rounded-full bg-[var(--color-brand-light)] flex items-center justify-center mb-6">
-          <span className="text-4xl">&#128218;</span>
+      <div className="om-empty">
+        <div className="om-empty-mark">
+          <Icon name="sparkles" size={26} />
         </div>
-        <h3 className="text-xl font-bold text-[var(--color-text)] mb-3 tracking-tight">
-          No memos yet
-        </h3>
-        <p className="text-[15px] text-[var(--color-text-secondary)] max-w-sm leading-relaxed">
-          Start by saving your first article, note, or file. Use the &quot;Add New&quot; button below.
-        </p>
+        <span className="mono om-greet-eyebrow">Nothing here yet</span>
+        <h2>No memos</h2>
+        <p>Tap the + button to save your first link, note, or file.</p>
       </div>
     );
   }
+
+  const breakpointCols = {
+    default: columns,
+    1500: Math.min(columns, 4),
+    1280: Math.min(columns, 3),
+    900: 2,
+  };
 
   return (
     <DndContext
@@ -138,14 +154,24 @@ export function MemoGrid({ memos: serverMemos }: MemoGridProps) {
       onDragEnd={handleDragEnd}
     >
       <SortableContext items={localMemos.map((m) => m.id)} strategy={verticalListSortingStrategy}>
-        <div className="max-w-[1280px] mx-auto pb-4">
+        <div
+          className="om-grid-wrap"
+          style={
+            tweaks.layout === 'boxed'
+              ? { maxWidth: 1240, marginInline: 'auto' }
+              : undefined
+          }
+        >
           <Masonry
-            breakpointCols={breakpointColumnsObj}
-            className="flex gap-4 w-full"
-            columnClassName="flex flex-col gap-4"
+            breakpointCols={breakpointCols}
+            className="om-masonry"
+            columnClassName="om-masonry-col"
+            style={{ gap }}
           >
             {localMemos.map((memo) => (
-              <SortableMemoCard key={memo.id} memo={memo} anyDragActive={!!activeId} />
+              <div key={memo.id} style={{ marginBottom: gap }}>
+                <SortableMemoCard memo={memo} anyDragActive={!!activeId} />
+              </div>
             ))}
           </Masonry>
         </div>
