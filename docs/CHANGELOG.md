@@ -3,6 +3,38 @@
 All notable changes to OpenMemo are documented here.
 
 ---
+## [1.8.0] - 2026-05-18
+
+### Added
+
+- 🎨 **Full UI rebuild from the Claude Design bundle** — ported the design system verbatim (`openmemo.css`, Satoshi/General Sans/Cabinet fonts, full inline icon set, appearance helpers) and rebuilt every screen against the live FastAPI backend (no mock data).
+- 🧩 **Collections page** (`/collections`) — stacked-card hover fan-out, per-collection memo count + recent titles via `useQueries`, hover edit button, "New collection" card; cover uses the collection's thumbnail, else the latest memo's, else a color gradient.
+- 🪟 **New-memo glass panel** — FAB-anchored capture panel with an animated-height tab morph (Link / Note / Media / Voice), wired to the ingest API.
+- 🎚️ **Live Appearance panel** — theme, accent (+ two custom swatches), card style, Boxed/Full layout, grid columns, background image/random, and a master background-fade slider; all persisted and applied to `<html>` live.
+- 🗂️ **Collection flyout** — the new-memo collection picker is now a separate left-side panel with a "New collection…" action, replacing the cropped in-panel popup.
+- ↕️ **Sort dropdown** — Recent (default) / Oldest / Title / Custom order on the dashboard header.
+- 🔍 **Command search overlay** — ⌘K opens a real search modal over any screen.
+- ✍️ **Fullscreen writer** — distraction-free note composer wired to note ingest.
+- 💾 **Storage stats** — `/api/stats` now reports real on-disk usage (database / files / Chroma cache / total); shown in a Settings "Storage" card with a usage bar.
+- 🧷 **Browser-extension Settings card** — dedicated install / GitHub entry point.
+- 🌈 **Dominant-color card backdrop** — a blurred, saturated copy of a card's preview image sits behind the surface so cards take on the resource's own colors.
+- 🟡 **Sliding filter pill** — framer-motion shared-layout pill animates under the active dashboard filter.
+
+### Changed
+
+- 🧭 **Memo detail stays a routed page** (`/memo/:id`) — the design's slide-over + backdrop blur was intentionally not adopted.
+- 📐 **Layout width** — new Boxed (default, max-width) / Full toggle; sparse grids no longer stretch a lone card across the page (`.om-masonry-col` width capped).
+- 🧑‍🎨 **Settings reflow** — Identity replaced by a slimmer **Creator** card (`dev.izo.red`), Danger zone laid out 3/4 with Creator at 1/4 so it no longer over-pads; Appearance link navigates home then animates the panel in.
+- 🎯 **Density removed** — spacing locked to `roomy`.
+- 🔤 **Menu text colour** — option/menu text stays the text colour; the accent is reserved for icons and indicators only.
+
+### Fixed
+
+- 🖼️ **Background image weight** — 5 MB upload ceiling + canvas downscale (≤1280px, JPEG q0.72) before persisting, so the backdrop no longer bloats local storage.
+- 🧱 **Cropped collection picker** — replaced the clipped in-panel dropdown with a dedicated flyout.
+- 📏 **Over-wide cards** — tightened masonry column max-width for image and text-only memos.
+
+---
 ## [1.7.43] - 2026-05-18
 
 ### Added
