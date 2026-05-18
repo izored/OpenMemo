@@ -1,7 +1,7 @@
 // File: frontend/src/components/MemoGrid.tsx
-import { DndContext, useSensor, useSensors, PointerSensor, DragOverlay, type DragEndEvent } from '@dnd-kit/core';
+import { DndContext, useSensor, useSensors, PointerSensor, DragOverlay, pointerWithin, type DragEndEvent, type DragOverEvent } from '@dnd-kit/core';
 import { SortableContext, verticalListSortingStrategy, useSortable, arrayMove } from '@dnd-kit/sortable';
-import { CSS } from '@dnd-kit/utilities';
+import { motion } from 'framer-motion';
 import Masonry from 'react-masonry-css';
 import { useState, useEffect, useRef } from 'react';
 import { MemoCard } from './MemoCard';
@@ -14,26 +14,20 @@ interface MemoGridProps {
   memos: Memo[];
 }
 
-function SortableMemoCard({ memo }: { memo: Memo }) {
-  const {
-    attributes,
-    listeners,
-    setNodeRef,
-    transform,
-    transition,
-    isDragging,
-  } = useSortable({ id: memo.id });
+function SortableMemoCard({ memo, anyDragActive }: { memo: Memo; anyDragActive: boolean }) {
+  const { attributes, listeners, setNodeRef, isDragging } = useSortable({ id: memo.id });
 
-  const style = {
-    transform: CSS.Transform.toString(transform),
-    transition,
-    opacity: isDragging ? 0.3 : 1,
-  };
-
+  // No dnd-kit transforms — array reorder controls positions, DragOverlay shows floating card
   return (
-    <div ref={setNodeRef} style={style}>
+    <motion.div
+      ref={setNodeRef}
+      layout={!anyDragActive}
+      layoutId={memo.id}
+      transition={{ layout: { duration: 0.25, ease: [0.25, 1, 0.5, 1] } }}
+      style={{ opacity: isDragging ? 0 : 1 }}
+    >
       <MemoCard memo={memo} dragHandleProps={{ attributes, listeners: listeners || {} }} />
-    </div>
+    </motion.div>
   );
 }
 
@@ -43,6 +37,8 @@ export function MemoGrid({ memos: serverMemos }: MemoGridProps) {
   const [activeId, setActiveId] = useState<string | null>(null);
   const [localMemos, setLocalMemos] = useState(serverMemos);
   const reorderingRef = useRef(false);
+  const dragOrderRef = useRef<Memo[]>([]);  // synchronously updated during drag
+  const lastOverIdRef = useRef<string | null>(null);
 
   const breakpointColumnsObj = {
     default: dashboardGridColumns,
@@ -63,18 +59,29 @@ export function MemoGrid({ memos: serverMemos }: MemoGridProps) {
     })
   );
 
+  const handleDragOver = (event: DragOverEvent) => {
+    const { active, over } = event;
+    if (!over || active.id === over.id) return;
+    const overId = String(over.id);
+    if (overId.startsWith('col-')) return;
+    if (overId === lastOverIdRef.current) return;
+    lastOverIdRef.current = overId;
+    const oldIndex = dragOrderRef.current.findIndex((m) => m.id === active.id);
+    const newIndex = dragOrderRef.current.findIndex((m) => m.id === over.id);
+    if (oldIndex === -1 || newIndex === -1) return;
+    dragOrderRef.current = arrayMove(dragOrderRef.current, oldIndex, newIndex);
+    setLocalMemos([...dragOrderRef.current]);
+  };
+
   const handleDragEnd = (event: DragEndEvent) => {
     const { active, over } = event;
     setActiveId(null);
+    lastOverIdRef.current = null;
 
-    if (!over || active.id === over.id) return;
-
-    const overId = String(over.id);
-
-    if (overId.startsWith('col-')) {
-      const collectionId = overId.replace('col-', '');
-      const memoId = String(active.id);
-      collectionApi.addMemo(collectionId, memoId)
+    // collection drop — check first
+    if (over && String(over.id).startsWith('col-')) {
+      const collectionId = String(over.id).replace('col-', '');
+      collectionApi.addMemo(collectionId, String(active.id))
         .then(() => {
           queryClient.invalidateQueries({ queryKey: ['collections'] });
           queryClient.invalidateQueries({ queryKey: ['memos'] });
@@ -83,16 +90,13 @@ export function MemoGrid({ memos: serverMemos }: MemoGridProps) {
       return;
     }
 
-    const oldIndex = localMemos.findIndex((m) => m.id === active.id);
-    const newIndex = localMemos.findIndex((m) => m.id === over.id);
-    if (oldIndex === -1 || newIndex === -1) return;
-
-    const newMemos = arrayMove(localMemos, oldIndex, newIndex);
+    // always persist — swaps already happened in onDragOver
+    const finalMemos = dragOrderRef.current;
+    if (!finalMemos.length) return;
     reorderingRef.current = true;
-    setLocalMemos(newMemos);
 
     Promise.all(
-      newMemos.map((m, i) => memoApi.updateSort(m.id, newMemos.length - i))
+      finalMemos.map((m, i) => memoApi.updateSort(m.id, finalMemos.length - i))
     ).then(() => {
       reorderingRef.current = false;
       queryClient.invalidateQueries({ queryKey: ['memos'] });
@@ -100,7 +104,6 @@ export function MemoGrid({ memos: serverMemos }: MemoGridProps) {
       console.error('Failed to reorder memos:', e);
       reorderingRef.current = false;
       setLocalMemos(serverMemos);
-      queryClient.invalidateQueries({ queryKey: ['memos'] });
     });
   };
 
@@ -125,7 +128,13 @@ export function MemoGrid({ memos: serverMemos }: MemoGridProps) {
   return (
     <DndContext
       sensors={sensors}
-      onDragStart={(e) => setActiveId(String(e.active.id))}
+      collisionDetection={pointerWithin}
+      onDragStart={(e) => {
+        setActiveId(String(e.active.id));
+        lastOverIdRef.current = null;
+        dragOrderRef.current = [...localMemos];
+      }}
+      onDragOver={handleDragOver}
       onDragEnd={handleDragEnd}
     >
       <SortableContext items={localMemos.map((m) => m.id)} strategy={verticalListSortingStrategy}>
@@ -136,7 +145,7 @@ export function MemoGrid({ memos: serverMemos }: MemoGridProps) {
             columnClassName="flex flex-col gap-4"
           >
             {localMemos.map((memo) => (
-              <SortableMemoCard key={memo.id} memo={memo} />
+              <SortableMemoCard key={memo.id} memo={memo} anyDragActive={!!activeId} />
             ))}
           </Masonry>
         </div>
@@ -144,9 +153,13 @@ export function MemoGrid({ memos: serverMemos }: MemoGridProps) {
 
       <DragOverlay dropAnimation={null}>
         {activeMemo ? (
-          <div className="opacity-80 rotate-2 scale-105">
+          <motion.div
+            initial={{ scale: 1, rotate: 0, opacity: 1 }}
+            animate={{ scale: 1.05, rotate: 2, opacity: 0.9 }}
+            transition={{ type: 'spring', stiffness: 300, damping: 20 }}
+          >
             <MemoCard memo={activeMemo} />
-          </div>
+          </motion.div>
         ) : null}
       </DragOverlay>
     </DndContext>
