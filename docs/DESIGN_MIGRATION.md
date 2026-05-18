@@ -67,8 +67,8 @@ Branch: `claude/competent-beaver-1a00f1`.
 
 ## Not imported
 
-- **Collections page** (`CollectionsPage`, stacked-card hover fan-out) — app
-  has no collections route; collections filter the dashboard via sidebar instead.
+- ~~**Collections page**~~ — **now implemented** (v1.8), see Post-migration
+  additions below.
 - **Logo showcase** (`LogoShowcase`, 3 logo proposals) — design-exploration
   artifact, not product UI.
 - **Tweaks dev panel** (`tweaks-panel.jsx` / `TweaksPanel`) — prototype-only
@@ -88,12 +88,12 @@ Branch: `claude/competent-beaver-1a00f1`.
 
 ## Difficult / deferred
 
-- **Dominant-color card tinting** — chats asked cards to take the dominant
-  color of the gathered resource (image/video/link thumb). Backend exposes no
-  palette/dominant-color field; would need server-side extraction (e.g. on
-  ingest, store an accent hex per memo) or client-side canvas sampling of
-  thumbnails (CORS + perf risk). Current impl: real thumbnail when present,
-  else a hashed warm-tint gradient fallback.
+- **Dominant-color card tinting** — **addressed in v1.8** via a pragmatic
+  no-backend approach: a blurred, saturated, scaled copy of the card's own
+  preview image is rendered behind the surface at ~32% opacity with an accent
+  wash. Cards pick up the resource's real colors without server-side palette
+  extraction or canvas/CORS sampling. True per-memo dominant hex (stored on
+  ingest) is still the "proper" long-term fix but no longer blocking.
 - **`color-mix(in oklab, …)`** — used heavily by the design tokens for accent
   tinting. Fine in modern Chromium/Safari; degrades on old browsers. Acceptable
   for a local-first desktop-class app, flagged for awareness.
@@ -108,6 +108,48 @@ Branch: `claude/competent-beaver-1a00f1`.
   the new system would remove the duplication.
 - **Voice capture** — design shows a waveform + record UI; no transcription
   backend (`Whisper · local` was aspirational). Left as disabled placeholder.
-- **Background image perf** — `bgImage` stored as a data URL in localStorage;
-  large images bloat storage. Fine for now; a real impl would persist to the
-  backend / object store.
+- **Background image perf** — `bgImage` stored as a data URL in localStorage.
+  v1.8 mitigates: 5 MB hard upload ceiling + canvas downscale to ≤1280px /
+  JPEG q0.72 before persisting. A backend/object-store impl is still cleaner
+  long-term but no longer a practical problem.
+
+---
+
+## Post-migration additions & fixes (v1.8)
+
+Built after the initial recreation, on the same branch:
+
+### Added
+- **Collections page** (`/collections`) — design's stacked-card fan-out, wired
+  to `collectionApi` + per-collection memo count/recent via `useQueries`.
+  Cover = collection `thumbnail_path` if backend provides one, else latest
+  memo's thumbnail, else color gradient. Hover **edit** button opens the
+  collection modal. "New collection" card.
+- **Sliding filter pill** — framer-motion shared-layout pill under the active
+  dashboard filter.
+- **Dominant-color card backdrop** — blurred preview behind the surface.
+- **Background fade slider** (`bgFade`) — a `var(--bg)` veil above the gradient
+  orbs; dial the backdrop toward the base color without recomputing gradients.
+- **Boxed / Full layout toggle** (`layout` tweak) — caps the grid width.
+- **Real storage stats** — backend `/api/stats` now returns
+  `storage{db,files,cache,total bytes}`; Settings "Storage" card with bar.
+- **Browser-extension Settings card** — install/GitHub link to
+  `chrome-extension/`.
+- **Sort dropdown** — Recent (default) / Oldest / Title / Custom; client-side.
+- **New-memo collection flyout** — left-side second panel replacing the cropped
+  in-panel popup, with a "New collection…" action.
+
+### Changed / Fixed
+- Density control **removed**; locked to `roomy`.
+- Settings: Identity → **Creator** card (no avatar, `dev.izo.red`), Danger zone
+  reflowed 3/4 + Creator 1/4 so it no longer over-pads.
+- Settings → Appearance navigates **home then animates** the panel in.
+- Sparse-grid guard: `.om-masonry-col` max-width capped (300 / 320 roomy) so a
+  lone card no longer balloons full-width.
+- Menu/option **text stays the text color**; accent reserved for icons /
+  indicators only (collection + sort menus).
+
+### Still backend-blocked
+- **User-uploaded collection thumbnail** — frontend reads
+  `collection.thumbnail_path` if present, but there's no DB column / upload
+  endpoint yet. Latest-memo cover works in the meantime.
