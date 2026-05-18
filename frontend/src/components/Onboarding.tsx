@@ -32,6 +32,12 @@ export function Onboarding() {
 
   useEffect(() => {
     if (!localStorage.getItem(ONBOARDING_KEY)) setPhase('intro');
+    const retake = () => {
+      setStep(0);
+      setPhase('tour');
+    };
+    window.addEventListener('openmemo:retake-tour', retake);
+    return () => window.removeEventListener('openmemo:retake-tour', retake);
   }, []);
 
   const finish = () => {
@@ -121,7 +127,7 @@ export function Onboarding() {
 
   return (
     <div className="om-coach-layer">
-      <div className="om-coach-backdrop" onClick={finish} />
+      {!rect && <div className="om-coach-dim" />}
       {rect && (
         <div
           className="om-coach-spot"

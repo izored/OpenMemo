@@ -101,6 +101,12 @@ export const memocastApi = {
     fetchJSON<any>('/memocast', { method: 'POST', body: JSON.stringify({ memo_ids, model }) }),
 };
 
+// Maintenance
+export const maintenanceApi = {
+  clearCache: () => fetchJSON<{ ok: boolean; freed_bytes: number }>('/maintenance/clear-cache', { method: 'POST' }),
+  reset: () => fetchJSON<{ ok: boolean }>('/maintenance/reset', { method: 'POST', body: JSON.stringify({ confirm: true }) }),
+};
+
 // Search
 export const searchApi = {
   search: (q: string) => fetchJSON<{ results: any[] }>(`/search?q=${encodeURIComponent(q)}`),

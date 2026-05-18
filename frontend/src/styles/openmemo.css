@@ -1764,6 +1764,71 @@ input, textarea { font: inherit; color: inherit; }
 .om-sort-opt.active { color: var(--text); }
 .om-sort-opt.active svg { color: var(--accent); }
 
+/* ─ Ask memo — history pane + centered→docked composer ─────────────────── */
+.om-ask-shell {
+  display: grid; grid-template-columns: 220px 1fr;
+  gap: 24px;
+  height: calc(100vh - 96px);
+  padding: 24px 0 0;
+}
+.om-ask-history {
+  display: flex; flex-direction: column; gap: 8px;
+  border-right: 1px solid var(--border);
+  padding-right: 16px; min-height: 0;
+}
+.om-ask-newchat {
+  display: inline-flex; align-items: center; gap: 8px;
+  padding: 9px 12px; border-radius: 10px;
+  background: var(--surface-2); border: 1px solid var(--border);
+  font-size: 13px; color: var(--text);
+  transition: background .15s, border-color .15s;
+}
+.om-ask-newchat:hover { background: var(--surface-3); border-color: var(--border-2); }
+.om-ask-history-list { display: flex; flex-direction: column; gap: 1px; overflow-y: auto; min-height: 0; }
+.om-ask-history-item {
+  display: grid; grid-template-columns: 14px 1fr; gap: 9px; align-items: center;
+  padding: 8px 10px; border-radius: 8px;
+  font-size: 12.5px; color: var(--text-2); text-align: left;
+}
+.om-ask-history-item span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.om-ask-history-item:hover { background: var(--surface-2); color: var(--text); }
+.om-ask-history-item.active { background: var(--surface-2); color: var(--text); box-shadow: inset 2px 0 0 var(--accent); }
+.om-ask-main { display: flex; flex-direction: column; min-height: 0; }
+.om-ask-hero {
+  margin: auto; max-width: 640px; width: 100%;
+  display: flex; flex-direction: column; gap: 12px;
+  text-align: center; align-items: center;
+}
+.om-ask-hero .om-ask-composer { width: 100%; margin-top: 8px; }
+.om-ask-main .om-ask-thread {
+  flex: 1; overflow-y: auto; min-height: 0;
+  display: flex; flex-direction: column; gap: 28px;
+  padding: 8px 4px 16px; max-width: 760px; width: 100%; margin: 0 auto;
+}
+.om-ask-composer-dock {
+  position: sticky; bottom: 0;
+  padding: 14px 0 20px;
+  max-width: 760px; width: 100%; margin: 0 auto;
+  background: linear-gradient(to top, var(--bg) 70%, transparent);
+}
+@media (max-width: 1000px) {
+  .om-ask-shell { grid-template-columns: 1fr; }
+  .om-ask-history { display: none; }
+}
+
+/* Hover = fill a pill, not recolor text (accessibility / contrast) */
+.om-filter-tab:hover { background: var(--surface-2); color: var(--text); }
+.om-creator-link:hover {
+  background: var(--surface-2);
+  color: var(--text);
+  border-color: var(--border-2);
+}
+.om-suggest:hover { background: var(--surface-2); color: var(--text); }
+
+/* Danger / Creator row — don't stretch cards to equal height */
+.om-settings-bottom { align-items: start; }
+.om-danger-grid { align-items: start; }
+
 /* ─ Type scale standardisation ──────────────────────────────────────────────
    Lighter, smaller headings; readable minimum body/caption size. */
 .om-greet-title, .om-ask-title { font-size: 32px; font-weight: 400; letter-spacing: -0.02em; }
@@ -1846,11 +1911,13 @@ input, textarea { font: inherit; color: inherit; }
 .om-intro-actions { display: flex; gap: 10px; margin-top: 22px; }
 .om-intro .om-add-foot-btn { height: 38px; padding: 0 18px; font-size: 13px; border-radius: 10px; }
 
-.om-coach-layer { position: fixed; inset: 0; z-index: 190; }
-.om-coach-backdrop { position: absolute; inset: 0; background: rgba(0,0,0,0.45); -webkit-backdrop-filter: blur(2px); backdrop-filter: blur(2px); animation: fade .2s ease; }
+/* Layer ignores pointer so the spotlighted control stays clickable;
+   only the card captures clicks. No blur — dim via opacity only. */
+.om-coach-layer { position: fixed; inset: 0; z-index: 190; pointer-events: none; }
+.om-coach-dim { position: absolute; inset: 0; background: rgba(0,0,0,0.42); animation: fade .2s ease; }
 .om-coach-spot {
   position: fixed; border-radius: 12px;
-  box-shadow: 0 0 0 9999px rgba(0,0,0,0.45), 0 0 0 2px var(--accent);
+  box-shadow: 0 0 0 9999px rgba(0,0,0,0.42), 0 0 0 2px var(--accent);
   transition: all .25s cubic-bezier(.2,.7,.2,1);
   pointer-events: none;
 }
@@ -1861,7 +1928,7 @@ input, textarea { font: inherit; color: inherit; }
   box-shadow: var(--shadow-elev);
   padding: 18px; display: flex; flex-direction: column; gap: 8px;
   animation: pop .2s cubic-bezier(.2,.7,.2,1);
-  z-index: 191;
+  z-index: 191; pointer-events: auto;
 }
 .om-coach-title { margin: 0; font-size: 16px; font-weight: 600; letter-spacing: -0.01em; }
 .om-coach-body { margin: 0; font-size: 13px; line-height: 1.6; color: var(--text-2); }

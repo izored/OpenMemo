@@ -97,6 +97,18 @@ async def serve_file(file_path: str):
 
     return FileResponse(str(target))
 
+
+_thumb_store = SafePath(settings.FILES_DIR / "thumbs")
+
+
+@app.get("/api/files/thumb/{name}")
+async def serve_thumb(name: str):
+    """Serve a locally-cached thumbnail (public; only images under files/thumbs)."""
+    target = _thumb_store.serve_path(name)
+    if not target.exists():
+        raise HTTPException(status_code=404, detail="Thumbnail not found")
+    return FileResponse(str(target))
+
 # Register routers
 from backend.api.memos import router as memos_router
 from backend.api.chat import router as chat_router
@@ -104,6 +116,7 @@ from backend.api.collections import router as collections_router
 from backend.api.ingest import router as ingest_router
 from backend.api.export import router as export_router
 from backend.api.search import router as search_router
+from backend.api.maintenance import router as maintenance_router
 
 app.include_router(memos_router)
 app.include_router(chat_router)
@@ -111,6 +124,7 @@ app.include_router(collections_router)
 app.include_router(ingest_router)
 app.include_router(export_router)
 app.include_router(search_router)
+app.include_router(maintenance_router)
 
 
 @app.get("/api/stats")
