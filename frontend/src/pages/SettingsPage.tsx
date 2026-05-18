@@ -2,8 +2,9 @@ import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Icon } from '@/components/Icon';
 import { ChangelogModal, cmpVersion } from '@/components/ChangelogModal';
+import { ONBOARDING_KEY } from '@/lib/onboarding';
 import { useAppStore } from '@/stores/appStore';
-import { systemApi } from '@/lib/api';
+import { systemApi, maintenanceApi } from '@/lib/api';
 import type { OllamaModel } from '@/types';
 
 const BUILT_WITH = [
@@ -129,6 +130,21 @@ export function SettingsPage() {
               <Icon name="arrowUpRight" size={14} />
             </span>
           </button>
+          <div className="om-setting-row" style={{ borderTop: '1px solid var(--border)', marginTop: 8 }}>
+            <div className="om-setting-row-text">
+              <p>Product tour</p>
+              <span className="mono">Replay the welcome walkthrough</span>
+            </div>
+            <button
+              className="om-btn-secondary"
+              onClick={() => {
+                localStorage.removeItem(ONBOARDING_KEY);
+                window.dispatchEvent(new Event('openmemo:retake-tour'));
+              }}
+            >
+              Retake
+            </button>
+          </div>
         </SettingCard>
 
         <SettingCard title="Browser extension" eyebrow="Capture">
@@ -288,7 +304,19 @@ export function SettingsPage() {
                   {stats?.storage ? `Frees ~${fmtBytes(stats.storage.cache_bytes)}` : 'Thumbnail cache'}
                 </span>
               </div>
-              <button className="om-btn-secondary" disabled title="Coming soon">
+              <button
+                className="om-btn-secondary"
+                onClick={async () => {
+                  if (!confirm('Delete all cached thumbnail previews? They re-cache automatically.')) return;
+                  try {
+                    const r = await maintenanceApi.clearCache();
+                    systemApi.stats().then(setStats).catch(() => {});
+                    alert(`Cleared ${fmtBytes(r.freed_bytes)} of cached previews.`);
+                  } catch {
+                    alert('Failed to clear cache.');
+                  }
+                }}
+              >
                 Clear
               </button>
             </div>
@@ -297,7 +325,20 @@ export function SettingsPage() {
                 <p>Reset workspace</p>
                 <span className="mono">Cannot be undone</span>
               </div>
-              <button className="om-btn-secondary danger" disabled title="Coming soon">
+              <button
+                className="om-btn-secondary danger"
+                onClick={async () => {
+                  if (!confirm('Permanently delete ALL memos, collections, tags, chats and files? This cannot be undone.')) return;
+                  if (!confirm('Final confirmation — reset the entire workspace?')) return;
+                  try {
+                    await maintenanceApi.reset();
+                    alert('Workspace reset. Reloading.');
+                    location.reload();
+                  } catch {
+                    alert('Failed to reset workspace.');
+                  }
+                }}
+              >
                 Reset
               </button>
             </div>
