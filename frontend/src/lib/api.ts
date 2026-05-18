@@ -101,6 +101,36 @@ export const memocastApi = {
     fetchJSON<any>('/memocast', { method: 'POST', body: JSON.stringify({ memo_ids, model }) }),
 };
 
+// Backup & Restore
+export const backupApi = {
+  download: async (scope: 'structure' | 'full'): Promise<void> => {
+    const resp = await fetch(`${API_BASE}/backup?scope=${scope}`, { method: 'POST' });
+    if (!resp.ok) {
+      const err = await resp.json().catch(() => ({ detail: resp.statusText }));
+      throw new Error(err.detail || 'Backup failed');
+    }
+    const blob = await resp.blob();
+    const url = URL.createObjectURL(blob);
+    const cd = resp.headers.get('content-disposition') || '';
+    const match = cd.match(/filename="([^"]+)"/);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = match?.[1] || `openmemo-backup-${scope}.zip`;
+    a.click();
+    URL.revokeObjectURL(url);
+  },
+  restore: async (file: File): Promise<{ ok: boolean; scope: string; version: string }> => {
+    const form = new FormData();
+    form.append('file', file);
+    const resp = await fetch(`${API_BASE}/backup/restore`, { method: 'POST', body: form });
+    if (!resp.ok) {
+      const err = await resp.json().catch(() => ({ detail: resp.statusText }));
+      throw new Error(err.detail || 'Restore failed');
+    }
+    return resp.json();
+  },
+};
+
 // Maintenance
 export const maintenanceApi = {
   clearCache: () => fetchJSON<{ ok: boolean; freed_bytes: number }>('/maintenance/clear-cache', { method: 'POST' }),

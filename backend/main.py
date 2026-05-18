@@ -117,6 +117,7 @@ from backend.api.ingest import router as ingest_router
 from backend.api.export import router as export_router
 from backend.api.search import router as search_router
 from backend.api.maintenance import router as maintenance_router
+from backend.api.backup import router as backup_router
 
 app.include_router(memos_router)
 app.include_router(chat_router)
@@ -125,6 +126,7 @@ app.include_router(ingest_router)
 app.include_router(export_router)
 app.include_router(search_router)
 app.include_router(maintenance_router)
+app.include_router(backup_router)
 
 
 @app.get("/api/stats")
