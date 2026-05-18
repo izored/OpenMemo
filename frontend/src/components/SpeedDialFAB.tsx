@@ -97,7 +97,7 @@ export function SpeedDialFAB({ inline = false }: { inline?: boolean }) {
               <div
                 className="w-11 h-11 rounded-full flex items-center justify-center shadow-md"
                 style={{
-                  backgroundColor: isHovered ? 'var(--color-dark)' : 'var(--color-bg-card)',
+                  backgroundColor: isHovered ? 'var(--color-dark)' : 'var(--surface)',
                   color: isHovered ? 'var(--color-bg)' : 'var(--color-text)',
                   border: '1px solid var(--color-border)',
                   transform: isHovered ? 'scale(1.08)' : 'scale(1)',

@@ -163,10 +163,10 @@ export function MarkdownEditor({
               remarkPlugins={[remarkGfm]}
               components={{
                 code: ({ children, className }: { children?: ReactNode; className?: string }) => (
-                  <code className={cn('bg-[var(--color-bg-code)] text-white px-1 py-0.5 rounded text-[12px] font-mono', className)}>{children}</code>
+                  <code className={cn('bg-[var(--surface-3)] text-white px-1 py-0.5 rounded text-[12px] font-mono', className)}>{children}</code>
                 ),
                 pre: ({ children }: { children?: ReactNode }) => (
-                  <pre className="bg-[var(--color-bg-code)] text-white p-4 rounded-xl overflow-x-auto font-mono text-[12px] my-3 [&_code]:bg-transparent [&_code]:p-0">
+                  <pre className="bg-[var(--surface-3)] text-white p-4 rounded-xl overflow-x-auto font-mono text-[12px] my-3 [&_code]:bg-transparent [&_code]:p-0">
                     {children}
                   </pre>
                 ),
@@ -176,7 +176,7 @@ export function MarkdownEditor({
                   </div>
                 ),
                 th: ({ children }: { children?: ReactNode }) => (
-                  <th className="border border-[var(--color-border)] bg-[var(--color-bg-hover)] px-3 py-2 text-left font-semibold">{children}</th>
+                  <th className="border border-[var(--color-border)] bg-[var(--surface-2)] px-3 py-2 text-left font-semibold">{children}</th>
                 ),
                 td: ({ children }: { children?: ReactNode }) => (
                   <td className="border border-[var(--color-border)] px-3 py-2">{children}</td>
@@ -187,7 +187,7 @@ export function MarkdownEditor({
             </ReactMarkdown>
           </div>
         ) : (
-          <p className="text-[var(--color-text-muted)] italic cursor-text px-1 py-2">{placeholder}</p>
+          <p className="text-[var(--text-4)] italic cursor-text px-1 py-2">{placeholder}</p>
         )}
         {savedFlash && (
           <div className="absolute bottom-2 right-3 text-[11px] font-medium text-[var(--color-status)] animate-in fade-in slide-in-from-bottom-1 duration-300">
@@ -205,7 +205,7 @@ export function MarkdownEditor({
       className={cn(
         'relative rounded-2xl transition-all',
         focused
-          ? 'border border-[var(--color-border)] bg-[var(--color-bg-card)]'
+          ? 'border border-[var(--color-border)] bg-[var(--surface)]'
           : 'border border-transparent bg-transparent',
         className
       )}

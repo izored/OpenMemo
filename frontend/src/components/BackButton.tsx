@@ -12,7 +12,7 @@ export function BackButton({ to, className }: BackButtonProps) {
   return (
     <button
       onClick={() => (to ? navigate(to) : navigate(-1))}
-      className={`flex items-center gap-2 text-[var(--color-brand)] hover:opacity-80 transition-opacity ${className || ''}`}
+      className={`flex items-center gap-2 text-[var(--accent)] hover:opacity-80 transition-opacity ${className || ''}`}
       title="Go back"
     >
       <ArrowLeft size={20} strokeWidth={2.5} />

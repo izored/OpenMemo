@@ -9,10 +9,10 @@ interface CardProps {
 }
 
 const variantStyles = {
-  default: 'bg-[var(--color-bg-card)] shadow-sm',
+  default: 'bg-[var(--surface)] shadow-sm',
   note: 'bg-[var(--color-type-note-bg)] text-[var(--color-type-note-text)]',
-  elevated: 'bg-[var(--color-bg-card)] shadow-md hover:shadow-xl',
-  flat: 'bg-[var(--color-bg-card)] border border-[var(--color-border)]',
+  elevated: 'bg-[var(--surface)] shadow-md hover:shadow-xl',
+  flat: 'bg-[var(--surface)] border border-[var(--color-border)]',
 };
 
 export function Card({
