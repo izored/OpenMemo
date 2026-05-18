@@ -1,11 +1,12 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { useQuery } from '@tanstack/react-query';
-import { Send, Bot, User, Loader2, Sparkles, Globe } from 'lucide-react';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { useNavigate } from 'react-router-dom';
+import { Icon } from '@/components/Icon';
 import { useAppStore } from '@/stores/appStore';
 import { chatApi, systemApi } from '@/lib/api';
 import type { ChatSource, OllamaModel } from '@/types';
-import { cn } from '@/lib/utils';
 import ReactMarkdown from 'react-markdown';
+import { cn } from '@/lib/utils';
 
 interface Message {
   id: string;
@@ -14,20 +15,36 @@ interface Message {
   sources?: ChatSource[];
 }
 
+interface Session {
+  id: string;
+  title: string;
+  created_at: string;
+}
+
+const SUGGESTIONS = [
+  'Summarize my reading this week',
+  'Connect ideas across my notes',
+  "What's in my inbox?",
+];
+
 export function AskMemoPage() {
   const { chatModel, setChatModel } = useAppStore();
+  const navigate = useNavigate();
+  const queryClient = useQueryClient();
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState('');
   const [streaming, setStreaming] = useState(false);
   const [sessionId, setSessionId] = useState<string | null>(null);
+  const [historyOpen, setHistoryOpen] = useState(false);
+  const [modelOpen, setModelOpen] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
 
-  const { data: modelsData } = useQuery({
-    queryKey: ['models'],
-    queryFn: systemApi.models,
+  const { data: modelsData } = useQuery({ queryKey: ['models'], queryFn: systemApi.models });
+  const { data: sessions = [] } = useQuery<Session[]>({
+    queryKey: ['chat-sessions'],
+    queryFn: chatApi.sessions,
   });
 
-  // Auto-select first available model if none chosen or saved model no longer exists
   useEffect(() => {
     const available = (modelsData?.models || []).map((m: OllamaModel) => m.name);
     if (available.length > 0 && (!chatModel || !available.includes(chatModel))) {
@@ -39,16 +56,38 @@ export function AskMemoPage() {
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: 'smooth' });
   }, [messages]);
 
-  const handleSend = async () => {
-    if (!input.trim() || streaming) return;
+  const loadSession = async (id: string) => {
+    try {
+      const msgs = await chatApi.messages(id);
+      setMessages(
+        (msgs || []).map((m: { id: string; role: string; content: string; sources?: ChatSource[] }) => ({
+          id: m.id,
+          role: m.role === 'assistant' ? 'assistant' : 'user',
+          content: m.content,
+          sources: m.sources,
+        }))
+      );
+      setSessionId(id);
+    } catch {
+      /* ignore */
+    }
+  };
 
-    const userMsg: Message = { id: Date.now().toString(), role: 'user', content: input };
-    setMessages((prev) => [...prev, userMsg]);
+  const newChat = () => {
+    setMessages([]);
+    setSessionId(null);
+    setInput('');
+  };
+
+  const handleSend = async (preset?: string) => {
+    const text = (preset ?? input).trim();
+    if (!text || streaming) return;
+    const userMsg: Message = { id: Date.now().toString(), role: 'user', content: text };
+    setMessages((p) => [...p, userMsg]);
     setInput('');
     setStreaming(true);
-
     const assistantMsg: Message = { id: (Date.now() + 1).toString(), role: 'assistant', content: '', sources: [] };
-    setMessages((prev) => [...prev, assistantMsg]);
+    setMessages((p) => [...p, assistantMsg]);
 
     try {
       const resp = await chatApi.stream({
@@ -56,50 +95,47 @@ export function AskMemoPage() {
         session_id: sessionId || undefined,
         model: chatModel,
       });
-
       if (!resp.ok) {
         const err = await resp.json().catch(() => ({ detail: `HTTP ${resp.status}` }));
         throw new Error(err.detail || `HTTP ${resp.status}`);
       }
-
       const reader = resp.body?.getReader();
       const decoder = new TextDecoder();
-
       if (reader) {
         let buffer = '';
         while (true) {
           const { done, value } = await reader.read();
           if (done) break;
-
           buffer += decoder.decode(value, { stream: true });
           const lines = buffer.split('\n');
           buffer = lines.pop() || '';
-
           for (const line of lines) {
             if (!line.startsWith('data: ')) continue;
             let data: Record<string, unknown>;
-            try { data = JSON.parse(line.slice(6)); } catch { continue; }
-
+            try {
+              data = JSON.parse(line.slice(6));
+            } catch {
+              continue;
+            }
             if (data.type === 'token') {
               setMessages((prev) => {
                 const last = prev[prev.length - 1];
-                if (last.role === 'assistant') {
+                if (last.role === 'assistant')
                   return [...prev.slice(0, -1), { ...last, content: last.content + data.data }];
-                }
                 return prev;
               });
             } else if (data.type === 'sources') {
               setMessages((prev) => {
                 const last = prev[prev.length - 1];
-                if (last.role === 'assistant') {
+                if (last.role === 'assistant')
                   return [...prev.slice(0, -1), { ...last, sources: data.data as ChatSource[] }];
-                }
                 return prev;
               });
             } else if (data.type === 'error') {
               throw new Error((data.data as string) || 'Ollama error');
             } else if (data.type === 'done') {
               setSessionId(data.session_id as string | null);
+              queryClient.invalidateQueries({ queryKey: ['chat-sessions'] });
             }
           }
         }
@@ -108,9 +144,8 @@ export function AskMemoPage() {
       setMessages((prev) => {
         const updated = [...prev];
         const last = updated[updated.length - 1];
-        if (last.role === 'assistant') {
+        if (last.role === 'assistant')
           last.content = 'Error: ' + ((e as Error).message || 'Failed to get response');
-        }
         return [...updated];
       });
     } finally {
@@ -118,123 +153,174 @@ export function AskMemoPage() {
     }
   };
 
-  return (
-    <div className="h-full flex flex-col bg-[var(--color-bg-card)] rounded-2xl overflow-hidden">
-      {/* Header */}
-      <header className="flex items-center justify-between px-6 py-4 pl-14 border-b border-[var(--color-border)]">
-        <div className="flex items-center gap-2.5">
-          <Sparkles size={20} className="text-[var(--color-brand)]" />
-          <h1 className="text-xl font-semibold text-[var(--color-text)] tracking-tight">AskMemo</h1>
-        </div>
-        <div className="flex items-center gap-3">
-          <select
-            value={chatModel}
-            onChange={(e) => setChatModel(e.target.value)}
-            className="px-3 py-1.5 border border-[var(--color-border)] rounded-full text-sm text-[var(--color-text)] bg-[var(--color-bg-card)] font-mono text-xs focus:outline-none focus:border-[var(--color-text)]"
-          >
-            {(modelsData?.models || []).map((m: OllamaModel) => (
-              <option key={m.name} value={m.name}>{m.name}</option>
-            ))}
-            {(!modelsData?.models || modelsData.models.length === 0) && (
-              <option value={chatModel}>{chatModel}</option>
-            )}
-          </select>
-        </div>
-      </header>
+  const hasThread = messages.length > 0;
 
-      {/* Messages */}
-      <div ref={scrollRef} className="flex-1 overflow-y-auto p-6 space-y-6">
-        {messages.length === 0 && (
-          <div className="flex flex-col items-center justify-center h-full text-center">
-            <div className="w-16 h-16 rounded-full bg-[var(--color-brand-light)] flex items-center justify-center mb-4">
-              <Bot size={28} className="text-[var(--color-brand)]" />
-            </div>
-            <h3 className="text-lg font-semibold text-[var(--color-text)] mb-2 tracking-tight">Ask anything about your memos</h3>
-            <p className="text-sm text-[var(--color-text-secondary)] max-w-md leading-relaxed">
-              I'll search through your saved articles, notes, and documents to give you grounded answers with citations.
-            </p>
-            <p className="text-xs text-[var(--color-text-muted)] mt-3 font-mono">
-              Tip: Start with @ to use general knowledge (no RAG)
-            </p>
-          </div>
-        )}
-
-        {messages.map((msg) => (
-          <div key={msg.id} className={cn('flex gap-3', msg.role === 'user' && 'justify-end')}>
-            {msg.role === 'assistant' && (
-              <div className="w-8 h-8 rounded-full bg-[var(--color-brand-light)] flex items-center justify-center flex-shrink-0">
-                <Bot size={16} className="text-[var(--color-brand)]" />
-              </div>
-            )}
-            <div
-              className={cn(
-                'max-w-[70%] rounded-2xl px-4 py-3',
-                msg.role === 'user'
-                  ? 'bg-[var(--color-bg-active)] text-[var(--color-text-active)]'
-                  : 'bg-[var(--color-bg-hover)] text-[var(--color-text)]'
-              )}
-            >
-              {msg.role === 'assistant' ? (
-                <div className="prose prose-sm max-w-none">
-                  <ReactMarkdown components={{
-                    code: ({ children, className }: { children?: React.ReactNode; className?: string }) => (
-                      <code className={`bg-[var(--color-bg-code)] text-white px-1 py-0.5 rounded text-[11px] font-mono ${className || ''}`}>{children}</code>
-                    ),
-                    pre: ({ children }: { children?: React.ReactNode }) => (
-                      <pre className="bg-[var(--color-bg-code)] text-white p-3 rounded-xl overflow-x-auto font-mono text-[11px] my-2 [&_code]:bg-transparent [&_code]:p-0">
-                        {children}
-                      </pre>
-                    )
-                  }}>{msg.content || (streaming ? '...' : '')}</ReactMarkdown>
-                </div>
-              ) : (
-                <p className="text-sm">{msg.content}</p>
-              )}
-              {msg.sources && msg.sources.length > 0 && (
-                <div className="mt-3 pt-2 border-t border-[var(--color-border)] flex flex-wrap gap-1.5">
-                  {msg.sources.map((s, i) => (
-                    <span
-                      key={i}
-                      className="inline-flex items-center gap-1 px-2.5 py-0.5 bg-[var(--color-bg-card)] rounded-full text-[11px] text-[var(--color-text-secondary)] border border-[var(--color-border)] font-mono"
-                      title={s.snippet}
-                    >
-                      <Globe size={9} />
-                      [{i + 1}] {s.title?.slice(0, 25)}
-                    </span>
-                  ))}
-                </div>
-              )}
-            </div>
-            {msg.role === 'user' && (
-              <div className="w-8 h-8 rounded-full bg-[var(--color-bg-hover)] flex items-center justify-center flex-shrink-0">
-                <User size={16} className="text-[var(--color-text-secondary)]" />
-              </div>
-            )}
-          </div>
-        ))}
-      </div>
-
-      {/* Input */}
-      <div className="p-4 border-t border-[var(--color-border)]">
-        <div className="flex items-center gap-2 max-w-3xl mx-auto">
-          <input
-            type="text"
-            value={input}
-            onChange={(e) => setInput(e.target.value)}
-            onKeyDown={(e) => e.key === 'Enter' && !e.shiftKey && handleSend()}
-            placeholder="Ask about your saved knowledge..."
-            className="flex-1 px-5 py-3 border border-[var(--color-border)] rounded-full text-sm focus:outline-none focus:border-[var(--color-text)] bg-[var(--color-bg-card)] transition-colors"
-            disabled={streaming}
-          />
+  const composer = (
+    <div className="om-ask-composer">
+      <Icon name="sparkles" size={14} />
+      <input
+        value={input}
+        onChange={(e) => setInput(e.target.value)}
+        onKeyDown={(e) => e.key === 'Enter' && !e.shiftKey && handleSend()}
+        placeholder="Ask anything across your Memos…"
+        disabled={streaming}
+        autoFocus
+      />
+      {(modelsData?.models || []).length > 0 && (
+        <div style={{ position: 'relative' }}>
           <button
-            onClick={handleSend}
-            disabled={!input.trim() || streaming}
-            className="p-3 bg-[var(--color-bg-active)] text-[var(--color-text-active)] rounded-full hover:bg-[var(--color-text)] disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+            type="button"
+            className="om-model-btn mono"
+            onClick={() => setModelOpen((v) => !v)}
+            title="Model"
           >
-            {streaming ? <Loader2 size={18} className="animate-spin" /> : <Send size={18} />}
+            <span>{chatModel || 'model'}</span>
+            <Icon name="chevronDown" size={10} />
+          </button>
+          {modelOpen && (
+            <>
+              <div
+                style={{ position: 'fixed', inset: 0, zIndex: 9 }}
+                onClick={() => setModelOpen(false)}
+              />
+              <div className="om-model-menu">
+                {(modelsData?.models || []).map((m: OllamaModel) => (
+                  <button
+                    key={m.name}
+                    className={cn('om-sort-opt mono', chatModel === m.name && 'active')}
+                    onClick={() => {
+                      setChatModel(m.name);
+                      setModelOpen(false);
+                    }}
+                  >
+                    {m.name}
+                    {chatModel === m.name && <Icon name="check" size={11} />}
+                  </button>
+                ))}
+              </div>
+            </>
+          )}
+        </div>
+      )}
+      <button className="om-send" onClick={() => handleSend()} disabled={streaming}>
+        <Icon name="send" size={13} />
+      </button>
+    </div>
+  );
+
+  return (
+    <div className={cn('om-ask-shell', historyOpen && 'history-open')}>
+      <div className="om-ask-main">
+        <div className="om-ask-topbar">
+          <button
+            className={cn('om-ask-histtoggle', historyOpen && 'active')}
+            onClick={() => setHistoryOpen((v) => !v)}
+            title="Chat history"
+          >
+            <Icon name="clock" size={13} />
+            <span>History</span>
           </button>
         </div>
+        {!hasThread ? (
+          <div className="om-ask-hero">
+            <span className="om-ask-eyebrow mono">
+              Ask · {chatModel ? `model ${chatModel}` : 'local AI'}
+            </span>
+            <h1 className="om-ask-title">What do you remember?</h1>
+            <p className="om-greet-sub" style={{ marginBottom: 8 }}>
+              I'll search your saved articles, notes, and documents and answer with citations.
+            </p>
+            {composer}
+            <div className="om-ask-suggestions" style={{ justifyContent: 'center' }}>
+              {SUGGESTIONS.map((s) => (
+                <button key={s} className="om-suggest" onClick={() => handleSend(s)}>
+                  {s}
+                </button>
+              ))}
+            </div>
+          </div>
+        ) : (
+          <>
+            <div className="om-ask-thread" ref={scrollRef}>
+              {messages.map((msg) => (
+                <div key={msg.id} className={`om-msg ${msg.role}`}>
+                  <div className={`om-msg-avatar ${msg.role === 'assistant' ? 'ai' : ''}`}>
+                    {msg.role === 'assistant' ? <Icon name="sparkles" size={13} /> : 'RI'}
+                  </div>
+                  <div className="om-msg-body">
+                    <span className="om-msg-meta mono">
+                      {msg.role === 'assistant' ? 'openMemo' : 'You'}
+                    </span>
+                    {msg.role === 'assistant' ? (
+                      <div
+                        className="om-detail-summary"
+                        style={{ background: 'transparent', border: 0, padding: 0 }}
+                      >
+                        <ReactMarkdown
+                          components={{
+                            code: ({ children, className }: { children?: React.ReactNode; className?: string }) => (
+                              <code className={`mono ${className || ''}`}>{children}</code>
+                            ),
+                          }}
+                        >
+                          {msg.content || (streaming ? '…' : '')}
+                        </ReactMarkdown>
+                      </div>
+                    ) : (
+                      <p>{msg.content}</p>
+                    )}
+                    {msg.sources && msg.sources.length > 0 && (
+                      <div className="om-msg-cards">
+                        {msg.sources.map((s, i) => (
+                          <div
+                            key={i}
+                            className="om-ask-source"
+                            onClick={() => s.memo_id && navigate(`/memo/${s.memo_id}`)}
+                          >
+                            <span className="om-ask-source-num mono">{i + 1}</span>
+                            <div>
+                              <p className="om-ask-source-title">{s.title}</p>
+                              <span className="om-ask-source-meta mono">{s.domain}</span>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+            <div className="om-ask-composer-dock">{composer}</div>
+          </>
+        )}
       </div>
+
+      {historyOpen && (
+        <aside className="om-ask-history">
+          <button className="om-ask-newchat" onClick={newChat}>
+            <Icon name="plus" size={13} />
+            <span>New chat</span>
+          </button>
+          <div className="om-ask-history-list">
+            {sessions.length === 0 && (
+              <p className="om-hint-readable" style={{ padding: '4px 8px' }}>
+                No chats yet.
+              </p>
+            )}
+            {sessions.map((s) => (
+              <button
+                key={s.id}
+                className={cn('om-ask-history-item', sessionId === s.id && 'active')}
+                onClick={() => loadSession(s.id)}
+                title={s.title}
+              >
+                <Icon name="message" size={12} />
+                <span>{s.title || 'Untitled chat'}</span>
+              </button>
+            ))}
+          </div>
+        </aside>
+      )}
     </div>
   );
 }
