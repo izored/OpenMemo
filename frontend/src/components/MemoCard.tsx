@@ -50,6 +50,7 @@ function Chrome({
   style,
   dragHandleProps,
   onDelete,
+  bgSrc,
   children,
 }: {
   memo: Memo;
@@ -57,6 +58,7 @@ function Chrome({
   style?: React.CSSProperties;
   dragHandleProps?: DragProps;
   onDelete: (e: React.MouseEvent) => void;
+  bgSrc?: string | null;
   children: React.ReactNode;
 }) {
   const navigate = useNavigate();
@@ -66,6 +68,11 @@ function Chrome({
       style={style}
       onClick={() => navigate(`/memo/${memo.id}`)}
     >
+      {bgSrc && (
+        <div className="om-card-dom" aria-hidden>
+          <span style={{ backgroundImage: `url(${bgSrc})` }} />
+        </div>
+      )}
       <span
         {...(dragHandleProps?.attributes || {})}
         {...(dragHandleProps?.listeners || {})}
@@ -163,7 +170,7 @@ export function MemoCard({ memo, dragHandleProps }: CardProps) {
   // ── Image ──
   if (memo.type === 'image') {
     return (
-      <Chrome memo={memo} dragHandleProps={dragHandleProps} onDelete={handleDelete} className="om-card-image">
+      <Chrome memo={memo} dragHandleProps={dragHandleProps} onDelete={handleDelete} bgSrc={src} className="om-card-image">
         <div className="om-image-frame" style={{ background: src ? undefined : heroBg }}>
           {src ? (
             <img
@@ -187,7 +194,7 @@ export function MemoCard({ memo, dragHandleProps }: CardProps) {
   // ── Video ──
   if (memo.type === 'video') {
     return (
-      <Chrome memo={memo} dragHandleProps={dragHandleProps} onDelete={handleDelete} className="om-card-video">
+      <Chrome memo={memo} dragHandleProps={dragHandleProps} onDelete={handleDelete} bgSrc={src} className="om-card-video">
         <div className="om-video-frame" style={{ background: src ? undefined : heroBg }}>
           {src ? (
             <img
@@ -238,7 +245,7 @@ export function MemoCard({ memo, dragHandleProps }: CardProps) {
 
   // ── Link / Article / Audio / fallback ──
   return (
-    <Chrome memo={memo} dragHandleProps={dragHandleProps} onDelete={handleDelete} className="om-card-link">
+    <Chrome memo={memo} dragHandleProps={dragHandleProps} onDelete={handleDelete} bgSrc={src} className="om-card-link">
       <div className="om-card-hero" style={{ background: src ? undefined : heroBg }}>
         {src ? (
           <img

@@ -1641,3 +1641,55 @@ input, textarea { font: inherit; color: inherit; }
 .om-masonry { justify-content: flex-start; }
 .om-masonry-col { flex: 1 1 0; max-width: 360px; }
 [data-density="roomy"] .om-masonry-col { max-width: 400px; }
+
+/* Sliding filter pill (framer-motion shared layout) */
+.om-filter-tab.active { background: transparent !important; box-shadow: none !important; }
+.om-filter-pill {
+  position: absolute; inset: 0; border-radius: 7px;
+  background: var(--surface-2);
+  box-shadow: 0 1px 2px rgba(0,0,0,0.06), inset 0 0 0 1px var(--border);
+  z-index: 0;
+}
+
+/* Dominant-color card backdrop — blurred copy of the preview image, faded
+   under the surface so the card picks up the resource's own colors. */
+.om-card-dom { position: absolute; inset: 0; z-index: 0; overflow: hidden; pointer-events: none; }
+.om-card-dom span {
+  position: absolute; inset: -30%;
+  background-size: cover; background-position: center;
+  filter: blur(38px) saturate(1.5);
+  transform: scale(1.15);
+  opacity: 0.32;
+}
+.om-card-dom::after {
+  content: ""; position: absolute; inset: 0;
+  background: linear-gradient(160deg, var(--accent-soft) 0%, transparent 55%);
+  mix-blend-mode: overlay;
+}
+.om-card-link .om-card-dom, .om-card-image .om-card-dom, .om-card-video .om-card-dom { z-index: 0; }
+
+/* Master background fade veil — sits above the gradient orbs, below content */
+.om-bg-veil {
+  position: fixed; inset: 0; z-index: 0;
+  background: var(--bg);
+  pointer-events: none;
+  transition: opacity .3s ease;
+}
+
+/* Appearance range slider */
+.om-ap-range {
+  -webkit-appearance: none; appearance: none;
+  width: 100%; height: 4px; border-radius: 999px;
+  background: var(--surface-3);
+  outline: none; cursor: pointer;
+}
+.om-ap-range::-webkit-slider-thumb {
+  -webkit-appearance: none; appearance: none;
+  width: 14px; height: 14px; border-radius: 50%;
+  background: var(--accent);
+  box-shadow: 0 1px 3px rgba(0,0,0,0.3);
+}
+.om-ap-range::-moz-range-thumb {
+  width: 14px; height: 14px; border: 0; border-radius: 50%;
+  background: var(--accent);
+}

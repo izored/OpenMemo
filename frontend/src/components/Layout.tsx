@@ -43,6 +43,7 @@ export function Layout() {
 
   return (
     <div className={cn('om-app', sidebarCollapsed && 'sidebar-collapsed')}>
+      <div className="om-bg-veil" style={{ opacity: tweaks.bgFade ?? 0 }} aria-hidden />
       <Sidebar />
 
       <main className="om-main" key={location.pathname}>

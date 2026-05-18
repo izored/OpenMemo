@@ -82,6 +82,7 @@ export interface Tweaks {
   gridColumns: number;
   bgMode: 'none' | 'random' | 'image';
   bgImage: string;
+  bgFade: number;
   bgPalette: string[];
   bgPositions: [number, number][];
   customAccents: [string, string];
@@ -134,6 +135,7 @@ export const DEFAULT_TWEAKS: Tweaks = {
   gridColumns: 4,
   bgMode: 'random',
   bgImage: '',
+  bgFade: 0,
   bgPalette: ['#F4825A', '#E8C087', '#C76E4A'],
   bgPositions: [
     [22, 24],
