@@ -5,6 +5,7 @@ import { AddMemoPanel } from './AddMemoPanel';
 import { AppearancePanel } from './AppearancePanel';
 import { FullscreenWriter } from './FullscreenWriter';
 import { SearchOverlay } from './SearchOverlay';
+import { Onboarding } from './Onboarding';
 import { AddCollectionModal } from './AddCollectionModal';
 import { Icon } from './Icon';
 import { useAppStore } from '@/stores/appStore';
@@ -50,6 +51,7 @@ export function Layout() {
         <Outlet />
       </main>
 
+      <Onboarding />
       <SearchOverlay />
       <AddMemoPanel />
       <AppearancePanel />

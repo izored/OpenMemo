@@ -1764,6 +1764,110 @@ input, textarea { font: inherit; color: inherit; }
 .om-sort-opt.active { color: var(--text); }
 .om-sort-opt.active svg { color: var(--accent); }
 
+/* ─ Type scale standardisation ──────────────────────────────────────────────
+   Lighter, smaller headings; readable minimum body/caption size. */
+.om-greet-title, .om-ask-title { font-size: 32px; font-weight: 400; letter-spacing: -0.02em; }
+.om-settings-head .om-greet-title { font-size: 28px; }
+.om-setting-title, .om-coll-title { font-size: 16px; font-weight: 500; }
+.om-setting-eyebrow, .om-greet-eyebrow, .om-add-eyebrow,
+.om-setting-row-text span, .om-ap-label span { letter-spacing: 0.06em; }
+.om-setting-row-text p { font-size: 13.5px; font-weight: 400; }
+/* Readable minimum for hint/caption text (was 10px) */
+.om-add-hint, .om-setting-row-text span, .om-add-note-meta,
+.om-ap-label span { font-size: 11.5px; }
+.om-hint-readable { font-size: 12px !important; color: var(--text-3); font-family: var(--font-ui) !important; line-height: 1.5; }
+
+/* Creator card — no heading, richer, isolated hover lift */
+.om-creator-card { transition: transform .2s cubic-bezier(.2,.7,.2,1), box-shadow .2s, border-color .2s; }
+.om-creator-card:hover {
+  transform: translateY(-4px);
+  box-shadow: var(--shadow-card-hover);
+  border-color: var(--border-2);
+}
+.om-creator-name { margin: 0; font-size: 20px; font-weight: 600; letter-spacing: -0.015em; color: var(--text); }
+.om-creator-role { font-size: 12px; color: var(--text-4); font-family: var(--font-mono); letter-spacing: 0.04em; }
+.om-creator-bio { margin: 10px 0 0; font-size: 12.5px; line-height: 1.6; color: var(--text-3); text-wrap: pretty; }
+
+/* Settings footer — Feedback (left) · Version (center) · Changelog (right) */
+.om-settings-footer {
+  display: grid; grid-template-columns: 1fr auto 1fr;
+  align-items: center; gap: 12px;
+  padding: 28px 0 8px; margin-top: 8px;
+  border-top: 1px solid var(--border);
+}
+.om-settings-footer > :first-child { justify-self: start; }
+.om-settings-footer > :last-child { justify-self: end; }
+.om-version-btn {
+  position: relative;
+  font-family: var(--font-mono);
+  font-size: 12px; font-weight: 600;
+  color: var(--text);
+  padding: 4px 8px;
+}
+.om-version-btn:hover { color: var(--accent); }
+.om-update-dot {
+  position: absolute; top: 0; right: -4px;
+  width: 8px; height: 8px; border-radius: 50%;
+  background: #2F7DF6;
+  box-shadow: 0 0 0 0 rgba(47,125,246,0.6);
+  animation: omUpdatePulse 1.6s infinite;
+}
+@keyframes omUpdatePulse {
+  0%   { box-shadow: 0 0 0 0 rgba(47,125,246,0.55); }
+  70%  { box-shadow: 0 0 0 7px rgba(47,125,246,0); }
+  100% { box-shadow: 0 0 0 0 rgba(47,125,246,0); }
+}
+
+/* ─ Onboarding ──────────────────────────────────────────────────────────── */
+.om-intro {
+  position: fixed; inset: 0; z-index: 200;
+  display: grid; grid-template-rows: 1fr auto;
+  background: var(--bg);
+  animation: fade .35s ease;
+}
+.om-intro-stage { position: relative; overflow: hidden; display: flex; align-items: center; justify-content: center; }
+/* Placeholder motion: a soft drifting orb. Swap for a real animation. */
+.om-intro-orb {
+  width: 320px; height: 320px; border-radius: 50%;
+  background: radial-gradient(circle at 35% 30%, var(--accent), var(--accent-deep) 70%, transparent);
+  filter: blur(20px) saturate(140%);
+  animation: omIntroFloat 6s ease-in-out infinite alternate;
+}
+@keyframes omIntroFloat {
+  0%   { transform: translateY(-12px) scale(1);    opacity: .85; }
+  100% { transform: translateY(12px)  scale(1.06); opacity: 1; }
+}
+.om-intro-copy {
+  text-align: center; padding: 0 24px 72px;
+  display: flex; flex-direction: column; align-items: center; gap: 10px;
+}
+.om-intro-title { font-family: var(--font-display); font-size: 56px; font-weight: 700; letter-spacing: -0.03em; margin: 4px 0 0; }
+.om-intro-sub { font-size: 15px; color: var(--text-3); margin: 0; }
+.om-intro-actions { display: flex; gap: 10px; margin-top: 22px; }
+.om-intro .om-add-foot-btn { height: 38px; padding: 0 18px; font-size: 13px; border-radius: 10px; }
+
+.om-coach-layer { position: fixed; inset: 0; z-index: 190; }
+.om-coach-backdrop { position: absolute; inset: 0; background: rgba(0,0,0,0.45); -webkit-backdrop-filter: blur(2px); backdrop-filter: blur(2px); animation: fade .2s ease; }
+.om-coach-spot {
+  position: fixed; border-radius: 12px;
+  box-shadow: 0 0 0 9999px rgba(0,0,0,0.45), 0 0 0 2px var(--accent);
+  transition: all .25s cubic-bezier(.2,.7,.2,1);
+  pointer-events: none;
+}
+.om-coach-card {
+  width: 320px; max-width: calc(100vw - 32px);
+  background: var(--elev); color: var(--text);
+  border: 1px solid var(--border-2); border-radius: 16px;
+  box-shadow: var(--shadow-elev);
+  padding: 18px; display: flex; flex-direction: column; gap: 8px;
+  animation: pop .2s cubic-bezier(.2,.7,.2,1);
+  z-index: 191;
+}
+.om-coach-title { margin: 0; font-size: 16px; font-weight: 600; letter-spacing: -0.01em; }
+.om-coach-body { margin: 0; font-size: 13px; line-height: 1.6; color: var(--text-2); }
+.om-coach-actions { display: flex; align-items: center; justify-content: space-between; margin-top: 8px; }
+.om-coach-actions .om-add-foot-btn { height: 28px; padding: 0 12px; font-size: 12px; border-radius: 8px; }
+
 /* Appearance range slider */
 .om-ap-range {
   -webkit-appearance: none; appearance: none;
