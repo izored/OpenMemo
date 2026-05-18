@@ -116,5 +116,6 @@ export const systemApi = {
     total_tags: number;
     memos_this_week: number;
     by_type: Record<string, number>;
+    storage?: { db_bytes: number; files_bytes: number; cache_bytes: number; total_bytes: number };
   }>('/stats'),
 };

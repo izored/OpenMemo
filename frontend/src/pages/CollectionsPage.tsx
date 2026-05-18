@@ -31,6 +31,11 @@ export function CollectionsPage() {
     setActiveCollection(id);
     navigate('/');
   };
+  const edit = (e: React.MouseEvent, c: Collection) => {
+    e.stopPropagation();
+    setEditingCollection(c);
+    setCollectionModalOpen(true);
+  };
   const newCollection = () => {
     setEditingCollection(null);
     setCollectionModalOpen(true);
@@ -48,14 +53,25 @@ export function CollectionsPage() {
         {(collections as Collection[]).map((c, i) => {
           const pv = previews[i]?.data;
           const total = pv?.total ?? 0;
-          const recent = (pv?.items || []).slice(0, 2);
+          const items = pv?.items || [];
+          const recent = items.slice(0, 2);
+          // Cover = collection's own thumbnail if set, else latest memo's thumb.
+          const coverImg =
+            (c as Collection & { thumbnail_path?: string }).thumbnail_path ||
+            items.find((m: { thumbnail_path?: string }) => m.thumbnail_path)?.thumbnail_path;
           return (
             <button key={c.id} className="om-coll-card" onClick={() => open(c.id)}>
               <span className="om-coll-stack om-coll-stack-2" style={{ background: c.color }} />
               <span className="om-coll-stack om-coll-stack-1" style={{ background: c.color }} />
               <div className="om-coll-face" style={{ ['--hue' as string]: c.color }}>
                 <div className="om-coll-cover" style={{ background: cover(c.color) }}>
+                  {coverImg && (
+                    <div className="om-coll-cover-img" style={{ backgroundImage: `url(${coverImg})` }} />
+                  )}
                   <div className="om-hero-noise" />
+                  <span className="om-coll-edit" role="button" title="Edit collection" onClick={(e) => edit(e, c)}>
+                    <Icon name="edit" size={13} />
+                  </span>
                 </div>
                 <div className="om-coll-body">
                   <div className="om-coll-meta">

@@ -1639,8 +1639,8 @@ input, textarea { font: inherit; color: inherit; }
    used column(s) to fill the row. Cap column width + left-align so a lone card
    stays card-sized instead of ballooning across the page. */
 .om-masonry { justify-content: flex-start; }
-.om-masonry-col { flex: 1 1 0; max-width: 360px; }
-[data-density="roomy"] .om-masonry-col { max-width: 400px; }
+.om-masonry-col { flex: 1 1 0; max-width: 300px; }
+[data-density="roomy"] .om-masonry-col { max-width: 320px; }
 
 /* Sliding filter pill (framer-motion shared layout) */
 .om-filter-tab.active { background: transparent !important; box-shadow: none !important; }
@@ -1675,6 +1675,94 @@ input, textarea { font: inherit; color: inherit; }
   pointer-events: none;
   transition: opacity .3s ease;
 }
+
+/* Settings bottom row — Danger (3/4) + Creator (1/4) */
+.om-settings-bottom {
+  display: grid;
+  grid-template-columns: 3fr 1fr;
+  gap: 16px;
+  margin-top: 16px;
+}
+@media (max-width: 900px) { .om-settings-bottom { grid-template-columns: 1fr; } }
+.om-creator-links { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 4px; }
+.om-creator-link {
+  display: inline-flex; align-items: center; gap: 6px;
+  font-size: 12px; color: var(--text-2);
+  padding: 5px 10px; border-radius: 999px;
+  background: var(--surface); border: 1px solid var(--border);
+  transition: background .15s, color .15s, border-color .15s;
+}
+.om-creator-link:hover { color: var(--accent); border-color: color-mix(in oklab, var(--accent) 30%, transparent); }
+
+/* Collection card — edit affordance over the cover */
+.om-coll-edit {
+  position: absolute; top: 10px; right: 10px; z-index: 3;
+  width: 28px; height: 28px; border-radius: 8px;
+  display: inline-flex; align-items: center; justify-content: center;
+  background: rgba(20,20,22,0.6); color: #fff;
+  backdrop-filter: blur(10px);
+  opacity: 0; transition: opacity .18s, background .15s;
+}
+.om-coll-card:hover .om-coll-edit { opacity: 1; }
+.om-coll-edit:hover { background: rgba(20,20,22,0.85); }
+.om-coll-cover-img { position: absolute; inset: 0; background-size: cover; background-position: center; }
+
+/* Sort dropdown */
+.om-sort-menu {
+  position: absolute; right: 0; top: calc(100% + 6px); z-index: 10;
+  min-width: 160px; padding: 4px;
+  background: var(--elev); border: 1px solid var(--border-2);
+  border-radius: 10px; box-shadow: var(--shadow-elev);
+  display: flex; flex-direction: column; gap: 1px;
+  animation: omPopUp .15s ease;
+}
+.om-sort-opt {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 7px 10px; border-radius: 7px;
+  font-size: 12.5px; color: var(--text-2); text-align: left;
+}
+.om-sort-opt:hover { background: var(--surface-2); color: var(--text); }
+.om-sort-opt.active { color: var(--accent); }
+
+/* Add-memo collection flyout — second panel left of the add panel */
+.om-add-coll-flyout {
+  position: fixed; right: 320px; bottom: 16px; z-index: 61;
+  width: 240px; max-height: calc(100vh - 32px);
+  display: flex; flex-direction: column;
+  background: rgba(20, 19, 22, 0.78);
+  -webkit-backdrop-filter: blur(24px) saturate(160%);
+          backdrop-filter: blur(24px) saturate(160%);
+  border: 0.5px solid rgba(255,255,255,0.10);
+  border-radius: 14px;
+  box-shadow: 0 1px 0 rgba(255,255,255,0.06) inset, 0 12px 40px rgba(0,0,0,0.5);
+  overflow: hidden;
+  animation: omPopUp .16s cubic-bezier(.2,.8,.2,1);
+}
+[data-theme="light"] .om-add-coll-flyout {
+  background: rgba(250, 249, 247, 0.9);
+  border-color: rgba(255,255,255,0.7);
+  box-shadow: 0 1px 0 rgba(255,255,255,0.5) inset, 0 12px 40px rgba(20,18,14,0.18);
+}
+.om-add-coll-flyout-list { overflow-y: auto; padding: 6px; display: flex; flex-direction: column; gap: 1px; }
+.om-add-coll-flyout-new {
+  display: flex; align-items: center; gap: 8px;
+  padding: 9px 12px; border-top: 0.5px solid rgba(255,255,255,0.08);
+  font-size: 11.5px; color: var(--accent);
+}
+.om-add-coll-flyout-new:hover { background: rgba(255,255,255,0.06); }
+[data-theme="light"] .om-add-coll-flyout-new { border-top-color: rgba(0,0,0,0.06); }
+
+/* Text never inherits the accent — accent stays for icons / indicators only */
+.om-add-coll-opt,
+.om-add-coll-opt.active,
+.om-add-coll-opt:hover { color: var(--text); }
+.om-add-coll-opt.active { background: var(--accent-soft); }
+.om-add-coll-opt.active svg,
+.om-add-coll-opt svg { color: var(--accent); }
+.om-add-coll-flyout-new { color: var(--text-2); }
+.om-add-coll-flyout-new svg { color: var(--accent); }
+.om-sort-opt.active { color: var(--text); }
+.om-sort-opt.active svg { color: var(--accent); }
 
 /* Appearance range slider */
 .om-ap-range {

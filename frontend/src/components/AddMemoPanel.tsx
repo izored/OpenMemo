@@ -35,6 +35,8 @@ export function AddMemoPanel() {
   const open = useAppStore((s) => s.addPanelOpen);
   const setOpen = useAppStore((s) => s.setAddPanelOpen);
   const setWriterOpen = useAppStore((s) => s.setWriterOpen);
+  const setCollectionModalOpen = useAppStore((s) => s.setCollectionModalOpen);
+  const setEditingCollection = useAppStore((s) => s.setEditingCollection);
   const queryClient = useQueryClient();
 
   const { data: collections = [] } = useQuery({
@@ -125,6 +127,56 @@ export function AddMemoPanel() {
   ];
 
   return (
+    <>
+    {open && collOpen && (
+      <aside className="om-add-coll-flyout" aria-label="Choose collection">
+        <div className="om-add-head">
+          <div className="om-add-head-l">
+            <b>Collection</b>
+          </div>
+          <button className="om-add-x" onClick={() => setCollOpen(false)} aria-label="Close">
+            <Icon name="x" size={13} />
+          </button>
+        </div>
+        <div className="om-add-coll-flyout-list">
+          <button
+            className={cn('om-add-coll-opt', !collection && 'active')}
+            onClick={() => {
+              setCollection('');
+              setCollOpen(false);
+            }}
+          >
+            <Icon name="inbox" size={11} />
+            <span>No collection</span>
+            <span className="mono" />
+          </button>
+          {collections.map((c: Collection) => (
+            <button
+              key={c.id}
+              className={cn('om-add-coll-opt', collection === c.id && 'active')}
+              onClick={() => {
+                setCollection(c.id);
+                setCollOpen(false);
+              }}
+            >
+              <span>{c.emoji || '📁'}</span>
+              <span>{c.name}</span>
+              <span className="mono" />
+            </button>
+          ))}
+        </div>
+        <button
+          className="om-add-coll-flyout-new"
+          onClick={() => {
+            setEditingCollection(null);
+            setCollectionModalOpen(true);
+          }}
+        >
+          <Icon name="plus" size={12} />
+          <span>New collection…</span>
+        </button>
+      </aside>
+    )}
     <aside className={cn('om-add-panel', open && 'open')} aria-hidden={!open}>
       <div className="om-add-head">
         <div className="om-add-head-l">
@@ -288,35 +340,6 @@ export function AddMemoPanel() {
               style={{ marginLeft: 'auto', opacity: 0.55, transform: collOpen ? 'rotate(180deg)' : 'none', transition: 'transform .15s' }}
             />
           </button>
-          {collOpen && (
-            <div className="om-add-coll-pop">
-              <button
-                className={cn('om-add-coll-opt', !collection && 'active')}
-                onClick={() => {
-                  setCollection('');
-                  setCollOpen(false);
-                }}
-              >
-                <Icon name="inbox" size={11} />
-                <span>No collection</span>
-                <span className="mono" />
-              </button>
-              {collections.map((c: Collection) => (
-                <button
-                  key={c.id}
-                  className={cn('om-add-coll-opt', collection === c.id && 'active')}
-                  onClick={() => {
-                    setCollection(c.id);
-                    setCollOpen(false);
-                  }}
-                >
-                  <span>{c.emoji || '📁'}</span>
-                  <span>{c.name}</span>
-                  <span className="mono" />
-                </button>
-              ))}
-            </div>
-          )}
         </div>
 
         <div className="om-add-sect mono">Tags</div>
@@ -360,5 +383,6 @@ export function AddMemoPanel() {
         </button>
       </div>
     </aside>
+    </>
   );
 }
