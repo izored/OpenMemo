@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "OpenMemo",
-  "version": "1.7.43",
+  "version": "1.8.1",
   "description": "Save anything to your local AI knowledge base",
   "permissions": [
     "activeTab",
