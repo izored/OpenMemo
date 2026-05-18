@@ -101,6 +101,12 @@ export const memocastApi = {
     fetchJSON<any>('/memocast', { method: 'POST', body: JSON.stringify({ memo_ids, model }) }),
 };
 
+// Maintenance
+export const maintenanceApi = {
+  clearCache: () => fetchJSON<{ ok: boolean; freed_bytes: number }>('/maintenance/clear-cache', { method: 'POST' }),
+  reset: () => fetchJSON<{ ok: boolean }>('/maintenance/reset', { method: 'POST', body: JSON.stringify({ confirm: true }) }),
+};
+
 // Search
 export const searchApi = {
   search: (q: string) => fetchJSON<{ results: any[] }>(`/search?q=${encodeURIComponent(q)}`),
@@ -116,5 +122,6 @@ export const systemApi = {
     total_tags: number;
     memos_this_week: number;
     by_type: Record<string, number>;
+    storage?: { db_bytes: number; files_bytes: number; cache_bytes: number; total_bytes: number };
   }>('/stats'),
 };

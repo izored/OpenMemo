@@ -97,6 +97,18 @@ async def serve_file(file_path: str):
 
     return FileResponse(str(target))
 
+
+_thumb_store = SafePath(settings.FILES_DIR / "thumbs")
+
+
+@app.get("/api/files/thumb/{name}")
+async def serve_thumb(name: str):
+    """Serve a locally-cached thumbnail (public; only images under files/thumbs)."""
+    target = _thumb_store.serve_path(name)
+    if not target.exists():
+        raise HTTPException(status_code=404, detail="Thumbnail not found")
+    return FileResponse(str(target))
+
 # Register routers
 from backend.api.memos import router as memos_router
 from backend.api.chat import router as chat_router
@@ -104,6 +116,7 @@ from backend.api.collections import router as collections_router
 from backend.api.ingest import router as ingest_router
 from backend.api.export import router as export_router
 from backend.api.search import router as search_router
+from backend.api.maintenance import router as maintenance_router
 
 app.include_router(memos_router)
 app.include_router(chat_router)
@@ -111,6 +124,7 @@ app.include_router(collections_router)
 app.include_router(ingest_router)
 app.include_router(export_router)
 app.include_router(search_router)
+app.include_router(maintenance_router)
 
 
 @app.get("/api/stats")
@@ -119,6 +133,7 @@ async def get_stats(db: AsyncSession = Depends(get_db)):
     from sqlalchemy import func, select, and_
     from backend.db.models import Memo, Collection, Tag
     from datetime import datetime, timedelta
+    from pathlib import Path
 
     total_memos = (await db.execute(select(func.count()).select_from(Memo))).scalar() or 0
     total_collections = (await db.execute(select(func.count()).select_from(Collection))).scalar() or 0
@@ -134,12 +149,39 @@ async def get_stats(db: AsyncSession = Depends(get_db)):
     ).all()
     by_type = {row[0]: row[1] for row in by_type_rows}
 
+    def _size(path: Path) -> int:
+        if not path.exists():
+            return 0
+        if path.is_file():
+            try:
+                return path.stat().st_size
+            except OSError:
+                return 0
+        total = 0
+        for p in path.rglob("*"):
+            if p.is_file():
+                try:
+                    total += p.stat().st_size
+                except OSError:
+                    pass
+        return total
+
+    db_bytes = _size(settings.DATA_DIR / "openmemo.db")
+    files_bytes = _size(settings.FILES_DIR)
+    cache_bytes = _size(Path(settings.CHROMA_PERSIST_DIR))
+
     return {
         "total_memos": total_memos,
         "total_collections": total_collections,
         "total_tags": total_tags,
         "memos_this_week": memos_this_week,
         "by_type": by_type,
+        "storage": {
+            "db_bytes": db_bytes,
+            "files_bytes": files_bytes,
+            "cache_bytes": cache_bytes,
+            "total_bytes": db_bytes + files_bytes + cache_bytes,
+        },
     }
 
 

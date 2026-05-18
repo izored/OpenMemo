@@ -43,6 +43,46 @@ class ExtensionSave(BaseModel):
     workspace_id: Optional[str] = None
 
 
+# --- Thumbnail caching ---
+
+THUMBS_DIR = Path(settings.FILES_DIR) / "thumbs"
+
+
+async def cache_thumbnail(memo_id: str):
+    """Download a remote thumbnail once and serve it locally so the dashboard
+    doesn't re-fetch third-party images on every load."""
+    import httpx
+
+    async with AsyncSessionLocal() as db:
+        memo = await db.get(Memo, memo_id)
+        if not memo or not memo.thumbnail_path:
+            return
+        src = memo.thumbnail_path
+        if not src.startswith("http"):
+            return
+        try:
+            THUMBS_DIR.mkdir(parents=True, exist_ok=True)
+            async with httpx.AsyncClient(timeout=15, follow_redirects=True) as client:
+                resp = await client.get(src)
+                resp.raise_for_status()
+                ctype = resp.headers.get("content-type", "")
+                if "image" not in ctype:
+                    return
+                ext = {
+                    "image/png": ".png",
+                    "image/webp": ".webp",
+                    "image/gif": ".gif",
+                }.get(ctype.split(";")[0].strip(), ".jpg")
+                name = f"{memo_id}{ext}"
+                (THUMBS_DIR / name).write_bytes(resp.content)
+            memo.thumbnail_path = f"/api/files/thumb/{name}"
+            memo.updated_at = datetime.utcnow()
+            await db.commit()
+        except Exception:
+            # Non-fatal — keep the remote URL as fallback.
+            return
+
+
 # --- Background processing ---
 
 async def process_memo(memo_id: str):
@@ -118,7 +158,9 @@ async def ingest_url(
     
     # Process in background
     background_tasks.add_task(process_memo, memo.id)
-    
+    if memo.thumbnail_path and memo.thumbnail_path.startswith("http"):
+        background_tasks.add_task(cache_thumbnail, memo.id)
+
     return {"id": memo.id, "title": memo.title, "type": memo.type, "status": "processing"}
 
 

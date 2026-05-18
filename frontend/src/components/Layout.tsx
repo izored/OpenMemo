@@ -1,56 +1,73 @@
+import { useEffect } from 'react';
 import { Outlet, useLocation } from 'react-router-dom';
-import { Menu } from 'lucide-react';
 import { Sidebar } from './Sidebar';
-import { AddMemoModal } from './AddMemoModal';
+import { AddMemoPanel } from './AddMemoPanel';
+import { AppearancePanel } from './AppearancePanel';
+import { FullscreenWriter } from './FullscreenWriter';
+import { SearchOverlay } from './SearchOverlay';
+import { Onboarding } from './Onboarding';
 import { AddCollectionModal } from './AddCollectionModal';
+import { Icon } from './Icon';
 import { useAppStore } from '@/stores/appStore';
+import { applyTweaks } from '@/lib/appearance';
 import { cn } from '@/lib/utils';
 
 export function Layout() {
-  const sidebarOpen = useAppStore((s) => s.sidebarOpen);
-  const toggleSidebar = useAppStore((s) => s.toggleSidebar);
+  const sidebarCollapsed = useAppStore((s) => s.sidebarCollapsed);
+  const tweaks = useAppStore((s) => s.tweaks);
+  const addPanelOpen = useAppStore((s) => s.addPanelOpen);
+  const setAddPanelOpen = useAppStore((s) => s.setAddPanelOpen);
+  const setSearchOpen = useAppStore((s) => s.setSearchOpen);
   const location = useLocation();
-  const isDashboard = location.pathname === '/';
+
+  // Drive theme / accent / background CSS vars from persisted tweaks.
+  useEffect(() => {
+    applyTweaks(tweaks);
+  }, [tweaks]);
+
+  // Global shortcuts: ⌘K search, N new memo (when not typing).
+  useEffect(() => {
+    const h = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') {
+        e.preventDefault();
+        setSearchOpen(true);
+      }
+      const tag = (e.target as HTMLElement)?.tagName;
+      const typing = tag === 'INPUT' || tag === 'TEXTAREA' || (e.target as HTMLElement)?.isContentEditable;
+      if (!typing && e.key.toLowerCase() === 'n' && !e.metaKey && !e.ctrlKey) {
+        setAddPanelOpen(true);
+      }
+    };
+    window.addEventListener('keydown', h);
+    return () => window.removeEventListener('keydown', h);
+  }, [setSearchOpen, setAddPanelOpen]);
 
   return (
-    <div className="flex h-screen overflow-hidden bg-[var(--color-bg)]">
-      {/* Sidebar — flex item, pushes content */}
-      <div
-        className="h-screen flex-shrink-0 overflow-hidden transition-[width] duration-200 ease-[cubic-bezier(0.16,1,0.3,1)]"
-        style={{ width: sidebarOpen ? '240px' : '0px' }}
-      >
-        <div className="w-[240px] h-full">
-          <Sidebar />
-        </div>
-      </div>
+    <div className={cn('om-app', sidebarCollapsed && 'sidebar-collapsed')}>
+      <div className="om-bg-veil" style={{ opacity: tweaks.bgFade ?? 0 }} aria-hidden />
+      <Sidebar />
 
-      {/* Main content */}
-      <div className="relative flex-1 min-w-0 overflow-x-hidden">
-        {/* Backdrop — dims content when sidebar open, click to close */}
-        <div
-          onClick={toggleSidebar}
-          className="absolute inset-0 z-30 bg-black/10 transition-opacity duration-200 pointer-events-none"
-          style={{ opacity: sidebarOpen ? 1 : 0, pointerEvents: sidebarOpen ? 'auto' : 'none' }}
-        />
-        <main className={cn(
-          "h-full overflow-y-auto px-8 md:px-16 lg:px-20 pb-6 bg-[var(--color-bg)]",
-          isDashboard ? 'pt-0' : 'pt-6'
-        )}>
-          <Outlet />
-        </main>
-      </div>
+      <main className="om-main" key={location.pathname}>
+        <Outlet />
+      </main>
 
-      {/* Hamburger — hidden on dashboard (dashboard header owns it) and when sidebar open */}
-      <button
-        onClick={toggleSidebar}
-        className="fixed top-4 left-4 z-50 p-2.5 rounded-full hover:bg-[var(--color-bg-hover)] transition-all duration-150 cursor-pointer"
-        style={{ opacity: (sidebarOpen || isDashboard) ? 0 : 1, pointerEvents: (sidebarOpen || isDashboard) ? 'none' : 'auto' }}
-        title="Open sidebar"
-      >
-        <Menu size={20} className="text-[var(--color-text-secondary)]" />
-      </button>
-      <AddMemoModal />
+      <Onboarding />
+      <SearchOverlay />
+      <AddMemoPanel />
+      <AppearancePanel />
+      <FullscreenWriter />
       <AddCollectionModal />
+
+      <button
+        className={cn('om-fab', addPanelOpen && 'open')}
+        onClick={() => setAddPanelOpen(!addPanelOpen)}
+        title={addPanelOpen ? 'Close' : 'New Memo · N'}
+        aria-label="New Memo"
+      >
+        <span className="om-fab-icon">
+          <Icon name={addPanelOpen ? 'x' : 'plus'} size={18} />
+        </span>
+      </button>
     </div>
   );
 }
