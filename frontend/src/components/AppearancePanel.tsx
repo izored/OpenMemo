@@ -330,6 +330,25 @@ export function AppearancePanel() {
             aria-label="Background fade"
           />
         </div>
+
+        {/* Blob animation speed */}
+        <div className="om-ap-row">
+          <div className="om-ap-label">
+            <p>Animation speed</p>
+            <span className="mono">Background blob drift</span>
+          </div>
+          <div className="om-add-segment" role="tablist">
+            {([0, 1, 2, 4] as const).map((s) => (
+              <button
+                key={s}
+                className={cn('om-add-seg', (t.blobSpeed ?? 1) === s && 'active')}
+                onClick={() => setTweak('blobSpeed', s)}
+              >
+                <span>{s === 0 ? 'Off' : `${s}×`}</span>
+              </button>
+            ))}
+          </div>
+        </div>
       </div>
 
       <div className="om-add-foot">

@@ -83,6 +83,11 @@ class MemoService(BaseService[Memo]):
         """Create a new memo with optional collections and tags."""
         session = await self._get_session()
 
+        max_order_result = await session.execute(
+            select(func.max(Memo.sort_order)).where(Memo.workspace_id == workspace_id)
+        )
+        max_order = max_order_result.scalar() or 0
+
         memo = Memo(
             id=str(uuid.uuid4()),
             workspace_id=workspace_id,
@@ -97,6 +102,7 @@ class MemoService(BaseService[Memo]):
             thumbnail_path=thumbnail_path,
             file_path=file_path,
             notes=notes,
+            sort_order=max_order + 1,
             created_at=datetime.utcnow(),
             updated_at=datetime.utcnow(),
         )

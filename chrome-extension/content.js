@@ -133,7 +133,7 @@ function extractGeneric() {
 }
 
 const extractors = {
-  youtube: () => ({
+  youtube: (videoId) => ({
     type: 'video',
     title: meta('og:title') ||
       document.querySelector('h1.ytd-watch-metadata')?.textContent?.trim() ||
@@ -142,7 +142,9 @@ const extractors = {
       document.querySelector('#description-text, #description')?.textContent?.trim() || '',
     content_text: document.querySelector('#description-text, #description')?.textContent?.trim() ||
       meta('og:description') || '',
-    thumbnail: pickImage(),
+    thumbnail: videoId
+      ? `https://img.youtube.com/vi/${videoId}/maxresdefault.jpg`
+      : pickImage(),
   }),
 
   twitter: () => {
@@ -162,7 +164,17 @@ const extractors = {
 
 function getExtractor() {
   const host = window.location.hostname;
-  if (host.includes('youtube.com') || host.includes('youtu.be')) return extractors.youtube;
+  const search = window.location.search;
+  const path = window.location.pathname;
+  if (host.includes('youtu.be')) {
+    const videoId = path.replace(/^\//, '').split('?')[0];
+    return () => extractors.youtube(videoId);
+  }
+  if (host.includes('youtube.com')) {
+    const params = new URLSearchParams(search);
+    const videoId = params.get('v') || (path.startsWith('/shorts/') ? path.split('/').pop() : null);
+    if (videoId) return () => extractors.youtube(videoId);
+  }
   if (host.includes('twitter.com') || host.includes('x.com')) return extractors.twitter;
   return extractors.generic;
 }
