@@ -19,10 +19,9 @@ export const TOUR_STEPS: TourStep[] = [
   {
     id: 'add',
     title: 'Capture anything',
-    body: 'This is the New Memo panel. Save a link, note, file, or voice memo. Open it anytime with the + button or by pressing N.',
-    target: '.om-add-panel',
+    body: 'Click the + button to open the New Memo panel. Save a link, note, file, or voice memo — or press N anytime.',
+    target: '.om-fab',
     placement: 'left',
-    action: 'openAdd',
   },
   {
     id: 'search',

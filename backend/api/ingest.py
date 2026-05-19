@@ -48,11 +48,57 @@ class ExtensionSave(BaseModel):
 THUMBS_DIR = Path(settings.FILES_DIR) / "thumbs"
 
 
-async def cache_thumbnail(memo_id: str):
-    """Download a remote thumbnail once and serve it locally so the dashboard
-    doesn't re-fetch third-party images on every load."""
+_BROWSER_UA = (
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+    "AppleWebKit/537.36 (KHTML, like Gecko) "
+    "Chrome/124.0.0.0 Safari/537.36"
+)
+
+
+def _thumb_headers(src_url: str) -> dict:
+    """Browser-like headers that bypass hotlink protection on visual platforms."""
+    from urllib.parse import urlparse
+    parsed = urlparse(src_url)
+    origin = f"{parsed.scheme}://{parsed.netloc}"
+    return {
+        "User-Agent": _BROWSER_UA,
+        "Accept": "image/webp,image/avif,image/*,*/*;q=0.8",
+        "Referer": origin + "/",
+        "Sec-Fetch-Dest": "image",
+        "Sec-Fetch-Mode": "no-cors",
+        "Sec-Fetch-Site": "same-origin",
+    }
+
+
+async def _download_thumb(src: str, name_stem: str) -> str | None:
+    """Fetch a remote image, save to thumbs dir, return local path or None."""
     import httpx
 
+    THUMBS_DIR.mkdir(parents=True, exist_ok=True)
+    try:
+        async with httpx.AsyncClient(
+            timeout=20, follow_redirects=True, headers=_thumb_headers(src)
+        ) as client:
+            resp = await client.get(src)
+            resp.raise_for_status()
+            ctype = resp.headers.get("content-type", "")
+            if "image" not in ctype:
+                return None
+            ext = {
+                "image/png": ".png",
+                "image/webp": ".webp",
+                "image/gif": ".gif",
+                "image/avif": ".avif",
+            }.get(ctype.split(";")[0].strip(), ".jpg")
+            name = f"{name_stem}{ext}"
+            (THUMBS_DIR / name).write_bytes(resp.content)
+            return f"/api/files/thumb/{name}"
+    except Exception:
+        return None
+
+
+async def cache_thumbnail(memo_id: str):
+    """Download a remote thumbnail once and serve it locally."""
     async with AsyncSessionLocal() as db:
         memo = await db.get(Memo, memo_id)
         if not memo or not memo.thumbnail_path:
@@ -60,27 +106,11 @@ async def cache_thumbnail(memo_id: str):
         src = memo.thumbnail_path
         if not src.startswith("http"):
             return
-        try:
-            THUMBS_DIR.mkdir(parents=True, exist_ok=True)
-            async with httpx.AsyncClient(timeout=15, follow_redirects=True) as client:
-                resp = await client.get(src)
-                resp.raise_for_status()
-                ctype = resp.headers.get("content-type", "")
-                if "image" not in ctype:
-                    return
-                ext = {
-                    "image/png": ".png",
-                    "image/webp": ".webp",
-                    "image/gif": ".gif",
-                }.get(ctype.split(";")[0].strip(), ".jpg")
-                name = f"{memo_id}{ext}"
-                (THUMBS_DIR / name).write_bytes(resp.content)
-            memo.thumbnail_path = f"/api/files/thumb/{name}"
+        local = await _download_thumb(src, memo_id)
+        if local:
+            memo.thumbnail_path = local
             memo.updated_at = datetime.utcnow()
             await db.commit()
-        except Exception:
-            # Non-fatal — keep the remote URL as fallback.
-            return
 
 
 # --- Background processing ---

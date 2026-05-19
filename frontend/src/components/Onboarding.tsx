@@ -50,12 +50,10 @@ export function Onboarding() {
 
   const current = TOUR_STEPS[step];
 
-  // Run a step's side-effect (e.g. open the add panel so the spotlight can
-  // animate to it). Keep the panel open only while that step is active.
+  // Close the add panel when the tour starts so the FAB is visible
   useEffect(() => {
-    if (phase !== 'tour') return;
-    setAddPanelOpen(current?.action === 'openAdd');
-  }, [phase, step, current?.action, setAddPanelOpen]);
+    if (phase === 'tour') setAddPanelOpen(false);
+  }, [phase, setAddPanelOpen]);
   const rect = useAnchorRect(current?.target, phase === 'tour');
   const cardRef = useRef<HTMLDivElement>(null);
   const [cardSize, setCardSize] = useState({ w: 320, h: 210 });

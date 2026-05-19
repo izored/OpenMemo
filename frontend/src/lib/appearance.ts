@@ -94,11 +94,18 @@ const TYPE_PAIRS: Record<string, { ui: string; display: string }> = {
   cabinet: { ui: 'Satoshi', display: 'Cabinet Grotesk' },
 };
 
+function resolveTheme(theme: string): string {
+  if (theme === 'system') {
+    return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'hi' : 'light';
+  }
+  return theme === 'dark' ? 'hi' : 'light';
+}
+
 // Apply the full tweak set to <html> as data attributes + CSS variables.
 // `theme: 'dark'` maps to the design's high-contrast inky `data-theme="hi"`.
 export function applyTweaks(t: Tweaks) {
   const root = document.documentElement;
-  root.dataset.theme = t.theme === 'dark' ? 'hi' : 'light';
+  root.dataset.theme = resolveTheme(t.theme);
   root.dataset.density = 'roomy';
   root.dataset.card = t.cardStyle;
   root.dataset.layout = t.layout || 'boxed';
