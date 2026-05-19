@@ -109,6 +109,56 @@ async def serve_thumb(name: str):
         raise HTTPException(status_code=404, detail="Thumbnail not found")
     return FileResponse(str(target))
 
+
+@app.get("/api/proxy/image")
+async def proxy_image(url: str, memo_id: str | None = None):
+    """Proxy a remote image with browser headers to bypass hotlink protection.
+    Optionally caches the result and updates the memo's thumbnail_path."""
+    import httpx
+    from starlette.responses import StreamingResponse
+    from backend.api.ingest import _download_thumb, _thumb_headers, THUMBS_DIR
+
+    if not url.startswith("http"):
+        raise HTTPException(status_code=400, detail="Invalid URL")
+
+    # Try to cache if we have a memo_id and it's not already cached
+    if memo_id:
+        cached = await _download_thumb(url, memo_id)
+        if cached:
+            from backend.db.database import AsyncSessionLocal
+            from backend.db.models import Memo
+            from datetime import datetime
+            async with AsyncSessionLocal() as db:
+                memo = await db.get(Memo, memo_id)
+                if memo and memo.thumbnail_path == url:
+                    memo.thumbnail_path = cached
+                    memo.updated_at = datetime.utcnow()
+                    await db.commit()
+            # Serve from local cache
+            name = cached.split("/")[-1]
+            target = THUMBS_DIR / name
+            if target.exists():
+                return FileResponse(str(target))
+
+    # Fallback: stream the remote image
+    try:
+        async with httpx.AsyncClient(
+            timeout=15, follow_redirects=True, headers=_thumb_headers(url)
+        ) as client:
+            resp = await client.get(url)
+            resp.raise_for_status()
+            ctype = resp.headers.get("content-type", "image/jpeg")
+            if "image" not in ctype:
+                raise HTTPException(status_code=422, detail="Not an image")
+            return StreamingResponse(
+                iter([resp.content]),
+                media_type=ctype,
+                headers={"Cache-Control": "public, max-age=86400"},
+            )
+    except Exception as e:
+        raise HTTPException(status_code=502, detail=f"Proxy failed: {e}")
+
+
 # Register routers
 from backend.api.memos import router as memos_router
 from backend.api.chat import router as chat_router

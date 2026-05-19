@@ -45,6 +45,8 @@ function CollectionRow({
   );
 }
 
+type ThemeValue = 'light' | 'dark' | 'system';
+
 export function Sidebar() {
   const navigate = useNavigate();
   const location = useLocation();
@@ -56,7 +58,12 @@ export function Sidebar() {
     setCollectionModalOpen,
     setEditingCollection,
     setSearchOpen,
+    tweaks,
+    setTweak,
   } = useAppStore();
+
+  const theme = (tweaks.theme as ThemeValue) || 'light';
+  const setTheme = (t: ThemeValue) => setTweak({ theme: t as 'light' | 'dark' });
 
   const { data: collections = [] } = useQuery({
     queryKey: ['collections'],
@@ -90,6 +97,12 @@ export function Sidebar() {
     setCollectionModalOpen(true);
   };
 
+  const themeOptions: { value: ThemeValue; icon: string; label: string }[] = [
+    { value: 'light', icon: 'sun', label: 'Light' },
+    { value: 'dark', icon: 'moon', label: 'Dark' },
+    { value: 'system', icon: 'monitor', label: 'System' },
+  ];
+
   return (
     <aside className={cn('om-sidebar', sidebarCollapsed && 'collapsed')}>
       <div className="om-sidebar-head">
@@ -98,10 +111,15 @@ export function Sidebar() {
           onClick={toggleSidebarCollapsed}
           title={sidebarCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
         >
-          <span className="om-avatar" style={{ width: 26, height: 26, borderRadius: 8, fontSize: 11 }}>
-            O
-          </span>
-          {!sidebarCollapsed && <span className="om-brand-name">openMemo</span>}
+          {sidebarCollapsed
+            ? <Icon name="menu" size={18} style={{ color: 'var(--text-3)' }} />
+            : (
+              <>
+                <span className="om-avatar" style={{ width: 26, height: 26, borderRadius: 8, fontSize: 11 }}>O</span>
+                <span className="om-brand-name">openMemo</span>
+              </>
+            )
+          }
         </button>
         {!sidebarCollapsed && (
           <button className="om-icon-btn" onClick={toggleSidebarCollapsed} title="Collapse">
@@ -191,6 +209,22 @@ export function Sidebar() {
       )}
 
       <div className="om-sidebar-foot">
+        {/* Theme selector — 3 icon buttons */}
+        {!sidebarCollapsed && (
+          <div className="om-theme-row">
+            {themeOptions.map((opt) => (
+              <button
+                key={opt.value}
+                className={cn('om-theme-btn', theme === opt.value && 'active')}
+                onClick={() => setTheme(opt.value)}
+                title={opt.label}
+              >
+                <Icon name={opt.icon} size={15} />
+              </button>
+            ))}
+          </div>
+        )}
+
         <button
           className="om-foot-btn"
           onClick={() => goRoute('/settings')}

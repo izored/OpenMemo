@@ -33,8 +33,18 @@ function typeLabel(t: MemoType) {
   )[t] || 'Memo';
 }
 
+// Domains that use hotlink protection — proxy through backend
+const HOTLINK_DOMAINS = ['dribbble.com', 'behance.net', 'pinterest.com', 'cdn.dribbble.com'];
+
 function mediaSrc(memo: Memo): string | null {
-  if (memo.thumbnail_path) return memo.thumbnail_path;
+  if (memo.thumbnail_path) {
+    if (memo.thumbnail_path.startsWith('http')) {
+      const needsProxy = HOTLINK_DOMAINS.some((d) => memo.thumbnail_path!.includes(d));
+      if (needsProxy)
+        return `/api/proxy/image?url=${encodeURIComponent(memo.thumbnail_path)}&memo_id=${memo.id}`;
+    }
+    return memo.thumbnail_path;
+  }
   if (memo.type === 'image' && memo.file_path) return `/api/files/${memo.file_path}`;
   return null;
 }
@@ -171,7 +181,7 @@ export function MemoCard({ memo, dragHandleProps }: CardProps) {
   if (memo.type === 'image') {
     return (
       <Chrome memo={memo} dragHandleProps={dragHandleProps} onDelete={handleDelete} bgSrc={src} className="om-card-image">
-        <div className="om-image-frame" style={{ background: src ? undefined : heroBg }}>
+        <div className="om-image-frame" style={{ background: heroBg }}>
           {src ? (
             <img
               src={src}
@@ -195,7 +205,7 @@ export function MemoCard({ memo, dragHandleProps }: CardProps) {
   if (memo.type === 'video') {
     return (
       <Chrome memo={memo} dragHandleProps={dragHandleProps} onDelete={handleDelete} bgSrc={src} className="om-card-video">
-        <div className="om-video-frame" style={{ background: src ? undefined : heroBg }}>
+        <div className="om-video-frame" style={{ background: heroBg }}>
           {src ? (
             <img
               src={src}
@@ -246,7 +256,7 @@ export function MemoCard({ memo, dragHandleProps }: CardProps) {
   // ── Link / Article / Audio / fallback ──
   return (
     <Chrome memo={memo} dragHandleProps={dragHandleProps} onDelete={handleDelete} bgSrc={src} className="om-card-link">
-      <div className="om-card-hero" style={{ background: src ? undefined : heroBg }}>
+      <div className="om-card-hero" style={{ background: heroBg }}>
         {src ? (
           <img
             src={src}

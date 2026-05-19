@@ -369,7 +369,7 @@ export function MemoDetail() {
                       <Sparkles size={16} className="om-accent-icon" />
                       <span className="om-ai-summary-label">AI Summary</span>
                     </div>
-                    <div className="prose prose-sm max-w-none">
+                    <div className="om-prose">
                       <ReactMarkdown remarkPlugins={[remarkGfm]}>{memo.ai_summary}</ReactMarkdown>
                     </div>
                   </div>
@@ -411,7 +411,7 @@ export function MemoDetail() {
                 <div className="om-web-card">
                   {memo.thumbnail_path && (
                     <div className="om-web-card-thumb">
-                      <img src={memo.thumbnail_path} alt="" />
+                      <img src={memo.thumbnail_path} alt="" onError={(e) => { (e.target as HTMLImageElement).closest('.om-web-card-thumb')?.remove(); }} />
                     </div>
                   )}
                   <div className="om-web-card-body">
@@ -451,15 +451,8 @@ export function MemoDetail() {
                       {showExtracted ? 'Hide extracted content' : 'Show extracted content'}
                     </button>
                     {showExtracted && (
-                      <div className="om-extracted-body prose prose-sm max-w-none">
-                        <ReactMarkdown remarkPlugins={[remarkGfm]} components={{
-                          code: ({ children, className }: { children?: React.ReactNode; className?: string }) => (
-                            <code className={`om-code-inline ${className || ''}`}>{children}</code>
-                          ),
-                          pre: ({ children }: { children?: React.ReactNode }) => (
-                            <pre className="om-code-block">{children}</pre>
-                          )
-                        }}>{memo.content_raw || memo.content_text}</ReactMarkdown>
+                      <div className="om-extracted-body om-prose">
+                        <ReactMarkdown remarkPlugins={[remarkGfm]}>{memo.content_raw || memo.content_text}</ReactMarkdown>
                       </div>
                     )}
                   </div>
@@ -487,15 +480,8 @@ export function MemoDetail() {
 
             {/* Document content */}
             {memo.type === 'document' && !isEditing && memo.content_text && (
-              <div className="prose prose-sm max-w-none">
-                <ReactMarkdown remarkPlugins={[remarkGfm]} components={{
-                  code: ({ children, className }: { children?: React.ReactNode; className?: string }) => (
-                    <code className={`om-code-inline ${className || ''}`}>{children}</code>
-                  ),
-                  pre: ({ children }: { children?: React.ReactNode }) => (
-                    <pre className="om-code-block">{children}</pre>
-                  )
-                }}>{memo.content_raw || memo.content_text}</ReactMarkdown>
+              <div className="om-prose">
+                <ReactMarkdown remarkPlugins={[remarkGfm]}>{memo.content_raw || memo.content_text}</ReactMarkdown>
               </div>
             )}
 
