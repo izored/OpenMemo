@@ -3,7 +3,7 @@
 All notable changes to OpenMemo are documented here.
 
 ---
-## [1.8.5] - Unreleased
+## [1.8.5] - 2026-05-19
 
 ### Fixed
 
