@@ -13,6 +13,7 @@ import {
   Save,
   Tag,
   Folder,
+  Download,
 } from 'lucide-react';
 import { BackButton } from '@/components/BackButton';
 import { MarkdownEditor } from '@/components/MarkdownEditor';
@@ -394,6 +395,26 @@ export function MemoDetail() {
               </div>
             )}
 
+            {/* Download original uploaded file */}
+            {memo.file_path && !isEditing && (
+              <a
+                className="om-btn-secondary"
+                href={`/api/memos/${memo.id}/file?download=1`}
+                download
+                style={{
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: '8px',
+                  width: 'fit-content',
+                  marginBottom: '24px',
+                  textDecoration: 'none',
+                }}
+              >
+                <Download size={14} />
+                <span>Download original</span>
+              </a>
+            )}
+
             {/* Video */}
             {youtubeId && !isEditing && (
               <div className="om-video-embed" style={{ marginBottom: '24px' }}>
@@ -478,8 +499,8 @@ export function MemoDetail() {
               </div>
             )}
 
-            {/* Document content */}
-            {memo.type === 'document' && !isEditing && memo.content_text && (
+            {/* Document / code content */}
+            {(memo.type === 'document' || memo.type === 'code') && !isEditing && memo.content_text && (
               <div className="om-prose">
                 <ReactMarkdown remarkPlugins={[remarkGfm]}>{memo.content_raw || memo.content_text}</ReactMarkdown>
               </div>

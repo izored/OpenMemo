@@ -5,7 +5,7 @@ import { Icon } from '@/components/Icon';
 import { ChangelogModal, cmpVersion } from '@/components/ChangelogModal';
 import { ONBOARDING_KEY } from '@/lib/onboarding';
 import { useAppStore } from '@/stores/appStore';
-import { systemApi, maintenanceApi, backupApi } from '@/lib/api';
+import { systemApi, maintenanceApi, backupApi, settingsApi } from '@/lib/api';
 import type { OllamaModel } from '@/types';
 
 const BUILT_WITH = [
@@ -76,6 +76,10 @@ export function SettingsPage() {
   const [updateAvailable, setUpdateAvailable] = useState(false);
   const [backing, setBacking] = useState<'structure' | 'full' | null>(null);
   const [restoring, setRestoring] = useState(false);
+  const [maxUploadMb, setMaxUploadMb] = useState<number | null>(null);
+  const [maxUploadSaved, setMaxUploadSaved] = useState(false);
+  const [localizing, setLocalizing] = useState(false);
+  const [localizeResult, setLocalizeResult] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -98,7 +102,36 @@ export function SettingsPage() {
       .catch(() => setOllamaConnected(false));
     systemApi.models().then((d) => setOllamaModels(d.models || [])).catch(() => setOllamaModels([]));
     systemApi.stats().then(setStats).catch(() => setStats(null));
+    settingsApi.get().then((s) => setMaxUploadMb(s.max_upload_mb)).catch(() => setMaxUploadMb(5120));
   }, []);
+
+  const runLocalize = async () => {
+    if (localizing) return;
+    if (!confirm('Download remote images in all saved articles to local copies? This may take a while for large libraries.')) return;
+    setLocalizing(true);
+    setLocalizeResult(null);
+    try {
+      const r = await maintenanceApi.localize();
+      setLocalizeResult(`${r.images_localized} images across ${r.memos_updated} memos`);
+    } catch {
+      setLocalizeResult('Failed — see server logs');
+    } finally {
+      setLocalizing(false);
+    }
+  };
+
+  const saveMaxUpload = async () => {
+    if (maxUploadMb == null || !Number.isFinite(maxUploadMb)) return;
+    const clamped = Math.max(1, Math.min(Math.round(maxUploadMb), 50 * 1024));
+    try {
+      const s = await settingsApi.update({ max_upload_mb: clamped });
+      setMaxUploadMb(s.max_upload_mb);
+      setMaxUploadSaved(true);
+      setTimeout(() => setMaxUploadSaved(false), 1500);
+    } catch {
+      /* ignore */
+    }
+  };
 
   const handleBackup = async (scope: 'structure' | 'full') => {
     setBacking(scope);
@@ -233,6 +266,41 @@ export function SettingsPage() {
                   <p className="om-add-hint mono">Loading storage…</p>
                 )}
               </div>
+            </div>
+          </SettingCard>
+
+          <SettingCard title="Uploads" eyebrow="Limits">
+            <div className="om-setting-row">
+              <div className="om-setting-row-text">
+                <p>Max upload size</p>
+                <span className="mono">Per file. Any file type is accepted. Default 5120 MB (5 GB).</span>
+              </div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <input
+                  type="number"
+                  min={1}
+                  max={51200}
+                  value={maxUploadMb ?? ''}
+                  onChange={(e) => setMaxUploadMb(e.target.value === '' ? null : Number(e.target.value))}
+                  className="om-input"
+                  style={{ width: 110, textAlign: 'right' }}
+                />
+                <span className="mono om-setting-val">MB</span>
+                <button className="om-btn-secondary" onClick={saveMaxUpload} disabled={maxUploadMb == null}>
+                  {maxUploadSaved ? 'Saved ✓' : 'Save'}
+                </button>
+              </div>
+            </div>
+            <div className="om-setting-row" style={{ borderTop: '1px solid var(--border)', marginTop: 8, paddingTop: 8 }}>
+              <div className="om-setting-row-text">
+                <p>Localize saved content</p>
+                <span className="mono">
+                  {localizeResult || 'Download remote images in saved articles so memos survive source deletion'}
+                </span>
+              </div>
+              <button className="om-btn-secondary" onClick={runLocalize} disabled={localizing}>
+                {localizing ? 'Localizing…' : 'Localize'}
+              </button>
             </div>
           </SettingCard>
 
