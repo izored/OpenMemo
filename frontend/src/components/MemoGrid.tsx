@@ -89,10 +89,10 @@ export function MemoGrid({ memos: serverMemos }: MemoGridProps) {
 
   const handleDragEnd = (event: DragEndEvent) => {
     const { active, over } = event;
-    setActiveId(null);
     lastOverIdRef.current = null;
 
     if (over && String(over.id).startsWith('col-')) {
+      setActiveId(null);
       const collectionId = String(over.id).replace('col-', '');
       collectionApi
         .addMemo(collectionId, String(active.id))
@@ -105,8 +105,12 @@ export function MemoGrid({ memos: serverMemos }: MemoGridProps) {
     }
 
     const finalMemos = dragOrderRef.current;
-    if (!finalMemos.length) return;
+    if (!finalMemos.length) {
+      setActiveId(null);
+      return;
+    }
     reorderingRef.current = true;
+    setActiveId(null);
     Promise.all(finalMemos.map((m, i) => memoApi.updateSort(m.id, finalMemos.length - i)))
       .then(() => {
         reorderingRef.current = false;
