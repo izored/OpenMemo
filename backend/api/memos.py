@@ -119,6 +119,7 @@ async def list_memos(
                 "source_domain": m.source_domain,
                 "source_favicon": m.source_favicon,
                 "thumbnail_path": m.thumbnail_path,
+                "file_path": m.file_path,
                 "ai_summary": m.ai_summary,
                 "notes": m.notes,
                 "sort_order": m.sort_order,
