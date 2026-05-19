@@ -180,6 +180,7 @@ from backend.api.export import router as export_router
 from backend.api.search import router as search_router
 from backend.api.maintenance import router as maintenance_router
 from backend.api.backup import router as backup_router
+from backend.api.settings import router as settings_router
 
 app.include_router(memos_router)
 app.include_router(chat_router)
@@ -189,6 +190,7 @@ app.include_router(export_router)
 app.include_router(search_router)
 app.include_router(maintenance_router)
 app.include_router(backup_router)
+app.include_router(settings_router)
 
 
 @app.get("/api/stats")

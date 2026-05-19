@@ -24,7 +24,7 @@ function hashId(id: string): number {
 
 function typeIcon(t: MemoType) {
   return (
-    { note: 'fileText', link: 'link', article: 'globe', image: 'image', video: 'video', document: 'file', audio: 'mic' } as Record<string, string>
+    { note: 'fileText', link: 'link', article: 'globe', image: 'image', video: 'video', document: 'file', audio: 'mic', code: 'code', file: 'file' } as Record<string, string>
   )[t] || 'file';
 }
 function typeLabel(t: MemoType) {
@@ -242,6 +242,26 @@ export function MemoCard({ memo, dragHandleProps }: CardProps) {
               <span className="om-doc-line" style={{ width: '60%' }} />
               <span className="om-doc-line" style={{ width: '80%' }} />
             </span>
+          </div>
+        </div>
+        <div className="om-card-body">
+          <h3 className="om-card-title">{memo.title}</h3>
+          {memo.description && <p className="om-card-desc">{memo.description}</p>}
+          <Meta memo={memo} />
+        </div>
+      </Chrome>
+    );
+  }
+
+  // ── Generic file / code (no preview) — icon + extension badge ──
+  if (memo.type === 'file' || memo.type === 'code') {
+    const ext = (memo.title.includes('.') ? memo.title.split('.').pop()! : '').toLowerCase();
+    return (
+      <Chrome memo={memo} dragHandleProps={dragHandleProps} onDelete={handleDelete} className="om-card-doc">
+        <div className="om-doc-frame">
+          <div className="om-file-badge">
+            <Icon name={memo.type === 'code' ? 'code' : 'file'} size={36} />
+            {ext && <span className="om-file-ext mono">.{ext}</span>}
           </div>
         </div>
         <div className="om-card-body">

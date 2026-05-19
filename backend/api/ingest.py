@@ -282,10 +282,32 @@ async def ingest_file(
     return {"id": memo.id, "title": memo.title, "type": result.type, "status": "processing"}
 
 
+# Map code/text extensions to a Markdown fence language for syntax rendering.
+_CODE_LANG = {
+    ".py": "python", ".js": "javascript", ".jsx": "jsx", ".ts": "typescript",
+    ".tsx": "tsx", ".java": "java", ".c": "c", ".h": "c", ".cpp": "cpp",
+    ".hpp": "cpp", ".cc": "cpp", ".cs": "csharp", ".go": "go", ".rs": "rust",
+    ".rb": "ruby", ".php": "php", ".swift": "swift", ".kt": "kotlin",
+    ".scala": "scala", ".sh": "bash", ".bash": "bash", ".zsh": "bash",
+    ".ps1": "powershell", ".bat": "batch", ".sql": "sql", ".html": "html",
+    ".htm": "html", ".css": "css", ".scss": "scss", ".sass": "sass",
+    ".less": "less", ".json": "json", ".yaml": "yaml", ".yml": "yaml",
+    ".toml": "toml", ".ini": "ini", ".xml": "xml", ".md": "markdown",
+    ".lua": "lua", ".r": "r", ".dart": "dart", ".vue": "vue",
+    ".svelte": "svelte", ".graphql": "graphql", ".proto": "protobuf",
+}
+
+
 async def process_file_memo(memo_id: str, file_path: str, memo_type: str):
-    """Background: extract text from file and embed."""
+    """Background: extract text from file and embed.
+
+    SECURITY: uploaded files are NEVER executed or interpreted. Code/script
+    files are only opened in read mode for text extraction and stored — no
+    subprocess, exec, eval, import, or shell invocation touches uploaded
+    content anywhere in the ingestion path.
+    """
     from backend.core.extractor import extract_pdf, extract_docx, extract_image
-    
+
     async with AsyncSessionLocal() as db:
         memo = await db.get(Memo, memo_id)
         if not memo:
@@ -301,16 +323,21 @@ async def process_file_memo(memo_id: str, file_path: str, memo_type: str):
             elif ext in (".png", ".jpg", ".jpeg", ".gif", ".webp"):
                 data = await extract_image(file_path)
             else:
-                # Try reading as text
+                # Read as text (code/plain). Opened read-only — never executed.
                 try:
-                    with open(file_path, "r", encoding="utf-8") as f:
+                    with open(file_path, "r", encoding="utf-8", errors="replace") as f:
                         content = f.read()
                     data = {"content_text": content, "description": content[:200]}
+                    if memo_type == "code":
+                        lang = _CODE_LANG.get(ext, "")
+                        data["content_raw"] = f"```{lang}\n{content}\n```"
                 except Exception:
                     data = {}
-            
+
             if data.get("content_text"):
                 memo.content_text = data["content_text"]
+                if data.get("content_raw"):
+                    memo.content_raw = data["content_raw"]
                 memo.description = data.get("description", "")[:200]
                 await db.commit()
                 

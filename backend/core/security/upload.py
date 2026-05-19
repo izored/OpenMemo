@@ -19,39 +19,56 @@ from fastapi import HTTPException, UploadFile
 from backend.core.security.sanitize import sanitize_workspace_id, sanitize_filename
 
 
-# Maximum file size: 50MB
-DEFAULT_MAX_FILE_SIZE = 50 * 1024 * 1024
+# Default maximum file size: 5GB. User-overridable via app settings
+# (backend/core/app_settings.py -> max_upload_mb).
+DEFAULT_MAX_FILE_SIZE = 5 * 1024 * 1024 * 1024
 
-# Allowed extensions and their memo type mapping
-ALLOWED_EXTENSIONS = {
-    ".pdf": "document",
-    ".doc": "document",
-    ".docx": "document",
-    ".xlsx": "document",
-    ".xls": "document",
-    ".png": "image",
-    ".jpg": "image",
-    ".jpeg": "image",
-    ".gif": "image",
-    ".webp": "image",
-    ".mp3": "audio",
-    ".wav": "audio",
-    ".m4a": "audio",
-    ".ogg": "audio",
-}
+# Extension -> memo type. This is a CATEGORIZATION map, NOT an allow-list:
+# any extension (or none) is accepted; unknown types fall back to "file" and
+# are shown with a generic file icon + extension badge in the UI.
+_IMAGE = {".png", ".jpg", ".jpeg", ".gif", ".webp", ".svg", ".bmp", ".tiff",
+          ".tif", ".heic", ".heif", ".avif", ".ico"}
+_AUDIO = {".mp3", ".wav", ".m4a", ".ogg", ".flac", ".aac", ".opus", ".wma"}
+_VIDEO = {".mp4", ".mov", ".webm", ".mkv", ".avi", ".m4v", ".wmv", ".flv"}
+_DOCUMENT = {".pdf", ".doc", ".docx", ".xls", ".xlsx", ".ppt", ".pptx",
+             ".odt", ".ods", ".odp", ".rtf", ".txt", ".csv", ".epub"}
+# Source/code files — never executed, only stored & rendered (see #4 / save()).
+_CODE = {".py", ".js", ".jsx", ".ts", ".tsx", ".java", ".c", ".h", ".cpp",
+         ".hpp", ".cc", ".cs", ".go", ".rs", ".rb", ".php", ".swift", ".kt",
+         ".kts", ".scala", ".sh", ".bash", ".zsh", ".ps1", ".bat", ".sql",
+         ".html", ".htm", ".css", ".scss", ".sass", ".less", ".json", ".yaml",
+         ".yml", ".toml", ".ini", ".xml", ".md", ".markdown", ".ipynb",
+         ".lua", ".r", ".dart", ".vue", ".svelte", ".graphql", ".proto",
+         ".dockerfile", ".makefile", ".gradle", ".tf", ".vim", ".el"}
 
-# Magic bytes for content validation
-MAGIC_BYTES = {
-    b"%PDF": "document",
-    b"\x89PNG": "image",
-    b"\xff\xd8\xff": "image",  # JPEG
-    b"RIFF": "audio",  # WAV / WEBP
-    b"ID3": "audio",  # MP3
-    b"\x66\x74\x79\x70": "audio",  # MP4 / M4A
-}
 
-# Extensions where magic bytes validation is skipped (compressed/office formats)
-MAGIC_BYPASS_EXTENSIONS = {".doc", ".docx", ".xlsx", ".xls", ".ogg", ".m4a"}
+def categorize_extension(ext: str) -> str:
+    """Map a file extension to a memo type. Unknown -> 'file'."""
+    ext = ext.lower()
+    if ext in _IMAGE:
+        return "image"
+    if ext in _AUDIO:
+        return "audio"
+    if ext in _VIDEO:
+        return "video"
+    if ext in _CODE:
+        return "code"
+    if ext in _DOCUMENT:
+        return "document"
+    return "file"
+
+
+# Magic bytes — only used to sanity-check declared IMAGE uploads (where a
+# corrupt/mislabelled image breaks rendering). All other types trust the
+# extension so arbitrary files (archives, 3D, binaries…) are accepted.
+_IMAGE_MAGIC = (
+    b"\x89PNG",
+    b"\xff\xd8\xff",       # JPEG
+    b"GIF8",               # GIF
+    b"RIFF",               # WEBP (RIFF container)
+    b"BM",                 # BMP
+    b"II*\x00", b"MM\x00*"  # TIFF
+)
 
 
 class UploadValidationError(HTTPException):
@@ -84,11 +101,24 @@ class FileUploadHandler:
     def __init__(
         self,
         base_dir: str | Path,
-        max_size: int = DEFAULT_MAX_FILE_SIZE,
+        max_size: int | None = None,
     ):
         self.base = Path(base_dir).resolve()
         self.base.mkdir(parents=True, exist_ok=True)
-        self.max_size = max_size
+        # Fixed override (tests); None = resolve the user-configurable limit
+        # from app settings on each save().
+        self._max_size_override = max_size
+
+    @property
+    def max_size(self) -> int:
+        if self._max_size_override is not None:
+            return self._max_size_override
+        try:
+            from backend.core.app_settings import get_max_upload_bytes
+
+            return get_max_upload_bytes()
+        except Exception:
+            return DEFAULT_MAX_FILE_SIZE
 
     async def save(
         self,
@@ -101,25 +131,22 @@ class FileUploadHandler:
 
         # Read and check size
         content = await file.read()
-        if len(content) > self.max_size:
+        max_size = self.max_size
+        if len(content) > max_size:
             raise UploadValidationError(
                 status_code=413,
-                detail=f"File too large. Max size: {self.max_size // (1024 * 1024)}MB",
+                detail=f"File too large. Max size: {max_size // (1024 * 1024)}MB",
             )
 
-        # Validate extension
+        # Any extension is accepted — categorize, don't gate.
         original_name = sanitize_filename(file.filename or "untitled")
         ext = Path(original_name).suffix.lower()
-        if ext not in ALLOWED_EXTENSIONS:
-            raise UploadValidationError(
-                status_code=400,
-                detail=f"File type not allowed: {ext}",
-            )
+        memo_type = categorize_extension(ext)
 
-        memo_type = ALLOWED_EXTENSIONS[ext]
-
-        # Validate magic bytes
-        self._validate_magic_bytes(content, ext)
+        # Only sanity-check declared images (a corrupt image just breaks
+        # rendering). Everything else trusts the extension.
+        if memo_type == "image":
+            self._validate_image_magic(content)
 
         # Build safe path
         file_id = str(uuid.uuid4())
@@ -145,18 +172,16 @@ class FileUploadHandler:
             size=len(content),
         )
 
-    def _validate_magic_bytes(self, content: bytes, ext: str) -> None:
-        """Check file content matches expected type via magic bytes."""
-        if ext in MAGIC_BYPASS_EXTENSIONS:
+    def _validate_image_magic(self, content: bytes) -> None:
+        """Reject a file claiming an image extension whose bytes aren't an image.
+        SVG is text-based, so it's exempt."""
+        header = content[:12]
+        if header.lstrip().startswith(b"<"):  # SVG / XML
             return
-
-        header = content[:8]
-        matched = any(header.startswith(magic) for magic in MAGIC_BYTES)
-
-        if not matched:
+        if not any(header.startswith(m) for m in _IMAGE_MAGIC):
             raise UploadValidationError(
                 status_code=400,
-                detail="File content does not match extension",
+                detail="File content does not look like a valid image",
             )
 
     def serve_path(self, relative_path: str) -> Path:

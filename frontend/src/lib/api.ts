@@ -133,6 +133,12 @@ export const backupApi = {
 };
 
 // Maintenance
+export const settingsApi = {
+  get: () => fetchJSON<{ max_upload_mb: number }>('/settings'),
+  update: (patch: { max_upload_mb?: number }) =>
+    fetchJSON<{ max_upload_mb: number }>('/settings', { method: 'PUT', body: JSON.stringify(patch) }),
+};
+
 export const maintenanceApi = {
   clearCache: () => fetchJSON<{ ok: boolean; freed_bytes: number }>('/maintenance/clear-cache', { method: 'POST' }),
   reset: () => fetchJSON<{ ok: boolean }>('/maintenance/reset', { method: 'POST', body: JSON.stringify({ confirm: true }) }),
