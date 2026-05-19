@@ -1,6 +1,7 @@
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { useDroppable } from '@dnd-kit/core';
+import { motion } from 'framer-motion';
 import { Icon } from './Icon';
 import { collectionApi, systemApi } from '@/lib/api';
 import { useAppStore } from '@/stores/appStore';
@@ -104,7 +105,11 @@ export function Sidebar() {
   ];
 
   return (
-    <aside className={cn('om-sidebar', sidebarCollapsed && 'collapsed')}>
+    <motion.aside
+      className={cn('om-sidebar', sidebarCollapsed && 'collapsed')}
+      animate={{ width: sidebarCollapsed ? 76 : 260 }}
+      transition={{ type: 'spring', stiffness: 320, damping: 32 }}
+    >
       <div className="om-sidebar-head">
         <button
           className="om-brand"
@@ -244,6 +249,6 @@ export function Sidebar() {
           )}
         </button>
       </div>
-    </aside>
+    </motion.aside>
   );
 }
