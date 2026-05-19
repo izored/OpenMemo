@@ -1,21 +1,95 @@
-MIT License
+## openMemo License
 
-Copyright (c) 2026 OpenMemo Contributors
+openMemo is licensed under the **GNU Affero General Public License v3.0 (AGPL-3.0)**.
 
-Permission is hereby granted, free of charge, to any person obtaining a copy
-of this software and associated documentation files (the "Software"), to deal
-in the Software without restriction, including without limitation the rights
-to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-copies of the Software, and to permit persons to whom the Software is
-furnished to do so, subject to the following conditions:
+### What This Means (Plain English)
 
-The above copyright notice and this permission notice shall be included in all
-copies or substantial portions of the Software.
+**You can:**
+- ✅ Use openMemo freely, without payment or restrictions
+- ✅ Modify the source code to fit your needs
+- ✅ Run it on your own servers or self-host locally
+- ✅ Redistribute modified versions
 
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-SOFTWARE.
+**You must:**
+- ⚠️ Share improvements back — any modifications must be open sourced
+- ⚠️ Include the license and copyright notice with distributions
+- ⚠️ Disclose the source — if you run openMemo as a service, users accessing it remotely must be able to download the source code
+- ⚠️ Use AGPL for derivative works — you cannot relicense as MIT, proprietary, or other licenses
+
+### The Copyleft Requirement
+
+AGPL is a **strong copyleft** license. If you modify openMemo, you must:
+
+1. **Release modifications publicly** — you cannot keep improvements private
+2. **Use AGPL for derivatives** — if you fork or extend openMemo, your project must also be AGPL
+3. **Attribute correctly** — credit the original authors and link to this repository
+
+**Example:** If you create a competing tool based on openMemo's code, it must also be AGPL and open source.
+
+### The Network Clause (The Difference from GPL)
+
+AGPL adds a **network use clause** — the strongest copyleft protection:
+
+**If you modify openMemo and run it as a service (web app, API, SaaS), users accessing it remotely must be able to download the modified source code.**
+
+**Example:** You cannot take openMemo, modify it, and run a closed-source SaaS version without sharing the source with users.
+
+This prevents companies from using open source code while keeping improvements proprietary.
+
+### Practical Questions
+
+**Q: Can I use openMemo in my business?**
+A: Yes, freely. You can self-host it internally, use it in production, modify it. You just can't keep changes private.
+
+**Q: Can I build a SaaS on top of openMemo?**
+A: Only if you open source your modifications and make the source available to users. You cannot run a closed-source version.
+
+**Q: Can I integrate openMemo into a larger closed-source application?**
+A: No. Any linked/integrated code must be AGPL. The copyleft "infects" the whole work.
+
+**Q: What if I only use openMemo as a dependency (not modify it)?**
+A: If you don't modify the openMemo code, you can integrate it into other projects. But if you modify it, the copyleft applies.
+
+**Q: Can I fork openMemo with a different name?**
+A: Yes, but it must remain AGPL and you must preserve copyright notices.
+
+### Contributing Improvements
+
+If you improve openMemo:
+
+1. [Open a pull request](https://github.com/izored/OpenMemo) to contribute back
+2. Include a summary of changes and reasoning
+3. Ensure code follows project style (see `CONTRIBUTING.md`)
+4. By contributing, you agree that your changes are also AGPL
+
+---
+
+## Full License Text
+
+GNU AFFERO GENERAL PUBLIC LICENSE
+Version 3, 19 November 2007
+
+Copyright (C) 2026 OpenMemo Contributors
+
+This program is free software: you can redistribute it and/or modify
+it under the terms of the GNU Affero General Public License as published
+by the Free Software Foundation, either version 3 of the License, or
+(at your option) any later version.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU Affero General Public License for more details.
+
+You should have received a copy of the GNU Affero General Public License
+along with this program.  If not, see <https://www.gnu.org/licenses/>.
+
+### Additional Terms
+
+Under AGPLv3 Section 7, additional terms may apply to your use. These are the additional terms:
+
+**Section 13. Remote Network Interaction**
+
+If you modify this program, you must provide a way for users who interact with it remotely through a computer network to receive the source code of your version by providing access to the Corresponding Source from a network server at no charge, through some standard or customary means of facilitating copying of software.
+
+This means if you run openMemo as a web service or API, you must provide users a way to download the source code of your modified version.
