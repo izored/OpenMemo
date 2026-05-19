@@ -20,7 +20,7 @@ export interface Memo {
   tags: string[];
 }
 
-export type MemoType = 'note' | 'article' | 'video' | 'image' | 'audio' | 'document' | 'link';
+export type MemoType = 'note' | 'article' | 'video' | 'image' | 'audio' | 'document' | 'link' | 'code' | 'file';
 
 export interface CollectionRef {
   id: string;

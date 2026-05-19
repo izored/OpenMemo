@@ -82,6 +82,29 @@ _file_store = SafePath(settings.FILES_DIR)
 _thumb_store = SafePath(settings.FILES_DIR / "thumbs")
 
 
+_extracted_store = SafePath(settings.FILES_DIR / "extracted")
+
+
+# Must be registered BEFORE the catch-all /api/files/{file_path:path} (same
+# route-ordering gotcha as the thumb route). Serves locally-cached images
+# from extracted article content (public; only under files/extracted).
+@app.get("/api/files/extracted/{memo_id}/{name}")
+async def serve_extracted(memo_id: str, name: str):
+    import mimetypes
+
+    target = _extracted_store.resolve(f"{memo_id}/{name}")
+    if not target.exists():
+        raise HTTPException(status_code=404, detail="Asset not found")
+    ext = target.suffix.lower()
+    media_type = {
+        ".webp": "image/webp", ".avif": "image/avif",
+        ".jpg": "image/jpeg", ".jpeg": "image/jpeg",
+        ".png": "image/png", ".gif": "image/gif",
+        ".svg": "image/svg+xml", ".bmp": "image/bmp",
+    }.get(ext) or mimetypes.guess_type(str(target))[0] or "image/jpeg"
+    return FileResponse(str(target), media_type=media_type)
+
+
 # NOTE: must be registered BEFORE the catch-all /api/files/{file_path:path};
 # otherwise the greedy :path param swallows "thumb/<name>" and the request
 # is routed to serve_file (Memo-ownership check) and 404s.
@@ -180,6 +203,7 @@ from backend.api.export import router as export_router
 from backend.api.search import router as search_router
 from backend.api.maintenance import router as maintenance_router
 from backend.api.backup import router as backup_router
+from backend.api.settings import router as settings_router
 
 app.include_router(memos_router)
 app.include_router(chat_router)
@@ -189,6 +213,7 @@ app.include_router(export_router)
 app.include_router(search_router)
 app.include_router(maintenance_router)
 app.include_router(backup_router)
+app.include_router(settings_router)
 
 
 @app.get("/api/stats")

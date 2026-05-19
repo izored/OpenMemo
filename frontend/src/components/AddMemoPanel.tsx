@@ -295,9 +295,9 @@ export function AddMemoPanel() {
                   <span className="om-add-link">browse</span>
                 </p>
                 <span className="mono">
-                  {mediaKind === 'image' && 'JPG · PNG · WebP · 25 MB'}
-                  {mediaKind === 'video' && 'MP4 · MOV · WebM · 500 MB'}
-                  {mediaKind === 'file' && 'PDF · MD · ZIP · 100 MB'}
+                  {mediaKind === 'image' && 'JPG · PNG · WebP · GIF · SVG'}
+                  {mediaKind === 'video' && 'MP4 · MOV · WebM · MKV'}
+                  {mediaKind === 'file' && 'Any file type — code, archives, 3D, docs…'}
                 </span>
               </div>
             </div>
@@ -368,7 +368,7 @@ export function AddMemoPanel() {
         ref={fileRef}
         type="file"
         multiple
-        accept=".pdf,.doc,.docx,.xlsx,.xls,.png,.jpg,.jpeg,.gif,.webp,.mp4,.mov,.webm,.mp3,.wav,.m4a,.md,.zip"
+        accept={mediaKind === 'image' ? 'image/*' : mediaKind === 'video' ? 'video/*' : undefined}
         hidden
         onChange={(e) => onFile(e.target.files)}
       />
