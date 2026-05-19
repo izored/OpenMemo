@@ -39,6 +39,8 @@ class ExtensionSave(BaseModel):
     content_text: Optional[str] = None
     html: Optional[str] = None
     favicon: Optional[str] = None
+    thumbnail: Optional[str] = None
+    description: Optional[str] = None
     collection_id: Optional[str] = None
     workspace_id: Optional[str] = None
 
@@ -305,17 +307,31 @@ async def ingest_from_extension(
     if data.url:
         parsed = urlparse(data.url)
         domain = parsed.netloc
-    
+
+    # The extension extracts from the live rendered DOM (works on SPA /
+    # bot-walled sites). Server fetch is only a fallback for the bits the
+    # extension couldn't supply.
+    extracted = {}
+    need_fallback = not data.content_text or not data.thumbnail
+    if data.url and need_fallback and data.type in ("article", "link"):
+        from backend.core.extractor import extract_url
+        try:
+            extracted = await extract_url(data.url)
+        except Exception:
+            extracted = {}
+
     memo = Memo(
         id=str(uuid.uuid4()),
         workspace_id=sanitize_workspace_id(data.workspace_id),
-        type=data.type,
-        title=data.title,
-        content_text=data.content_text,
-        content_raw=data.html,
+        type=data.type or extracted.get("type", "article"),
+        title=data.title or extracted.get("title") or data.url,
+        description=data.description or extracted.get("description"),
+        content_text=data.content_text or extracted.get("content_text"),
+        content_raw=data.html or extracted.get("content_raw"),
         source_url=data.url,
         source_domain=domain,
-        source_favicon=data.favicon or (f"https://www.google.com/s2/favicons?domain={domain}&sz=32" if domain else None),
+        source_favicon=data.favicon or extracted.get("source_favicon") or (f"https://www.google.com/s2/favicons?domain={domain}&sz=32" if domain else None),
+        thumbnail_path=data.thumbnail or extracted.get("thumbnail_path"),
         created_at=datetime.utcnow(),
         updated_at=datetime.utcnow(),
     )
@@ -324,5 +340,7 @@ async def ingest_from_extension(
     await db.commit()
     
     background_tasks.add_task(process_memo, memo.id)
-    
+    if memo.thumbnail_path and memo.thumbnail_path.startswith("http"):
+        background_tasks.add_task(cache_thumbnail, memo.id)
+
     return {"id": memo.id, "title": memo.title, "status": "saved"}
