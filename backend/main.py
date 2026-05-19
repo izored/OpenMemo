@@ -79,6 +79,28 @@ app.add_middleware(
 _file_store = SafePath(settings.FILES_DIR)
 
 
+_thumb_store = SafePath(settings.FILES_DIR / "thumbs")
+
+
+# NOTE: must be registered BEFORE the catch-all /api/files/{file_path:path};
+# otherwise the greedy :path param swallows "thumb/<name>" and the request
+# is routed to serve_file (Memo-ownership check) and 404s.
+@app.get("/api/files/thumb/{name}")
+async def serve_thumb(name: str):
+    """Serve a locally-cached thumbnail (public; only images under files/thumbs)."""
+    target = _thumb_store.resolve(name)
+    if not target.exists():
+        raise HTTPException(status_code=404, detail="Thumbnail not found")
+    import mimetypes
+    ext = target.suffix.lower()
+    media_type = {
+        ".webp": "image/webp", ".avif": "image/avif",
+        ".jpg": "image/jpeg", ".jpeg": "image/jpeg",
+        ".png": "image/png", ".gif": "image/gif",
+    }.get(ext) or mimetypes.guess_type(str(target))[0] or "image/jpeg"
+    return FileResponse(str(target), media_type=media_type)
+
+
 @app.get("/api/files/{file_path:path}")
 async def serve_file(file_path: str):
     """Serve an uploaded file if it belongs to a memo in the workspace."""
@@ -87,7 +109,7 @@ async def serve_file(file_path: str):
     from backend.db.models import Memo
 
     # SafePath resolves and validates traversal
-    target = _file_store.serve_path(file_path)
+    target = _file_store.resolve(file_path)
 
     async with AsyncSessionLocal() as db:
         result = await db.execute(
@@ -97,18 +119,6 @@ async def serve_file(file_path: str):
         if not memo:
             raise HTTPException(status_code=404, detail="File not found")
 
-    return FileResponse(str(target))
-
-
-_thumb_store = SafePath(settings.FILES_DIR / "thumbs")
-
-
-@app.get("/api/files/thumb/{name}")
-async def serve_thumb(name: str):
-    """Serve a locally-cached thumbnail (public; only images under files/thumbs)."""
-    target = _thumb_store.serve_path(name)
-    if not target.exists():
-        raise HTTPException(status_code=404, detail="Thumbnail not found")
     return FileResponse(str(target))
 
 

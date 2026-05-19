@@ -168,7 +168,17 @@ async def ingest_url(
             extracted = await extract_url(data.url)
     except Exception as e:
         raise HTTPException(status_code=400, detail=f"Failed to extract: {str(e)}")
-    
+
+    # JS-rendered / bot-walled sites (e.g. Dribbble returns HTTP 202 empty to
+    # server fetches) yield nothing. Don't persist an empty memo — tell the
+    # user to capture it via the browser extension, which reads the live DOM.
+    if not (extracted.get("title") or "").strip() and not (extracted.get("content_text") or "").strip():
+        raise HTTPException(
+            status_code=422,
+            detail="This page blocks server-side reading (likely JS-rendered). "
+                   "Open it in your browser and save with the OpenMemo extension.",
+        )
+
     memo = Memo(
         id=str(uuid.uuid4()),
         workspace_id=sanitize_workspace_id(data.workspace_id),
