@@ -44,7 +44,7 @@ All notable changes to OpenMemo are documented here.
 - 📏 **Over-wide cards** — tightened masonry column max-width for image and text-only memos.
 
 ---
-## [Unreleased]
+## [1.8.4] - 2026-05-19
 
 ### Added
 
