@@ -1,14 +1,141 @@
 """Content extractors for URLs, PDFs, documents, images."""
 import re
+import json
 import base64
 from pathlib import Path
-from urllib.parse import urlparse
+from urllib.parse import urlparse, urljoin
 
 import httpx
 from bs4 import BeautifulSoup
 import html2text
 
 from backend.core.ollama_client import ollama_client
+
+
+# --- Defuddle-style metadata extraction (ported from Obsidian Clipper) ---
+
+# Elements that are never part of the main content.
+_JUNK_TAGS = [
+    "script", "style", "noscript", "iframe", "svg", "form", "button",
+    "nav", "footer", "aside", "header",
+]
+_JUNK_SELECTORS = [
+    '[role="navigation"]', '[role="banner"]', '[role="contentinfo"]',
+    '[aria-hidden="true"]', ".nav", ".navbar", ".menu", ".sidebar",
+    ".footer", ".header", ".comments", ".comment", ".share", ".social",
+    ".related", ".newsletter", ".cookie", ".ad", ".ads", ".advert",
+    ".promo", ".popup", ".modal",
+]
+
+
+def _meta(soup: BeautifulSoup, key: str, val: str) -> str:
+    """First matching <meta> content by name OR property, case-insensitive.
+
+    `key` is kept for call-site readability; lookup checks both attributes
+    like Defuddle's getMetaContent.
+    """
+    pat = re.compile(f"^{re.escape(val)}$", re.I)
+    for attr in ("property", "name"):
+        tag = soup.find("meta", attrs={attr: pat})
+        if tag and tag.get("content"):
+            return tag["content"].strip()
+    return ""
+
+
+def _extract_jsonld(soup: BeautifulSoup) -> list[dict]:
+    """All schema.org JSON-LD objects on the page (flattened)."""
+    out: list[dict] = []
+
+    def _walk(obj):
+        if isinstance(obj, dict):
+            out.append(obj)
+            for v in obj.values():
+                _walk(v)
+        elif isinstance(obj, list):
+            for v in obj:
+                _walk(v)
+
+    for tag in soup.find_all("script", type="application/ld+json"):
+        raw = tag.string or tag.get_text() or ""
+        try:
+            _walk(json.loads(raw))
+        except Exception:
+            continue
+    return out
+
+
+def _schema_image(jsonld: list[dict]) -> str:
+    """schema.org image: string | {url} | [..] — first usable URL."""
+    for obj in jsonld:
+        img = obj.get("image") or obj.get("thumbnailUrl")
+        if not img:
+            continue
+        if isinstance(img, str):
+            return img
+        if isinstance(img, dict) and img.get("url"):
+            return img["url"]
+        if isinstance(img, list) and img:
+            first = img[0]
+            if isinstance(first, str):
+                return first
+            if isinstance(first, dict) and first.get("url"):
+                return first["url"]
+    return ""
+
+
+def _pick_image(soup: BeautifulSoup, jsonld: list[dict], base_url: str) -> str:
+    """Defuddle image priority: og:image → twitter:image → schema → link → hero <img>."""
+    candidates = [
+        _meta(soup, "property", "og:image"),
+        _meta(soup, "property", "og:image:url"),
+        _meta(soup, "name", "twitter:image"),
+        _meta(soup, "name", "twitter:image:src"),
+        _schema_image(jsonld),
+        _meta(soup, "name", "sailthru.image.full"),
+    ]
+    link_img = soup.find("link", rel=re.compile(r"image_src", re.I))
+    if link_img and link_img.get("href"):
+        candidates.append(link_img["href"])
+
+    for c in candidates:
+        if c and c.strip():
+            return urljoin(base_url, c.strip())
+
+    # Last resort: largest content <img> (skip icons/spacers/data URIs).
+    root = soup.find("article") or soup.find("main") or soup.body or soup
+    best = ""
+    best_area = 0
+    for img in root.find_all("img"):
+        src = img.get("src") or img.get("data-src") or ""
+        if not src or src.startswith("data:"):
+            continue
+        try:
+            area = int(img.get("width", 0)) * int(img.get("height", 0))
+        except (TypeError, ValueError):
+            area = 0
+        if area >= best_area:
+            best_area = area
+            best = src
+    if best:
+        return urljoin(base_url, best)
+    return ""
+
+
+def _clean_content_node(soup: BeautifulSoup):
+    """Find the main content root and strip junk in-place. Returns the node."""
+    root = (
+        soup.find("article")
+        or soup.find("main")
+        or soup.find(attrs={"role": "main"})
+        or soup.body
+        or soup
+    )
+    for tag in root.find_all(_JUNK_TAGS):
+        tag.decompose()
+    for sel in _JUNK_SELECTORS:
+        for el in root.select(sel):
+            el.decompose()
+    return root
 
 
 async def extract_url(url: str) -> dict:
@@ -31,62 +158,56 @@ async def extract_url(url: str) -> dict:
         html = resp.text
     
     soup = BeautifulSoup(html, "lxml")
-    
-    # Extract metadata
-    title = ""
-    if soup.title:
-        title = soup.title.string or ""
-    og_title = soup.find("meta", property="og:title")
-    if og_title:
-        title = og_title.get("content", title)
-    
-    description = ""
-    meta_desc = soup.find("meta", attrs={"name": "description"})
-    if meta_desc:
-        description = meta_desc.get("content", "")
-    og_desc = soup.find("meta", property="og:description")
-    if og_desc:
-        description = og_desc.get("content", description)
-    
-    # Thumbnail — try multiple meta tag formats
-    thumbnail = ""
-    for attrs in [
-        {"property": "og:image"},
-        {"name": "og:image"},
-        {"property": "og:image:url"},
-        {"name": "twitter:image"},
-        {"property": "twitter:image"},
-        {"name": "twitter:image:src"},
-    ]:
-        tag = soup.find("meta", attrs=attrs)
-        if tag and tag.get("content"):
-            thumbnail = tag["content"]
-            break
-    
-    # Favicon
+    base_url = str(resp.url)
+    jsonld = _extract_jsonld(soup)
+
+    # Title: og:title → schema headline → <title>
+    title = (
+        _meta(soup, "property", "og:title")
+        or next((o["headline"] for o in jsonld if isinstance(o.get("headline"), str)), "")
+        or (soup.title.string.strip() if soup.title and soup.title.string else "")
+    )
+
+    # Description: meta description → og:description → schema
+    description = (
+        _meta(soup, "name", "description")
+        or _meta(soup, "property", "og:description")
+        or _meta(soup, "name", "twitter:description")
+        or next((o["description"] for o in jsonld if isinstance(o.get("description"), str)), "")
+    )
+
+    thumbnail = _pick_image(soup, jsonld, base_url)
+
     parsed = urlparse(url)
     domain = parsed.netloc
     favicon = f"https://www.google.com/s2/favicons?domain={domain}&sz=32"
-    
-    # Extract body text using html2text
+
+    # Main content root, junk stripped, image src made absolute.
+    root = _clean_content_node(soup)
+    for img in root.find_all("img"):
+        src = img.get("src") or img.get("data-src")
+        if src and not src.startswith("data:"):
+            img["src"] = urljoin(base_url, src)
+        elif not src:
+            img.decompose()
+    for a in root.find_all("a", href=True):
+        a["href"] = urljoin(base_url, a["href"])
+
+    content_html = str(root)
+
     h = html2text.HTML2Text()
     h.ignore_links = False
-    h.ignore_images = True
+    h.ignore_images = False
     h.body_width = 0
-    
-    # Try to find main content
-    article = soup.find("article") or soup.find("main") or soup.find("body")
-    content_html = str(article) if article else html
     content_text = h.handle(content_html)
-    
-    # Clean up
-    content_text = re.sub(r'\n{3,}', '\n\n', content_text).strip()
-    
+    content_text = re.sub(r"\n{3,}", "\n\n", content_text).strip()
+
     return {
         "title": title.strip(),
         "description": description.strip(),
         "content_text": content_text,
-        "content_raw": content_html,
+        # Markdown (not raw HTML) — MemoDetail renders this via ReactMarkdown.
+        "content_raw": content_text,
         "source_url": url,
         "source_domain": domain,
         "source_favicon": favicon,
