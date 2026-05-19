@@ -3,6 +3,14 @@
 All notable changes to OpenMemo are documented here.
 
 ---
+## [1.8.6] - Unreleased
+
+### Fixed
+
+- 🖼️ **Thumbnails never loaded (pre-existing)** — the catch-all `/api/files/{path}` route was registered before `/api/files/thumb/{name}`, so the greedy path param swallowed every thumbnail request and 404'd it; the thumb/file handlers also called a nonexistent `SafePath.serve_path()` (now `.resolve()`) which would 500. Cached thumbnails now serve correctly in cards and MemoDetail, with proper `image/webp`·`image/avif` content types.
+- 🚫 **Silent empty memos** — saving a JS-rendered / bot-walled link (e.g. Dribbble returns HTTP 202 empty to server fetches) from the in-app dashboard created a blank memo; it now returns a clear 422 telling the user to capture via the browser extension.
+
+---
 ## [1.8.5] - 2026-05-19
 
 ### Fixed
