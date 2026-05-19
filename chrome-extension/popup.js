@@ -24,45 +24,30 @@ chrome.tabs.query({ active: true, currentWindow: true }, async (tabs) => {
   titleEl.textContent = tab.title || 'Untitled';
   urlEl.textContent = tab.url;
 
-  // Extract content from page
+  // Extract from the live DOM via the content script (Defuddle-style).
+  let r;
   try {
-    const [result] = await chrome.scripting.executeScript({
-      target: { tabId: tab.id },
-      func: () => {
-        const article = document.querySelector('article') || document.querySelector('main') || document.body;
-        return {
-          title: document.title,
-          text: article.innerText.slice(0, 10000),
-          url: window.location.href,
-          favicon: document.querySelector('link[rel*="icon"]')?.href || '',
-        };
-      },
-    });
-    
-    pageData = {
-      type: detectType(tab.url),
-      url: tab.url,
-      title: result.result.title || tab.title,
-      content_text: result.result.text,
-      favicon: tab.favIconUrl || result.result.favicon,
-    };
+    r = await chrome.tabs.sendMessage(tab.id, { action: 'extract-content' });
   } catch {
-    pageData = {
-      type: 'link',
-      url: tab.url,
-      title: tab.title,
-      content_text: '',
-      favicon: tab.favIconUrl,
-    };
+    // Content script not present (e.g. just-loaded tab) — inject then retry.
+    try {
+      await chrome.scripting.executeScript({ target: { tabId: tab.id }, files: ['content.js'] });
+      r = await chrome.tabs.sendMessage(tab.id, { action: 'extract-content' });
+    } catch { r = null; }
   }
-});
 
-function detectType(url) {
-  if (url.includes('youtube.com') || url.includes('youtu.be')) return 'video';
-  if (url.includes('twitter.com') || url.includes('x.com')) return 'link';
-  if (url.includes('reddit.com')) return 'link';
-  return 'article';
-}
+  pageData = r
+    ? {
+        type: r.type || 'article',
+        url: tab.url,
+        title: r.title || tab.title,
+        description: r.description || '',
+        content_text: r.content_text || '',
+        thumbnail: r.thumbnail || '',
+        favicon: tab.favIconUrl || r.favicon || '',
+      }
+    : { type: 'link', url: tab.url, title: tab.title, content_text: '', favicon: tab.favIconUrl };
+});
 
 // Save button click
 saveBtn.addEventListener('click', async () => {

@@ -21,32 +21,30 @@ chrome.contextMenus.onClicked.addListener(async (info, tab) => {
   if (info.menuItemId === 'save-to-openmemo') {
     try {
       const API_BASE = await getApiBase();
-      // Get page content via content script
-      const [result] = await chrome.scripting.executeScript({
-        target: { tabId: tab.id },
-        func: extractPageContent,
-      });
-
-      const content = result.result;
-      
-      // Detect type
-      let type = 'article';
       const url = info.pageUrl || tab.url;
-      if (url.includes('youtube.com') || url.includes('youtu.be')) type = 'video';
-      else if (url.includes('twitter.com') || url.includes('x.com')) type = 'twitter';
-      else if (url.includes('reddit.com')) type = 'reddit';
-      
+
+      // Extract from the live DOM via the content script (Defuddle-style).
+      let content;
+      try {
+        content = await chrome.tabs.sendMessage(tab.id, { action: 'extract-content' });
+      } catch {
+        await chrome.scripting.executeScript({ target: { tabId: tab.id }, files: ['content.js'] });
+        content = await chrome.tabs.sendMessage(tab.id, { action: 'extract-content' });
+      }
+      content = content || {};
+
       // Save via API
       const response = await fetch(`${API_BASE}/ingest/extension`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          type,
+          type: content.type || 'article',
           url: url,
           title: content.title || tab.title,
-          content_text: info.selectionText || content.text,
-          html: content.html,
-          favicon: tab.favIconUrl,
+          description: content.description || '',
+          content_text: info.selectionText || content.content_text || '',
+          thumbnail: content.thumbnail || '',
+          favicon: tab.favIconUrl || content.favicon,
         }),
       });
 
@@ -99,20 +97,4 @@ async function checkConnection() {
   } catch {
     return { connected: false, ollama: false };
   }
-}
-
-// Content extraction function injected into pages
-function extractPageContent() {
-  const title = document.title;
-  
-  // Try to get article content
-  const article = document.querySelector('article') || document.querySelector('main') || document.body;
-  const text = article.innerText.slice(0, 10000);
-  const html = article.innerHTML.slice(0, 50000);
-  
-  // Get meta description
-  const metaDesc = document.querySelector('meta[name="description"]');
-  const description = metaDesc ? metaDesc.content : '';
-  
-  return { title, text, html, description };
 }
