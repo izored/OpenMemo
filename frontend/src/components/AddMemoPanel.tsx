@@ -110,7 +110,7 @@ export function AddMemoPanel() {
     setBusy(true);
     setError('');
     try {
-      for (const f of Array.from(files)) await ingestApi.file(f);
+      for (const f of Array.from(files)) await ingestApi.file(f, collection || undefined);
       done();
     } catch (e) {
       setError((e as Error).message || 'Failed to upload');

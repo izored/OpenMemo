@@ -742,6 +742,35 @@ input, textarea { font: inherit; color: inherit; }
                        font-family: var(--font-mono); font-size: 12px; line-height: 1.6; margin: 8px 0; }
 .om-prose pre code   { background: transparent; padding: 0; }
 
+/* MDXEditor edit-mode inline code — its bundled style.css hardcodes a near-white
+   background + white text, which is an invisible white box in dark themes.
+   Force token colors. Class hash (_code_*) is build-generated, hence the prefix
+   match + !important to beat the module stylesheet. */
+.mdxeditor code,
+.mdxeditor code span[class*="_code_"] {
+  background: var(--surface-3) !important;
+  color: var(--text) !important;
+  border-radius: 4px;
+}
+
+/* MDXEditor fenced code blocks use CodeMirror, which ships a fixed light theme
+   (white bg, #2E3440 text) — jarring in dark mode. Force token surfaces in all
+   themes; syntax-highlight span colors stay (legible on both surfaces). */
+.mdxeditor .cm-editor,
+.mdxeditor .cm-editor .cm-gutters {
+  background: var(--surface-3) !important;
+}
+.mdxeditor .cm-editor .cm-content { color: var(--text) !important; }
+.mdxeditor .cm-editor .cm-gutters {
+  color: var(--text-3) !important;
+  border-right: 1px solid var(--border) !important;
+}
+.mdxeditor .cm-editor .cm-activeLine,
+.mdxeditor .cm-editor .cm-activeLineGutter {
+  background: color-mix(in oklab, var(--accent) 8%, transparent) !important;
+}
+.mdxeditor .cm-editor .cm-cursor { border-left-color: var(--text) !important; }
+
 /* Code blocks for ReactMarkdown in MemoDetail / AskMemoPanel */
 .om-code-inline     { background: var(--surface-3); color: var(--text); padding: 1px 5px;
                       border-radius: 4px; font-size: 11px; font-family: var(--font-mono); }

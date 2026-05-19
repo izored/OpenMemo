@@ -50,15 +50,17 @@ export function Dashboard() {
   const sortedMemos = useMemo(() => {
     const items: Memo[] = [...(data?.items || [])];
     if (sort === 'recent')
+      items.sort((a, b) => +new Date(b.created_at) - +new Date(a.created_at));
+    else if (sort === 'oldest')
+      items.sort((a, b) => +new Date(a.created_at) - +new Date(b.created_at));
+    else if (sort === 'title')
+      items.sort((a, b) => a.title.localeCompare(b.title));
+    else if (sort === 'custom')
       items.sort((a, b) => {
         const so = (b.sort_order ?? 0) - (a.sort_order ?? 0);
         if (so !== 0) return so;
         return +new Date(b.created_at) - +new Date(a.created_at);
       });
-    else if (sort === 'oldest')
-      items.sort((a, b) => +new Date(a.created_at) - +new Date(b.created_at));
-    else if (sort === 'title')
-      items.sort((a, b) => a.title.localeCompare(b.title));
     return items;
   }, [data, sort]);
 

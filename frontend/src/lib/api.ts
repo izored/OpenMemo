@@ -45,9 +45,10 @@ export const ingestApi = {
       method: 'POST',
       body: JSON.stringify({ title, content, collection_id }),
     }),
-  file: async (file: File, workspace_id?: string) => {
+  file: async (file: File, collection_id?: string, workspace_id?: string) => {
     const form = new FormData();
     form.append('file', file);
+    if (collection_id) form.append('collection_id', collection_id);
     if (workspace_id) form.append('workspace_id', workspace_id);
     const resp = await fetch(`${API_BASE}/ingest/file`, { method: 'POST', body: form });
     if (!resp.ok) {
