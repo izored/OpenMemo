@@ -78,6 +78,8 @@ export function SettingsPage() {
   const [restoring, setRestoring] = useState(false);
   const [maxUploadMb, setMaxUploadMb] = useState<number | null>(null);
   const [maxUploadSaved, setMaxUploadSaved] = useState(false);
+  const [localizing, setLocalizing] = useState(false);
+  const [localizeResult, setLocalizeResult] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -102,6 +104,21 @@ export function SettingsPage() {
     systemApi.stats().then(setStats).catch(() => setStats(null));
     settingsApi.get().then((s) => setMaxUploadMb(s.max_upload_mb)).catch(() => setMaxUploadMb(5120));
   }, []);
+
+  const runLocalize = async () => {
+    if (localizing) return;
+    if (!confirm('Download remote images in all saved articles to local copies? This may take a while for large libraries.')) return;
+    setLocalizing(true);
+    setLocalizeResult(null);
+    try {
+      const r = await maintenanceApi.localize();
+      setLocalizeResult(`${r.images_localized} images across ${r.memos_updated} memos`);
+    } catch {
+      setLocalizeResult('Failed — see server logs');
+    } finally {
+      setLocalizing(false);
+    }
+  };
 
   const saveMaxUpload = async () => {
     if (maxUploadMb == null || !Number.isFinite(maxUploadMb)) return;
@@ -273,6 +290,17 @@ export function SettingsPage() {
                   {maxUploadSaved ? 'Saved ✓' : 'Save'}
                 </button>
               </div>
+            </div>
+            <div className="om-setting-row" style={{ borderTop: '1px solid var(--border)', marginTop: 8, paddingTop: 8 }}>
+              <div className="om-setting-row-text">
+                <p>Localize saved content</p>
+                <span className="mono">
+                  {localizeResult || 'Download remote images in saved articles so memos survive source deletion'}
+                </span>
+              </div>
+              <button className="om-btn-secondary" onClick={runLocalize} disabled={localizing}>
+                {localizing ? 'Localizing…' : 'Localize'}
+              </button>
             </div>
           </SettingCard>
 
