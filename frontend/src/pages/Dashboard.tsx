@@ -1,4 +1,3 @@
-import { useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { motion } from 'framer-motion';
 import { MemoGrid } from '@/components/MemoGrid';
@@ -6,15 +5,7 @@ import { Icon } from '@/components/Icon';
 import { useAppStore } from '@/stores/appStore';
 import { memoApi, collectionApi } from '@/lib/api';
 import { cn } from '@/lib/utils';
-import type { Collection, Memo } from '@/types';
-
-const SORTS = [
-  { id: 'recent', label: 'Recent' },
-  { id: 'oldest', label: 'Oldest' },
-  { id: 'title', label: 'Title' },
-  { id: 'custom', label: 'Custom order' },
-] as const;
-type SortId = (typeof SORTS)[number]['id'];
+import type { Collection } from '@/types';
 
 const FILTERS = [
   { id: 'all', label: 'All' },
@@ -27,8 +18,6 @@ const FILTERS = [
 
 export function Dashboard() {
   const { activeFilter, setActiveFilter, activeCollection } = useAppStore();
-  const [sort, setSort] = useState<SortId>('recent');
-  const [sortMenu, setSortMenu] = useState(false);
 
   const { data: collections = [] } = useQuery({
     queryKey: ['collections'],
@@ -47,27 +36,11 @@ export function Dashboard() {
     gcTime: 10 * 60 * 1000,
   });
 
-  const sortedMemos = useMemo(() => {
-    const items: Memo[] = [...(data?.items || [])];
-    if (sort === 'recent')
-      items.sort((a, b) => +new Date(b.created_at) - +new Date(a.created_at));
-    else if (sort === 'oldest')
-      items.sort((a, b) => +new Date(a.created_at) - +new Date(b.created_at));
-    else if (sort === 'title')
-      items.sort((a, b) => a.title.localeCompare(b.title));
-    else if (sort === 'custom')
-      items.sort((a, b) => {
-        const so = (b.sort_order ?? 0) - (a.sort_order ?? 0);
-        if (so !== 0) return so;
-        return +new Date(b.created_at) - +new Date(a.created_at);
-      });
-    return items;
-  }, [data, sort]);
+  const memos = data?.items || [];
 
   const collection = activeCollection
     ? collections.find((c: Collection) => c.id === activeCollection)
     : null;
-  const sortLabel = SORTS.find((s) => s.id === sort)?.label ?? 'Recent';
   const today = new Date().toLocaleDateString('en-US', {
     weekday: 'long',
     month: 'long',
@@ -106,36 +79,6 @@ export function Dashboard() {
               </button>
             ))}
           </div>
-          <div style={{ position: 'relative' }}>
-            <button className="om-sort-btn" onClick={() => setSortMenu((v) => !v)}>
-              <span className="mono om-sort-label">Sort</span>
-              <span>{sortLabel}</span>
-              <Icon name="chevronDown" size={10} />
-            </button>
-            {sortMenu && (
-              <>
-                <div
-                  style={{ position: 'fixed', inset: 0, zIndex: 9 }}
-                  onClick={() => setSortMenu(false)}
-                />
-                <div className="om-sort-menu">
-                  {SORTS.map((s) => (
-                    <button
-                      key={s.id}
-                      className={cn('om-sort-opt', sort === s.id && 'active')}
-                      onClick={() => {
-                        setSort(s.id);
-                        setSortMenu(false);
-                      }}
-                    >
-                      {s.label}
-                      {sort === s.id && <Icon name="check" size={11} />}
-                    </button>
-                  ))}
-                </div>
-              </>
-            )}
-          </div>
         </div>
       </header>
 
@@ -147,7 +90,7 @@ export function Dashboard() {
           <p>Loading Memos…</p>
         </div>
       ) : (
-        <MemoGrid memos={sortedMemos} />
+        <MemoGrid memos={memos} />
       )}
     </>
   );

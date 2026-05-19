@@ -194,7 +194,7 @@ export function MemoCard({ memo, dragHandleProps }: CardProps) {
           )}
         </div>
         <div className="om-card-body tight">
-          <h3 className="om-card-title small">{memo.title}</h3>
+          <h3 className="om-card-title">{memo.title}</h3>
           <Meta memo={memo} />
         </div>
       </Chrome>

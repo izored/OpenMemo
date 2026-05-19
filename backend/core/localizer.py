@@ -70,7 +70,8 @@ async def _download(client: httpx.AsyncClient, url: str, memo_id: str) -> str | 
         digest = hashlib.sha1(url.encode()).hexdigest()[:16]
         target_dir = EXTRACTED_DIR / memo_id
         target_dir.mkdir(parents=True, exist_ok=True)
-        (target_dir / f"{digest}{ext}").write_bytes(resp.content)
+        saved = target_dir / f"{digest}{ext}"
+        saved.write_bytes(resp.content)
         return f"/api/files/extracted/{memo_id}/{digest}{ext}"
     except Exception:
         return None

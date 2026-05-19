@@ -1,5 +1,6 @@
-import { useEffect } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Outlet, useLocation } from 'react-router-dom';
+import { AnimatePresence, motion } from 'framer-motion';
 import { Sidebar } from './Sidebar';
 import { AddMemoPanel } from './AddMemoPanel';
 import { AppearancePanel } from './AppearancePanel';
@@ -20,9 +21,20 @@ export function Layout() {
   const setSearchOpen = useAppStore((s) => s.setSearchOpen);
   const location = useLocation();
 
+  const [overlayKey, setOverlayKey] = useState(0);
+  const [overlayTheme, setOverlayTheme] = useState(tweaks.theme);
+  const prevTheme = useRef(tweaks.theme);
+  const mounted = useRef(false);
+
   // Drive theme / accent / background CSS vars from persisted tweaks.
   useEffect(() => {
     applyTweaks(tweaks);
+    if (!mounted.current) { mounted.current = true; return; }
+    if (prevTheme.current !== tweaks.theme) {
+      prevTheme.current = tweaks.theme;
+      setOverlayTheme(tweaks.theme);
+      setOverlayKey((k) => k + 1);
+    }
   }, [tweaks]);
 
   // Global shortcuts: ⌘K search, N new memo (when not typing).
@@ -57,6 +69,23 @@ export function Layout() {
       <AppearancePanel />
       <FullscreenWriter />
       <AddCollectionModal />
+
+      <AnimatePresence>
+        {overlayKey > 0 && (
+          <motion.div
+            key={overlayKey}
+            initial={{ opacity: 0.75 }}
+            animate={{ opacity: 0 }}
+            transition={{ duration: 2.55, ease: 'easeOut' }}
+            style={{
+              position: 'fixed', inset: 0, zIndex: 9999, pointerEvents: 'none',
+              background: overlayTheme === 'dark'
+                ? 'radial-gradient(circle at 50% 45%, rgba(6,5,14,0.9) 0%, rgba(6,5,14,0.5) 100%)'
+                : 'radial-gradient(circle at 50% 45%, rgba(255,253,248,0.95) 0%, rgba(255,253,248,0.4) 100%)',
+            }}
+          />
+        )}
+      </AnimatePresence>
 
       <button
         className={cn('om-fab', addPanelOpen && 'open')}

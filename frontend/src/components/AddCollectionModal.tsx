@@ -1,11 +1,49 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
-import { X, Loader2 } from 'lucide-react';
+import { Loader2 } from 'lucide-react';
 import { useAppStore } from '@/stores/appStore';
 import { collectionApi } from '@/lib/api';
-import { cn } from '@/lib/utils';
 
-const presetColors = [
+const PRESET_EMOJIS = [
+  '📁','📂','🗂️','⭐','🔖','📌',
+  '💡','🔍','🎯','📝','💻','🎨',
+  '📊','📈','📚','💰','✈️','🏋️',
+  '🍕','🎵','🎬','💬','🔐','🛠️',
+  '🏠','🌍','🎮','🔬','📱','🎭',
+  '🌟','🔥','❤️','🚀','⚡','🎉',
+  '💼','📷','🌱','🏆','⚽','🎪',
+];
+
+const KEYWORD_EMOJI: [RegExp, string][] = [
+  [/\b(code|dev|program|script|software|tech|web|app|api)\b/i, '💻'],
+  [/\b(design|ui|ux|figma|sketch|art|creative|graphic)\b/i, '🎨'],
+  [/\b(book|read|learn|study|educat|course|class|school)\b/i, '📚'],
+  [/\b(money|finance|budget|invest|bank|crypto|stock|wallet)\b/i, '💰'],
+  [/\b(travel|trip|vacation|flight|hotel|tour)\b/i, '✈️'],
+  [/\b(health|fitness|gym|workout|sport|run|diet|medical)\b/i, '🏋️'],
+  [/\b(food|cook|recipe|restaurant|meal|eat|drink)\b/i, '🍕'],
+  [/\b(music|song|playlist|album|artist|band|audio|podcast)\b/i, '🎵'],
+  [/\b(video|movie|film|tv|series|watch|cinema|youtube)\b/i, '🎬'],
+  [/\b(game|gaming|play|esport|steam|xbox|playstation)\b/i, '🎮'],
+  [/\b(research|science|lab|experiment|data|analysis)\b/i, '🔬'],
+  [/\b(work|job|office|career|business|meeting|project)\b/i, '💼'],
+  [/\b(home|personal|life|family|house|daily)\b/i, '🏠'],
+  [/\b(social|chat|team|community|friends|network)\b/i, '💬'],
+  [/\b(security|crypto|password|vault|key|lock|privacy)\b/i, '🔐'],
+  [/\b(photo|image|picture|gallery|camera)\b/i, '📷'],
+  [/\b(note|memo|journal|diary|write|blog)\b/i, '📝'],
+  [/\b(idea|thought|brain|mind|think|concept)\b/i, '💡'],
+  [/\b(star|fav|important|key|main|primary)\b/i, '⭐'],
+];
+
+function deriveEmoji(name: string): string | null {
+  for (const [re, emoji] of KEYWORD_EMOJI) {
+    if (re.test(name)) return emoji;
+  }
+  return null;
+}
+
+const PRESET_COLORS = [
   '#D97706', '#DC2626', '#7C3AED', '#2563EB',
   '#059669', '#0891B2', '#DB2777', '#475569',
 ];
@@ -15,31 +53,53 @@ export function AddCollectionModal() {
   const queryClient = useQueryClient();
   const [name, setName] = useState('');
   const [emoji, setEmoji] = useState('📁');
+  const [emojiManual, setEmojiManual] = useState(false);
+  const [pickerOpen, setPickerOpen] = useState(false);
   const [description, setDescription] = useState('');
   const [color, setColor] = useState('#D97706');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [confirmDelete, setConfirmDelete] = useState(false);
+  const pickerRef = useRef<HTMLDivElement>(null);
 
   const isEditing = !!editingCollection;
 
-  /* eslint-disable react-hooks/set-state-in-effect */
   useEffect(() => {
     if (editingCollection) {
       setName(editingCollection.name);
       setEmoji(editingCollection.emoji || '📁');
+      setEmojiManual(true);
       setDescription(editingCollection.description || '');
       setColor(editingCollection.color || '#D97706');
     } else {
       setName('');
       setEmoji('📁');
+      setEmojiManual(false);
       setDescription('');
       setColor('#D97706');
     }
     setError('');
     setConfirmDelete(false);
+    setPickerOpen(false);
   }, [editingCollection, collectionModalOpen]);
-  /* eslint-enable react-hooks/set-state-in-effect */
+
+  // Auto-derive emoji from name unless user manually picked one
+  useEffect(() => {
+    if (emojiManual) return;
+    const derived = deriveEmoji(name);
+    setEmoji(derived ?? '📁');
+  }, [name, emojiManual]);
+
+  // Close picker on outside click
+  useEffect(() => {
+    const h = (e: MouseEvent) => {
+      if (pickerRef.current && !pickerRef.current.contains(e.target as Node)) {
+        setPickerOpen(false);
+      }
+    };
+    if (pickerOpen) document.addEventListener('mousedown', h);
+    return () => document.removeEventListener('mousedown', h);
+  }, [pickerOpen]);
 
   const close = () => {
     setCollectionModalOpen(false);
@@ -69,17 +129,11 @@ export function AddCollectionModal() {
     try {
       if (isEditing && editingCollection) {
         await collectionApi.update(editingCollection.id, {
-          name: name.trim(),
-          emoji,
-          description: description.trim() || null,
-          color,
+          name: name.trim(), emoji, description: description.trim() || null, color,
         });
       } else {
         await collectionApi.create({
-          name: name.trim(),
-          emoji,
-          description: description.trim() || undefined,
-          color,
+          name: name.trim(), emoji, description: description.trim() || undefined, color,
         });
       }
       queryClient.invalidateQueries({ queryKey: ['collections'] });
@@ -94,50 +148,54 @@ export function AddCollectionModal() {
   if (!collectionModalOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-[60] flex items-center justify-center">
-      {/* Backdrop */}
-      <div className="absolute inset-0 bg-black/40" onClick={close} />
-
-      {/* Modal */}
-      <div className="relative bg-[var(--surface)] rounded-2xl shadow-xl w-full max-w-md mx-4 overflow-hidden border border-[var(--color-border)]">
+    <div className="om-modal-backdrop">
+      <div className="om-modal-scrim" onClick={close} />
+      <div className="om-modal om-coll-modal">
         {/* Header */}
-        <div className="flex items-center justify-between px-6 py-4 border-b border-[var(--color-border)]">
-          <h2 className="text-lg font-semibold text-[var(--color-text)] tracking-tight">
-            {isEditing ? 'Edit Collection' : 'New Collection'}
-          </h2>
-          <button onClick={close} className="p-1.5 rounded-full hover:bg-[var(--surface-2)] transition-colors">
-            <X size={18} className="text-[var(--text-2)]" />
+        <div className="om-modal-header">
+          <h2 className="om-modal-title">{isEditing ? 'Edit Collection' : 'New Collection'}</h2>
+          <button className="om-icon-btn" onClick={close}>
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
           </button>
         </div>
 
-        {/* Form */}
-        <div className="p-6 space-y-5">
-          {error && (
-            <div className="p-3 bg-red-50 border border-red-200 rounded-xl text-sm text-red-700">
-              {error}
-            </div>
-          )}
+        <div className="om-modal-body">
+          {error && <div className="om-modal-error">{error}</div>}
 
-          {/* Name + Emoji row */}
-          <div className="flex gap-3">
-            <div className="flex-shrink-0">
-              <label className="block text-sm font-semibold text-[var(--color-text)] mb-1.5">Emoji</label>
-              <input
-                type="text"
-                value={emoji}
-                onChange={(e) => setEmoji(e.target.value)}
-                className="w-14 h-11 text-center text-xl border border-[var(--color-border)] rounded-xl focus:outline-none focus:border-[var(--color-text)] transition-colors bg-[var(--surface)]"
-                maxLength={2}
-              />
+          {/* Emoji + Name row */}
+          <div className="om-coll-row">
+            <div className="om-coll-emoji-wrap" ref={pickerRef}>
+              <label className="om-field-label">Emoji</label>
+              <button
+                className="om-coll-emoji-btn"
+                onClick={() => setPickerOpen((v) => !v)}
+                type="button"
+              >
+                {emoji}
+              </button>
+              {pickerOpen && (
+                <div className="om-emoji-picker">
+                  {PRESET_EMOJIS.map((e) => (
+                    <button
+                      key={e}
+                      className={`om-emoji-opt${emoji === e ? ' active' : ''}`}
+                      onClick={() => { setEmoji(e); setEmojiManual(true); setPickerOpen(false); }}
+                      type="button"
+                    >
+                      {e}
+                    </button>
+                  ))}
+                </div>
+              )}
             </div>
-            <div className="flex-1">
-              <label className="block text-sm font-semibold text-[var(--color-text)] mb-1.5">Name</label>
+            <div style={{ flex: 1 }}>
+              <label className="om-field-label">Name</label>
               <input
+                className="om-input om-input-pill"
                 type="text"
                 value={name}
                 onChange={(e) => setName(e.target.value)}
                 placeholder="Collection name"
-                className="w-full px-4 py-2.5 border border-[var(--color-border)] rounded-full text-sm focus:outline-none focus:border-[var(--color-text)] transition-colors bg-[var(--surface)]"
                 onKeyDown={(e) => e.key === 'Enter' && handleSubmit()}
               />
             </div>
@@ -145,29 +203,27 @@ export function AddCollectionModal() {
 
           {/* Description */}
           <div>
-            <label className="block text-sm font-semibold text-[var(--color-text)] mb-1.5">Description</label>
+            <label className="om-field-label">Description</label>
             <textarea
+              className="om-textarea"
               value={description}
               onChange={(e) => setDescription(e.target.value)}
-              placeholder="Optional description..."
+              placeholder="Optional description…"
               rows={3}
-              className="w-full px-4 py-2.5 border border-[var(--color-border)] rounded-xl text-sm focus:outline-none focus:border-[var(--color-text)] resize-none transition-colors bg-[var(--surface)]"
             />
           </div>
 
           {/* Color */}
           <div>
-            <label className="block text-sm font-semibold text-[var(--color-text)] mb-2">Color</label>
-            <div className="flex gap-2 flex-wrap">
-              {presetColors.map((c) => (
+            <label className="om-field-label">Color</label>
+            <div className="om-color-row">
+              {PRESET_COLORS.map((c) => (
                 <button
                   key={c}
+                  className={`om-color-swatch${color === c ? ' active' : ''}`}
                   onClick={() => setColor(c)}
-                  className={cn(
-                    'w-8 h-8 rounded-full border-2 transition-all',
-                    color === c ? 'border-[var(--color-text)] scale-110' : 'border-transparent hover:scale-105'
-                  )}
                   style={{ backgroundColor: c }}
+                  type="button"
                 />
               ))}
             </div>
@@ -175,43 +231,30 @@ export function AddCollectionModal() {
 
           {/* Submit */}
           <button
+            className="om-btn-full"
             onClick={handleSubmit}
             disabled={loading || !name.trim()}
-            className="w-full py-2.5 bg-[var(--text)] text-[var(--bg)] rounded-full text-sm font-semibold hover:bg-[var(--color-text)] disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center gap-2 transition-colors"
+            type="button"
           >
-            {loading && <Loader2 size={16} className="animate-spin" />}
+            {loading && <Loader2 size={15} className="om-spin" />}
             {isEditing ? 'Save Changes' : 'Create Collection'}
           </button>
 
           {isEditing && (
-            <div className="pt-4 mt-1 border-t border-[var(--color-border)]">
+            <div className="om-coll-danger">
               {!confirmDelete ? (
-                <button
-                  onClick={() => setConfirmDelete(true)}
-                  className="w-full py-2.5 rounded-full text-sm font-semibold text-red-600 border border-red-500/30 hover:bg-red-500/10 transition-colors"
-                >
+                <button className="om-btn-danger-ghost" onClick={() => setConfirmDelete(true)} type="button">
                   Delete collection
                 </button>
               ) : (
-                <div className="space-y-2.5">
-                  <p className="text-[12px] text-[var(--text-2)] leading-relaxed">
-                    Delete <b>{editingCollection?.name}</b>? Memos are kept, only the
-                    collection is removed. Consider exporting a backup first
-                    (Settings → Danger zone → Export).
+                <div className="om-coll-confirm">
+                  <p className="om-coll-confirm-text">
+                    Delete <b>{editingCollection?.name}</b>? Memos are kept, only the collection is removed.
                   </p>
-                  <div className="flex gap-2">
-                    <button
-                      onClick={() => setConfirmDelete(false)}
-                      className="flex-1 py-2.5 rounded-full text-sm font-semibold border border-[var(--color-border)] hover:bg-[var(--surface-2)] transition-colors"
-                    >
-                      Cancel
-                    </button>
-                    <button
-                      onClick={handleDelete}
-                      disabled={loading}
-                      className="flex-1 py-2.5 rounded-full text-sm font-semibold text-white bg-red-600 hover:bg-red-700 disabled:opacity-50 flex items-center justify-center gap-2 transition-colors"
-                    >
-                      {loading && <Loader2 size={16} className="animate-spin" />}
+                  <div className="om-coll-confirm-row">
+                    <button className="om-btn-cancel" onClick={() => setConfirmDelete(false)} type="button">Cancel</button>
+                    <button className="om-btn-delete" onClick={handleDelete} disabled={loading} type="button">
+                      {loading && <Loader2 size={15} className="om-spin" />}
                       Delete forever
                     </button>
                   </div>

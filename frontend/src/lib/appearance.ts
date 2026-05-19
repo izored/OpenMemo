@@ -86,6 +86,7 @@ export interface Tweaks {
   bgPalette: string[];
   bgPositions: [number, number][];
   customAccents: [string, string];
+  blobSpeed: 0 | 1 | 2 | 4;
 }
 
 const TYPE_PAIRS: Record<string, { ui: string; display: string }> = {
@@ -128,6 +129,14 @@ export function applyTweaks(t: Tweaks) {
   root.style.setProperty('--font-ui', `'${pair.ui}', ui-sans-serif, system-ui`);
   root.style.setProperty('--font-display', `'${pair.display}', '${pair.ui}', ui-sans-serif, system-ui`);
   root.style.setProperty('--font-mono', `'${pair.ui}', ui-sans-serif, system-ui`);
+  const speed = t.blobSpeed ?? 1;
+  if (speed === 0) {
+    root.style.setProperty('--blob-play-state', 'paused');
+    root.style.setProperty('--blob-duration', '42s');
+  } else {
+    root.style.setProperty('--blob-play-state', 'running');
+    root.style.setProperty('--blob-duration', `${Math.round(42 / speed)}s`);
+  }
 }
 
 export const ACCENT_OPTIONS = ['#F4825A', '#E8D77B', '#7DB9E8', '#C3F26B', '#E8E8E8'];
@@ -151,4 +160,5 @@ export const DEFAULT_TWEAKS: Tweaks = {
     [26, 80],
   ],
   customAccents: ['', ''],
+  blobSpeed: 1,
 };
