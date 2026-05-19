@@ -1,9 +1,12 @@
 """Memo CRUD API endpoints."""
+import mimetypes
 import uuid
 from datetime import datetime
+from pathlib import Path
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi.responses import FileResponse
 from sqlalchemy import select, func, desc
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
@@ -173,6 +176,34 @@ async def get_memo(memo_id: str, db: AsyncSession = Depends(get_db)):
         "collections": [{"id": c.id, "name": c.name, "color": c.color} for c in memo.collections],
         "tags": [t.name for t in memo.tags],
     }
+
+
+@router.get("/{memo_id}/file")
+async def get_memo_file(
+    memo_id: str,
+    download: bool = False,
+    db: AsyncSession = Depends(get_db),
+):
+    """Serve the original uploaded file for a memo.
+
+    Inline by default (used for image rendering); pass ?download=1 to force a
+    download with the original filename.
+    """
+    memo = (
+        await db.execute(select(Memo).where(Memo.id == memo_id))
+    ).scalar_one_or_none()
+    if not memo or not memo.file_path:
+        raise HTTPException(status_code=404, detail="File not found")
+
+    p = Path(memo.file_path)
+    if not p.exists():
+        raise HTTPException(status_code=404, detail="File not found")
+
+    media_type = mimetypes.guess_type(str(p))[0] or "application/octet-stream"
+    if download:
+        filename = (memo.title or p.name).replace('"', "")
+        return FileResponse(str(p), media_type=media_type, filename=filename)
+    return FileResponse(str(p), media_type=media_type)
 
 
 @router.post("")

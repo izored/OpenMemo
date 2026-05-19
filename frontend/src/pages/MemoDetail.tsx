@@ -390,7 +390,7 @@ export function MemoDetail() {
             {/* Thumbnail / Image */}
             {memo.type === 'image' && memo.file_path && !isEditing && (
               <div className="om-image-memo" style={{ marginBottom: '24px' }}>
-                <img src={`/api/files/${memo.file_path}`} alt={memo.title} />
+                <img src={`/api/memos/${memo.id}/file`} alt={memo.title} />
               </div>
             )}
 

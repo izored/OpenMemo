@@ -1,4 +1,4 @@
-import { useRef, useState, useCallback, useEffect, type ReactNode } from 'react';
+import { useRef, useState, useCallback, useEffect } from 'react';
 import { MDXEditor, type MDXEditorMethods } from '@mdxeditor/editor';
 import {
   headingsPlugin,
@@ -158,33 +158,8 @@ export function MarkdownEditor({
     return (
       <div className={cn('relative', className)} onClick={handleViewClick}>
         {value ? (
-          <div className="prose prose-sm dark:prose-invert max-w-none text-[var(--color-text)] cursor-text prose-p:my-2 prose-headings:mt-4 prose-headings:mb-2 prose-li:my-0.5 prose-ul:my-2 prose-ol:my-2 prose-blockquote:my-2 prose-pre:my-2">
-            <ReactMarkdown
-              remarkPlugins={[remarkGfm]}
-              components={{
-                code: ({ children, className }: { children?: ReactNode; className?: string }) => (
-                  <code className={cn('bg-[var(--surface-3)] text-white px-1 py-0.5 rounded text-[12px] font-mono', className)}>{children}</code>
-                ),
-                pre: ({ children }: { children?: ReactNode }) => (
-                  <pre className="bg-[var(--surface-3)] text-white p-4 rounded-xl overflow-x-auto font-mono text-[12px] my-3 [&_code]:bg-transparent [&_code]:p-0">
-                    {children}
-                  </pre>
-                ),
-                table: ({ children }: { children?: ReactNode }) => (
-                  <div className="overflow-x-auto my-4">
-                    <table className="min-w-full border-collapse border border-[var(--color-border)]">{children}</table>
-                  </div>
-                ),
-                th: ({ children }: { children?: ReactNode }) => (
-                  <th className="border border-[var(--color-border)] bg-[var(--surface-2)] px-3 py-2 text-left font-semibold">{children}</th>
-                ),
-                td: ({ children }: { children?: ReactNode }) => (
-                  <td className="border border-[var(--color-border)] px-3 py-2">{children}</td>
-                ),
-              }}
-            >
-              {value}
-            </ReactMarkdown>
+          <div className="om-prose max-w-none cursor-text">
+            <ReactMarkdown remarkPlugins={[remarkGfm]}>{value}</ReactMarkdown>
           </div>
         ) : (
           <p className="text-[var(--text-4)] italic cursor-text px-1 py-2">{placeholder}</p>
@@ -219,7 +194,7 @@ export function MarkdownEditor({
         onChange={handleChange}
         placeholder={placeholder}
         readOnly={readOnly}
-        contentEditableClassName="prose dark:prose-invert max-w-none text-[var(--color-text)] min-h-[240px] px-4 py-3 outline-none"
+        contentEditableClassName="om-prose max-w-none min-h-[240px] px-4 py-3 outline-none"
         plugins={[
           headingsPlugin(),
           listsPlugin(),

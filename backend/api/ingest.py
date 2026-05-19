@@ -10,13 +10,26 @@ from pydantic import BaseModel
 
 from backend.config import settings
 from backend.db.database import get_db, AsyncSessionLocal
-from backend.db.models import Memo
+from sqlalchemy import select
+
+from backend.db.models import Memo, Collection
 from backend.core.security import sanitize_workspace_id, validate_url, FileUploadHandler
 
 router = APIRouter(prefix="/api/ingest", tags=["ingest"])
 
 # Shared file upload handler
 _upload_handler = FileUploadHandler(settings.FILES_DIR)
+
+
+async def _attach_collection(db: AsyncSession, memo: Memo, collection_id: Optional[str]) -> None:
+    """Link a memo to a collection by id, if provided and it exists."""
+    if not collection_id:
+        return
+    coll = (
+        await db.execute(select(Collection).where(Collection.id == collection_id))
+    ).scalar_one_or_none()
+    if coll is not None:
+        memo.collections.append(coll)
 
 
 class URLIngest(BaseModel):
@@ -196,8 +209,9 @@ async def ingest_url(
     )
     
     db.add(memo)
+    await _attach_collection(db, memo, data.collection_id)
     await db.commit()
-    
+
     # Process in background
     background_tasks.add_task(process_memo, memo.id)
     if memo.thumbnail_path and memo.thumbnail_path.startswith("http"):
@@ -225,10 +239,11 @@ async def ingest_note(
     )
     
     db.add(memo)
+    await _attach_collection(db, memo, data.collection_id)
     await db.commit()
-    
+
     background_tasks.add_task(process_memo, memo.id)
-    
+
     return {"id": memo.id, "title": memo.title, "type": "note", "status": "processing"}
 
 
@@ -258,6 +273,7 @@ async def ingest_file(
     )
 
     db.add(memo)
+    await _attach_collection(db, memo, collection_id)
     await db.commit()
 
     # Process in background (extract text from file)
@@ -347,8 +363,9 @@ async def ingest_from_extension(
     )
     
     db.add(memo)
+    await _attach_collection(db, memo, data.collection_id)
     await db.commit()
-    
+
     background_tasks.add_task(process_memo, memo.id)
     if memo.thumbnail_path and memo.thumbnail_path.startswith("http"):
         background_tasks.add_task(cache_thumbnail, memo.id)

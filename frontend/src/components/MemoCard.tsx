@@ -45,7 +45,7 @@ function mediaSrc(memo: Memo): string | null {
     }
     return memo.thumbnail_path;
   }
-  if (memo.type === 'image' && memo.file_path) return `/api/files/${memo.file_path}`;
+  if (memo.type === 'image' && memo.file_path) return `/api/memos/${memo.id}/file`;
   return null;
 }
 
