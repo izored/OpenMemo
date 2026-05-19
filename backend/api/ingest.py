@@ -130,6 +130,17 @@ async def cache_thumbnail(memo_id: str):
 
 # --- Background processing ---
 
+async def _localize_memo_task(memo_id: str):
+    """Download remote images in extracted content so the memo survives the
+    source being deleted. Best-effort — never blocks/raises into the request."""
+    try:
+        from backend.core.localizer import localize_memo
+
+        await localize_memo(memo_id)
+    except Exception as e:
+        print(f"Localize failed for {memo_id}: {e}")
+
+
 async def process_memo(memo_id: str):
     """Background task to embed memo content."""
     from backend.core.embedder import embed_memo
@@ -216,6 +227,7 @@ async def ingest_url(
     background_tasks.add_task(process_memo, memo.id)
     if memo.thumbnail_path and memo.thumbnail_path.startswith("http"):
         background_tasks.add_task(cache_thumbnail, memo.id)
+    background_tasks.add_task(_localize_memo_task, memo.id)
 
     return {"id": memo.id, "title": memo.title, "type": memo.type, "status": "processing"}
 
@@ -396,5 +408,6 @@ async def ingest_from_extension(
     background_tasks.add_task(process_memo, memo.id)
     if memo.thumbnail_path and memo.thumbnail_path.startswith("http"):
         background_tasks.add_task(cache_thumbnail, memo.id)
+    background_tasks.add_task(_localize_memo_task, memo.id)
 
     return {"id": memo.id, "title": memo.title, "status": "saved"}

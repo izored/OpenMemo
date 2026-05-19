@@ -141,6 +141,7 @@ export const settingsApi = {
 
 export const maintenanceApi = {
   clearCache: () => fetchJSON<{ ok: boolean; freed_bytes: number }>('/maintenance/clear-cache', { method: 'POST' }),
+  localize: () => fetchJSON<{ memos_updated: number; images_localized: number }>('/maintenance/localize', { method: 'POST' }),
   reset: () => fetchJSON<{ ok: boolean }>('/maintenance/reset', { method: 'POST', body: JSON.stringify({ confirm: true }) }),
 };
 

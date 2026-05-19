@@ -49,6 +49,15 @@ def _empty_dir(path: Path) -> None:
             pass
 
 
+@router.post("/localize")
+async def localize_content():
+    """Backfill: download remote images in every memo's extracted content and
+    rewrite them to local copies, so saved memos survive source deletion."""
+    from backend.core.localizer import localize_all
+
+    return await localize_all()
+
+
 @router.post("/clear-cache")
 async def clear_cache():
     """Delete locally-cached thumbnail previews. Safe — they re-cache on next
