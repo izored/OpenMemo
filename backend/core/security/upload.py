@@ -125,51 +125,75 @@ class FileUploadHandler:
         file: UploadFile,
         workspace_id: str | None = "default",
     ) -> UploadResult:
-        """Validate and save an uploaded file. Returns UploadResult on success."""
+        """Validate and save an uploaded file. Returns UploadResult on success.
+
+        Streams the upload to disk in 1 MiB chunks so a 30 GB video does not
+        balloon the Python process RSS by 30 GB. Size is enforced incrementally;
+        if the cap is exceeded mid-stream we delete the partial file and 413.
+        """
         # Sanitize workspace_id
         ws = sanitize_workspace_id(workspace_id)
 
-        # Read and check size
-        content = await file.read()
-        max_size = self.max_size
-        if len(content) > max_size:
-            raise UploadValidationError(
-                status_code=413,
-                detail=f"File too large. Max size: {max_size // (1024 * 1024)}MB",
-            )
-
-        # Any extension is accepted — categorize, don't gate.
+        # Resolve safe target path up-front
         original_name = sanitize_filename(file.filename or "untitled")
         ext = Path(original_name).suffix.lower()
         memo_type = categorize_extension(ext)
 
-        # Only sanity-check declared images (a corrupt image just breaks
-        # rendering). Everything else trusts the extension.
-        if memo_type == "image":
-            self._validate_image_magic(content)
-
-        # Build safe path
         file_id = str(uuid.uuid4())
         safe_name = f"{file_id}{ext}"
         target_dir = self.base / ws
         target_dir.mkdir(parents=True, exist_ok=True)
         target_path = target_dir / safe_name
 
-        # Defensive: ensure resolved path is still under base
         try:
             target_path.resolve().relative_to(self.base)
         except ValueError:
             raise UploadValidationError(status_code=400, detail="Invalid file path")
 
-        # Write file
-        with open(target_path, "wb") as f:
-            f.write(content)
+        max_size = self.max_size
+        chunk_size = 1024 * 1024  # 1 MiB
+        size = 0
+        magic_buf = b""
+
+        try:
+            with open(target_path, "wb") as out:
+                while True:
+                    chunk = await file.read(chunk_size)
+                    if not chunk:
+                        break
+                    size += len(chunk)
+                    if size > max_size:
+                        out.close()
+                        target_path.unlink(missing_ok=True)
+                        raise UploadValidationError(
+                            status_code=413,
+                            detail=f"File too large. Max size: {max_size // (1024 * 1024)}MB",
+                        )
+                    # Capture first 12 bytes for image magic check
+                    if memo_type == "image" and len(magic_buf) < 12:
+                        magic_buf += chunk[: 12 - len(magic_buf)]
+                    out.write(chunk)
+        except UploadValidationError:
+            raise
+        except Exception as e:
+            target_path.unlink(missing_ok=True)
+            raise UploadValidationError(
+                status_code=500, detail=f"Failed to save upload: {e}"
+            )
+
+        # Validate image magic after the file is on disk; remove if it lies.
+        if memo_type == "image":
+            try:
+                self._validate_image_magic(magic_buf)
+            except UploadValidationError:
+                target_path.unlink(missing_ok=True)
+                raise
 
         return UploadResult(
             path=str(target_path),
             filename=original_name,
             type=memo_type,
-            size=len(content),
+            size=size,
         )
 
     def _validate_image_magic(self, content: bytes) -> None:
