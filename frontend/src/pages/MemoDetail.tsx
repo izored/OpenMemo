@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import {
@@ -14,7 +14,10 @@ import {
   Tag,
   Folder,
   Download,
+  Maximize2,
+  Expand,
 } from 'lucide-react';
+import { cn } from '@/lib/utils';
 import { BackButton } from '@/components/BackButton';
 import { MarkdownEditor } from '@/components/MarkdownEditor';
 import { memoApi, collectionApi } from '@/lib/api';
@@ -22,6 +25,95 @@ import { AskMemoPanel } from '@/components/AskMemoPanel';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import type { Memo, Collection } from '@/types';
+
+/**
+ * Wraps an image or local video preview with three affordances:
+ *   - Theater toggle (top-right): expands preview to full content width
+ *   - Fullscreen (top-right): browser-native fullscreen API
+ *   - Lightbox (click image only): modal overlay, Esc/click closes
+ */
+function MediaPreview({ src, alt, kind }: { src: string; alt: string; kind: 'image' | 'video' }) {
+  const [theater, setTheater] = useState(false);
+  const [lightbox, setLightbox] = useState(false);
+  const mediaRef = useRef<HTMLImageElement | HTMLVideoElement | null>(null);
+
+  const goFullscreen = () => {
+    const el = mediaRef.current;
+    if (!el) return;
+    if (document.fullscreenElement) {
+      document.exitFullscreen().catch(() => {});
+    } else if (el.requestFullscreen) {
+      el.requestFullscreen().catch(() => {});
+    }
+  };
+
+  // Esc closes the lightbox.
+  useEffect(() => {
+    if (!lightbox) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setLightbox(false);
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [lightbox]);
+
+  return (
+    <>
+      <div className={cn('om-media-preview', theater && 'theater')} style={{ marginBottom: '24px' }}>
+        {kind === 'video' ? (
+          <video
+            ref={(el) => { mediaRef.current = el; }}
+            src={src}
+            controls
+            playsInline
+            preload="metadata"
+          />
+        ) : (
+          <img
+            ref={(el) => { mediaRef.current = el; }}
+            src={src}
+            alt={alt}
+            onClick={() => setLightbox(true)}
+            style={{ cursor: 'zoom-in' }}
+          />
+        )}
+        <div className="om-media-controls">
+          <button
+            type="button"
+            className="om-media-btn"
+            onClick={() => setTheater((v) => !v)}
+            title={theater ? 'Exit theater (compact)' : 'Theater (full width)'}
+            aria-label={theater ? 'Exit theater mode' : 'Theater mode'}
+          >
+            <Maximize2 size={14} />
+          </button>
+          <button
+            type="button"
+            className="om-media-btn"
+            onClick={goFullscreen}
+            title="Fullscreen"
+            aria-label="Fullscreen"
+          >
+            <Expand size={14} />
+          </button>
+        </div>
+      </div>
+      {lightbox && kind === 'image' && (
+        <div className="om-lightbox" role="dialog" aria-modal="true" onClick={() => setLightbox(false)}>
+          <img src={src} alt={alt} onClick={(e) => e.stopPropagation()} />
+          <button
+            type="button"
+            className="om-lightbox-close"
+            onClick={() => setLightbox(false)}
+            aria-label="Close lightbox"
+          >
+            <X size={20} />
+          </button>
+        </div>
+      )}
+    </>
+  );
+}
 
 function getYouTubeVideoId(url: string): string | null {
   try {
@@ -401,14 +493,17 @@ export function MemoDetail() {
               </div>
             )}
 
-            {/* Thumbnail / Image */}
+            {/* Image preview — with lightbox, theater, fullscreen */}
             {memo.type === 'image' && memo.file_path && !isEditing && (
-              <div className="om-image-memo" style={{ marginBottom: '24px' }}>
-                <img src={`/api/memos/${memo.id}/file`} alt={memo.title} />
-              </div>
+              <MediaPreview src={`/api/memos/${memo.id}/file`} alt={memo.title} kind="image" />
             )}
 
-            {/* Video */}
+            {/* Local video preview — with theater + fullscreen */}
+            {memo.type === 'video' && memo.file_path && !isEditing && (
+              <MediaPreview src={`/api/memos/${memo.id}/file`} alt={memo.title} kind="video" />
+            )}
+
+            {/* YouTube embed */}
             {youtubeId && !isEditing && (
               <div className="om-video-embed" style={{ marginBottom: '24px' }}>
                 <iframe
