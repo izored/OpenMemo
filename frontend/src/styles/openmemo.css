@@ -341,6 +341,22 @@ input, textarea { font: inherit; color: inherit; }
 [data-theme="dark"] .om-filter-tab.active,
 [data-theme="hi"]   .om-filter-tab.active { background: var(--surface-2); }
 
+/* Sort dropdown — sits to the right of the filter tabs */
+.om-sort-wrap {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 4px 10px 4px 12px; border-radius: 7px;
+  background: var(--surface); color: var(--text-2);
+  border: 1px solid var(--border);
+  transition: background .15s, color .15s;
+}
+.om-sort-wrap:hover { background: var(--surface-2); color: var(--text); }
+.om-sort-select {
+  appearance: none; background: transparent; border: 0; outline: 0;
+  color: inherit; font: inherit; font-size: 12.5px;
+  padding-right: 4px; cursor: pointer;
+}
+.om-sort-select option { color: var(--text); background: var(--surface); }
+
 /* Legacy buttons kept for Settings actions etc. */
 .om-btn-ghost {
   display: inline-flex; align-items: center; gap: 8px;

@@ -15,11 +15,12 @@ async function fetchJSON<T>(url: string, options?: RequestInit): Promise<T> {
 
 // Memos
 export const memoApi = {
-  list: (params?: { type?: string; collection_id?: string; search?: string; offset?: number; limit?: number }) => {
+  list: (params?: { type?: string; collection_id?: string; search?: string; sort?: 'recent' | 'oldest' | 'title' | 'custom'; offset?: number; limit?: number }) => {
     const search = new URLSearchParams();
     if (params?.type && params.type !== 'all') search.set('type', params.type);
     if (params?.collection_id) search.set('collection_id', params.collection_id);
     if (params?.search) search.set('search', params.search);
+    if (params?.sort) search.set('sort', params.sort);
     if (params?.offset) search.set('offset', String(params.offset));
     if (params?.limit) search.set('limit', String(params.limit));
     return fetchJSON<{ items: any[]; total: number }>(`/memos?${search}`);

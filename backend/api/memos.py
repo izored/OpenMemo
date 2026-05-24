@@ -7,7 +7,7 @@ from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import FileResponse
-from sqlalchemy import select, func, desc
+from sqlalchemy import select, func, desc, asc
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 from pydantic import BaseModel
@@ -71,24 +71,50 @@ class MemoResponse(BaseModel):
 
 # --- Routes ---
 
+_SORT_MODES = {"recent", "oldest", "title", "custom"}
+
+
+def _apply_sort(query, sort: str):
+    """Apply ORDER BY based on the requested sort mode.
+
+    - recent (default): newest first by created_at. Manual sort_order is
+      intentionally ignored so freshly added memos always land on top.
+    - oldest: oldest first.
+    - title: alphabetical, case-insensitive.
+    - custom: respects manual drag-to-reorder (sort_order desc), then
+      created_at as a stable tiebreaker.
+    """
+    if sort == "oldest":
+        return query.order_by(asc(Memo.created_at))
+    if sort == "title":
+        return query.order_by(func.lower(Memo.title).asc())
+    if sort == "custom":
+        return query.order_by(desc(Memo.sort_order), desc(Memo.created_at))
+    # recent / unknown -> default
+    return query.order_by(desc(Memo.created_at))
+
+
 @router.get("")
 async def list_memos(
     workspace_id: Optional[str] = None,
     type: Optional[str] = None,
     collection_id: Optional[str] = None,
     search: Optional[str] = None,
+    sort: str = "recent",
     offset: int = 0,
     limit: int = 50,
     db: AsyncSession = Depends(get_db),
 ):
     if workspace_id:
         workspace_id = sanitize_workspace_id(workspace_id)
+    if sort not in _SORT_MODES:
+        sort = "recent"
     """List memos with filtering and pagination."""
     query = select(Memo).options(
         selectinload(Memo.collections),
         selectinload(Memo.tags),
     )
-    
+
     if workspace_id:
         query = query.where(Memo.workspace_id == workspace_id)
     if type and type != "all":
@@ -101,13 +127,13 @@ async def list_memos(
         query = query.where(
             Memo.title.ilike(f"%{search}%") | Memo.content_text.ilike(f"%{search}%")
         )
-    
+
     # Count total
     count_query = select(func.count()).select_from(query.subquery())
     total = (await db.execute(count_query)).scalar()
-    
+
     # Fetch with pagination
-    query = query.order_by(desc(Memo.sort_order), desc(Memo.created_at)).offset(offset).limit(limit)
+    query = _apply_sort(query, sort).offset(offset).limit(limit)
     result = await db.execute(query)
     memos = result.scalars().all()
     
