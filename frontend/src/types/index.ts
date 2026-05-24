@@ -13,6 +13,7 @@ export interface Memo {
   ai_summary?: string;
   notes?: string;
   sort_order?: number;
+  pinned?: boolean;
   is_processed: boolean;
   created_at: string;
   updated_at: string;

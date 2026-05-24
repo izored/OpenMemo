@@ -490,19 +490,101 @@ async def _fetch_microlink(url: str) -> dict:
         return {}
 
 
+_BROWSER_UA_HTML = (
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+    "AppleWebKit/537.36 (KHTML, like Gecko) "
+    "Chrome/124.0.0.0 Safari/537.36"
+)
+
+
+async def _fetch_og_meta(url: str) -> dict:
+    """Last-resort metadata extractor: fetch the page with a browser UA and
+    parse OpenGraph / Twitter card / <title> tags.
+
+    Used when both yt-dlp and Microlink fail (Microlink rate limit, free-tier
+    flake, regional block). No third-party dependency, no API key.
+    """
+    headers = {
+        "User-Agent": _BROWSER_UA_HTML,
+        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+        "Accept-Language": "en-US,en;q=0.9",
+    }
+    try:
+        async with httpx.AsyncClient(
+            timeout=15.0, follow_redirects=True, headers=headers
+        ) as client:
+            resp = await client.get(url)
+            if resp.status_code >= 400 or not resp.text:
+                return {}
+            soup = BeautifulSoup(resp.text, "html.parser")
+    except Exception:
+        return {}
+
+    def _meta(prop: str, attr: str = "property") -> str:
+        tag = soup.find("meta", attrs={attr: prop})
+        if tag and tag.get("content"):
+            return tag["content"].strip()
+        return ""
+
+    title = (
+        _meta("og:title")
+        or _meta("twitter:title", "name")
+        or (soup.title.get_text().strip() if soup.title else "")
+    )
+    description = (
+        _meta("og:description")
+        or _meta("twitter:description", "name")
+        or _meta("description", "name")
+    )
+    thumbnail = (
+        _meta("og:image")
+        or _meta("og:image:secure_url")
+        or _meta("twitter:image", "name")
+        or _meta("twitter:image:src", "name")
+    )
+
+    return {
+        "title": title,
+        "description": description,
+        "thumbnail_path": thumbnail,
+    }
+
+
 async def _minimal_link(url: str, domain: str | None = None) -> dict:
-    """Minimal memo dict enriched via Microlink OG metadata."""
+    """Minimal memo dict enriched via Microlink → direct OG scrape fallback.
+
+    The chain is deliberate: Microlink first because it handles SPA/JS-heavy
+    pages, then a direct HTML fetch + OG parse for pages where Microlink's
+    free tier flakes (FB reels regularly fall here). If both fail, return the
+    raw URL + a `preview_unavailable` flag so the card can surface that to
+    the user instead of silently rendering a gradient placeholder.
+    """
     from urllib.parse import urlparse as _up
     if not domain:
         domain = _up(url).netloc.lstrip("www.")
-    og = await _fetch_microlink(url)
+
+    enrichment = await _fetch_microlink(url)
+    if not (enrichment.get("title") and enrichment.get("thumbnail_path")):
+        # Try direct OG scrape, merging any missing fields
+        og = await _fetch_og_meta(url)
+        if og:
+            enrichment = {
+                "title": enrichment.get("title") or og.get("title", ""),
+                "description": enrichment.get("description") or og.get("description", ""),
+                "thumbnail_path": enrichment.get("thumbnail_path") or og.get("thumbnail_path", ""),
+            }
+
+    has_meta = bool(enrichment.get("title") or enrichment.get("thumbnail_path"))
+    description = enrichment.get("description") or (
+        "" if has_meta else f"Preview unavailable — {domain} blocked metadata extraction. Open the original to view."
+    )
     return {
-        "title": og.get("title") or url,
-        "description": og.get("description") or "",
-        "content_text": og.get("description") or url,
+        "title": enrichment.get("title") or url,
+        "description": description,
+        "content_text": enrichment.get("description") or url,
         "source_url": url,
         "source_domain": domain,
         "source_favicon": f"https://www.google.com/s2/favicons?domain={domain}&sz=32",
-        "thumbnail_path": og.get("thumbnail_path") or "",
+        "thumbnail_path": enrichment.get("thumbnail_path") or "",
         "type": "link",
     }

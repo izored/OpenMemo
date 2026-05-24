@@ -3,7 +3,7 @@ import { useQuery } from '@tanstack/react-query';
 import { useDroppable } from '@dnd-kit/core';
 import { motion } from 'framer-motion';
 import { Icon } from './Icon';
-import { collectionApi, systemApi } from '@/lib/api';
+import { collectionApi, memoApi, systemApi } from '@/lib/api';
 import { useAppStore } from '@/stores/appStore';
 import type { Collection } from '@/types';
 import { cn } from '@/lib/utils';
@@ -69,6 +69,10 @@ export function Sidebar() {
   const { data: collections = [] } = useQuery({
     queryKey: ['collections'],
     queryFn: collectionApi.list,
+  });
+  const { data: pinnedMemos = [] } = useQuery({
+    queryKey: ['memos', 'pinned'],
+    queryFn: memoApi.listPinned,
   });
   const { data: stats } = useQuery({
     queryKey: ['stats'],
@@ -162,7 +166,7 @@ export function Sidebar() {
 
       {!sidebarCollapsed && (
         <>
-          {pinned.length > 0 && (
+          {(pinned.length > 0 || pinnedMemos.length > 0) && (
             <div className="om-sidebar-section">
               <div className="om-section-head">
                 <span className="om-section-label mono">Pinned</span>
@@ -171,13 +175,28 @@ export function Sidebar() {
               <div className="om-collection-list">
                 {pinned.map((c: Collection) => (
                   <CollectionRow
-                    key={c.id}
+                    key={`col-${c.id}`}
                     col={c}
                     pinned
                     active={activeCollection === c.id}
                     onSelect={() => selectCollection(c.id)}
                     onEdit={(e) => editCollection(e, c)}
                   />
+                ))}
+                {pinnedMemos.map((m) => (
+                  <button
+                    key={`memo-${m.id}`}
+                    className="om-coll pinned"
+                    onClick={() => {
+                      setActiveCollection(null);
+                      navigate(`/memo/${m.id}`);
+                    }}
+                    title={m.title}
+                  >
+                    <span className="om-coll-dot" style={{ background: 'var(--accent)' }} />
+                    <span className="om-coll-name">{m.title}</span>
+                    <Icon name="pin" size={10} className="om-coll-count" />
+                  </button>
                 ))}
               </div>
             </div>

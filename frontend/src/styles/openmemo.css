@@ -341,6 +341,89 @@ input, textarea { font: inherit; color: inherit; }
 [data-theme="dark"] .om-filter-tab.active,
 [data-theme="hi"]   .om-filter-tab.active { background: var(--surface-2); }
 
+/* Sort dropdown — sits to the right of the filter tabs */
+.om-sort-wrap {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 4px 10px 4px 12px; border-radius: 7px;
+  background: var(--surface); color: var(--text-2);
+  border: 1px solid var(--border);
+  transition: background .15s, color .15s;
+}
+.om-sort-wrap:hover { background: var(--surface-2); color: var(--text); }
+.om-sort-select {
+  appearance: none; background: transparent; border: 0; outline: 0;
+  color: inherit; font: inherit; font-size: 12.5px;
+  padding-right: 4px; cursor: pointer;
+}
+.om-sort-select option { color: var(--text); background: var(--surface); }
+
+/* Memo detail media preview — image/video with hover-revealed
+   theater + fullscreen, and click-to-lightbox on images. */
+.om-media-preview {
+  position: relative;
+  border-radius: var(--r-lg);
+  overflow: hidden;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  max-width: 720px;
+  transition: max-width .25s cubic-bezier(.2,.7,.2,1);
+}
+.om-media-preview.theater { max-width: none; }
+.om-media-preview img,
+.om-media-preview video {
+  display: block; width: 100%; height: auto; max-height: 70vh; object-fit: contain;
+}
+.om-media-controls {
+  position: absolute; top: 10px; right: 10px;
+  display: flex; gap: 6px;
+  opacity: 0; transition: opacity .15s ease;
+  z-index: 2;
+}
+.om-media-preview:hover .om-media-controls,
+.om-media-preview:focus-within .om-media-controls { opacity: 1; }
+.om-media-btn {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 32px; height: 32px; border-radius: 8px;
+  background: rgba(20,20,24,0.72); color: #F5F2EC;
+  border: 1px solid rgba(255,255,255,0.12);
+  backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px);
+  transition: background .15s, transform .12s;
+}
+.om-media-btn:hover { background: rgba(20,20,24,0.92); transform: translateY(-1px); }
+
+.om-lightbox {
+  position: fixed; inset: 0; z-index: 200;
+  display: flex; align-items: center; justify-content: center;
+  background: rgba(8,8,10,0.92);
+  padding: 32px;
+  animation: om-fade-in .15s ease;
+}
+.om-lightbox img {
+  max-width: 100%; max-height: 100%; object-fit: contain;
+  border-radius: 12px; box-shadow: 0 30px 80px rgba(0,0,0,0.5);
+}
+.om-lightbox-close {
+  position: absolute; top: 18px; right: 18px;
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 40px; height: 40px; border-radius: 50%;
+  background: rgba(255,255,255,0.12); color: #F5F2EC;
+  border: 1px solid rgba(255,255,255,0.18);
+  transition: background .15s;
+}
+.om-lightbox-close:hover { background: rgba(255,255,255,0.22); }
+@keyframes om-fade-in { from { opacity: 0; } to { opacity: 1; } }
+
+/* Memo detail header action row — keeps "Generate AI Summary",
+   "Download original" and any future header action pills aligned with a
+   consistent gap. Per-button styling comes from `.om-btn-*` so this stays a
+   layout-only utility. */
+.om-detail-actions {
+  display: flex; flex-wrap: wrap; align-items: center; gap: 8px;
+  margin-bottom: 24px;
+}
+.om-detail-actions > a,
+.om-detail-actions > button { text-decoration: none; }
+
 /* Legacy buttons kept for Settings actions etc. */
 .om-btn-ghost {
   display: inline-flex; align-items: center; gap: 8px;
@@ -386,7 +469,13 @@ input, textarea { font: inherit; color: inherit; }
   cursor: pointer;
   transition: transform .25s cubic-bezier(.2,.7,.2,1), box-shadow .25s, border-color .25s;
   will-change: transform;
+  /* Stop the browser claiming pointerdown gestures for native scroll/select
+     so @dnd-kit's drag activation actually fires from the card body. */
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
 }
+.om-card:active { cursor: grabbing; }
 .om-card-hover:hover { transform: translateY(-2px); box-shadow: var(--shadow-card-hover); border-color: var(--border-2); }
 
 /* Card hover halo — accent-tinted glow on hover, deferred for hybrid */
@@ -544,6 +633,7 @@ input, textarea { font: inherit; color: inherit; }
 .om-textarea:focus { border-color: var(--border-2); }
 .om-file-badge { display: flex; flex-direction: column; align-items: center; gap: 10px; color: var(--text-2); }
 .om-file-ext { font-size: 12px; color: var(--text-3); letter-spacing: 0.04em; text-transform: lowercase; }
+.om-file-svg { width: 60%; max-width: 140px; color: var(--text-2); display: block; }
 .om-doc-stack { position: relative; width: 100px; }
 .om-doc-page {
   display: block;
@@ -1991,6 +2081,39 @@ input, textarea { font: inherit; color: inherit; }
   margin-top: 16px;
 }
 @media (max-width: 900px) { .om-settings-bottom { grid-template-columns: 1fr; } }
+.om-built-with-lead {
+  margin: 0 0 14px; font-size: 13px; line-height: 1.55; color: var(--text-2);
+}
+.om-built-with-grid {
+  display: flex; flex-wrap: wrap; gap: 6px;
+}
+.om-built-with-tile {
+  display: inline-flex; align-items: center;
+  padding: 6px 12px; border-radius: 999px;
+  background: var(--surface); color: var(--text-2);
+  border: 1px solid var(--border);
+  font-size: 12.5px;
+  text-decoration: none;
+  transition: background .15s, color .15s, border-color .15s, transform .12s;
+}
+.om-built-with-tile:hover,
+.om-built-with-tile:focus-visible,
+.om-built-with-tile.focus {
+  background: var(--surface-2); color: var(--text);
+  border-color: color-mix(in oklab, var(--accent) 35%, var(--border));
+  transform: translateY(-1px);
+}
+.om-built-with-detail {
+  margin-top: 14px; padding: 12px 14px;
+  border-radius: 12px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  font-size: 12.5px; line-height: 1.55; color: var(--text-2);
+  display: flex; flex-direction: column; gap: 8px;
+  min-height: 76px;
+}
+.om-built-with-detail p { margin: 0; color: var(--text); }
+
 .om-creator-links { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 4px; }
 .om-creator-link {
   display: inline-flex; align-items: center; gap: 6px;
@@ -2273,7 +2396,10 @@ input, textarea { font: inherit; color: inherit; }
 .om-settings-footer {
   display: grid; grid-template-columns: 1fr auto 1fr;
   align-items: center; gap: 12px;
-  padding: 28px 0 8px; margin-top: 8px;
+  /* Equal breathing room above the divider (margin-top) and below it
+     (padding-top) so the footer rule sits symmetrically. */
+  padding: 24px 0;
+  margin-top: 24px;
   border-top: 1px solid var(--border);
 }
 .om-settings-footer > :first-child { justify-self: start; }

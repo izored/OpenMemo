@@ -16,8 +16,15 @@ const FILTERS = [
   { id: 'document', label: 'Files' },
 ];
 
+const SORTS: { id: 'recent' | 'oldest' | 'title' | 'custom'; label: string }[] = [
+  { id: 'recent', label: 'Recent' },
+  { id: 'oldest', label: 'Oldest' },
+  { id: 'title', label: 'Title' },
+  { id: 'custom', label: 'Custom order' },
+];
+
 export function Dashboard() {
-  const { activeFilter, setActiveFilter, activeCollection } = useAppStore();
+  const { activeFilter, setActiveFilter, activeCollection, sortMode, setSortMode } = useAppStore();
 
   const { data: collections = [] } = useQuery({
     queryKey: ['collections'],
@@ -25,9 +32,9 @@ export function Dashboard() {
   });
 
   const { data, isLoading } = useQuery({
-    queryKey: ['memos', activeFilter, activeCollection],
+    queryKey: ['memos', activeFilter, activeCollection, sortMode],
     queryFn: () => {
-      const params: { type?: string; collection_id?: string } = {};
+      const params: { type?: string; collection_id?: string; sort: typeof sortMode } = { sort: sortMode };
       if (activeFilter !== 'all') params.type = activeFilter;
       if (activeCollection) params.collection_id = activeCollection;
       return memoApi.list(params);
@@ -78,6 +85,19 @@ export function Dashboard() {
                 <span style={{ position: 'relative', zIndex: 1 }}>{f.label}</span>
               </button>
             ))}
+          </div>
+          <div className="om-sort-wrap">
+            <Icon name="chevronDown" size={11} />
+            <select
+              className="om-sort-select mono"
+              value={sortMode}
+              onChange={(e) => setSortMode(e.target.value as typeof sortMode)}
+              aria-label="Sort memos"
+            >
+              {SORTS.map((s) => (
+                <option key={s.id} value={s.id}>{s.label}</option>
+              ))}
+            </select>
           </div>
         </div>
       </header>
