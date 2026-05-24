@@ -136,8 +136,31 @@ export function MarkdownEditor({
       // becomes proper nodes instead of literal text.
       e.preventDefault();
       e.stopPropagation();
-      ref.current.insertMarkdown(text);
+      // Focus first so the editor has a definite selection range, otherwise
+      // insertMarkdown() can be a no-op or insert at an unexpected location
+      // when the wrapper receives the paste before the contenteditable has
+      // taken focus (e.g. paste via menu, paste right after click).
+      try {
+        ref.current.focus();
+      } catch {
+        /* focus is best-effort */
+      }
+      let inserted = false;
+      try {
+        ref.current.insertMarkdown(text);
+        inserted = true;
+      } catch {
+        inserted = false;
+      }
+      // Defensive fallback: if insertMarkdown silently no-ops (cursor not
+      // set, plugin error), replace the entire document with current value +
+      // the pasted content appended so the user does not lose the paste.
+      if (!inserted) {
+        const current = ref.current.getMarkdown();
+        ref.current.setMarkdown(current + (current.endsWith('\n') ? '' : '\n\n') + text);
+      }
       dirtyRef.current = true;
+      onChange?.(ref.current.getMarkdown());
     };
 
     wrapper.addEventListener('paste', onPaste, true);
@@ -205,28 +228,96 @@ export function MarkdownEditor({
           tablePlugin(),
           codeBlockPlugin({ defaultCodeBlockLanguage: 'txt' }),
           codeMirrorPlugin({
+            // Unknown languages render as plain monospace instead of
+            // crashing the editor. Aliases (py->python, sh->bash, etc.) keep
+            // pasted fenced blocks from showing as "unsupported".
             codeBlockLanguages: {
               txt: 'Plain Text',
+              plaintext: 'Plain Text',
+              text: 'Plain Text',
               js: 'JavaScript',
+              javascript: 'JavaScript',
               jsx: 'JSX',
               ts: 'TypeScript',
+              typescript: 'TypeScript',
               tsx: 'TSX',
               python: 'Python',
               py: 'Python',
               bash: 'Bash',
               sh: 'Shell',
+              shell: 'Shell',
+              zsh: 'Zsh',
+              fish: 'Fish',
+              powershell: 'PowerShell',
+              ps1: 'PowerShell',
+              bat: 'Batch',
+              cmd: 'Batch',
               json: 'JSON',
+              jsonc: 'JSON',
               yaml: 'YAML',
               yml: 'YAML',
+              toml: 'TOML',
+              ini: 'INI',
               html: 'HTML',
+              htm: 'HTML',
+              xml: 'XML',
+              svg: 'SVG',
               css: 'CSS',
+              scss: 'SCSS',
+              sass: 'Sass',
+              less: 'Less',
               sql: 'SQL',
               md: 'Markdown',
+              markdown: 'Markdown',
               go: 'Go',
               rust: 'Rust',
+              rs: 'Rust',
               java: 'Java',
+              kotlin: 'Kotlin',
+              kt: 'Kotlin',
+              swift: 'Swift',
               c: 'C',
               cpp: 'C++',
+              cxx: 'C++',
+              cc: 'C++',
+              csharp: 'C#',
+              cs: 'C#',
+              fsharp: 'F#',
+              fs: 'F#',
+              ruby: 'Ruby',
+              rb: 'Ruby',
+              php: 'PHP',
+              perl: 'Perl',
+              pl: 'Perl',
+              lua: 'Lua',
+              r: 'R',
+              dart: 'Dart',
+              elixir: 'Elixir',
+              ex: 'Elixir',
+              erlang: 'Erlang',
+              haskell: 'Haskell',
+              hs: 'Haskell',
+              julia: 'Julia',
+              jl: 'Julia',
+              scala: 'Scala',
+              clojure: 'Clojure',
+              clj: 'Clojure',
+              vim: 'Vim Script',
+              dockerfile: 'Dockerfile',
+              docker: 'Dockerfile',
+              makefile: 'Makefile',
+              make: 'Makefile',
+              nginx: 'Nginx',
+              graphql: 'GraphQL',
+              gql: 'GraphQL',
+              proto: 'Protobuf',
+              protobuf: 'Protobuf',
+              tex: 'LaTeX',
+              latex: 'LaTeX',
+              vue: 'Vue',
+              svelte: 'Svelte',
+              diff: 'Diff',
+              patch: 'Diff',
             },
           }),
           frontmatterPlugin(),

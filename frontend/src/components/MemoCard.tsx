@@ -62,6 +62,7 @@ function Chrome({
   onDelete,
   bgSrc,
   children,
+  dataTint,
 }: {
   memo: Memo;
   className?: string;
@@ -70,6 +71,7 @@ function Chrome({
   onDelete: (e: React.MouseEvent) => void;
   bgSrc?: string | null;
   children: React.ReactNode;
+  dataTint?: number;
 }) {
   const navigate = useNavigate();
   // PointerSensor in MemoGrid has activationConstraint distance: 8, so a
@@ -83,6 +85,7 @@ function Chrome({
       {...(dragHandleProps?.listeners || {})}
       className={cn('om-card om-card-hover', className)}
       style={style}
+      data-tint={dataTint !== undefined ? String(dataTint) : undefined}
       onClick={() => navigate(`/memo/${memo.id}`)}
     >
       {bgSrc && (
@@ -156,7 +159,8 @@ export function MemoCard({ memo, dragHandleProps }: CardProps) {
 
   // ── Note ──
   if (memo.type === 'note') {
-    const tint = NOTE_TINTS[hashId(memo.id) % NOTE_TINTS.length];
+    const tintIdx = hashId(memo.id) % NOTE_TINTS.length;
+    const tint = NOTE_TINTS[tintIdx];
     const body = memo.content_text || memo.content_raw || memo.description || '';
     return (
       <Chrome
@@ -165,6 +169,7 @@ export function MemoCard({ memo, dragHandleProps }: CardProps) {
         onDelete={handleDelete}
         className="om-card-note"
         style={{ background: tint.bg, color: tint.text }}
+        dataTint={tintIdx}
       >
         <div className="om-note-body">
           <h3 className="om-note-title">{memo.title}</h3>
