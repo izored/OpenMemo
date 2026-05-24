@@ -181,27 +181,21 @@ async def ingest_url(
     db: AsyncSession = Depends(get_db),
 ):
     """Ingest content from a URL."""
-    from backend.core.extractor import extract_url, extract_youtube, detect_url_type
-    
+    from backend.core.extractor import (
+        extract_url, extract_youtube, extract_social_video, detect_url_type,
+    )
+
     url_type = detect_url_type(data.url)
-    
+
     try:
         if url_type == "youtube":
             extracted = await extract_youtube(data.url)
+        elif url_type == "social_video":
+            extracted = await extract_social_video(data.url)
         else:
             extracted = await extract_url(data.url)
     except Exception as e:
         raise HTTPException(status_code=400, detail=f"Failed to extract: {str(e)}")
-
-    # JS-rendered / bot-walled sites (e.g. Dribbble returns HTTP 202 empty to
-    # server fetches) yield nothing. Don't persist an empty memo — tell the
-    # user to capture it via the browser extension, which reads the live DOM.
-    if not (extracted.get("title") or "").strip() and not (extracted.get("content_text") or "").strip():
-        raise HTTPException(
-            status_code=422,
-            detail="This page blocks server-side reading (likely JS-rendered). "
-                   "Open it in your browser and save with the OpenMemo extension.",
-        )
 
     memo = Memo(
         id=str(uuid.uuid4()),
