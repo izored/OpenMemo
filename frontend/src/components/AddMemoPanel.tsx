@@ -107,6 +107,22 @@ export function AddMemoPanel() {
 
   const onFile = async (files: FileList | null) => {
     if (!files || !files.length) return;
+
+    // Disclaimer for huge uploads — they consume RAM (browser side), disk
+    // (server side), and processing time (embedding, thumbnail, etc.).
+    // 1 GiB threshold; below that we just upload silently.
+    const HUGE = 1024 * 1024 * 1024;
+    const huge = Array.from(files).filter((f) => f.size >= HUGE);
+    if (huge.length) {
+      const totalMb = huge.reduce((s, f) => s + f.size, 0) / (1024 * 1024);
+      const ok = window.confirm(
+        `Heads up — ${huge.length} file(s) totalling ${(totalMb / 1024).toFixed(2)} GB.\n\n` +
+        `Large uploads take a while to ingest and consume disk + RAM for embedding. ` +
+        `OpenMemo is local-first so they stay on your machine. Continue?`,
+      );
+      if (!ok) return;
+    }
+
     setBusy(true);
     setError('');
     try {

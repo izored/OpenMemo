@@ -50,10 +50,30 @@ export const ingestApi = {
     form.append('file', file);
     if (collection_id) form.append('collection_id', collection_id);
     if (workspace_id) form.append('workspace_id', workspace_id);
-    const resp = await fetch(`${API_BASE}/ingest/file`, { method: 'POST', body: form });
+    let resp: Response;
+    try {
+      resp = await fetch(`${API_BASE}/ingest/file`, { method: 'POST', body: form });
+    } catch (e) {
+      // fetch() throws TypeError when the connection is dropped mid-stream
+      // (e.g. a reverse proxy kills the upload because of a body-size cap).
+      // Surface a useful hint instead of "Failed to fetch".
+      const sizeMb = (file.size / (1024 * 1024)).toFixed(1);
+      throw new Error(
+        `Upload aborted (${sizeMb} MB). The server or a proxy refused the request before a response arrived. ` +
+        `If you are behind nginx/Docker, raise client_max_body_size; in dev mode make sure the Vite proxy points to uvicorn (default :8099).`,
+      );
+    }
     if (!resp.ok) {
-      const error = await resp.json().catch(() => ({ detail: resp.statusText }));
-      throw new Error(error.detail || 'Upload failed');
+      const contentType = resp.headers.get('content-type') || '';
+      let detail: string;
+      if (contentType.includes('application/json')) {
+        const error = await resp.json().catch(() => ({ detail: resp.statusText }));
+        detail = error.detail || resp.statusText;
+      } else {
+        // nginx returns HTML for 413/502 etc — give the user something readable.
+        detail = `${resp.status} ${resp.statusText}`;
+      }
+      throw new Error(detail || 'Upload failed');
     }
     return resp.json();
   },
