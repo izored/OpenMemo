@@ -13,7 +13,7 @@ class Settings(BaseSettings):
     FILES_DIR: Path = BASE_DIR / "files"
     
     # Database
-    DATABASE_URL: str = "sqlite+aiosqlite:///./data/openmemo.db"
+    DATABASE_URL: str = f"sqlite+aiosqlite:///{Path(__file__).parent.parent / 'data' / 'openmemo.db'}"
     
     # Ollama
     OLLAMA_HOST: str = "http://localhost:11434"
@@ -23,7 +23,7 @@ class Settings(BaseSettings):
     DEFAULT_VISION_MODEL: str = "gemma3:4b"
     
     # ChromaDB
-    CHROMA_PERSIST_DIR: str = "./data/chroma"
+    CHROMA_PERSIST_DIR: str = str(Path(__file__).parent.parent / "data" / "chroma")
     CHROMA_COLLECTION: str = "memos"
     
     # Chunking
