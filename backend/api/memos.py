@@ -15,6 +15,7 @@ from pydantic import BaseModel
 from backend.db.database import get_db
 from backend.db.models import Memo, Collection, Tag, memo_collections, memo_tags
 from backend.core.security import sanitize_workspace_id
+from backend.core.file_paths import resolve_memo_path
 
 router = APIRouter(prefix="/api/memos", tags=["memos"])
 
@@ -195,8 +196,8 @@ async def get_memo_file(
     if not memo or not memo.file_path:
         raise HTTPException(status_code=404, detail="File not found")
 
-    p = Path(memo.file_path)
-    if not p.exists():
+    p = resolve_memo_path(memo.file_path)
+    if p is None:
         raise HTTPException(status_code=404, detail="File not found")
 
     media_type = mimetypes.guess_type(str(p))[0] or "application/octet-stream"

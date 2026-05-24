@@ -12,6 +12,7 @@ from backend.config import settings
 from backend.db.database import init_db, AsyncSessionLocal, get_db
 from backend.db.models import User, Workspace
 from backend.core.security import SafePath
+from backend.core.file_paths import resolve_memo_path
 
 
 @asynccontextmanager
@@ -126,7 +127,13 @@ async def serve_thumb(name: str):
 
 @app.get("/api/files/{file_path:path}")
 async def serve_file(file_path: str):
-    """Serve an uploaded file if it belongs to a memo in the workspace."""
+    """Serve an uploaded file if it belongs to a memo in the workspace.
+
+    Looks up the memo by either the exact stored `file_path` OR the tolerant
+    relative form (after the `files/` segment) so that legacy memos created
+    under a different environment (Docker `/app/files/...` vs Windows
+    `D:\\...\\files\\...`) still resolve.
+    """
     from sqlalchemy import select
     from backend.db.database import AsyncSessionLocal
     from backend.db.models import Memo
@@ -135,10 +142,26 @@ async def serve_file(file_path: str):
     target = _file_store.resolve(file_path)
 
     async with AsyncSessionLocal() as db:
+        # Try exact path match first (fast path).
         result = await db.execute(
             select(Memo).where(Memo.file_path == str(target))
         )
         memo = result.scalar_one_or_none()
+
+        # Fallback: scan memos and resolve each path tolerantly. Only triggers
+        # when the URL is reached at all, so cost is bounded by one missed
+        # request; in practice the UI uses `/api/memos/{id}/file` for image
+        # rendering so this branch is rarely hit.
+        if not memo:
+            all_memos = (
+                await db.execute(select(Memo).where(Memo.file_path.is_not(None)))
+            ).scalars().all()
+            for candidate in all_memos:
+                resolved = resolve_memo_path(candidate.file_path)
+                if resolved and resolved == target:
+                    memo = candidate
+                    break
+
         if not memo:
             raise HTTPException(status_code=404, detail="File not found")
 
