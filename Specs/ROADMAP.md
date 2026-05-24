@@ -70,8 +70,8 @@ Single source of truth for all planned work. Versioned milestones + unversioned 
 - [ ] **[P] RAG full audit** — Verify ChromaDB receives embeddings on save, hybrid search (FTS5 + Chroma) returns results, retrieved context injects correctly. Add `GET /api/debug/rag?q=...` endpoint returning retrieved chunks
 - [ ] **[Q] System prompt injection** — Inject OpenMemo assistant system prompt as first `role: "system"` message on Ollama chat payload, never visible to user
 - [ ] **[R] Seamless RAG default** — Drop `@general` requirement; every chat message auto-queries knowledge base. Keep `@collection-name` syntax for scoped queries
-- [ ] **[D] Image thumbnail on ingest** — Audit `ingest.py` image flow, generate + persist `thumbnail_path` so MemoCard renders thumbnails
-- [ ] **[E] Image preview on MemoDetail** — Fix `file_path` construction / `/api/files/:path` resolution for image memos
+- [x] **[D] Image thumbnail on ingest** — Effectively fixed in 1.8.6: `/api/memos/{id}/file` serves originals inline, cards/MemoDetail point at it; cross-env `file_path` resolved via `backend/core/file_paths.resolve_memo_path()` (PR #17 + #18).
+- [x] **[E] Image preview on MemoDetail** — Fixed in 1.8.6 via the same tolerant resolver + new `MediaPreview` component with lightbox / fullscreen / theater (PR #18).
 - [ ] **[F] Speed Dial main `+` button** — Tapping the `+` (without hovering child) opens default Add Memo modal (Link tab)
 
 ---
@@ -133,7 +133,7 @@ Single source of truth for all planned work. Versioned milestones + unversioned 
 - [ ] **[S] Disclaimer banner** — Small `--color-text-muted` centered banner under chat header: "Chat history is not saved — this session will be cleared on refresh. AskMemo is a work in progress." Dismissible × per session
 
 **Pinned memos (P4):**
-- [ ] **[W] Pinned memos sidebar** — `is_pinned BOOLEAN DEFAULT false` migration, pin/unpin via card hover menu, pinned section at top of sidebar, pinned-first ordering in grid
+- [~] **[W] Pinned memos sidebar** — *Partially shipped in 1.8.6 (PR #18):* `memos.pinned BOOLEAN DEFAULT 0` migration, `PUT /api/memos/{id}/pin`, `GET /api/memos/pinned/list`, sidebar Pinned section now renders pinned memos alongside pinned collections, MemoDetail has Pin/Unpin pill. Still TODO: pin from card hover menu (currently only MemoDetail), pinned-first ordering in the main grid, drag-to-reorder UI inside the Pinned section (sort_order is wired, UI not).
 
 ---
 
