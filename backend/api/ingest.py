@@ -322,14 +322,22 @@ async def process_file_memo(memo_id: str, file_path: str, memo_type: str):
         try:
             ext = Path(file_path).suffix.lower()
             
+            # Known text-ish file extensions whose content is safe to read as
+            # UTF-8 even when memo_type is the generic "file" bucket (i.e. a
+            # plain text file the categorizer hadn't seen).
+            _PLAIN_TEXT_EXTS = {".txt", ".csv", ".log", ".tsv", ".srt", ".vtt"}
+
             if ext == ".pdf":
                 data = await extract_pdf(file_path)
             elif ext in (".doc", ".docx"):
                 data = await extract_docx(file_path)
             elif ext in (".png", ".jpg", ".jpeg", ".gif", ".webp"):
                 data = await extract_image(file_path)
-            else:
+            elif memo_type == "code" or ext in _PLAIN_TEXT_EXTS:
                 # Read as text (code/plain). Opened read-only — never executed.
+                # Skipped for memo_type == "file" with an unknown extension so
+                # we don't dump replacement-char garbage from a binary blob
+                # (3D models, archives, proprietary formats…) into the DB.
                 try:
                     with open(file_path, "r", encoding="utf-8", errors="replace") as f:
                         content = f.read()
@@ -339,6 +347,10 @@ async def process_file_memo(memo_id: str, file_path: str, memo_type: str):
                         data["content_raw"] = f"```{lang}\n{content}\n```"
                 except Exception:
                     data = {}
+            else:
+                # Unknown binary / generic file — keep the memo as a pure
+                # file reference, no text extraction.
+                data = {}
 
             if data.get("content_text"):
                 memo.content_text = data["content_text"]
