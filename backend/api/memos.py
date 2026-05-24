@@ -7,7 +7,7 @@ from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import FileResponse
-from sqlalchemy import select, func, desc
+from sqlalchemy import select, func, desc, asc
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 from pydantic import BaseModel
@@ -15,6 +15,7 @@ from pydantic import BaseModel
 from backend.db.database import get_db
 from backend.db.models import Memo, Collection, Tag, memo_collections, memo_tags
 from backend.core.security import sanitize_workspace_id
+from backend.core.file_paths import resolve_memo_path
 
 router = APIRouter(prefix="/api/memos", tags=["memos"])
 
@@ -70,24 +71,50 @@ class MemoResponse(BaseModel):
 
 # --- Routes ---
 
+_SORT_MODES = {"recent", "oldest", "title", "custom"}
+
+
+def _apply_sort(query, sort: str):
+    """Apply ORDER BY based on the requested sort mode.
+
+    - recent (default): newest first by created_at. Manual sort_order is
+      intentionally ignored so freshly added memos always land on top.
+    - oldest: oldest first.
+    - title: alphabetical, case-insensitive.
+    - custom: respects manual drag-to-reorder (sort_order desc), then
+      created_at as a stable tiebreaker.
+    """
+    if sort == "oldest":
+        return query.order_by(asc(Memo.created_at))
+    if sort == "title":
+        return query.order_by(func.lower(Memo.title).asc())
+    if sort == "custom":
+        return query.order_by(desc(Memo.sort_order), desc(Memo.created_at))
+    # recent / unknown -> default
+    return query.order_by(desc(Memo.created_at))
+
+
 @router.get("")
 async def list_memos(
     workspace_id: Optional[str] = None,
     type: Optional[str] = None,
     collection_id: Optional[str] = None,
     search: Optional[str] = None,
+    sort: str = "recent",
     offset: int = 0,
     limit: int = 50,
     db: AsyncSession = Depends(get_db),
 ):
     if workspace_id:
         workspace_id = sanitize_workspace_id(workspace_id)
+    if sort not in _SORT_MODES:
+        sort = "recent"
     """List memos with filtering and pagination."""
     query = select(Memo).options(
         selectinload(Memo.collections),
         selectinload(Memo.tags),
     )
-    
+
     if workspace_id:
         query = query.where(Memo.workspace_id == workspace_id)
     if type and type != "all":
@@ -100,13 +127,13 @@ async def list_memos(
         query = query.where(
             Memo.title.ilike(f"%{search}%") | Memo.content_text.ilike(f"%{search}%")
         )
-    
+
     # Count total
     count_query = select(func.count()).select_from(query.subquery())
     total = (await db.execute(count_query)).scalar()
-    
+
     # Fetch with pagination
-    query = query.order_by(desc(Memo.sort_order), desc(Memo.created_at)).offset(offset).limit(limit)
+    query = _apply_sort(query, sort).offset(offset).limit(limit)
     result = await db.execute(query)
     memos = result.scalars().all()
     
@@ -126,6 +153,7 @@ async def list_memos(
                 "ai_summary": m.ai_summary,
                 "notes": m.notes,
                 "sort_order": m.sort_order,
+                "pinned": m.pinned,
                 "is_processed": m.is_processed,
                 "created_at": m.created_at.isoformat(),
                 "updated_at": m.updated_at.isoformat(),
@@ -170,6 +198,7 @@ async def get_memo(memo_id: str, db: AsyncSession = Depends(get_db)):
         "ai_summary": memo.ai_summary,
         "notes": memo.notes,
         "sort_order": memo.sort_order,
+        "pinned": memo.pinned,
         "is_processed": memo.is_processed,
         "created_at": memo.created_at.isoformat(),
         "updated_at": memo.updated_at.isoformat(),
@@ -195,8 +224,8 @@ async def get_memo_file(
     if not memo or not memo.file_path:
         raise HTTPException(status_code=404, detail="File not found")
 
-    p = Path(memo.file_path)
-    if not p.exists():
+    p = resolve_memo_path(memo.file_path)
+    if p is None:
         raise HTTPException(status_code=404, detail="File not found")
 
     media_type = mimetypes.guess_type(str(p))[0] or "application/octet-stream"
@@ -323,6 +352,47 @@ async def update_memo_sort(memo_id: str, body: SortUpdate, db: AsyncSession = De
     memo.updated_at = datetime.utcnow()
     await db.commit()
     return {"id": memo.id, "sort_order": memo.sort_order, "status": "updated"}
+
+
+class PinUpdate(BaseModel):
+    pinned: bool
+
+
+@router.put("/{memo_id}/pin")
+async def update_memo_pin(memo_id: str, body: PinUpdate, db: AsyncSession = Depends(get_db)):
+    """Pin or unpin a memo so it surfaces in the sidebar Pinned section."""
+    memo = await db.get(Memo, memo_id)
+    if not memo:
+        raise HTTPException(status_code=404, detail="Memo not found")
+    memo.pinned = bool(body.pinned)
+    memo.updated_at = datetime.utcnow()
+    await db.commit()
+    return {"id": memo.id, "pinned": memo.pinned, "status": "updated"}
+
+
+@router.get("/pinned/list")
+async def list_pinned_memos(db: AsyncSession = Depends(get_db)):
+    """Return memos with pinned=True, ordered by sort_order desc, then recency."""
+    rows = (
+        await db.execute(
+            select(Memo)
+            .where(Memo.pinned.is_(True))
+            .order_by(desc(Memo.sort_order), desc(Memo.created_at))
+        )
+    ).scalars().all()
+    return [
+        {
+            "id": m.id,
+            "type": m.type,
+            "title": m.title,
+            "thumbnail_path": m.thumbnail_path,
+            "source_domain": m.source_domain,
+            "source_favicon": m.source_favicon,
+            "pinned": m.pinned,
+            "sort_order": m.sort_order,
+        }
+        for m in rows
+    ]
 
 
 @router.delete("/{memo_id}")

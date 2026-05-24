@@ -8,17 +8,60 @@ import { useAppStore } from '@/stores/appStore';
 import { systemApi, maintenanceApi, backupApi, settingsApi } from '@/lib/api';
 import type { OllamaModel } from '@/types';
 
-const BUILT_WITH = [
-  { name: 'React', url: 'https://react.dev' },
-  { name: 'Vite', url: 'https://vitejs.dev' },
-  { name: 'FastAPI', url: 'https://fastapi.tiangolo.com' },
-  { name: 'SQLite', url: 'https://sqlite.org' },
-  { name: 'Ollama', url: 'https://ollama.com' },
-  { name: 'ChromaDB', url: 'https://www.trychroma.com' },
-  { name: 'TanStack Query', url: 'https://tanstack.com/query' },
-  { name: 'Zustand', url: 'https://github.com/pmndrs/zustand' },
-  { name: 'framer-motion', url: 'https://motion.dev' },
-  { name: 'dnd-kit', url: 'https://dndkit.com' },
+type BuiltWithEntry = { name: string; url: string; desc: string };
+
+function BuiltWithGrid({ entries }: { entries: BuiltWithEntry[] }) {
+  const [focus, setFocus] = useState<BuiltWithEntry | null>(null);
+  const detail = focus ?? entries[0];
+  return (
+    <>
+      <div className="om-built-with-grid">
+        {entries.map((d) => (
+          <a
+            key={d.name}
+            className={`om-built-with-tile${focus?.name === d.name ? ' focus' : ''}`}
+            href={d.url}
+            target="_blank"
+            rel="noopener noreferrer"
+            onMouseEnter={() => setFocus(d)}
+            onFocus={() => setFocus(d)}
+            onMouseLeave={() => setFocus(null)}
+            onBlur={() => setFocus(null)}
+          >
+            {d.name}
+          </a>
+        ))}
+      </div>
+      {detail && (
+        <div className="om-built-with-detail" aria-live="polite">
+          <p>{detail.desc}</p>
+          <a
+            className="om-creator-link"
+            href={detail.url}
+            target="_blank"
+            rel="noopener noreferrer"
+          >
+            Learn more about {detail.name} →
+          </a>
+        </div>
+      )}
+    </>
+  );
+}
+
+const BUILT_WITH: BuiltWithEntry[] = [
+  { name: 'React', url: 'https://react.dev', desc: 'The UI library every screen is built on — components, hooks, the whole shape of the frontend.' },
+  { name: 'Vite', url: 'https://vitejs.dev', desc: 'Dev server + build tool. Instant HMR while building, a tiny production bundle when shipping.' },
+  { name: 'FastAPI', url: 'https://fastapi.tiangolo.com', desc: 'The Python web framework powering the API. Async-first, type-safe via Pydantic, OpenAPI for free.' },
+  { name: 'SQLite', url: 'https://sqlite.org', desc: 'The single-file database holding every memo, collection, tag and chat. Embedded, zero-config, fast.' },
+  { name: 'Ollama', url: 'https://ollama.com', desc: 'Runs the local LLMs that power chat, summarisation and embeddings — no cloud round-trip, no API key.' },
+  { name: 'ChromaDB', url: 'https://www.trychroma.com', desc: 'Vector store for memo embeddings. Makes "search by meaning" possible against your own knowledge base.' },
+  { name: 'TanStack Query', url: 'https://tanstack.com/query', desc: 'Frontend cache + data fetching. Keeps memos, stats and collections in sync without manual wiring.' },
+  { name: 'Zustand', url: 'https://github.com/pmndrs/zustand', desc: 'Tiny state store for sidebar, filters, sort mode and appearance — no boilerplate, no providers.' },
+  { name: 'framer-motion', url: 'https://motion.dev', desc: 'Every spring, fade and layout animation in the UI. The sidebar collapse, the filter pill, the card transitions.' },
+  { name: 'dnd-kit', url: 'https://dndkit.com', desc: 'Drag-and-drop primitives behind reordering memos and dropping cards into collections.' },
+  { name: 'MDXEditor', url: 'https://mdxeditor.dev', desc: 'The rich Markdown editor for notes and memo content — WYSIWYG with real Markdown underneath.' },
+  { name: 'yt-dlp', url: 'https://github.com/yt-dlp/yt-dlp', desc: 'Pulls title, description and thumbnails from YouTube and social-video URLs so saving a link gives a rich memo.' },
 ];
 
 type Stats = {
@@ -444,16 +487,6 @@ export function SettingsPage() {
             </div>
           </SettingCard>
 
-          <SettingCard title="Built with" eyebrow="Open source">
-            <div className="om-creator-links" style={{ marginTop: 0 }}>
-              {BUILT_WITH.map((d) => (
-                <a key={d.name} className="om-creator-link" href={d.url} target="_blank" rel="noopener noreferrer">
-                  {d.name}
-                </a>
-              ))}
-            </div>
-          </SettingCard>
-
           <div className="om-setting-card om-creator-card">
             <div className="om-setting-head">
               <span className="mono om-setting-eyebrow">Made by</span>
@@ -475,6 +508,13 @@ export function SettingsPage() {
               </div>
             </div>
           </div>
+
+          <SettingCard title="Built with ❤️" eyebrow="Open source">
+            <p className="om-built-with-lead">
+              openMemo would not be possible without the amazing free and open-source software it stands on. Hover any tool to see what it does — every one of them is worth a thank-you.
+            </p>
+            <BuiltWithGrid entries={BUILT_WITH} />
+          </SettingCard>
         </div>
 
       </div>
