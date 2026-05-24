@@ -72,8 +72,15 @@ function Chrome({
   children: React.ReactNode;
 }) {
   const navigate = useNavigate();
+  // PointerSensor in MemoGrid has activationConstraint distance: 8, so a
+  // simple click never triggers drag — only a pointerdown that moves >8px
+  // does. Spreading the drag listeners onto the card root makes the *entire
+  // thumbnail* a drag surface; the corner grip icon stays as a visual cue
+  // (and remains a valid drag surface itself).
   return (
     <div
+      {...(dragHandleProps?.attributes || {})}
+      {...(dragHandleProps?.listeners || {})}
       className={cn('om-card om-card-hover', className)}
       style={style}
       onClick={() => navigate(`/memo/${memo.id}`)}
@@ -84,12 +91,11 @@ function Chrome({
         </div>
       )}
       <span
-        {...(dragHandleProps?.attributes || {})}
-        {...(dragHandleProps?.listeners || {})}
         className="om-drag"
         onClick={(e) => e.stopPropagation()}
         title="Drag to reorder / collection"
         aria-label="Drag handle"
+        aria-hidden
       >
         <Icon name="grip" size={15} />
       </span>

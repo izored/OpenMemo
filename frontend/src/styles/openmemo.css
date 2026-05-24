@@ -402,7 +402,13 @@ input, textarea { font: inherit; color: inherit; }
   cursor: pointer;
   transition: transform .25s cubic-bezier(.2,.7,.2,1), box-shadow .25s, border-color .25s;
   will-change: transform;
+  /* Stop the browser claiming pointerdown gestures for native scroll/select
+     so @dnd-kit's drag activation actually fires from the card body. */
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
 }
+.om-card:active { cursor: grabbing; }
 .om-card-hover:hover { transform: translateY(-2px); box-shadow: var(--shadow-card-hover); border-color: var(--border-2); }
 
 /* Card hover halo — accent-tinted glow on hover, deferred for hybrid */
