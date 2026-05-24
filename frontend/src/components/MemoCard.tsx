@@ -36,6 +36,54 @@ function typeLabel(t: MemoType) {
 // Domains that use hotlink protection — proxy through backend
 const HOTLINK_DOMAINS = ['dribbble.com', 'behance.net', 'pinterest.com', 'cdn.dribbble.com'];
 
+// Inline SVG file icon with the extension burned in. Single component, the
+// extension is passed in as a prop — avoids maintaining a library of per-type
+// icons. Renders crisp at any DPR and adapts to the active text color.
+function FileBadge({ ext }: { ext: string }) {
+  const label = ext ? `.${ext.toLowerCase()}` : '';
+  // Auto-shrink long extensions so unusual ones (`.markdown`, `.dockerfile`)
+  // still fit inside the icon body.
+  const len = label.length;
+  const size = len <= 5 ? 36 : len <= 7 ? 28 : len <= 10 ? 22 : 18;
+  return (
+    <svg viewBox="0 0 200 240" className="om-file-svg" role="img" aria-label={label || 'file'}>
+      <path
+        d="M40 14 H128 L172 58 V216 Q172 226 162 226 H40 Q30 226 30 216 V24 Q30 14 40 14 Z"
+        fill="currentColor"
+        fillOpacity="0.10"
+      />
+      <path
+        d="M40 14 H128 L172 58 V216 Q172 226 162 226 H40 Q30 226 30 216 V24 Q30 14 40 14 Z"
+        fill="none"
+        stroke="currentColor"
+        strokeOpacity="0.55"
+        strokeWidth="2"
+      />
+      <path
+        d="M128 14 V48 Q128 58 138 58 H172"
+        fill="none"
+        stroke="currentColor"
+        strokeOpacity="0.45"
+        strokeWidth="2"
+      />
+      {label && (
+        <text
+          x="100"
+          y="190"
+          textAnchor="middle"
+          fontFamily="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace"
+          fontSize={size}
+          fontWeight="600"
+          fill="currentColor"
+          letterSpacing="0.5"
+        >
+          {label}
+        </text>
+      )}
+    </svg>
+  );
+}
+
 function mediaSrc(memo: Memo): string | null {
   if (memo.thumbnail_path) {
     if (memo.thumbnail_path.startsWith('http')) {
@@ -264,16 +312,13 @@ export function MemoCard({ memo, dragHandleProps }: CardProps) {
     );
   }
 
-  // ── Generic file / code (no preview) — icon + extension badge ──
+  // ── Generic file / code (no preview) — file-shape SVG with extension burned in ──
   if (memo.type === 'file' || memo.type === 'code') {
     const ext = (memo.title.includes('.') ? memo.title.split('.').pop()! : '').toLowerCase();
     return (
       <Chrome memo={memo} dragHandleProps={dragHandleProps} onDelete={handleDelete} className="om-card-doc">
         <div className="om-doc-frame">
-          <div className="om-file-badge">
-            <Icon name={memo.type === 'code' ? 'code' : 'file'} size={36} />
-            {ext && <span className="om-file-ext mono">.{ext}</span>}
-          </div>
+          <FileBadge ext={ext} />
         </div>
         <div className="om-card-body">
           <h3 className="om-card-title">{memo.title}</h3>

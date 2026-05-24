@@ -577,6 +577,7 @@ input, textarea { font: inherit; color: inherit; }
 .om-textarea:focus { border-color: var(--border-2); }
 .om-file-badge { display: flex; flex-direction: column; align-items: center; gap: 10px; color: var(--text-2); }
 .om-file-ext { font-size: 12px; color: var(--text-3); letter-spacing: 0.04em; text-transform: lowercase; }
+.om-file-svg { width: 60%; max-width: 140px; color: var(--text-2); display: block; }
 .om-doc-stack { position: relative; width: 100px; }
 .om-doc-page {
   display: block;
