@@ -16,6 +16,8 @@ import {
   Download,
   Maximize2,
   Expand,
+  Pin,
+  PinOff,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { BackButton } from '@/components/BackButton';
@@ -181,6 +183,17 @@ export function MemoDetail() {
     }
   }, [memo]);
   /* eslint-enable react-hooks/set-state-in-effect */
+
+  const togglePin = async () => {
+    if (!id || !memo) return;
+    try {
+      await memoApi.pin(id, !memo.pinned);
+      queryClient.invalidateQueries({ queryKey: ['memo', id] });
+      queryClient.invalidateQueries({ queryKey: ['memos', 'pinned'] });
+    } catch (e) {
+      console.error(e);
+    }
+  };
 
   const handleGenerateSummary = async () => {
     if (!id) return;
@@ -467,8 +480,17 @@ export function MemoDetail() {
             )}
 
             {/* Header action row — same component, same metrics, real gap */}
-            {!isEditing && (!memo.ai_summary || memo.file_path) && (
+            {!isEditing && (
               <div className="om-detail-actions">
+                <button
+                  onClick={togglePin}
+                  className="om-btn-ghost om-btn-pill"
+                  title={memo.pinned ? 'Unpin from sidebar' : 'Pin to sidebar'}
+                  aria-pressed={!!memo.pinned}
+                >
+                  {memo.pinned ? <PinOff size={14} /> : <Pin size={14} />}
+                  <span>{memo.pinned ? 'Unpin' : 'Pin to sidebar'}</span>
+                </button>
                 {!memo.ai_summary && (
                   <button
                     onClick={handleGenerateSummary}

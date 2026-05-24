@@ -153,6 +153,7 @@ async def list_memos(
                 "ai_summary": m.ai_summary,
                 "notes": m.notes,
                 "sort_order": m.sort_order,
+                "pinned": m.pinned,
                 "is_processed": m.is_processed,
                 "created_at": m.created_at.isoformat(),
                 "updated_at": m.updated_at.isoformat(),
@@ -197,6 +198,7 @@ async def get_memo(memo_id: str, db: AsyncSession = Depends(get_db)):
         "ai_summary": memo.ai_summary,
         "notes": memo.notes,
         "sort_order": memo.sort_order,
+        "pinned": memo.pinned,
         "is_processed": memo.is_processed,
         "created_at": memo.created_at.isoformat(),
         "updated_at": memo.updated_at.isoformat(),
@@ -350,6 +352,47 @@ async def update_memo_sort(memo_id: str, body: SortUpdate, db: AsyncSession = De
     memo.updated_at = datetime.utcnow()
     await db.commit()
     return {"id": memo.id, "sort_order": memo.sort_order, "status": "updated"}
+
+
+class PinUpdate(BaseModel):
+    pinned: bool
+
+
+@router.put("/{memo_id}/pin")
+async def update_memo_pin(memo_id: str, body: PinUpdate, db: AsyncSession = Depends(get_db)):
+    """Pin or unpin a memo so it surfaces in the sidebar Pinned section."""
+    memo = await db.get(Memo, memo_id)
+    if not memo:
+        raise HTTPException(status_code=404, detail="Memo not found")
+    memo.pinned = bool(body.pinned)
+    memo.updated_at = datetime.utcnow()
+    await db.commit()
+    return {"id": memo.id, "pinned": memo.pinned, "status": "updated"}
+
+
+@router.get("/pinned/list")
+async def list_pinned_memos(db: AsyncSession = Depends(get_db)):
+    """Return memos with pinned=True, ordered by sort_order desc, then recency."""
+    rows = (
+        await db.execute(
+            select(Memo)
+            .where(Memo.pinned.is_(True))
+            .order_by(desc(Memo.sort_order), desc(Memo.created_at))
+        )
+    ).scalars().all()
+    return [
+        {
+            "id": m.id,
+            "type": m.type,
+            "title": m.title,
+            "thumbnail_path": m.thumbnail_path,
+            "source_domain": m.source_domain,
+            "source_favicon": m.source_favicon,
+            "pinned": m.pinned,
+            "sort_order": m.sort_order,
+        }
+        for m in rows
+    ]
 
 
 @router.delete("/{memo_id}")

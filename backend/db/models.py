@@ -76,6 +76,7 @@ class Memo(Base):
     embedding_ids = Column(JSON, nullable=True)  # list of chunk IDs in ChromaDB
     notes = Column(Text, nullable=True)
     sort_order = Column(Integer, default=0)
+    pinned = Column(Boolean, default=False)
     is_processed = Column(Boolean, default=False)
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)

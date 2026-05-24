@@ -52,3 +52,7 @@ async def _run_migrations():
         if "sort_order" not in columns:
             await db.execute("ALTER TABLE memos ADD COLUMN sort_order INTEGER DEFAULT 0")
             await db.commit()
+
+        if "pinned" not in columns:
+            await db.execute("ALTER TABLE memos ADD COLUMN pinned BOOLEAN DEFAULT 0")
+            await db.commit()
