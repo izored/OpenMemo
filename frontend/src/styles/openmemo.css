@@ -357,6 +357,17 @@ input, textarea { font: inherit; color: inherit; }
 }
 .om-sort-select option { color: var(--text); background: var(--surface); }
 
+/* Memo detail header action row — keeps "Generate AI Summary",
+   "Download original" and any future header action pills aligned with a
+   consistent gap. Per-button styling comes from `.om-btn-*` so this stays a
+   layout-only utility. */
+.om-detail-actions {
+  display: flex; flex-wrap: wrap; align-items: center; gap: 8px;
+  margin-bottom: 24px;
+}
+.om-detail-actions > a,
+.om-detail-actions > button { text-decoration: none; }
+
 /* Legacy buttons kept for Settings actions etc. */
 .om-btn-ghost {
   display: inline-flex; align-items: center; gap: 8px;

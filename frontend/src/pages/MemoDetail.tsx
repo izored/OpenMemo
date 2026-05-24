@@ -361,31 +361,44 @@ export function MemoDetail() {
               </div>
             )}
 
-            {/* AI Summary */}
-            {!isEditing && (
-              <>
-                {memo.ai_summary ? (
-                  <div className="om-ai-summary" style={{ marginBottom: '24px' }}>
-                    <div className="om-ai-summary-head">
-                      <Sparkles size={16} className="om-accent-icon" />
-                      <span className="om-ai-summary-label">AI Summary</span>
-                    </div>
-                    <div className="om-prose">
-                      <ReactMarkdown remarkPlugins={[remarkGfm]}>{memo.ai_summary}</ReactMarkdown>
-                    </div>
-                  </div>
-                ) : (
+            {/* AI Summary block (when generated) */}
+            {!isEditing && memo.ai_summary && (
+              <div className="om-ai-summary" style={{ marginBottom: '24px' }}>
+                <div className="om-ai-summary-head">
+                  <Sparkles size={16} className="om-accent-icon" />
+                  <span className="om-ai-summary-label">AI Summary</span>
+                </div>
+                <div className="om-prose">
+                  <ReactMarkdown remarkPlugins={[remarkGfm]}>{memo.ai_summary}</ReactMarkdown>
+                </div>
+              </div>
+            )}
+
+            {/* Header action row — same component, same metrics, real gap */}
+            {!isEditing && (!memo.ai_summary || memo.file_path) && (
+              <div className="om-detail-actions">
+                {!memo.ai_summary && (
                   <button
                     onClick={handleGenerateSummary}
                     disabled={generatingSummary}
                     className="om-btn-ghost om-btn-pill"
-                    style={{ marginBottom: '24px', opacity: generatingSummary ? 0.4 : undefined }}
+                    style={{ opacity: generatingSummary ? 0.4 : undefined }}
                   >
                     {generatingSummary ? <Loader2 size={14} className="om-spin" /> : <Sparkles size={14} />}
-                    Generate AI Summary
+                    <span>Generate AI Summary</span>
                   </button>
                 )}
-              </>
+                {memo.file_path && (
+                  <a
+                    className="om-btn-ghost om-btn-pill"
+                    href={`/api/memos/${memo.id}/file?download=1`}
+                    download
+                  >
+                    <Download size={14} />
+                    <span>Download original</span>
+                  </a>
+                )}
+              </div>
             )}
 
             {/* Thumbnail / Image */}
@@ -393,26 +406,6 @@ export function MemoDetail() {
               <div className="om-image-memo" style={{ marginBottom: '24px' }}>
                 <img src={`/api/memos/${memo.id}/file`} alt={memo.title} />
               </div>
-            )}
-
-            {/* Download original uploaded file */}
-            {memo.file_path && !isEditing && (
-              <a
-                className="om-btn-secondary"
-                href={`/api/memos/${memo.id}/file?download=1`}
-                download
-                style={{
-                  display: 'inline-flex',
-                  alignItems: 'center',
-                  gap: '8px',
-                  width: 'fit-content',
-                  marginBottom: '24px',
-                  textDecoration: 'none',
-                }}
-              >
-                <Download size={14} />
-                <span>Download original</span>
-              </a>
             )}
 
             {/* Video */}
