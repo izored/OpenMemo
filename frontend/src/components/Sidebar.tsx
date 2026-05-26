@@ -122,12 +122,7 @@ export function Sidebar() {
         >
           {sidebarCollapsed
             ? <Icon name="menu" size={18} style={{ color: 'var(--text-3)' }} />
-            : (
-              <>
-                <span className="om-avatar" style={{ width: 26, height: 26, borderRadius: 8, fontSize: 11 }}>O</span>
-                <span className="om-brand-name">openMemo</span>
-              </>
-            )
+            : <span className="om-brand-name">openMemo</span>
           }
         </button>
         {!sidebarCollapsed && (

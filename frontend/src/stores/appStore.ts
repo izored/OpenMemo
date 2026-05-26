@@ -5,7 +5,13 @@ import { DEFAULT_TWEAKS, applyTweaks, type Tweaks } from '@/lib/appearance';
 const loadTweaks = (): Tweaks => {
   try {
     const raw = localStorage.getItem('openmemo_tweaks');
-    if (raw) return { ...DEFAULT_TWEAKS, ...JSON.parse(raw), density: 'roomy' as const };
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      // Migrations for removed options: 'rich' card style, 1× blob speed.
+      if (parsed.cardStyle === 'rich') parsed.cardStyle = 'hybrid';
+      if (parsed.blobSpeed === 1) parsed.blobSpeed = 2;
+      return { ...DEFAULT_TWEAKS, ...parsed, density: 'roomy' as const };
+    }
   } catch {
     /* ignore */
   }

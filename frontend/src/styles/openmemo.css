@@ -141,10 +141,11 @@ input, textarea { font: inherit; color: inherit; }
 [data-theme="hi"]   .om-app::before { opacity: 0; }
 
 @keyframes omIridescent {
-  0%   { transform: translate(0, 0)       rotate(0deg)    scale(1);    filter: blur(80px) saturate(130%); }
-  33%  { transform: translate(2%, -1.5%)  rotate(2deg)    scale(1.05); filter: blur(90px) saturate(145%); }
-  66%  { transform: translate(-1.5%, 1%)  rotate(-1.5deg) scale(1.03); filter: blur(85px) saturate(135%); }
-  100% { transform: translate(1%, 1.5%)   rotate(1deg)    scale(1.06); filter: blur(95px) saturate(140%); }
+  0%   { transform: translate(0, 0)     rotate(0deg)   scale(1);    filter: blur(80px) saturate(130%); }
+  25%  { transform: translate(7%, -5%)  rotate(7deg)   scale(1.12); filter: blur(95px) saturate(155%); }
+  50%  { transform: translate(-6%, 4%)  rotate(-6deg)  scale(1.08); filter: blur(85px) saturate(140%); }
+  75%  { transform: translate(5%, 6%)   rotate(4deg)   scale(1.15); filter: blur(100px) saturate(150%); }
+  100% { transform: translate(-4%, -3%) rotate(-3deg)  scale(1.18); filter: blur(90px) saturate(145%); }
 }
 @media (prefers-reduced-motion: reduce) { .om-app::before { animation: none; } }
 
@@ -182,7 +183,7 @@ input, textarea { font: inherit; color: inherit; }
 }
 .om-sidebar-head { display: flex; align-items: center; justify-content: space-between; padding: 0 4px 16px; }
 .om-brand { display: flex; align-items: center; gap: 10px; }
-.om-brand-name { font-weight: 600; letter-spacing: -0.01em; font-size: 15px; }
+.om-brand-name { font-weight: 600; letter-spacing: -0.015em; font-size: 19px; }
 
 .om-icon-btn {
   width: 28px; height: 28px; border-radius: 8px;
@@ -478,14 +479,12 @@ input, textarea { font: inherit; color: inherit; }
 .om-card:active { cursor: grabbing; }
 .om-card-hover:hover { transform: translateY(-2px); box-shadow: var(--shadow-card-hover); border-color: var(--border-2); }
 
-/* Card hover halo — accent-tinted glow on hover, deferred for hybrid */
-[data-card="rich"] .om-card::before,
+/* Card hover halo — accent-tinted glow on hover */
 [data-card="hybrid"] .om-card::before {
   content: ""; position: absolute; inset: -20%;
   background: radial-gradient(50% 50% at 50% 0%, var(--accent-soft) 0%, transparent 70%);
   opacity: 0; transition: opacity .35s; pointer-events: none; z-index: 0;
 }
-[data-card="rich"] .om-card::before { opacity: 0.5; }
 [data-card="hybrid"] .om-card:hover::before { opacity: 0.7; }
 .om-card > * { position: relative; z-index: 1; }
 
@@ -496,11 +495,6 @@ input, textarea { font: inherit; color: inherit; }
 [data-card="minimal"] .om-image-frame { aspect-ratio: 4/3; }
 [data-card="minimal"] .om-card-body { padding: 14px; gap: 8px; }
 [data-card="minimal"] .om-meta { border-top: 0; padding-top: 0; }
-
-/* Rich — always-on halo, bigger radius, stronger lift */
-[data-card="rich"] .om-card { border-radius: var(--r-2xl); box-shadow: var(--shadow-card-hover); }
-[data-card="rich"] .om-card-hover:hover { transform: translateY(-4px); }
-[data-card="rich"] .om-card-actions { opacity: 1; }
 
 .om-card-actions {
   position: absolute; top: 10px; right: 10px; z-index: 2;
@@ -522,7 +516,6 @@ input, textarea { font: inherit; color: inherit; }
 .om-drag:active { cursor: grabbing; }
 .om-drag:hover { background: rgba(20,20,22,0.92); color: #fff; }
 .om-card:hover .om-drag { opacity: 1; }
-[data-card="rich"] .om-drag { opacity: 1; }
 .om-card-note .om-drag { background: rgba(0,0,0,0.22); color: rgba(255,255,255,0.92); }
 .om-card-note .om-drag:hover { background: rgba(0,0,0,0.42); }
 
@@ -960,7 +953,9 @@ input, textarea { font: inherit; color: inherit; }
 .om-modal-foot { padding: 14px 20px; display: flex; justify-content: space-between; align-items: center; border-top: 1px solid var(--border); }
 
 /* ─ Collection modal ───────────────────────────────────────────────────── */
-.om-modal-backdrop { position: fixed; inset: 0; z-index: 60; display: flex; align-items: center; justify-content: center; }
+/* z-index above .om-fab (60) / .om-add-panel (61) / .om-fab.open (62) so the
+   modal scrim properly covers the FAB and add-memo panel while editing. */
+.om-modal-backdrop { position: fixed; inset: 0; z-index: 80; display: flex; align-items: center; justify-content: center; }
 .om-modal-scrim { position: absolute; inset: 0; background: rgba(0,0,0,0.4); }
 .om-coll-modal { position: relative; width: min(440px, calc(100vw - 32px)); background: var(--elev); border: 1px solid var(--border); border-radius: var(--r-2xl); box-shadow: var(--shadow-elev); animation: pop .2s cubic-bezier(.2,.7,.2,1); }
 .om-modal-header { display: flex; align-items: center; justify-content: space-between; padding: 18px 22px 16px; }
@@ -1184,8 +1179,19 @@ input, textarea { font: inherit; color: inherit; }
 .om-appearance-cta:hover .om-appearance-cta-arrow { background: var(--accent); color: #fff; border-color: var(--accent); }
 
 /* Appearance live-preview panel — reuses the AddMemoPanel chrome and tab
-   colors, but its body is a stack of label-on-top / control-below rows. */
-.om-ap-panel { width: 320px; }
+   colors, but its body is a stack of label-on-top / control-below rows.
+   Opens on the LEFT next to the sidebar (sidebar width + 16px gap).
+   Compound `.om-add-panel.om-ap-panel` keeps specificity above the base
+   `.om-add-panel` block defined further down. */
+.om-add-panel.om-ap-panel {
+  width: 320px;
+  right: auto;
+  left: calc(260px + 16px);
+  transform-origin: bottom left;
+  transform: scale(0.2) translate(-40%, 40%);
+}
+.om-app.sidebar-collapsed .om-add-panel.om-ap-panel { left: calc(76px + 16px); }
+.om-add-panel.om-ap-panel.open { transform: none; }
 .om-ap-row {
   display: flex; flex-direction: column; gap: 6px;
   padding: 10px 0;
@@ -1252,12 +1258,28 @@ input, textarea { font: inherit; color: inherit; }
 
 /* Danger zone — stacked rows, warm warning card */
 .om-danger-grid { display: flex; flex-direction: column; }
-.om-settings-col .om-setting-card:has(.om-danger-grid) {
+.om-setting-card:has(.om-danger-grid) {
   background: color-mix(in oklab, #EF5048 5%, var(--surface-2));
   border-color: color-mix(in oklab, #EF5048 18%, var(--border));
 }
-.om-settings-col .om-setting-card:has(.om-danger-grid) .om-setting-eyebrow {
+.om-setting-card:has(.om-danger-grid) .om-setting-eyebrow {
   color: color-mix(in oklab, #EF5048 60%, var(--text-4));
+}
+/* Full-bleed danger zone — rendered as sibling of the settings grid, spans
+   both columns. The three actions sit side-by-side on wide screens. */
+.om-danger-wide { margin-top: 16px; }
+.om-danger-wide .om-danger-grid {
+  display: grid; grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0;
+}
+.om-danger-wide .om-danger-grid > .om-setting-row {
+  padding: 4px 16px;
+  border-left: 1px solid var(--border);
+}
+.om-danger-wide .om-danger-grid > .om-setting-row:first-child { border-left: 0; padding-left: 4px; }
+@media (max-width: 900px) {
+  .om-danger-wide .om-danger-grid { grid-template-columns: 1fr; }
+  .om-danger-wide .om-danger-grid > .om-setting-row { border-left: 0; padding-left: 0; }
 }
 
 /* ─ Logos showcase ─────────────────────────────────────────────────────── */
@@ -2110,7 +2132,8 @@ input, textarea { font: inherit; color: inherit; }
   border: 1px solid var(--border);
   font-size: 12.5px; line-height: 1.55; color: var(--text-2);
   display: flex; flex-direction: column; gap: 8px;
-  min-height: 76px;
+  /* Locked height so hovering different tiles never reflows the page below. */
+  min-height: 112px;
 }
 .om-built-with-detail p { margin: 0; color: var(--text); }
 
@@ -2330,9 +2353,9 @@ input, textarea { font: inherit; color: inherit; }
 .om-ext-install-btn {
   display: inline-flex; align-items: center; gap: 8px;
   padding: 10px 16px; border-radius: 10px;
-  background: var(--accent); color: #fff;
+  background: var(--accent); color: var(--accent-text, #fff);
   font-size: 13px; font-weight: 600; letter-spacing: -0.01em;
-  transition: opacity .15s, transform .12s;
+  transition: opacity .15s, transform .12s, color .2s;
   width: fit-content;
 }
 .om-ext-install-btn:hover { opacity: .88; transform: translateY(-1px); }

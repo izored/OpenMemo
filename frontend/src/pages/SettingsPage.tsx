@@ -11,40 +11,37 @@ import type { OllamaModel } from '@/types';
 type BuiltWithEntry = { name: string; url: string; desc: string };
 
 function BuiltWithGrid({ entries }: { entries: BuiltWithEntry[] }) {
-  const [focus, setFocus] = useState<BuiltWithEntry | null>(null);
-  const detail = focus ?? entries[0];
+  // Detail block keeps showing the LAST hovered tile after the mouse leaves —
+  // height stays stable instead of collapsing and shifting page layout.
+  const [focus, setFocus] = useState<BuiltWithEntry>(entries[0]);
   return (
     <>
       <div className="om-built-with-grid">
         {entries.map((d) => (
           <a
             key={d.name}
-            className={`om-built-with-tile${focus?.name === d.name ? ' focus' : ''}`}
+            className={`om-built-with-tile${focus.name === d.name ? ' focus' : ''}`}
             href={d.url}
             target="_blank"
             rel="noopener noreferrer"
             onMouseEnter={() => setFocus(d)}
             onFocus={() => setFocus(d)}
-            onMouseLeave={() => setFocus(null)}
-            onBlur={() => setFocus(null)}
           >
             {d.name}
           </a>
         ))}
       </div>
-      {detail && (
-        <div className="om-built-with-detail" aria-live="polite">
-          <p>{detail.desc}</p>
-          <a
-            className="om-creator-link"
-            href={detail.url}
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Learn more about {detail.name} →
-          </a>
-        </div>
-      )}
+      <div className="om-built-with-detail" aria-live="polite">
+        <p>{focus.desc}</p>
+        <a
+          className="om-creator-link"
+          href={focus.url}
+          target="_blank"
+          rel="noopener noreferrer"
+        >
+          Learn more about {focus.name} →
+        </a>
+      </div>
     </>
   );
 }
@@ -378,52 +375,6 @@ export function SettingsPage() {
             </div>
           </SettingCard>
 
-          <SettingCard title="Danger zone" eyebrow="Careful">
-            <div className="om-danger-grid">
-              <div className="om-setting-row">
-                <div className="om-setting-row-text">
-                  <p>Export all Memos</p>
-                  <span className="mono">JSON · Markdown bundle</span>
-                </div>
-                <a className="om-btn-secondary" href="/api/export/markdown" target="_blank" rel="noopener noreferrer">Export</a>
-              </div>
-              <div className="om-setting-row">
-                <div className="om-setting-row-text">
-                  <p>Delete cached previews</p>
-                  <span className="mono">{stats?.storage ? `Frees ~${fmtBytes(stats.storage.cache_bytes)}` : 'Thumbnail cache'}</span>
-                </div>
-                <button
-                  className="om-btn-secondary"
-                  onClick={async () => {
-                    if (!confirm('Delete all cached thumbnail previews? They re-cache automatically.')) return;
-                    try {
-                      const r = await maintenanceApi.clearCache();
-                      systemApi.stats().then(setStats).catch(() => {});
-                      alert(`Cleared ${fmtBytes(r.freed_bytes)} of cached previews.`);
-                    } catch { alert('Failed to clear cache.'); }
-                  }}
-                >Clear</button>
-              </div>
-              <div className="om-setting-row">
-                <div className="om-setting-row-text">
-                  <p>Reset workspace</p>
-                  <span className="mono">Cannot be undone</span>
-                </div>
-                <button
-                  className="om-btn-secondary danger"
-                  onClick={async () => {
-                    if (!confirm('Permanently delete ALL Memos, collections, tags, chats and files? This cannot be undone.')) return;
-                    if (!confirm('Final confirmation. Reset the entire workspace?')) return;
-                    try {
-                      await maintenanceApi.reset();
-                      alert('Workspace reset. Reloading.');
-                      location.reload();
-                    } catch { alert('Failed to reset workspace.'); }
-                  }}
-                >Reset</button>
-              </div>
-            </div>
-          </SettingCard>
         </div>
 
         {/* ── Right column ────────────────────────────────────── */}
@@ -517,6 +468,60 @@ export function SettingsPage() {
           </SettingCard>
         </div>
 
+      </div>
+
+      {/* Danger zone spans the full grid width below both columns. */}
+      <div className="om-setting-card om-danger-wide">
+        <div className="om-setting-head">
+          <span className="mono om-setting-eyebrow">Careful</span>
+          <h3 className="om-setting-title">Danger zone</h3>
+        </div>
+        <div className="om-setting-body">
+          <div className="om-danger-grid">
+            <div className="om-setting-row">
+              <div className="om-setting-row-text">
+                <p>Export all Memos</p>
+                <span className="mono">JSON · Markdown bundle</span>
+              </div>
+              <a className="om-btn-secondary" href="/api/export/markdown" target="_blank" rel="noopener noreferrer">Export</a>
+            </div>
+            <div className="om-setting-row">
+              <div className="om-setting-row-text">
+                <p>Delete cached previews</p>
+                <span className="mono">{stats?.storage ? `Frees ~${fmtBytes(stats.storage.cache_bytes)}` : 'Thumbnail cache'}</span>
+              </div>
+              <button
+                className="om-btn-secondary"
+                onClick={async () => {
+                  if (!confirm('Delete all cached thumbnail previews? They re-cache automatically.')) return;
+                  try {
+                    const r = await maintenanceApi.clearCache();
+                    systemApi.stats().then(setStats).catch(() => {});
+                    alert(`Cleared ${fmtBytes(r.freed_bytes)} of cached previews.`);
+                  } catch { alert('Failed to clear cache.'); }
+                }}
+              >Clear</button>
+            </div>
+            <div className="om-setting-row">
+              <div className="om-setting-row-text">
+                <p>Reset workspace</p>
+                <span className="mono">Cannot be undone</span>
+              </div>
+              <button
+                className="om-btn-secondary danger"
+                onClick={async () => {
+                  if (!confirm('Permanently delete ALL Memos, collections, tags, chats and files? This cannot be undone.')) return;
+                  if (!confirm('Final confirmation. Reset the entire workspace?')) return;
+                  try {
+                    await maintenanceApi.reset();
+                    alert('Workspace reset. Reloading.');
+                    location.reload();
+                  } catch { alert('Failed to reset workspace.'); }
+                }}
+              >Reset</button>
+            </div>
+          </div>
+        </div>
       </div>
 
       <div className="om-settings-footer">
