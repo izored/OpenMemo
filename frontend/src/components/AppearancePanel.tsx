@@ -182,11 +182,10 @@ export function AppearancePanel() {
             <p>Card style</p>
             <span className="mono">How Memos render in the grid</span>
           </div>
-          <div className="om-add-segment" role="tablist">
+          <div className="om-add-segment two" role="tablist">
             {[
               { v: 'minimal', l: 'Min' },
               { v: 'hybrid', l: 'Hybrid' },
-              { v: 'rich', l: 'Rich' },
             ].map((o) => (
               <button
                 key={o.v}
@@ -338,10 +337,10 @@ export function AppearancePanel() {
             <span className="mono">Background blob drift</span>
           </div>
           <div className="om-add-segment" role="tablist">
-            {([0, 1, 2, 4] as const).map((s) => (
+            {([0, 2, 4] as const).map((s) => (
               <button
                 key={s}
-                className={cn('om-add-seg', (t.blobSpeed ?? 1) === s && 'active')}
+                className={cn('om-add-seg', (t.blobSpeed ?? 2) === s && 'active')}
                 onClick={() => setTweak('blobSpeed', s)}
               >
                 <span>{s === 0 ? 'Off' : `${s}×`}</span>

@@ -108,6 +108,7 @@ function Chrome({
   style,
   dragHandleProps,
   onDelete,
+  onPin,
   bgSrc,
   children,
   dataTint,
@@ -117,6 +118,7 @@ function Chrome({
   style?: React.CSSProperties;
   dragHandleProps?: DragProps;
   onDelete: (e: React.MouseEvent) => void;
+  onPin: (e: React.MouseEvent) => void;
   bgSrc?: string | null;
   children: React.ReactNode;
   dataTint?: number;
@@ -151,6 +153,13 @@ function Chrome({
         <Icon name="grip" size={15} />
       </span>
       <div className="om-card-actions">
+        <button
+          className={cn('om-action', memo.pinned && 'pinned')}
+          onClick={onPin}
+          title={memo.pinned ? 'Unpin' : 'Pin to sidebar'}
+        >
+          <Icon name="pin" size={14} />
+        </button>
         <button className="om-action" onClick={onDelete} title="Delete">
           <Icon name="x" size={15} />
         </button>
@@ -201,6 +210,17 @@ export function MemoCard({ memo, dragHandleProps }: CardProps) {
     }
   };
 
+  const handlePin = async (e: React.MouseEvent) => {
+    e.stopPropagation();
+    try {
+      await memoApi.pin(memo.id, !memo.pinned);
+      queryClient.invalidateQueries({ queryKey: ['memos'] });
+      queryClient.invalidateQueries({ queryKey: ['memos', 'pinned'] });
+    } catch {
+      /* ignore */
+    }
+  };
+
   const src = mediaSrc(memo);
   const fallbackTint = TINT_FALLBACK[hashId(memo.id) % TINT_FALLBACK.length];
   const heroBg = `linear-gradient(135deg, ${fallbackTint} 0%, color-mix(in oklab, ${fallbackTint} 55%, #1a1a18) 100%)`;
@@ -214,7 +234,7 @@ export function MemoCard({ memo, dragHandleProps }: CardProps) {
       <Chrome
         memo={memo}
         dragHandleProps={dragHandleProps}
-        onDelete={handleDelete}
+        onDelete={handleDelete} onPin={handlePin}
         className="om-card-note"
         style={{ background: tint.bg, color: tint.text }}
         dataTint={tintIdx}
@@ -239,7 +259,7 @@ export function MemoCard({ memo, dragHandleProps }: CardProps) {
   // ── Image ──
   if (memo.type === 'image') {
     return (
-      <Chrome memo={memo} dragHandleProps={dragHandleProps} onDelete={handleDelete} bgSrc={src} className="om-card-image">
+      <Chrome memo={memo} dragHandleProps={dragHandleProps} onDelete={handleDelete} onPin={handlePin} bgSrc={src} className="om-card-image">
         <div className="om-image-frame" style={{ background: heroBg }}>
           {src ? (
             <img
@@ -263,7 +283,7 @@ export function MemoCard({ memo, dragHandleProps }: CardProps) {
   // ── Video ──
   if (memo.type === 'video') {
     return (
-      <Chrome memo={memo} dragHandleProps={dragHandleProps} onDelete={handleDelete} bgSrc={src} className="om-card-video">
+      <Chrome memo={memo} dragHandleProps={dragHandleProps} onDelete={handleDelete} onPin={handlePin} bgSrc={src} className="om-card-video">
         <div className="om-video-frame" style={{ background: heroBg }}>
           {src ? (
             <img
@@ -290,7 +310,7 @@ export function MemoCard({ memo, dragHandleProps }: CardProps) {
   // ── Document ──
   if (memo.type === 'document') {
     return (
-      <Chrome memo={memo} dragHandleProps={dragHandleProps} onDelete={handleDelete} className="om-card-doc">
+      <Chrome memo={memo} dragHandleProps={dragHandleProps} onDelete={handleDelete} onPin={handlePin} className="om-card-doc">
         <div className="om-doc-frame">
           <div className="om-doc-stack">
             <span className="om-doc-page" />
@@ -316,7 +336,7 @@ export function MemoCard({ memo, dragHandleProps }: CardProps) {
   if (memo.type === 'file' || memo.type === 'code') {
     const ext = (memo.title.includes('.') ? memo.title.split('.').pop()! : '').toLowerCase();
     return (
-      <Chrome memo={memo} dragHandleProps={dragHandleProps} onDelete={handleDelete} className="om-card-doc">
+      <Chrome memo={memo} dragHandleProps={dragHandleProps} onDelete={handleDelete} onPin={handlePin} className="om-card-doc">
         <div className="om-doc-frame">
           <FileBadge ext={ext} />
         </div>
@@ -331,7 +351,7 @@ export function MemoCard({ memo, dragHandleProps }: CardProps) {
 
   // ── Link / Article / Audio / fallback ──
   return (
-    <Chrome memo={memo} dragHandleProps={dragHandleProps} onDelete={handleDelete} bgSrc={src} className="om-card-link">
+    <Chrome memo={memo} dragHandleProps={dragHandleProps} onDelete={handleDelete} onPin={handlePin} bgSrc={src} className="om-card-link">
       <div className="om-card-hero" style={{ background: heroBg }}>
         {src ? (
           <img
