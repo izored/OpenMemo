@@ -219,10 +219,6 @@ input, textarea { font: inherit; color: inherit; }
 }
 .om-nav-item:hover { background: var(--surface-2); color: var(--text); }
 .om-nav-item.active { background: var(--surface-2); color: var(--text); }
-.om-nav-item.active::before {
-  content: ""; width: 2px; height: 14px; background: var(--accent); border-radius: 2px;
-  margin-left: -10px; margin-right: 8px;
-}
 
 .om-sidebar-section { display: flex; flex-direction: column; margin-bottom: 18px; }
 .om-section-head { display: flex; align-items: center; justify-content: space-between; padding: 0 10px; margin-bottom: 6px; }
@@ -238,7 +234,7 @@ input, textarea { font: inherit; color: inherit; }
   text-align: left;
 }
 .om-coll:hover { background: var(--surface-2); color: var(--text); }
-.om-coll.active { background: var(--surface-2); color: var(--text); box-shadow: inset 2px 0 0 var(--accent); }
+.om-coll.active { background: var(--surface-2); color: var(--text); }
 .om-coll-dot {
   width: 8px; height: 8px; border-radius: 50%;
   background: var(--text-4);
@@ -393,7 +389,9 @@ input, textarea { font: inherit; color: inherit; }
 .om-media-btn:hover { background: rgba(20,20,24,0.92); transform: translateY(-1px); }
 
 .om-lightbox {
-  position: fixed; inset: 0; z-index: 200;
+  position: fixed; top: 0; right: 0; bottom: 0;
+  left: var(--sidebar-w, 0);
+  z-index: 200;
   display: flex; align-items: center; justify-content: center;
   background: rgba(8,8,10,0.92);
   padding: 32px;
@@ -412,6 +410,71 @@ input, textarea { font: inherit; color: inherit; }
   transition: background .15s;
 }
 .om-lightbox-close:hover { background: rgba(255,255,255,0.22); }
+.om-lightbox-toolbar {
+  position: absolute; top: 18px; right: 18px;
+  display: inline-flex; align-items: center; gap: 8px;
+}
+.om-lightbox-toolbar .om-lightbox-close { position: static; }
+.om-lightbox-open {
+  display: inline-flex; align-items: center; gap: 8px;
+  height: 40px; padding: 0 14px; border-radius: 999px;
+  background: rgba(255,255,255,0.12); color: #F5F2EC;
+  border: 1px solid rgba(255,255,255,0.18);
+  font-size: 12.5px; font-weight: 500;
+  transition: background .15s;
+}
+.om-lightbox-open:hover { background: rgba(255,255,255,0.22); }
+
+/* ─ Branded confirm modal (delete prompt) ─────────────────────────────── */
+.om-confirm-overlay {
+  position: fixed; inset: 0; z-index: 250;
+  display: flex; align-items: center; justify-content: center;
+  background: rgba(8,8,10,0.62);
+  backdrop-filter: blur(8px);
+  animation: om-fade-in .15s ease;
+  padding: 24px;
+}
+.om-confirm {
+  background: var(--surface-2);
+  border: 1px solid var(--border-2);
+  border-radius: var(--r-xl);
+  box-shadow: var(--shadow-elev);
+  padding: 24px 24px 18px;
+  width: min(420px, 100%);
+  color: var(--text);
+  animation: om-confirm-in .18s ease;
+}
+@keyframes om-confirm-in {
+  from { opacity: 0; transform: translateY(8px) scale(0.98); }
+  to   { opacity: 1; transform: none; }
+}
+.om-confirm-title {
+  margin: 0 0 8px;
+  font-family: var(--font-display);
+  font-size: 16px; font-weight: 600;
+  letter-spacing: -0.012em;
+}
+.om-confirm-body {
+  margin: 0 0 20px;
+  font-size: 13px; line-height: 1.5;
+  color: var(--text-2);
+}
+.om-confirm-body strong { color: var(--text); font-weight: 600; }
+.om-confirm-actions {
+  display: flex; justify-content: flex-end; gap: 8px;
+}
+.om-confirm-btn {
+  height: 36px; padding: 0 16px; border-radius: 10px;
+  font-size: 13px; font-weight: 500;
+  background: var(--surface-3); color: var(--text-2);
+  border: 1px solid var(--border);
+  transition: background .15s, color .15s, border-color .15s;
+}
+.om-confirm-btn:hover { background: var(--elev); color: var(--text); border-color: var(--border-2); }
+.om-confirm-btn.danger {
+  background: #EF5048; color: #fff; border-color: transparent;
+}
+.om-confirm-btn.danger:hover { background: #D93C34; }
 @keyframes om-fade-in { from { opacity: 0; } to { opacity: 1; } }
 
 /* Memo detail header action row — keeps "Generate AI Summary",
@@ -479,25 +542,210 @@ input, textarea { font: inherit; color: inherit; }
 .om-card:active { cursor: grabbing; }
 .om-card-hover:hover { transform: translateY(-2px); box-shadow: var(--shadow-card-hover); border-color: var(--border-2); }
 
-/* Card hover halo — accent-tinted glow on hover */
-[data-card="hybrid"] .om-card::before {
+/* Normal — card hover halo */
+[data-card="normal"] .om-card::before {
   content: ""; position: absolute; inset: -20%;
   background: radial-gradient(50% 50% at 50% 0%, var(--accent-soft) 0%, transparent 70%);
   opacity: 0; transition: opacity .35s; pointer-events: none; z-index: 0;
 }
-[data-card="hybrid"] .om-card:hover::before { opacity: 0.7; }
+[data-card="normal"] .om-card:hover::before { opacity: 0.7; }
 .om-card > * { position: relative; z-index: 1; }
 
-/* Minimal — flat, smaller radius, no lift, no halo */
-[data-card="minimal"] .om-card { border-radius: var(--r-md); box-shadow: none; background: transparent; border-color: var(--border); }
-[data-card="minimal"] .om-card-hover:hover { transform: none; box-shadow: none; background: var(--surface); border-color: var(--border-2); }
-[data-card="minimal"] .om-card-hero, [data-card="minimal"] .om-image-frame, [data-card="minimal"] .om-video-frame { border-radius: var(--r-sm); margin: 8px 8px 0; }
-[data-card="minimal"] .om-image-frame { aspect-ratio: 4/3; }
-[data-card="minimal"] .om-card-body { padding: 14px; gap: 8px; }
-[data-card="minimal"] .om-meta { border-top: 0; padding-top: 0; }
+/* ─ Minimal mode — full-bleed media, hover overlays ──────────────────── */
+[data-card="minimal"] .om-card {
+  box-shadow: none; background: transparent;
+  border: 1px solid var(--border);
+  min-height: 260px;
+}
+[data-card="minimal"] .om-card-hover:hover { transform: none; box-shadow: none; border-color: var(--border-2); }
+/* Dominant-color backdrop glows through transparent minimal cards — disable it */
+[data-card="minimal"] .om-card-dom { display: none; }
+/* Dark theme: stroke is dark so it reads as a real edge, not a bright halo */
+[data-theme="hi"] [data-card="minimal"] .om-card { border-color: rgba(0,0,0,0.55); }
+[data-theme="hi"] [data-card="minimal"] .om-card-hover:hover { border-color: rgba(0,0,0,0.75); }
+
+/* Notes in minimal: title always; body text fades in on hover; footer stays hidden. */
+[data-card="minimal"] .om-card-note { padding: 22px; min-height: 260px; }
+[data-card="minimal"] .om-card-note .om-note-title { font-size: 21px; line-height: 1.25; letter-spacing: -0.015em; }
+[data-card="minimal"] .om-card-note .om-meta { display: none; }
+/* Notes in minimal: stack action buttons vertically (more breathing room over text) */
+[data-card="minimal"] .om-card-note .om-card-actions { flex-direction: column; }
+[data-card="minimal"] .om-card-note .om-note-text {
+  opacity: 0; transition: opacity .25s ease;
+  -webkit-line-clamp: 8;
+}
+[data-card="minimal"] .om-card-note:hover .om-note-text { opacity: 1; }
+
+/* Image: full-bleed, natural orientation, no body.
+   aspect-ratio drives height — override card min-height. */
+[data-card="minimal"] .om-card-image { min-height: 0; }
+[data-card="minimal"] .om-card-image .om-image-frame {
+  margin: 0; border-radius: var(--r-xl); aspect-ratio: 4/3;
+}
+[data-card="minimal"] .om-card-image .om-image-frame[data-orient="portrait"] { aspect-ratio: 3/4; }
+[data-card="minimal"] .om-card-image .om-image-frame img { width: 100%; height: 100%; object-fit: cover; display: block; }
+[data-card="minimal"] .om-card-image .om-card-body { display: none; }
+
+/* Video: full-bleed, play hidden until hover, no body.
+   Override card min-height — video uses its own aspect ratio, no padding below. */
+[data-card="minimal"] .om-card-video { min-height: 0; }
+[data-card="minimal"] .om-card-video .om-video-frame {
+  margin: 0; border-radius: var(--r-xl); aspect-ratio: 16/9;
+}
+[data-card="minimal"] .om-card-video .om-card-body { display: none; }
+[data-card="minimal"] .om-play { opacity: 0; transform: translate(-50%, -50%) scale(0.8); transition: opacity .2s, transform .2s; }
+[data-card="minimal"] .om-card:hover .om-play { opacity: 1; transform: translate(-50%, -50%) scale(1); }
+
+/* Link/Article: full-bleed hero, no body, domain pill always visible */
+[data-card="minimal"] .om-card-link { min-height: 0; }
+[data-card="minimal"] .om-card-link .om-card-hero {
+  margin: 0; border-radius: var(--r-xl); aspect-ratio: 4/3;
+}
+[data-card="minimal"] .om-card-link .om-card-body { display: none; }
+
+/* Doc / file / code: stronger surface contrast vs dashboard bg.
+   Use surface-3 + visible border so file cards don't blend into the page. */
+[data-card="minimal"] .om-card-doc {
+  background: var(--bg-rail);
+  border: 1px solid var(--border-2);
+  border-radius: var(--r-xl);
+  min-height: 260px;
+  display: flex; flex-direction: column;
+}
+[data-card="minimal"] .om-card-doc .om-doc-frame {
+  background: transparent;
+  flex: 1;
+  aspect-ratio: auto;
+}
+[data-card="minimal"] .om-card-doc .om-card-body {
+  padding: 14px 18px 16px;
+  border-top: 1px solid var(--border);
+  background: transparent;
+}
+[data-card="minimal"] .om-card-doc .om-card-title { font-size: 13px; }
+[data-card="minimal"] .om-card-doc .om-card-desc,
+[data-card="minimal"] .om-card-doc .om-meta { display: none; }
+
+/* Domain pill (always visible in minimal for links) */
+.om-min-domain {
+  position: absolute; bottom: 12px; left: 12px;
+  display: none;
+  align-items: center; gap: 6px;
+  background: rgba(10,10,12,0.62); backdrop-filter: blur(10px);
+  border-radius: 8px; padding: 5px 10px;
+  color: rgba(255,255,255,0.92); font-size: 11px;
+  font-family: var(--font-mono);
+  pointer-events: none; z-index: 3;
+  max-width: calc(100% - 24px);
+}
+[data-card="minimal"] .om-min-domain { display: flex; }
+[data-card="normal"]  .om-min-domain { display: none; }
+
+/* Image/Video/Audio pill: icon-only by default, expands to show title on hover */
+[data-card="minimal"] .om-card-image .om-min-domain,
+[data-card="minimal"] .om-card-video .om-min-domain,
+[data-card="minimal"] .om-card-audio .om-min-domain {
+  gap: 0;
+}
+[data-card="minimal"] .om-card-image .om-min-domain span,
+[data-card="minimal"] .om-card-video .om-min-domain span,
+[data-card="minimal"] .om-card-audio .om-min-domain span {
+  max-width: 0; opacity: 0; overflow: hidden; white-space: nowrap;
+  padding-left: 0;
+  transition: max-width .3s ease, opacity .22s ease, padding-left .3s ease;
+}
+[data-card="minimal"] .om-card-image:hover .om-min-domain span,
+[data-card="minimal"] .om-card-video:hover .om-min-domain span,
+[data-card="minimal"] .om-card-audio:hover .om-min-domain span {
+  max-width: 220px; opacity: 1; padding-left: 6px;
+}
+
+/* Media img: scale runs slower + bigger than blur (subtle parallax feel) */
+[data-card="minimal"] .om-media-img {
+  transition: filter 0.7s ease, transform 1.8s ease;
+}
+[data-card="minimal"] .om-card:hover .om-media-img {
+  filter: blur(12px);
+  transform: scale(1.10);
+}
+
+/* Icon inside expanding pill must not shrink during text reveal animation */
+.om-min-domain > svg { flex-shrink: 0; }
+
+/* Hover overlay — gradient veil + structured content.
+   Light gradient (default) for light theme; dark variant for hi-contrast theme. */
+.om-min-hover {
+  position: absolute; inset: 0;
+  background: linear-gradient(to bottom, rgba(245,242,236,0.92) 0%, rgba(245,242,236,0.55) 50%, rgba(245,242,236,0.15) 100%);
+  opacity: 0; transition: opacity .25s;
+  pointer-events: none; z-index: 1;
+  /* Bottom padding leaves room for the tags/pill row at the very bottom. */
+  padding: 16px 16px 44px;
+  display: flex; flex-direction: column;
+  color: var(--text);
+}
+.om-min-hover-desc { margin: 0; }
+/* Invisible float gives description text a virtual obstacle to flow around —
+   sits where the action cluster (arrow + pin + delete = ~98px) renders.
+   Once description text passes the float bottom, it wraps to full width. */
+.om-min-hover-desc::before {
+  content: "";
+  float: right;
+  width: 110px;
+  height: 38px;
+  shape-outside: inset(0);
+  margin: 0 0 8px 12px;
+}
+[data-theme="hi"] .om-min-hover {
+  background:
+    radial-gradient(ellipse 110% 110% at center, transparent 40%, rgba(0,0,0,0.55) 100%),
+    linear-gradient(to bottom, rgba(0,0,0,0.7) 0%, rgba(0,0,0,0.25) 55%, transparent 100%);
+  color: #fff;
+}
+.om-min-hover-desc {
+  font-size: 13px; line-height: 1.4; color: var(--text);
+  font-family: var(--font-display); font-weight: 500;
+  display: -webkit-box; -webkit-line-clamp: 6; -webkit-box-orient: vertical; overflow: hidden;
+  margin: 0;
+}
+[data-theme="hi"] .om-min-hover-desc { color: rgba(255,255,255,0.96); }
+/* Tags on same bottom row as the always-visible domain pill: pill bottom-left,
+   tags bottom-right. Date moved out — future dashboard timeline. */
+.om-min-hover-tags {
+  position: absolute;
+  bottom: 16px;
+  right: 14px;
+  left: 150px;  /* clear domain pill on left */
+  display: flex; flex-wrap: wrap; justify-content: flex-end;
+  align-items: center;
+  gap: 4px 10px;
+  font-size: 11px; color: var(--text);
+  font-family: var(--font-mono); font-weight: 500;
+}
+[data-theme="hi"] .om-min-hover-tags { color: rgba(255,255,255,0.95); }
+.om-min-hover-tags span::before { content: "•"; margin-right: 4px; color: var(--text-3); }
+[data-theme="hi"] .om-min-hover-tags span::before { color: rgba(255,255,255,0.65); }
+.om-min-hover-date { flex-shrink: 0; }
+[data-card="minimal"] .om-card:hover .om-min-hover { opacity: 1; }
+[data-card="normal"]  .om-min-hover { display: none; }
+
+/* Minimal: pin + delete sit inside the hover overlay's top-right corner.
+   Pointer-events restored because the overlay disables them on its container. */
+[data-card="minimal"] .om-card-actions {
+  top: 12px; right: 12px;
+  z-index: 4; pointer-events: auto;
+}
+[data-card="minimal"] .om-card-actions .om-action {
+  background: rgba(255,255,255,0.18);
+  backdrop-filter: blur(12px);
+  border: 1px solid rgba(255,255,255,0.22);
+  color: #fff;
+}
+[data-card="minimal"] .om-card-actions .om-action:hover { background: rgba(255,255,255,0.32); }
+[data-card="minimal"] .om-card-actions .om-action.pinned { background: var(--accent); color: var(--accent-text, #fff); border-color: transparent; }
 
 .om-card-actions {
-  position: absolute; top: 10px; right: 10px; z-index: 2;
+  position: absolute; top: 10px; right: 10px; z-index: 10;
   display: flex; gap: 4px;
   opacity: 0; transition: opacity .2s;
 }
@@ -505,7 +753,7 @@ input, textarea { font: inherit; color: inherit; }
 
 /* Drag handle — mirrors .om-action style at top-left. Shows on card hover. */
 .om-drag {
-  position: absolute; top: 10px; left: 10px; z-index: 2;
+  position: absolute; top: 10px; left: 10px; z-index: 10;
   width: 30px; height: 30px; border-radius: 8px;
   display: inline-flex; align-items: center; justify-content: center;
   background: rgba(20,20,22,0.72);
@@ -542,6 +790,8 @@ input, textarea { font: inherit; color: inherit; }
 }
 .om-card-image .om-image-frame { aspect-ratio: 1 / 1; }
 .om-card-link .om-card-hero    { aspect-ratio: 16 / 9; }
+.om-media-img { width: 100%; height: 100%; object-fit: cover; display: block; }
+
 .om-hero-noise {
   position: absolute; inset: 0; pointer-events: none;
   background-image: var(--grain);
@@ -631,7 +881,7 @@ input, textarea { font: inherit; color: inherit; }
 .om-textarea:focus { border-color: var(--border-2); }
 .om-file-badge { display: flex; flex-direction: column; align-items: center; gap: 10px; color: var(--text-2); }
 .om-file-ext { font-size: 12px; color: var(--text-3); letter-spacing: 0.04em; text-transform: lowercase; }
-.om-file-svg { width: 60%; max-width: 140px; color: var(--text-2); display: block; }
+.om-file-svg { width: 42%; max-width: 98px; color: var(--text-2); display: block; }
 .om-doc-stack { position: relative; width: 100px; }
 .om-doc-page {
   display: block;
@@ -1619,6 +1869,20 @@ input, textarea { font: inherit; color: inherit; }
 .om-add-recent-row:hover { background: rgba(255,255,255,0.06); color: var(--text); }
 [data-theme="light"] .om-add-recent-row:hover { background: rgba(0,0,0,0.04); }
 
+/* Voice — coming soon notice */
+.om-add-coming-soon {
+  display: flex; flex-direction: column; align-items: center; gap: 6px;
+  padding: 18px 14px 14px;
+  border-radius: 10px;
+  background: var(--surface-3);
+  border: 1px solid var(--border);
+  text-align: center;
+  color: var(--text-3);
+  margin-bottom: 6px;
+}
+.om-add-coming-soon p { margin: 0; font-size: 13px; color: var(--text-2); font-weight: 500; }
+.om-add-coming-soon span { font-size: 10.5px; color: var(--text-4); }
+
 /* Voice */
 .om-add-voice {
   display: flex; flex-direction: column; align-items: center; gap: 10px;
@@ -1771,7 +2035,7 @@ input, textarea { font: inherit; color: inherit; }
 
 .om-seg-swatch { width: 14px; height: 10px; border-radius: 3px; flex-shrink: 0; }
 .om-seg-swatch.s-minimal { background: transparent; box-shadow: inset 0 0 0 1px var(--border-2); }
-.om-seg-swatch.s-hybrid  { background: var(--surface-2); box-shadow: inset 0 0 0 1px var(--border-2), 0 1px 2px rgba(0,0,0,0.18); }
+.om-seg-swatch.s-normal  { background: var(--surface-2); box-shadow: inset 0 0 0 1px var(--border-2), 0 1px 2px rgba(0,0,0,0.18); }
 .om-seg-swatch.s-rich    { background: linear-gradient(135deg, var(--accent-soft), var(--surface-2)); box-shadow: 0 1px 2px rgba(0,0,0,0.25), 0 0 8px var(--accent-soft); }
 .om-seg.active .om-seg-swatch { box-shadow: inset 0 0 0 1px var(--accent), 0 1px 2px rgba(0,0,0,0.18); }
 
@@ -1933,7 +2197,7 @@ input, textarea { font: inherit; color: inherit; }
 [data-bg="image"] .om-app::before {
   opacity: 1;
   background: var(--bg-image) center/cover no-repeat;
-  filter: blur(64px) saturate(120%) brightness(1.02);
+  filter: blur(var(--bg-blur, 64px)) saturate(120%) brightness(1.02);
   animation: none;
 }
 /* Random mode: three accent-harmonious orbs at randomized positions, blurred + drifting. */
@@ -1972,7 +2236,7 @@ input, textarea { font: inherit; color: inherit; }
   transition: background 0.7s ease;
 }
 /* In dark / contrast mode, dim the background overlay so memos stay legible. */
-[data-theme="hi"][data-bg="image"] .om-app::before { filter: blur(64px) saturate(110%) brightness(0.42); }
+[data-theme="hi"][data-bg="image"] .om-app::before { filter: blur(var(--bg-blur, 64px)) saturate(110%) brightness(0.42); }
 [data-theme="hi"][data-bg="random"] .om-app::before { opacity: 0.55; }
 
 /* ─ Appearance Panel — Background controls ─────────────────────────────── */
@@ -2013,6 +2277,8 @@ input, textarea { font: inherit; color: inherit; }
   padding: 3px 6px; border-radius: 5px;
 }
 .om-ap-bg-clear:hover { color: var(--text); background: rgba(255,255,255,0.06); }
+.om-ap-blur-row { display: flex; flex-direction: column; gap: 4px; }
+.om-ap-blur-label { font-size: 10px; color: var(--text-3); }
 [data-theme="light"] .om-ap-bg-drop { background: rgba(255,255,255,0.6); border-color: rgba(0,0,0,0.12); }
 [data-theme="light"] .om-ap-bg-drop:hover { border-color: var(--accent); }
 [data-theme="light"] .om-ap-bg-clear:hover { background: rgba(0,0,0,0.05); }
