@@ -585,48 +585,39 @@ export function SettingsPage() {
             </p>
             <BuiltWithGrid entries={BUILT_WITH} />
           </SettingCard>
-        </div>
 
-      </div>
-
-      {/* Danger zone spans the full grid width below both columns. */}
-      <div className="om-setting-card om-danger-wide">
-        <div className="om-setting-head">
-          <span className="mono om-setting-eyebrow">Careful</span>
-          <h3 className="om-setting-title">Danger zone</h3>
-        </div>
-        <div className="om-setting-body">
-          <div className="om-danger-grid">
-            <div className="om-setting-row">
-              <div className="om-setting-row-text">
-                <p>Export all Memos</p>
-                <span className="mono">JSON · Markdown bundle</span>
+          <SettingCard title="Danger zone" eyebrow="Careful">
+            <div className="om-danger-grid">
+              <div className="om-setting-row">
+                <div className="om-setting-row-text">
+                  <p>Export all Memos</p>
+                  <span className="mono">JSON · Markdown bundle</span>
+                </div>
+                <a className="om-btn-secondary" href="/api/export/markdown" target="_blank" rel="noopener noreferrer">Export</a>
               </div>
-              <a className="om-btn-secondary" href="/api/export/markdown" target="_blank" rel="noopener noreferrer">Export</a>
-            </div>
-            <div className="om-setting-row">
-              <div className="om-setting-row-text">
-                <p>Delete cached previews</p>
-                <span className="mono">{stats?.storage ? `Frees ~${fmtBytes(stats.storage.cache_bytes)}` : 'Thumbnail cache'}</span>
+              <div className="om-setting-row">
+                <div className="om-setting-row-text">
+                  <p>Delete cached previews</p>
+                  <span className="mono">{stats?.storage ? `Frees ~${fmtBytes(stats.storage.cache_bytes)}` : 'Thumbnail cache'}</span>
+                </div>
+                <button
+                  className="om-btn-secondary"
+                  onClick={async () => {
+                    if (!confirm('Delete all cached thumbnail previews? They re-cache automatically.')) return;
+                    try {
+                      const r = await maintenanceApi.clearCache();
+                      systemApi.stats().then(setStats).catch(() => {});
+                      alert(`Cleared ${fmtBytes(r.freed_bytes)} of cached previews.`);
+                    } catch { alert('Failed to clear cache.'); }
+                  }}
+                >Clear</button>
               </div>
-              <button
-                className="om-btn-secondary"
-                onClick={async () => {
-                  if (!confirm('Delete all cached thumbnail previews? They re-cache automatically.')) return;
-                  try {
-                    const r = await maintenanceApi.clearCache();
-                    systemApi.stats().then(setStats).catch(() => {});
-                    alert(`Cleared ${fmtBytes(r.freed_bytes)} of cached previews.`);
-                  } catch { alert('Failed to clear cache.'); }
-                }}
-              >Clear</button>
-            </div>
-            <div className="om-setting-row">
-              <div className="om-setting-row-text">
-                <p>Reset workspace</p>
-                <span className="mono">Cannot be undone</span>
-              </div>
-              <button
+              <div className="om-setting-row">
+                <div className="om-setting-row-text">
+                  <p>Reset workspace</p>
+                  <span className="mono">Cannot be undone</span>
+                </div>
+                <button
                 className="om-btn-secondary danger"
                 onClick={async () => {
                   if (!confirm('Permanently delete ALL Memos, collections, tags, chats and files? This cannot be undone.')) return;
@@ -638,9 +629,11 @@ export function SettingsPage() {
                   } catch { alert('Failed to reset workspace.'); }
                 }}
               >Reset</button>
+              </div>
             </div>
-          </div>
+          </SettingCard>
         </div>
+
       </div>
 
       <div className="om-settings-footer">

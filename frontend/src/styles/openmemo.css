@@ -1270,22 +1270,6 @@ input, textarea { font: inherit; color: inherit; }
 .om-setting-card:has(.om-danger-grid) .om-setting-eyebrow {
   color: color-mix(in oklab, #EF5048 60%, var(--text-4));
 }
-/* Full-bleed danger zone — rendered as sibling of the settings grid, spans
-   both columns. The three actions sit side-by-side on wide screens. */
-.om-danger-wide { margin-top: 16px; }
-.om-danger-wide .om-danger-grid {
-  display: grid; grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 0;
-}
-.om-danger-wide .om-danger-grid > .om-setting-row {
-  padding: 4px 16px;
-  border-left: 1px solid var(--border);
-}
-.om-danger-wide .om-danger-grid > .om-setting-row:first-child { border-left: 0; padding-left: 4px; }
-@media (max-width: 900px) {
-  .om-danger-wide .om-danger-grid { grid-template-columns: 1fr; }
-  .om-danger-wide .om-danger-grid > .om-setting-row { border-left: 0; padding-left: 0; }
-}
 
 /* ─ Logos showcase ─────────────────────────────────────────────────────── */
 .om-logos { margin-top: 80px; padding: 40px 0 20px; border-top: 1px solid var(--border); }
