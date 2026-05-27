@@ -71,27 +71,14 @@ class MemoResponse(BaseModel):
 
 # --- Routes ---
 
-_SORT_MODES = {"recent", "oldest", "title", "custom"}
-
-
-def _apply_sort(query, sort: str):
-    """Apply ORDER BY based on the requested sort mode.
-
-    - recent (default): newest first by created_at. Manual sort_order is
-      intentionally ignored so freshly added memos always land on top.
-    - oldest: oldest first.
-    - title: alphabetical, case-insensitive.
-    - custom: respects manual drag-to-reorder (sort_order desc), then
-      created_at as a stable tiebreaker.
+def _apply_sort(query):
+    """Single sort order: most recent on top. `recency_at` is bumped to
+    NOW() on memo creation and rewritten when the user drags a card, so
+    "recent" implicitly captures both fresh memos and explicit drag intent.
+    `created_at` is the stable tiebreaker for memos created in the same
+    millisecond (test seeds, bulk imports).
     """
-    if sort == "oldest":
-        return query.order_by(asc(Memo.created_at))
-    if sort == "title":
-        return query.order_by(func.lower(Memo.title).asc())
-    if sort == "custom":
-        return query.order_by(desc(Memo.sort_order), desc(Memo.created_at))
-    # recent / unknown -> default
-    return query.order_by(desc(Memo.created_at))
+    return query.order_by(desc(Memo.recency_at), desc(Memo.created_at))
 
 
 @router.get("")
@@ -100,15 +87,12 @@ async def list_memos(
     type: Optional[str] = None,
     collection_id: Optional[str] = None,
     search: Optional[str] = None,
-    sort: str = "recent",
     offset: int = 0,
     limit: int = 50,
     db: AsyncSession = Depends(get_db),
 ):
     if workspace_id:
         workspace_id = sanitize_workspace_id(workspace_id)
-    if sort not in _SORT_MODES:
-        sort = "recent"
     """List memos with filtering and pagination."""
     query = select(Memo).options(
         selectinload(Memo.collections),
@@ -133,7 +117,7 @@ async def list_memos(
     total = (await db.execute(count_query)).scalar()
 
     # Fetch with pagination
-    query = _apply_sort(query, sort).offset(offset).limit(limit)
+    query = _apply_sort(query).offset(offset).limit(limit)
     result = await db.execute(query)
     memos = result.scalars().all()
     
@@ -338,20 +322,22 @@ async def update_memo(memo_id: str, data: MemoUpdate, db: AsyncSession = Depends
     return {"id": memo.id, "status": "updated"}
 
 
-class SortUpdate(BaseModel):
-    sort_order: int
+class RecencyUpdate(BaseModel):
+    recency_at: datetime
 
 
-@router.put("/{memo_id}/sort")
-async def update_memo_sort(memo_id: str, body: SortUpdate, db: AsyncSession = Depends(get_db)):
-    """Update a memo's sort order."""
+@router.put("/{memo_id}/recency")
+async def update_memo_recency(memo_id: str, body: RecencyUpdate, db: AsyncSession = Depends(get_db)):
+    """Set a memo's recency timestamp directly. Used by drag-to-reorder to
+    place the memo at a chosen position in the recency-sorted list.
+    """
     memo = await db.get(Memo, memo_id)
     if not memo:
         raise HTTPException(status_code=404, detail="Memo not found")
-    memo.sort_order = body.sort_order
+    memo.recency_at = body.recency_at
     memo.updated_at = datetime.utcnow()
     await db.commit()
-    return {"id": memo.id, "sort_order": memo.sort_order, "status": "updated"}
+    return {"id": memo.id, "recency_at": memo.recency_at.isoformat(), "status": "updated"}
 
 
 class PinUpdate(BaseModel):
@@ -372,12 +358,12 @@ async def update_memo_pin(memo_id: str, body: PinUpdate, db: AsyncSession = Depe
 
 @router.get("/pinned/list")
 async def list_pinned_memos(db: AsyncSession = Depends(get_db)):
-    """Return memos with pinned=True, ordered by sort_order desc, then recency."""
+    """Return memos with pinned=True, ordered by recency."""
     rows = (
         await db.execute(
             select(Memo)
             .where(Memo.pinned.is_(True))
-            .order_by(desc(Memo.sort_order), desc(Memo.created_at))
+            .order_by(desc(Memo.recency_at), desc(Memo.created_at))
         )
     ).scalars().all()
     return [

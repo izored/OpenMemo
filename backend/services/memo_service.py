@@ -88,6 +88,7 @@ class MemoService(BaseService[Memo]):
         )
         max_order = max_order_result.scalar() or 0
 
+        now = datetime.utcnow()
         memo = Memo(
             id=str(uuid.uuid4()),
             workspace_id=workspace_id,
@@ -103,8 +104,9 @@ class MemoService(BaseService[Memo]):
             file_path=file_path,
             notes=notes,
             sort_order=max_order + 1,
-            created_at=datetime.utcnow(),
-            updated_at=datetime.utcnow(),
+            created_at=now,
+            updated_at=now,
+            recency_at=now,
         )
 
         # Add collections

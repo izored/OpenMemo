@@ -56,3 +56,11 @@ async def _run_migrations():
         if "pinned" not in columns:
             await db.execute("ALTER TABLE memos ADD COLUMN pinned BOOLEAN DEFAULT 0")
             await db.commit()
+
+        # recency_at drives the single sort order — "recent on top" with drag
+        # promotion. Backfilled from created_at so existing libraries keep their
+        # current order until the user drags something.
+        if "recency_at" not in columns:
+            await db.execute("ALTER TABLE memos ADD COLUMN recency_at TIMESTAMP")
+            await db.execute("UPDATE memos SET recency_at = created_at WHERE recency_at IS NULL")
+            await db.commit()

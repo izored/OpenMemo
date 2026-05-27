@@ -15,12 +15,11 @@ async function fetchJSON<T>(url: string, options?: RequestInit): Promise<T> {
 
 // Memos
 export const memoApi = {
-  list: (params?: { type?: string; collection_id?: string; search?: string; sort?: 'recent' | 'oldest' | 'title' | 'custom'; offset?: number; limit?: number }) => {
+  list: (params?: { type?: string; collection_id?: string; search?: string; offset?: number; limit?: number }) => {
     const search = new URLSearchParams();
     if (params?.type && params.type !== 'all') search.set('type', params.type);
     if (params?.collection_id) search.set('collection_id', params.collection_id);
     if (params?.search) search.set('search', params.search);
-    if (params?.sort) search.set('sort', params.sort);
     if (params?.offset) search.set('offset', String(params.offset));
     if (params?.limit) search.set('limit', String(params.limit));
     return fetchJSON<{ items: any[]; total: number }>(`/memos?${search}`);
@@ -28,9 +27,10 @@ export const memoApi = {
   get: (id: string) => fetchJSON<any>(`/memos/${id}`),
   create: (data: any) => fetchJSON<{ id: string }>('/memos', { method: 'POST', body: JSON.stringify(data) }),
   update: (id: string, data: any) => fetchJSON<any>(`/memos/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
-  updateSort: (id: string, sort_order: number) => fetchJSON<any>(`/memos/${id}/sort`, { method: 'PUT', body: JSON.stringify({ sort_order }) }),
+  setRecency: (id: string, recency_at: string) =>
+    fetchJSON<{ id: string; recency_at: string }>(`/memos/${id}/recency`, { method: 'PUT', body: JSON.stringify({ recency_at }) }),
   pin: (id: string, pinned: boolean) => fetchJSON<{ id: string; pinned: boolean }>(`/memos/${id}/pin`, { method: 'PUT', body: JSON.stringify({ pinned }) }),
-  listPinned: () => fetchJSON<{ id: string; type: string; title: string; thumbnail_path?: string; source_domain?: string; source_favicon?: string; pinned: boolean; sort_order: number }[]>('/memos/pinned/list'),
+  listPinned: () => fetchJSON<{ id: string; type: string; title: string; thumbnail_path?: string; source_domain?: string; source_favicon?: string; pinned: boolean }[]>('/memos/pinned/list'),
   delete: (id: string) => fetchJSON<any>(`/memos/${id}`, { method: 'DELETE' }),
   summary: (id: string) => fetchJSON<{ summary: string }>(`/memos/${id}/summary`, { method: 'POST' }),
   related: (id: string) => fetchJSON<any[]>(`/memos/${id}/related`),

@@ -58,8 +58,6 @@ function useViewportColumns(userCols: number): number {
 export function MemoGrid({ memos: serverMemos }: MemoGridProps) {
   const queryClient = useQueryClient();
   const tweaks = useAppStore((s) => s.tweaks);
-  const sortMode = useAppStore((s) => s.sortMode);
-  const setSortMode = useAppStore((s) => s.setSortMode);
   const columns = useViewportColumns(tweaks.gridColumns || 4);
   const gap = tweaks.density === 'compact' ? 12 : tweaks.density === 'roomy' ? 28 : 20;
 
@@ -113,12 +111,14 @@ export function MemoGrid({ memos: serverMemos }: MemoGridProps) {
     }
     reorderingRef.current = true;
     setActiveId(null);
-    // Manual drag-to-reorder only persists visually in "custom" sort mode.
-    // If the user is in any other mode, switch them so they immediately see
-    // the reorder they just performed (otherwise the cards would snap back
-    // to the active sort on next fetch).
-    if (sortMode !== 'custom') setSortMode('custom');
-    Promise.all(finalMemos.map((m, i) => memoApi.updateSort(m.id, finalMemos.length - i)))
+    // Drag-to-reorder writes recency_at on each card: top card gets NOW,
+    // each next card gets 1s earlier. The result is the dragged order,
+    // and a brand-new memo created later still lands on top because its
+    // recency_at = NOW() is later than every rewritten value.
+    const base = Date.now();
+    Promise.all(
+      finalMemos.map((m, i) => memoApi.setRecency(m.id, new Date(base - i * 1000).toISOString()))
+    )
       .then(() => {
         reorderingRef.current = false;
         queryClient.invalidateQueries({ queryKey: ['memos'] });

@@ -80,6 +80,9 @@ class Memo(Base):
     is_processed = Column(Boolean, default=False)
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    # Drives the single "recent on top" sort. Bumped to now() on create
+    # and rewritten by the drag-to-reorder endpoint.
+    recency_at = Column(DateTime, default=datetime.utcnow)
     
     workspace = relationship("Workspace", back_populates="memos")
     collections = relationship("Collection", secondary=memo_collections, back_populates="memos")
