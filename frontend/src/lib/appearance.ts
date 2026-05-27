@@ -85,7 +85,7 @@ export function randomBlobPositions(): [number, number][] {
 export interface Tweaks {
   theme: 'light' | 'dark';
   accent: string;
-  cardStyle: 'minimal' | 'hybrid';
+  cardStyle: 'minimal' | 'normal';
   density: 'compact' | 'comfy' | 'roomy';
   typePair: 'satoshi' | 'general' | 'cabinet';
   layout: 'boxed' | 'full';
@@ -93,6 +93,7 @@ export interface Tweaks {
   bgMode: 'none' | 'random' | 'image';
   bgImage: string;
   bgFade: number;
+  bgBlur: number;
   bgPalette: string[];
   bgPositions: [number, number][];
   customAccents: [string, string];
@@ -121,6 +122,7 @@ export function applyTweaks(t: Tweaks) {
   root.dataset.card = t.cardStyle;
   root.dataset.layout = t.layout || 'boxed';
   root.dataset.bg = t.bgMode || 'none';
+  root.style.setProperty('--bg-blur', `${t.bgBlur ?? 64}px`);
   root.style.setProperty('--accent', t.accent);
   root.style.setProperty('--accent-deep', shade(t.accent, -28));
   root.style.setProperty('--accent-soft', shade(t.accent, 28) + '20');
@@ -157,7 +159,7 @@ export const ACCENT_OPTIONS = ['#F4825A', '#E8D77B', '#7DB9E8', '#C3F26B', '#E8E
 export const DEFAULT_TWEAKS: Tweaks = {
   theme: 'light',
   accent: '#F4825A',
-  cardStyle: 'hybrid',
+  cardStyle: 'normal',
   density: 'roomy',
   typePair: 'cabinet',
   layout: 'boxed',
@@ -165,6 +167,7 @@ export const DEFAULT_TWEAKS: Tweaks = {
   bgMode: 'random',
   bgImage: '',
   bgFade: 0,
+  bgBlur: 64,
   bgPalette: ['#F4825A', '#E8C087', '#C76E4A'],
   bgPositions: [
     [22, 24],

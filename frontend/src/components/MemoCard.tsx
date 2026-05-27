@@ -22,6 +22,29 @@ function hashId(id: string): number {
   return h;
 }
 
+function youtubeEmbed(url?: string | null): string | null {
+  if (!url) return null;
+  try {
+    const u = new URL(url);
+    let id: string | null = null;
+    if (u.hostname.includes('youtube.com')) id = u.searchParams.get('v');
+    else if (u.hostname === 'youtu.be') id = u.pathname.slice(1);
+    return id ? `https://www.youtube.com/embed/${id}?autoplay=1&rel=0` : null;
+  } catch {
+    return null;
+  }
+}
+
+function rootDomain(domain?: string | null): string {
+  if (!domain) return '';
+  try {
+    const host = domain.includes('//') ? new URL(domain).hostname : domain.split('/')[0];
+    return host.replace(/^www\./, '');
+  } catch {
+    return domain.split('/')[0];
+  }
+}
+
 function typeIcon(t: MemoType) {
   return (
     { note: 'fileText', link: 'link', article: 'globe', image: 'image', video: 'video', document: 'file', audio: 'mic', code: 'code', file: 'file' } as Record<string, string>
@@ -112,6 +135,8 @@ function Chrome({
   bgSrc,
   children,
   dataTint,
+  onCardClick,
+  onOpen,
 }: {
   memo: Memo;
   className?: string;
@@ -122,13 +147,14 @@ function Chrome({
   bgSrc?: string | null;
   children: React.ReactNode;
   dataTint?: number;
+  onCardClick?: () => void;
+  onOpen?: (e: React.MouseEvent) => void;
 }) {
   const navigate = useNavigate();
-  // PointerSensor in MemoGrid has activationConstraint distance: 8, so a
-  // simple click never triggers drag — only a pointerdown that moves >8px
-  // does. Spreading the drag listeners onto the card root makes the *entire
-  // thumbnail* a drag surface; the corner grip icon stays as a visual cue
-  // (and remains a valid drag surface itself).
+  const handleClick = () => {
+    if (onCardClick) onCardClick();
+    else navigate(`/memo/${memo.id}`);
+  };
   return (
     <div
       {...(dragHandleProps?.attributes || {})}
@@ -136,23 +162,19 @@ function Chrome({
       className={cn('om-card om-card-hover', className)}
       style={style}
       data-tint={dataTint !== undefined ? String(dataTint) : undefined}
-      onClick={() => navigate(`/memo/${memo.id}`)}
+      onClick={handleClick}
     >
       {bgSrc && (
         <div className="om-card-dom" aria-hidden>
           <span style={{ backgroundImage: `url(${bgSrc})` }} />
         </div>
       )}
-      <span
-        className="om-drag"
-        onClick={(e) => e.stopPropagation()}
-        title="Drag to reorder / collection"
-        aria-label="Drag handle"
-        aria-hidden
-      >
-        <Icon name="grip" size={15} />
-      </span>
       <div className="om-card-actions">
+        {onOpen && (
+          <button className="om-action" onClick={onOpen} title="Open memo page" aria-label="Open memo">
+            <Icon name="arrowUpRight" size={14} />
+          </button>
+        )}
         <button
           className={cn('om-action', memo.pinned && 'pinned')}
           onClick={onPin}
@@ -198,16 +220,41 @@ interface CardProps {
 
 export function MemoCard({ memo, dragHandleProps }: CardProps) {
   const queryClient = useQueryClient();
+  const navigate = useNavigate();
+  const [imageOrient, setImageOrient] = React.useState<'landscape' | 'portrait'>('landscape');
+  const [lightboxOpen, setLightboxOpen] = React.useState(false);
+  const [confirmDeleteOpen, setConfirmDeleteOpen] = React.useState(false);
 
-  const handleDelete = async (e: React.MouseEvent) => {
+  React.useEffect(() => {
+    if (!lightboxOpen && !confirmDeleteOpen) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        setLightboxOpen(false);
+        setConfirmDeleteOpen(false);
+      }
+    };
+    document.addEventListener('keydown', onKey);
+    return () => document.removeEventListener('keydown', onKey);
+  }, [lightboxOpen, confirmDeleteOpen]);
+
+  const goDetail = (e: React.MouseEvent) => {
     e.stopPropagation();
-    if (!confirm(`Delete "${memo.title}"?`)) return;
+    navigate(`/memo/${memo.id}`);
+  };
+
+  const confirmDelete = async () => {
+    setConfirmDeleteOpen(false);
     try {
       await memoApi.delete(memo.id);
       queryClient.invalidateQueries({ queryKey: ['memos'] });
     } catch {
       alert('Failed to delete memo');
     }
+  };
+
+  const handleDelete = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    setConfirmDeleteOpen(true);
   };
 
   const handlePin = async (e: React.MouseEvent) => {
@@ -225,16 +272,38 @@ export function MemoCard({ memo, dragHandleProps }: CardProps) {
   const fallbackTint = TINT_FALLBACK[hashId(memo.id) % TINT_FALLBACK.length];
   const heroBg = `linear-gradient(135deg, ${fallbackTint} 0%, color-mix(in oklab, ${fallbackTint} 55%, #1a1a18) 100%)`;
 
+  const confirmModal = confirmDeleteOpen ? (
+    <div
+      className="om-confirm-overlay"
+      role="dialog"
+      aria-modal="true"
+      onClick={(e) => { e.stopPropagation(); setConfirmDeleteOpen(false); }}
+    >
+      <div className="om-confirm" onClick={(e) => e.stopPropagation()}>
+        <h3 className="om-confirm-title">Delete memo?</h3>
+        <p className="om-confirm-body">
+          <strong>{memo.title}</strong> will be permanently removed. This cannot be undone.
+        </p>
+        <div className="om-confirm-actions">
+          <button className="om-confirm-btn" onClick={() => setConfirmDeleteOpen(false)}>Cancel</button>
+          <button className="om-confirm-btn danger" onClick={confirmDelete} autoFocus>Delete</button>
+        </div>
+      </div>
+    </div>
+  ) : null;
+
   // ── Note ──
   if (memo.type === 'note') {
     const tintIdx = hashId(memo.id) % NOTE_TINTS.length;
     const tint = NOTE_TINTS[tintIdx];
     const body = memo.content_text || memo.content_raw || memo.description || '';
     return (
+      <>
       <Chrome
         memo={memo}
         dragHandleProps={dragHandleProps}
         onDelete={handleDelete} onPin={handlePin}
+        onOpen={goDetail}
         className="om-card-note"
         style={{ background: tint.bg, color: tint.text }}
         dataTint={tintIdx}
@@ -253,64 +322,159 @@ export function MemoCard({ memo, dragHandleProps }: CardProps) {
           </span>
         </div>
       </Chrome>
+      {confirmModal}
+      </>
     );
   }
 
   // ── Image ──
   if (memo.type === 'image') {
     return (
-      <Chrome memo={memo} dragHandleProps={dragHandleProps} onDelete={handleDelete} onPin={handlePin} bgSrc={src} className="om-card-image">
-        <div className="om-image-frame" style={{ background: heroBg }}>
-          {src ? (
-            <img
-              src={src}
-              alt=""
-              style={{ width: '100%', height: '100%', objectFit: 'cover' }}
-              onError={(e) => ((e.target as HTMLImageElement).style.display = 'none')}
-            />
-          ) : (
-            <div className="om-hero-noise" />
-          )}
-        </div>
-        <div className="om-card-body tight">
-          <h3 className="om-card-title">{memo.title}</h3>
-          <Meta memo={memo} />
-        </div>
-      </Chrome>
+      <>
+        <Chrome
+          memo={memo}
+          dragHandleProps={dragHandleProps}
+          onDelete={handleDelete}
+          onPin={handlePin}
+          bgSrc={src}
+          className="om-card-image"
+          onCardClick={() => setLightboxOpen(true)}
+          onOpen={goDetail}
+        >
+          <div className="om-image-frame" data-orient={imageOrient} style={{ background: heroBg }}>
+            {src ? (
+              <img
+                src={src}
+                alt=""
+                className="om-media-img"
+                onLoad={(e) => {
+                  const img = e.target as HTMLImageElement;
+                  setImageOrient(img.naturalHeight > img.naturalWidth ? 'portrait' : 'landscape');
+                }}
+                onError={(e) => ((e.target as HTMLImageElement).style.display = 'none')}
+              />
+            ) : (
+              <div className="om-hero-noise" />
+            )}
+            <div className="om-min-hover" />
+          </div>
+          <div className="om-card-body tight">
+            <h3 className="om-card-title">{memo.title}</h3>
+            <Meta memo={memo} />
+          </div>
+          <div className="om-min-domain">
+            <Icon name="image" size={12} />
+            <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{memo.title}</span>
+          </div>
+        </Chrome>
+        {lightboxOpen && src && (
+          <div className="om-lightbox" role="dialog" aria-modal="true" onClick={() => setLightboxOpen(false)}>
+            <img src={src} alt={memo.title} onClick={(e) => e.stopPropagation()} />
+            <div className="om-lightbox-toolbar" onClick={(e) => e.stopPropagation()}>
+              <button
+                className="om-lightbox-open"
+                onClick={() => { setLightboxOpen(false); navigate(`/memo/${memo.id}`); }}
+              >
+                <Icon name="arrowUpRight" size={14} />
+                <span>Open memo page</span>
+              </button>
+              <button className="om-lightbox-close" onClick={() => setLightboxOpen(false)} aria-label="Close">
+                <Icon name="x" size={20} />
+              </button>
+            </div>
+          </div>
+        )}
+        {confirmModal}
+      </>
     );
   }
 
   // ── Video ──
   if (memo.type === 'video') {
+    const localVideo = memo.file_path ? `/api/memos/${memo.id}/file` : null;
+    const ytEmbed = youtubeEmbed(memo.source_url);
+    const canPlay = localVideo || ytEmbed;
     return (
-      <Chrome memo={memo} dragHandleProps={dragHandleProps} onDelete={handleDelete} onPin={handlePin} bgSrc={src} className="om-card-video">
-        <div className="om-video-frame" style={{ background: heroBg }}>
-          {src ? (
-            <img
-              src={src}
-              alt=""
-              style={{ width: '100%', height: '100%', objectFit: 'cover' }}
-              onError={(e) => ((e.target as HTMLImageElement).style.display = 'none')}
-            />
-          ) : (
-            <div className="om-hero-noise" />
-          )}
-          <div className="om-play">
-            <Icon name="play" size={16} stroke={0} style={{ fill: 'currentColor' }} />
+      <>
+        <Chrome
+          memo={memo}
+          dragHandleProps={dragHandleProps}
+          onDelete={handleDelete}
+          onPin={handlePin}
+          bgSrc={src}
+          className="om-card-video"
+          onCardClick={canPlay ? () => setLightboxOpen(true) : undefined}
+          onOpen={goDetail}
+        >
+          <div className="om-video-frame" style={{ background: heroBg }}>
+            {src ? (
+              <img
+                src={src}
+                alt=""
+                className="om-media-img"
+                onError={(e) => ((e.target as HTMLImageElement).style.display = 'none')}
+              />
+            ) : (
+              <div className="om-hero-noise" />
+            )}
+            <div className="om-min-hover" />
+            <div className="om-play">
+              <Icon name="play" size={16} stroke={0} style={{ fill: 'currentColor' }} />
+            </div>
           </div>
-        </div>
-        <div className="om-card-body">
-          <h3 className="om-card-title">{memo.title}</h3>
-          <Meta memo={memo} />
-        </div>
-      </Chrome>
+          <div className="om-card-body">
+            <h3 className="om-card-title">{memo.title}</h3>
+            <Meta memo={memo} />
+          </div>
+          <div className="om-min-domain">
+            <Icon name="video" size={12} />
+            <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{memo.title}</span>
+          </div>
+        </Chrome>
+        {lightboxOpen && canPlay && (
+          <div className="om-lightbox" role="dialog" aria-modal="true" onClick={() => setLightboxOpen(false)}>
+            {ytEmbed ? (
+              <iframe
+                src={ytEmbed}
+                title={memo.title}
+                allow="autoplay; encrypted-media; picture-in-picture"
+                allowFullScreen
+                onClick={(e) => e.stopPropagation()}
+                style={{ width: 'min(90vw, 1280px)', aspectRatio: '16/9', border: 0, borderRadius: 12, boxShadow: '0 30px 80px rgba(0,0,0,0.5)' }}
+              />
+            ) : (
+              <video
+                src={localVideo!}
+                controls
+                autoPlay
+                onClick={(e) => e.stopPropagation()}
+                style={{ maxWidth: '100%', maxHeight: '100%', borderRadius: 12 }}
+              />
+            )}
+            <div className="om-lightbox-toolbar" onClick={(e) => e.stopPropagation()}>
+              <button
+                className="om-lightbox-open"
+                onClick={() => { setLightboxOpen(false); navigate(`/memo/${memo.id}`); }}
+              >
+                <Icon name="arrowUpRight" size={14} />
+                <span>Open memo page</span>
+              </button>
+              <button className="om-lightbox-close" onClick={() => setLightboxOpen(false)} aria-label="Close">
+                <Icon name="x" size={20} />
+              </button>
+            </div>
+          </div>
+        )}
+        {confirmModal}
+      </>
     );
   }
 
   // ── Document ──
   if (memo.type === 'document') {
     return (
-      <Chrome memo={memo} dragHandleProps={dragHandleProps} onDelete={handleDelete} onPin={handlePin} className="om-card-doc">
+      <>
+      <Chrome memo={memo} dragHandleProps={dragHandleProps} onDelete={handleDelete} onPin={handlePin} onOpen={goDetail} className="om-card-doc">
         <div className="om-doc-frame">
           <div className="om-doc-stack">
             <span className="om-doc-page" />
@@ -329,6 +493,8 @@ export function MemoCard({ memo, dragHandleProps }: CardProps) {
           <Meta memo={memo} />
         </div>
       </Chrome>
+      {confirmModal}
+      </>
     );
   }
 
@@ -336,7 +502,8 @@ export function MemoCard({ memo, dragHandleProps }: CardProps) {
   if (memo.type === 'file' || memo.type === 'code') {
     const ext = (memo.title.includes('.') ? memo.title.split('.').pop()! : '').toLowerCase();
     return (
-      <Chrome memo={memo} dragHandleProps={dragHandleProps} onDelete={handleDelete} onPin={handlePin} className="om-card-doc">
+      <>
+      <Chrome memo={memo} dragHandleProps={dragHandleProps} onDelete={handleDelete} onPin={handlePin} onOpen={goDetail} className="om-card-doc">
         <div className="om-doc-frame">
           <FileBadge ext={ext} />
         </div>
@@ -346,29 +513,62 @@ export function MemoCard({ memo, dragHandleProps }: CardProps) {
           <Meta memo={memo} />
         </div>
       </Chrome>
+      {confirmModal}
+      </>
     );
   }
 
   // ── Link / Article / Audio / fallback ──
+  const domain = rootDomain(memo.source_domain);
   return (
-    <Chrome memo={memo} dragHandleProps={dragHandleProps} onDelete={handleDelete} onPin={handlePin} bgSrc={src} className="om-card-link">
+    <>
+    <Chrome memo={memo} dragHandleProps={dragHandleProps} onDelete={handleDelete} onPin={handlePin} onOpen={goDetail} bgSrc={src} className="om-card-link">
       <div className="om-card-hero" style={{ background: heroBg }}>
         {src ? (
           <img
             src={src}
             alt=""
-            style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+            className="om-media-img"
             onError={(e) => ((e.target as HTMLImageElement).style.display = 'none')}
           />
         ) : (
           <div className="om-hero-noise" />
         )}
       </div>
+      {/* Normal mode body */}
       <div className="om-card-body">
         <h3 className="om-card-title">{memo.title}</h3>
         {memo.description && <p className="om-card-desc">{memo.description}</p>}
         <Meta memo={memo} />
       </div>
+      {/* Minimal mode: always-visible domain pill */}
+      <div className="om-min-domain">
+        {memo.source_favicon ? (
+          <img
+            src={memo.source_favicon}
+            alt=""
+            width={12}
+            height={12}
+            style={{ borderRadius: 3, flexShrink: 0 }}
+            onError={(e) => ((e.target as HTMLImageElement).style.display = 'none')}
+          />
+        ) : null}
+        <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{domain}</span>
+      </div>
+      {/* Minimal mode: hover reveals desc + tags + date.
+          Domain pill stays in same position (rendered above as om-min-domain). */}
+      <div className="om-min-hover">
+        <p className="om-min-hover-desc">{memo.description || memo.title}</p>
+        {memo.tags && memo.tags.length > 0 && (
+          <div className="om-min-hover-tags">
+            {memo.tags.slice(0, 8).map((t) => (
+              <span key={t}>{t}</span>
+            ))}
+          </div>
+        )}
+      </div>
     </Chrome>
+    {confirmModal}
+    </>
   );
 }

@@ -23,6 +23,59 @@ from backend.db.models import (
 router = APIRouter(prefix="/api/maintenance", tags=["maintenance"])
 
 
+@router.post("/backfill-video-thumbs")
+async def backfill_video_thumbnails(db: AsyncSession = Depends(get_db)):
+    """Re-run thumbnail extraction for all video memos missing thumbnail_path.
+
+    Uses the same extractor as the ingest path. Skips when ffmpeg isn't
+    installed. Returns counts so the caller knows how many succeeded.
+    """
+    from sqlalchemy import select
+    from datetime import datetime
+    from backend.core.video import extract_video_thumbnail, ffmpeg_available
+    from backend.core.file_paths import resolve_memo_path
+
+    if not ffmpeg_available():
+        raise HTTPException(status_code=503, detail="ffmpeg not available on server PATH")
+
+    thumbs_dir = Path(settings.FILES_DIR) / "thumbs"
+    thumbs_dir.mkdir(parents=True, exist_ok=True)
+
+    rows = (
+        await db.execute(
+            select(Memo).where(Memo.type == "video", Memo.file_path.isnot(None))
+        )
+    ).scalars().all()
+
+    processed = 0
+    skipped = 0
+    failed = 0
+    for memo in rows:
+        if memo.thumbnail_path and Path(str(memo.thumbnail_path).lstrip("/")).is_absolute() is False:
+            # Already has a thumbnail path string; only redo if file actually missing
+            local = thumbs_dir / f"{memo.id}.jpg"
+            if local.exists():
+                skipped += 1
+                continue
+
+        real_path = resolve_memo_path(memo.file_path) if memo.file_path else None
+        if not real_path or not Path(real_path).exists():
+            failed += 1
+            continue
+
+        target = thumbs_dir / f"{memo.id}.jpg"
+        ok = await extract_video_thumbnail(real_path, target)
+        if ok:
+            memo.thumbnail_path = f"/api/files/thumb/{memo.id}.jpg"
+            memo.updated_at = datetime.utcnow()
+            processed += 1
+        else:
+            failed += 1
+
+    await db.commit()
+    return {"processed": processed, "skipped_existing": skipped, "failed": failed, "total_videos": len(rows)}
+
+
 def _dir_size(path: Path) -> int:
     if not path.exists():
         return 0
