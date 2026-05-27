@@ -105,36 +105,27 @@ export function Layout() {
           Sits BEHIND the memo grid (z=0, same as the bg blob layer) so the
           UI stays fully visible during the swap. Going dark: purple-tinted
           dusk rolls in from the bottom. Going light: warm dawn lifts from
-          the top. Two phases, each 3s, sequential:
-            0–3s: clip-path tidal expansion to full screen.
-            3–6s: opacity fades to reveal the new background.
-          The radial gradient has its OWN alpha falloff so the leading edge
-          of the bloom is soft, not a hard circle boundary. */}
+          the top.
+          No clip-path — the gradient itself is sized via the `--r` CSS
+          variable. The outer alpha stop (`transparent 100%`) makes the
+          leading edge softly fade INTO the background, no hard boundary.
+          Two phases (sequential, 2× slower than v1): 0–6s tidal grow,
+          0–12s opacity fade (full opacity for the first 6s, then fades). */}
       <AnimatePresence>
         {overlayKey > 0 && (
           <motion.div
             key={overlayKey}
-            initial={{
-              clipPath: overlayTheme === 'dark'
-                ? 'circle(4% at 50% 100%)'
-                : 'circle(4% at 50% 0%)',
-              opacity: 1,
-            }}
-            animate={{
-              clipPath: overlayTheme === 'dark'
-                ? 'circle(170% at 50% 100%)'
-                : 'circle(170% at 50% 0%)',
-              opacity: [1, 1, 0],
-            }}
+            initial={{ '--r': '3%', opacity: 1 } as any}
+            animate={{ '--r': '180%', opacity: [1, 1, 0] } as any}
             transition={{
-              clipPath: { duration: 3, ease: [0.2, 0.8, 0.2, 1] },
-              opacity: { duration: 6, times: [0, 0.5, 1], ease: [0.4, 0, 0.2, 1] },
+              '--r': { duration: 6, ease: [0.2, 0.8, 0.2, 1] as [number, number, number, number] },
+              opacity: { duration: 12, times: [0, 0.5, 1], ease: [0.4, 0, 0.2, 1] as [number, number, number, number] },
             }}
             style={{
               position: 'fixed', inset: 0, zIndex: 0, pointerEvents: 'none',
               background: overlayTheme === 'dark'
-                ? 'radial-gradient(ellipse 100% 90% at 50% 100%, rgba(140, 70, 200, 0.55) 0%, rgba(60, 30, 110, 0.78) 30%, rgba(10, 8, 22, 0.88) 60%, rgba(6, 5, 14, 0.55) 85%, rgba(6, 5, 14, 0) 100%)'
-                : 'radial-gradient(ellipse 100% 90% at 50% 0%, rgba(255, 200, 140, 0.7) 0%, rgba(255, 220, 180, 0.78) 30%, rgba(255, 245, 225, 0.88) 60%, rgba(255, 253, 248, 0.55) 85%, rgba(255, 253, 248, 0) 100%)',
+                ? 'radial-gradient(ellipse var(--r) var(--r) at 50% 100%, rgba(140, 70, 200, 0.95) 0%, rgba(60, 30, 110, 0.88) 40%, rgba(10, 8, 22, 0.72) 70%, rgba(6, 5, 14, 0.35) 88%, rgba(6, 5, 14, 0) 100%)'
+                : 'radial-gradient(ellipse var(--r) var(--r) at 50% 0%, rgba(255, 200, 140, 0.95) 0%, rgba(255, 220, 180, 0.88) 40%, rgba(255, 245, 225, 0.72) 70%, rgba(255, 253, 248, 0.35) 88%, rgba(255, 253, 248, 0) 100%)',
             }}
           />
         )}
