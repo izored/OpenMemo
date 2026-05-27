@@ -256,8 +256,8 @@ export function Sidebar() {
 
         <button
           className="om-foot-btn"
-          onClick={() => goRoute('/settings')}
-          title="Settings"
+          onClick={() => location.pathname === '/settings' ? goRoute('/') : goRoute('/settings')}
+          title={location.pathname === '/settings' ? 'Go home' : 'Settings'}
         >
           <div
             className="om-avatar"
