@@ -61,3 +61,6 @@ RELEASE_NOTES.md
 design.html
 design_dump.html
 design_extracted/
+.backend.err.log
+.backend.out.log
+TEST VIDEO UPLOAD.mp4
