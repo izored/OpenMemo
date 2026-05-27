@@ -313,12 +313,25 @@ async def process_file_memo(memo_id: str, file_path: str, memo_type: str):
     content anywhere in the ingestion path.
     """
     from backend.core.extractor import extract_pdf, extract_docx, extract_image
+    from backend.core.video import extract_video_thumbnail
 
     async with AsyncSessionLocal() as db:
         memo = await db.get(Memo, memo_id)
         if not memo:
             return
-        
+
+        # Video → grab a still frame for the grid thumbnail. Best-effort:
+        # if ffmpeg is missing or fails, the video memo just renders without
+        # a thumb (same path as before).
+        if memo_type == "video":
+            THUMBS_DIR.mkdir(parents=True, exist_ok=True)
+            thumb_name = f"{memo_id}.jpg"
+            thumb_target = THUMBS_DIR / thumb_name
+            if await extract_video_thumbnail(file_path, thumb_target):
+                memo.thumbnail_path = f"/api/files/thumb/{thumb_name}"
+                memo.updated_at = datetime.utcnow()
+                await db.commit()
+
         try:
             ext = Path(file_path).suffix.lower()
             
