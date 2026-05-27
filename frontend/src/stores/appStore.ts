@@ -5,7 +5,13 @@ import { DEFAULT_TWEAKS, applyTweaks, type Tweaks } from '@/lib/appearance';
 const loadTweaks = (): Tweaks => {
   try {
     const raw = localStorage.getItem('openmemo_tweaks');
-    if (raw) return { ...DEFAULT_TWEAKS, ...JSON.parse(raw), density: 'roomy' as const };
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      // Migrations for removed options: 'rich' card style, 1× blob speed.
+      if (parsed.cardStyle === 'rich') parsed.cardStyle = 'hybrid';
+      if (parsed.blobSpeed === 1) parsed.blobSpeed = 2;
+      return { ...DEFAULT_TWEAKS, ...parsed, density: 'roomy' as const };
+    }
   } catch {
     /* ignore */
   }
@@ -25,10 +31,6 @@ const loadSettings = () => {
 
 const saved = loadSettings();
 
-export type SortMode = 'recent' | 'oldest' | 'title' | 'custom';
-const VALID_SORTS: SortMode[] = ['recent', 'oldest', 'title', 'custom'];
-const initialSort: SortMode = VALID_SORTS.includes(saved.sortMode) ? saved.sortMode : 'recent';
-
 interface AppState {
   // Sidebar
   sidebarOpen: boolean;
@@ -37,10 +39,6 @@ interface AppState {
   // Filter
   activeFilter: string;
   setActiveFilter: (filter: string) => void;
-
-  // Sort
-  sortMode: SortMode;
-  setSortMode: (mode: SortMode) => void;
 
   // Active collection
   activeCollection: string | null;
@@ -93,10 +91,9 @@ interface AppState {
   setTweak: (keyOrPatch: keyof Tweaks | Partial<Tweaks>, value?: unknown) => void;
 }
 
-const persist = (partial: { chatModel?: string; sortMode?: SortMode }) => {
+const persist = (partial: { chatModel?: string }) => {
   localStorage.setItem('openmemo_settings', JSON.stringify({
     chatModel: partial.chatModel ?? saved.chatModel ?? '',
-    sortMode: partial.sortMode ?? saved.sortMode ?? 'recent',
   }));
 };
 
@@ -106,12 +103,6 @@ export const useAppStore = create<AppState>((set) => ({
 
   activeFilter: 'all',
   setActiveFilter: (filter) => set({ activeFilter: filter }),
-
-  sortMode: initialSort,
-  setSortMode: (mode) => {
-    set({ sortMode: mode });
-    persist({ sortMode: mode });
-  },
 
   activeCollection: null,
   setActiveCollection: (id) => set({ activeCollection: id }),

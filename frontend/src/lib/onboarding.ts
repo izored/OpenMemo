@@ -13,15 +13,27 @@ export interface TourStep {
   placement?: 'right' | 'left' | 'top' | 'bottom' | 'center';
   /** Side-effect run when the step becomes active. */
   action?: 'openAdd';
+  /** Gate progression on a real user action. `panelOpen` = the add-memo
+   *  panel must be open before Next becomes available. */
+  gate?: 'panelOpen';
+  /** When the gate is satisfied, the spotlight smoothly morphs to this
+   *  selector (e.g. from the FAB onto the now-open new-memo panel). */
+  morphTarget?: string;
+  /** Body copy shown once the gate is satisfied — replaces `body` so the
+   *  card guides the user to the next thing. */
+  gateBody?: string;
 }
 
 export const TOUR_STEPS: TourStep[] = [
   {
     id: 'add',
     title: 'Capture anything',
-    body: 'Click the + button to open the New Memo panel. Save a link, note, file, or voice memo — or press N anytime.',
+    body: 'Click the + button to open the New Memo panel.',
     target: '.om-fab',
     placement: 'left',
+    gate: 'panelOpen',
+    morphTarget: '.om-add-panel.open',
+    gateBody: 'Save a link, note, file, or voice memo — or press N anytime. Hit Next when ready.',
   },
   {
     id: 'search',

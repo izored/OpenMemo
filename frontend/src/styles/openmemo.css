@@ -141,10 +141,11 @@ input, textarea { font: inherit; color: inherit; }
 [data-theme="hi"]   .om-app::before { opacity: 0; }
 
 @keyframes omIridescent {
-  0%   { transform: translate(0, 0)       rotate(0deg)    scale(1);    filter: blur(80px) saturate(130%); }
-  33%  { transform: translate(2%, -1.5%)  rotate(2deg)    scale(1.05); filter: blur(90px) saturate(145%); }
-  66%  { transform: translate(-1.5%, 1%)  rotate(-1.5deg) scale(1.03); filter: blur(85px) saturate(135%); }
-  100% { transform: translate(1%, 1.5%)   rotate(1deg)    scale(1.06); filter: blur(95px) saturate(140%); }
+  0%   { transform: translate(0, 0)     rotate(0deg)   scale(1);    filter: blur(80px) saturate(130%); }
+  25%  { transform: translate(7%, -5%)  rotate(7deg)   scale(1.12); filter: blur(95px) saturate(155%); }
+  50%  { transform: translate(-6%, 4%)  rotate(-6deg)  scale(1.08); filter: blur(85px) saturate(140%); }
+  75%  { transform: translate(5%, 6%)   rotate(4deg)   scale(1.15); filter: blur(100px) saturate(150%); }
+  100% { transform: translate(-4%, -3%) rotate(-3deg)  scale(1.18); filter: blur(90px) saturate(145%); }
 }
 @media (prefers-reduced-motion: reduce) { .om-app::before { animation: none; } }
 
@@ -182,7 +183,7 @@ input, textarea { font: inherit; color: inherit; }
 }
 .om-sidebar-head { display: flex; align-items: center; justify-content: space-between; padding: 0 4px 16px; }
 .om-brand { display: flex; align-items: center; gap: 10px; }
-.om-brand-name { font-weight: 600; letter-spacing: -0.01em; font-size: 15px; }
+.om-brand-name { font-weight: 600; letter-spacing: -0.015em; font-size: 19px; }
 
 .om-icon-btn {
   width: 28px; height: 28px; border-radius: 8px;
@@ -478,14 +479,12 @@ input, textarea { font: inherit; color: inherit; }
 .om-card:active { cursor: grabbing; }
 .om-card-hover:hover { transform: translateY(-2px); box-shadow: var(--shadow-card-hover); border-color: var(--border-2); }
 
-/* Card hover halo — accent-tinted glow on hover, deferred for hybrid */
-[data-card="rich"] .om-card::before,
+/* Card hover halo — accent-tinted glow on hover */
 [data-card="hybrid"] .om-card::before {
   content: ""; position: absolute; inset: -20%;
   background: radial-gradient(50% 50% at 50% 0%, var(--accent-soft) 0%, transparent 70%);
   opacity: 0; transition: opacity .35s; pointer-events: none; z-index: 0;
 }
-[data-card="rich"] .om-card::before { opacity: 0.5; }
 [data-card="hybrid"] .om-card:hover::before { opacity: 0.7; }
 .om-card > * { position: relative; z-index: 1; }
 
@@ -496,11 +495,6 @@ input, textarea { font: inherit; color: inherit; }
 [data-card="minimal"] .om-image-frame { aspect-ratio: 4/3; }
 [data-card="minimal"] .om-card-body { padding: 14px; gap: 8px; }
 [data-card="minimal"] .om-meta { border-top: 0; padding-top: 0; }
-
-/* Rich — always-on halo, bigger radius, stronger lift */
-[data-card="rich"] .om-card { border-radius: var(--r-2xl); box-shadow: var(--shadow-card-hover); }
-[data-card="rich"] .om-card-hover:hover { transform: translateY(-4px); }
-[data-card="rich"] .om-card-actions { opacity: 1; }
 
 .om-card-actions {
   position: absolute; top: 10px; right: 10px; z-index: 2;
@@ -522,7 +516,6 @@ input, textarea { font: inherit; color: inherit; }
 .om-drag:active { cursor: grabbing; }
 .om-drag:hover { background: rgba(20,20,22,0.92); color: #fff; }
 .om-card:hover .om-drag { opacity: 1; }
-[data-card="rich"] .om-drag { opacity: 1; }
 .om-card-note .om-drag { background: rgba(0,0,0,0.22); color: rgba(255,255,255,0.92); }
 .om-card-note .om-drag:hover { background: rgba(0,0,0,0.42); }
 
@@ -535,6 +528,11 @@ input, textarea { font: inherit; color: inherit; }
   transition: background .15s, color .15s;
 }
 .om-action:hover { background: rgba(20,20,22,0.92); color: #fff; }
+/* Pinned state — accent-tinted so the memo's status is visible at a glance,
+   not just on hover. Stays visible even when card-actions are hidden. */
+.om-action.pinned { background: var(--accent); color: var(--accent-text, #fff); opacity: 1; }
+.om-card-actions .om-action.pinned { opacity: 1; }
+.om-card .om-card-actions:has(.om-action.pinned) { opacity: 1; }
 
 /* Hero / image / video frames */
 .om-card-hero, .om-image-frame, .om-video-frame, .om-doc-frame {
@@ -960,7 +958,9 @@ input, textarea { font: inherit; color: inherit; }
 .om-modal-foot { padding: 14px 20px; display: flex; justify-content: space-between; align-items: center; border-top: 1px solid var(--border); }
 
 /* ─ Collection modal ───────────────────────────────────────────────────── */
-.om-modal-backdrop { position: fixed; inset: 0; z-index: 60; display: flex; align-items: center; justify-content: center; }
+/* z-index above .om-fab (60) / .om-add-panel (61) / .om-fab.open (62) so the
+   modal scrim properly covers the FAB and add-memo panel while editing. */
+.om-modal-backdrop { position: fixed; inset: 0; z-index: 80; display: flex; align-items: center; justify-content: center; }
 .om-modal-scrim { position: absolute; inset: 0; background: rgba(0,0,0,0.4); }
 .om-coll-modal { position: relative; width: min(440px, calc(100vw - 32px)); background: var(--elev); border: 1px solid var(--border); border-radius: var(--r-2xl); box-shadow: var(--shadow-elev); animation: pop .2s cubic-bezier(.2,.7,.2,1); }
 .om-modal-header { display: flex; align-items: center; justify-content: space-between; padding: 18px 22px 16px; }
@@ -1184,8 +1184,19 @@ input, textarea { font: inherit; color: inherit; }
 .om-appearance-cta:hover .om-appearance-cta-arrow { background: var(--accent); color: #fff; border-color: var(--accent); }
 
 /* Appearance live-preview panel — reuses the AddMemoPanel chrome and tab
-   colors, but its body is a stack of label-on-top / control-below rows. */
-.om-ap-panel { width: 320px; }
+   colors, but its body is a stack of label-on-top / control-below rows.
+   Opens on the LEFT next to the sidebar (sidebar width + 16px gap).
+   Compound `.om-add-panel.om-ap-panel` keeps specificity above the base
+   `.om-add-panel` block defined further down. */
+.om-add-panel.om-ap-panel {
+  width: 320px;
+  right: auto;
+  left: calc(260px + 16px);
+  transform-origin: bottom left;
+  transform: scale(0.2) translate(-40%, 40%);
+}
+.om-app.sidebar-collapsed .om-add-panel.om-ap-panel { left: calc(76px + 16px); }
+.om-add-panel.om-ap-panel.open { transform: none; }
 .om-ap-row {
   display: flex; flex-direction: column; gap: 6px;
   padding: 10px 0;
@@ -1252,11 +1263,11 @@ input, textarea { font: inherit; color: inherit; }
 
 /* Danger zone — stacked rows, warm warning card */
 .om-danger-grid { display: flex; flex-direction: column; }
-.om-settings-col .om-setting-card:has(.om-danger-grid) {
+.om-setting-card:has(.om-danger-grid) {
   background: color-mix(in oklab, #EF5048 5%, var(--surface-2));
   border-color: color-mix(in oklab, #EF5048 18%, var(--border));
 }
-.om-settings-col .om-setting-card:has(.om-danger-grid) .om-setting-eyebrow {
+.om-setting-card:has(.om-danger-grid) .om-setting-eyebrow {
   color: color-mix(in oklab, #EF5048 60%, var(--text-4));
 }
 
@@ -2110,11 +2121,45 @@ input, textarea { font: inherit; color: inherit; }
   border: 1px solid var(--border);
   font-size: 12.5px; line-height: 1.55; color: var(--text-2);
   display: flex; flex-direction: column; gap: 8px;
-  min-height: 76px;
+  /* Locked height so hovering different tiles never reflows the page below. */
+  min-height: 112px;
 }
 .om-built-with-detail p { margin: 0; color: var(--text); }
 
 .om-creator-links { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 4px; }
+
+/* Profile card — avatar on the left, two text fields on the right. */
+.om-profile-grid { display: grid; grid-template-columns: 76px 1fr; gap: 16px; align-items: center; }
+.om-profile-avatar {
+  position: relative;
+  width: 76px; height: 76px; border-radius: 50%;
+  background: var(--surface-2) center/cover no-repeat;
+  border: 1px solid var(--border-2);
+  display: inline-flex; align-items: center; justify-content: center;
+  font-weight: 600; font-size: 22px; color: var(--text-2);
+  cursor: pointer; transition: border-color .15s, transform .15s;
+}
+.om-profile-avatar:hover { border-color: var(--accent); transform: scale(1.02); }
+.om-profile-avatar-edit {
+  position: absolute; right: -2px; bottom: -2px;
+  width: 24px; height: 24px; border-radius: 50%;
+  background: var(--accent); color: var(--accent-text, #fff);
+  display: inline-flex; align-items: center; justify-content: center;
+  border: 2px solid var(--bg);
+}
+.om-profile-fields { display: flex; flex-direction: column; gap: 8px; }
+.om-profile-field { display: flex; flex-direction: column; gap: 3px; }
+.om-profile-field span { font-size: 10.5px; color: var(--text-3); letter-spacing: 0.06em; text-transform: uppercase; }
+.om-profile-consent {
+  display: flex; gap: 10px; margin-top: 12px;
+  padding: 10px 12px; border: 1px solid var(--border); border-radius: 10px;
+  background: var(--surface);
+  cursor: pointer;
+}
+.om-profile-consent input { margin-top: 3px; flex-shrink: 0; accent-color: var(--accent); }
+.om-profile-consent p { margin: 0; font-size: 13px; color: var(--text); }
+.om-profile-consent span { display: block; font-size: 11.5px; color: var(--text-3); margin-top: 2px; line-height: 1.45; }
+.om-profile-saved { display: inline-block; margin-top: 8px; color: var(--accent); font-size: 11px; }
 .om-creator-link {
   display: inline-flex; align-items: center; gap: 6px;
   font-size: 12px; color: var(--text-2);
@@ -2123,6 +2168,21 @@ input, textarea { font: inherit; color: inherit; }
   transition: background .15s, color .15s, border-color .15s;
 }
 .om-creator-link:hover { color: var(--accent); border-color: color-mix(in oklab, var(--accent) 30%, transparent); }
+
+/* Collection card — pin affordance over the cover. Top-left corner so it
+   doesn't fight the edit button (top-right). Always visible when pinned. */
+.om-coll-pin {
+  position: absolute; top: 10px; left: 10px; z-index: 3;
+  width: 28px; height: 28px; border-radius: 8px;
+  display: inline-flex; align-items: center; justify-content: center;
+  background: rgba(20,20,22,0.6); color: #fff;
+  backdrop-filter: blur(10px);
+  opacity: 0; transition: opacity .18s, background .15s, color .15s;
+}
+.om-coll-card:hover .om-coll-pin { opacity: 1; }
+.om-coll-pin.pinned { opacity: 1; background: var(--accent); color: var(--accent-text, #fff); }
+.om-coll-pin:hover { background: rgba(20,20,22,0.85); }
+.om-coll-pin.pinned:hover { background: var(--accent-deep, var(--accent)); }
 
 /* Collection card — edit affordance over the cover */
 .om-coll-edit {
@@ -2330,9 +2390,9 @@ input, textarea { font: inherit; color: inherit; }
 .om-ext-install-btn {
   display: inline-flex; align-items: center; gap: 8px;
   padding: 10px 16px; border-radius: 10px;
-  background: var(--accent); color: #fff;
+  background: var(--accent); color: var(--accent-text, #fff);
   font-size: 13px; font-weight: 600; letter-spacing: -0.01em;
-  transition: opacity .15s, transform .12s;
+  transition: opacity .15s, transform .12s, color .2s;
   width: fit-content;
 }
 .om-ext-install-btn:hover { opacity: .88; transform: translateY(-1px); }
@@ -2433,16 +2493,69 @@ input, textarea { font: inherit; color: inherit; }
   animation: fade .35s ease;
 }
 .om-intro-stage { position: relative; overflow: hidden; display: flex; align-items: center; justify-content: center; }
-/* Placeholder motion: a soft drifting orb. Swap for a real animation. */
-.om-intro-orb {
-  width: 320px; height: 320px; border-radius: 50%;
-  background: radial-gradient(circle at 35% 30%, var(--accent), var(--accent-deep) 70%, transparent);
-  filter: blur(20px) saturate(140%);
-  animation: omIntroFloat 6s ease-in-out infinite alternate;
+
+/* Living-cell — 4 blurred blobs drifting on independent loops at calm,
+   slow speeds. Centered, ~340px tall, blurred so motion stays soft. */
+.om-intro-cell {
+  position: relative;
+  width: 340px; height: 340px;
+  filter: blur(28px) saturate(150%);
 }
-@keyframes omIntroFloat {
-  0%   { transform: translateY(-12px) scale(1);    opacity: .85; }
-  100% { transform: translateY(12px)  scale(1.06); opacity: 1; }
+.om-intro-blob {
+  position: absolute;
+  border-radius: 50%;
+  mix-blend-mode: screen;
+  will-change: transform;
+}
+.om-intro-blob.b1 {
+  width: 200px; height: 200px; left: 40px; top: 50px;
+  background: var(--accent);
+  animation: omIntroBlob1 14s ease-in-out infinite;
+}
+.om-intro-blob.b2 {
+  width: 180px; height: 180px; right: 30px; top: 30px;
+  background: var(--accent-deep);
+  animation: omIntroBlob2 17s ease-in-out infinite;
+}
+.om-intro-blob.b3 {
+  width: 220px; height: 220px; left: 20px; bottom: 20px;
+  background: color-mix(in oklab, var(--accent) 70%, #ff7aa8);
+  animation: omIntroBlob3 19s ease-in-out infinite;
+}
+.om-intro-blob.b4 {
+  width: 170px; height: 170px; right: 40px; bottom: 50px;
+  background: color-mix(in oklab, var(--accent) 60%, #6ab1ff);
+  animation: omIntroBlob4 22s ease-in-out infinite;
+}
+[data-theme="light"] .om-intro-cell { filter: blur(28px) saturate(135%); }
+[data-theme="hi"]    .om-intro-cell { filter: blur(28px) saturate(160%); opacity: .92; }
+
+@keyframes omIntroBlob1 {
+  0%, 100% { transform: translate(0, 0)        scale(1); }
+  25%      { transform: translate(28px, -18px) scale(1.08); }
+  50%      { transform: translate(-12px, 22px) scale(0.94); }
+  75%      { transform: translate(-22px, -10px) scale(1.05); }
+}
+@keyframes omIntroBlob2 {
+  0%, 100% { transform: translate(0, 0)        scale(1); }
+  30%      { transform: translate(-26px, 16px) scale(1.1); }
+  60%      { transform: translate(14px, -20px) scale(0.92); }
+  85%      { transform: translate(22px, 10px)  scale(1.04); }
+}
+@keyframes omIntroBlob3 {
+  0%, 100% { transform: translate(0, 0)         scale(1); }
+  20%      { transform: translate(20px, 18px)   scale(1.06); }
+  55%      { transform: translate(-24px, -14px) scale(0.95); }
+  80%      { transform: translate(10px, -22px)  scale(1.09); }
+}
+@keyframes omIntroBlob4 {
+  0%, 100% { transform: translate(0, 0)         scale(1); }
+  35%      { transform: translate(-16px, -22px) scale(1.07); }
+  65%      { transform: translate(24px, 12px)   scale(0.93); }
+  90%      { transform: translate(-10px, 20px)  scale(1.06); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .om-intro-blob { animation: none; }
 }
 .om-intro-copy {
   text-align: center; padding: 0 24px 72px;
@@ -2457,6 +2570,11 @@ input, textarea { font: inherit; color: inherit; }
    card's Skip/Back/Next work (prevents confusing mid-tour interactions).
    No blur — dim via opacity only; spotlight is purely visual. */
 .om-coach-layer { position: fixed; inset: 0; z-index: 190; pointer-events: auto; }
+/* When a step gates progression on a user action (e.g. clicking the FAB),
+   let pointer events fall through to the underlying UI; the coach card stays
+   clickable so Skip / Next still work. */
+.om-coach-layer.gated { pointer-events: none; }
+.om-coach-layer.gated .om-coach-card { pointer-events: auto; }
 .om-coach-dim { position: absolute; inset: 0; background: rgba(0,0,0,0.42); animation: fade .2s ease; }
 .om-coach-spot {
   position: fixed; border-radius: 12px;

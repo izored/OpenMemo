@@ -1,6 +1,16 @@
 // Appearance helpers ported from the OpenMemo design bundle (app.jsx).
 // Drive theme / accent / background CSS variables on <html>.
 
+// Perceived luminance (0..1) for choosing a readable text color on an accent.
+export function luminance(hex: string): number {
+  const h = hex.replace('#', '');
+  const x = h.length === 3 ? h.split('').map((c) => c + c).join('') : h;
+  const r = parseInt(x.slice(0, 2), 16) / 255;
+  const g = parseInt(x.slice(2, 4), 16) / 255;
+  const b = parseInt(x.slice(4, 6), 16) / 255;
+  return 0.2126 * r + 0.7152 * g + 0.0722 * b;
+}
+
 export function shade(hex: string, pct: number): string {
   const h = hex.replace('#', '');
   const x = h.length === 3 ? h.split('').map((c) => c + c).join('') : h;
@@ -75,7 +85,7 @@ export function randomBlobPositions(): [number, number][] {
 export interface Tweaks {
   theme: 'light' | 'dark';
   accent: string;
-  cardStyle: 'minimal' | 'hybrid' | 'rich';
+  cardStyle: 'minimal' | 'hybrid';
   density: 'compact' | 'comfy' | 'roomy';
   typePair: 'satoshi' | 'general' | 'cabinet';
   layout: 'boxed' | 'full';
@@ -86,7 +96,7 @@ export interface Tweaks {
   bgPalette: string[];
   bgPositions: [number, number][];
   customAccents: [string, string];
-  blobSpeed: 0 | 1 | 2 | 4;
+  blobSpeed: 0 | 2 | 4;
 }
 
 const TYPE_PAIRS: Record<string, { ui: string; display: string }> = {
@@ -114,6 +124,9 @@ export function applyTweaks(t: Tweaks) {
   root.style.setProperty('--accent', t.accent);
   root.style.setProperty('--accent-deep', shade(t.accent, -28));
   root.style.setProperty('--accent-soft', shade(t.accent, 28) + '20');
+  // Contrast-aware text color for anything painted on the accent (buttons,
+  // chips). Pale accents get dark text so they don't disappear into white.
+  root.style.setProperty('--accent-text', luminance(t.accent) > 0.62 ? '#1A1A1C' : '#FFFFFF');
   root.style.setProperty('--bg-image', t.bgImage ? `url(${t.bgImage})` : 'none');
   const pal = Array.isArray(t.bgPalette) && t.bgPalette.length ? t.bgPalette : accentHarmony(t.accent);
   root.style.setProperty('--bg-c1', pal[0] || t.accent);
@@ -129,7 +142,7 @@ export function applyTweaks(t: Tweaks) {
   root.style.setProperty('--font-ui', `'${pair.ui}', ui-sans-serif, system-ui`);
   root.style.setProperty('--font-display', `'${pair.display}', '${pair.ui}', ui-sans-serif, system-ui`);
   root.style.setProperty('--font-mono', `'${pair.ui}', ui-sans-serif, system-ui`);
-  const speed = t.blobSpeed ?? 1;
+  const speed = t.blobSpeed ?? 2;
   if (speed === 0) {
     root.style.setProperty('--blob-play-state', 'paused');
     root.style.setProperty('--blob-duration', '42s');
@@ -160,5 +173,5 @@ export const DEFAULT_TWEAKS: Tweaks = {
     [26, 80],
   ],
   customAccents: ['', ''],
-  blobSpeed: 1,
+  blobSpeed: 2,
 };
