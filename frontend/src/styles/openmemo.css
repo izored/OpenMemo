@@ -158,7 +158,7 @@ input, textarea { font: inherit; color: inherit; }
 .om-sidebar.collapsed .om-nav-item.active::before { display: none; }
 .om-sidebar.collapsed .om-nav-item.active { box-shadow: inset 0 0 0 1px var(--accent); }
 .om-sidebar.collapsed .om-sidebar-foot { width: 100%; align-items: center; border-top: 1px solid var(--border); padding: 10px 0 14px; gap: 4px; }
-.om-sidebar.collapsed .om-foot-btn { width: 44px; height: 44px; padding: 0; grid-template-columns: 44px; justify-content: center; border-radius: 12px; }
+.om-sidebar.collapsed .om-foot-btn { width: 44px; height: 44px; padding: 0; grid-template-columns: 44px; justify-content: center; justify-items: center; border-radius: 12px; }
 .om-sidebar.collapsed .om-avatar { width: 32px; height: 32px; }
 .om-app::after {
   content: ""; position: fixed; inset: 0; pointer-events: none;
@@ -676,7 +676,7 @@ input, textarea { font: inherit; color: inherit; }
    Light gradient (default) for light theme; dark variant for hi-contrast theme. */
 .om-min-hover {
   position: absolute; inset: 0;
-  background: linear-gradient(to bottom, rgba(245,242,236,0.92) 0%, rgba(245,242,236,0.55) 50%, rgba(245,242,236,0.15) 100%);
+  background: linear-gradient(to bottom, rgba(245,242,236,0.72) 0%, rgba(245,242,236,0.32) 50%, rgba(245,242,236,0.05) 100%);
   opacity: 0; transition: opacity .25s;
   pointer-events: none; z-index: 1;
   /* Bottom padding leaves room for the tags/pill row at the very bottom. */
@@ -743,6 +743,17 @@ input, textarea { font: inherit; color: inherit; }
 }
 [data-card="minimal"] .om-card-actions .om-action:hover { background: rgba(255,255,255,0.32); }
 [data-card="minimal"] .om-card-actions .om-action.pinned { background: var(--accent); color: var(--accent-text, #fff); border-color: transparent; }
+/* Light theme: note cards have light tint bg — use dark action buttons */
+[data-theme="light"] [data-card="minimal"] .om-card-note .om-card-actions .om-action {
+  background: rgba(0,0,0,0.08); backdrop-filter: blur(12px);
+  border: 1px solid rgba(0,0,0,0.14); color: rgba(0,0,0,0.7);
+}
+[data-theme="light"] [data-card="minimal"] .om-card-note .om-card-actions .om-action:hover { background: rgba(0,0,0,0.16); }
+/* Dark tint (index 3) note in light theme — keep white buttons */
+[data-theme="light"] [data-card="minimal"] .om-card-note[data-tint="3"] .om-card-actions .om-action {
+  background: rgba(255,255,255,0.18); border: 1px solid rgba(255,255,255,0.22); color: rgba(255,255,255,0.9);
+}
+[data-theme="light"] [data-card="minimal"] .om-card-note[data-tint="3"] .om-card-actions .om-action:hover { background: rgba(255,255,255,0.32); }
 
 .om-card-actions {
   position: absolute; top: 10px; right: 10px; z-index: 10;
@@ -1398,12 +1409,12 @@ input, textarea { font: inherit; color: inherit; }
   display: grid; grid-template-columns: 72px 1fr auto;
   gap: 16px; align-items: center;
   padding: 14px; border-radius: 12px;
-  background: var(--surface);
-  border: 1px solid var(--border);
+  background: color-mix(in srgb, var(--accent) 8%, var(--surface-2));
+  border: 1px solid color-mix(in srgb, var(--accent) 45%, var(--border));
   text-align: left;
   transition: background .15s, border-color .15s, transform .12s;
 }
-.om-appearance-cta:hover { background: var(--surface-2); border-color: var(--border-2); transform: translateY(-1px); }
+.om-appearance-cta:hover { background: color-mix(in srgb, var(--accent) 14%, var(--surface-2)); border-color: color-mix(in srgb, var(--accent) 65%, var(--border)); transform: translateY(-1px); }
 .om-appearance-cta-preview {
   position: relative; width: 72px; height: 56px; border-radius: 9px;
   background: linear-gradient(135deg, var(--surface-2), var(--surface-3));
@@ -1427,11 +1438,11 @@ input, textarea { font: inherit; color: inherit; }
 .om-appearance-cta-arrow {
   width: 32px; height: 32px; border-radius: 8px;
   display: inline-flex; align-items: center; justify-content: center;
-  background: var(--surface-2); color: var(--text-2);
-  border: 1px solid var(--border);
-  transition: background .15s, color .15s;
+  background: var(--accent); color: var(--accent-text, #fff);
+  border: 1px solid transparent;
+  transition: background .15s, color .15s, opacity .15s;
 }
-.om-appearance-cta:hover .om-appearance-cta-arrow { background: var(--accent); color: #fff; border-color: var(--accent); }
+.om-appearance-cta:hover .om-appearance-cta-arrow { opacity: 0.85; }
 
 /* Appearance live-preview panel — reuses the AddMemoPanel chrome and tab
    colors, but its body is a stack of label-on-top / control-below rows.
@@ -2090,6 +2101,18 @@ input, textarea { font: inherit; color: inherit; }
 
 .om-coll-card:hover .om-coll-stack-1 { transform: translate(-10px, -8px) rotate(-4deg); opacity: 0.85; }
 .om-coll-card:hover .om-coll-stack-2 { transform: translate(10px, -14px) rotate(4deg); opacity: 0.65; }
+
+/* Minimal card style: flat collection cards — no stacking, no lift */
+[data-card="minimal"] .om-coll-card .om-coll-stack { display: none; }
+[data-card="minimal"] .om-coll-face {
+  border: 1px solid var(--border);
+  box-shadow: none;
+}
+[data-card="minimal"] .om-coll-card:hover .om-coll-face {
+  transform: none;
+  box-shadow: none;
+  border-color: var(--border-2);
+}
 
 .om-coll-face {
   position: relative; z-index: 1;

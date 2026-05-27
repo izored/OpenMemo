@@ -198,9 +198,13 @@ class FileUploadHandler:
 
     def _validate_image_magic(self, content: bytes) -> None:
         """Reject a file claiming an image extension whose bytes aren't an image.
-        SVG is text-based, so it's exempt."""
+        SVG is text-based; ISOBMFF containers (AVIF, HEIC, HEIF) use 'ftyp' at
+        offset 4 rather than a fixed magic prefix — both are exempt from the
+        prefix check."""
         header = content[:12]
         if header.lstrip().startswith(b"<"):  # SVG / XML
+            return
+        if len(header) >= 8 and header[4:8] == b"ftyp":  # ISOBMFF (AVIF, HEIC, HEIF)
             return
         if not any(header.startswith(m) for m in _IMAGE_MAGIC):
             raise UploadValidationError(
