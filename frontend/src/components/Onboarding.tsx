@@ -2,6 +2,7 @@ import { useEffect, useState, useLayoutEffect, useRef } from 'react';
 import { Icon } from './Icon';
 import { TOUR_STEPS, ONBOARDING_KEY } from '@/lib/onboarding';
 import { useAppStore } from '@/stores/appStore';
+import { cn } from '@/lib/utils';
 
 type Phase = 'intro' | 'tour' | 'done';
 
@@ -31,6 +32,7 @@ export function Onboarding() {
   const [phase, setPhase] = useState<Phase>('done');
   const [step, setStep] = useState(0);
   const setAddPanelOpen = useAppStore((s) => s.setAddPanelOpen);
+  const addPanelOpen = useAppStore((s) => s.addPanelOpen);
 
   useEffect(() => {
     if (!localStorage.getItem(ONBOARDING_KEY)) setPhase('intro');
@@ -54,7 +56,22 @@ export function Onboarding() {
   useEffect(() => {
     if (phase === 'tour') setAddPanelOpen(false);
   }, [phase, setAddPanelOpen]);
-  const rect = useAnchorRect(current?.target, phase === 'tour');
+  // When step changes, re-hide the panel so gated steps start at the FAB.
+  useEffect(() => {
+    if (phase === 'tour' && current?.gate === 'panelOpen') setAddPanelOpen(false);
+  }, [step, phase, current?.gate, setAddPanelOpen]);
+
+  // Gate logic: the `add` step waits for the user to click the FAB and open
+  // the panel before Next becomes available. Once open, the spot morphs to
+  // the new-memo panel via `morphTarget`.
+  const gateSatisfied = current?.gate === 'panelOpen' ? addPanelOpen : true;
+  const effectiveTarget = current?.gate === 'panelOpen' && addPanelOpen
+    ? current.morphTarget ?? current.target
+    : current?.target;
+  const effectiveBody = current?.gate === 'panelOpen' && addPanelOpen
+    ? current.gateBody ?? current.body
+    : current?.body;
+  const rect = useAnchorRect(effectiveTarget, phase === 'tour');
   const cardRef = useRef<HTMLDivElement>(null);
   const [cardSize, setCardSize] = useState({ w: 320, h: 210 });
 
@@ -78,9 +95,14 @@ export function Onboarding() {
     return (
       <div className="om-intro">
         <div className="om-intro-stage">
-          {/* ▼▼ ANIMATION SLOT — replace with a motion piece ▼▼ */}
-          <div className="om-intro-orb" aria-hidden />
-          {/* ▲▲ ANIMATION SLOT ▲▲ */}
+          {/* Living-cell composition — 4 blurred blobs drifting on independent
+              loops at calm, slow speeds. Centered, not wide. */}
+          <div className="om-intro-cell" aria-hidden>
+            <span className="om-intro-blob b1" />
+            <span className="om-intro-blob b2" />
+            <span className="om-intro-blob b3" />
+            <span className="om-intro-blob b4" />
+          </div>
         </div>
         <div className="om-intro-copy">
           <span className="mono om-greet-eyebrow">Welcome to</span>
@@ -134,7 +156,7 @@ export function Onboarding() {
   const cardStyle: React.CSSProperties = { position: 'fixed', left: x, top: y, transform: 'none' };
 
   return (
-    <div className="om-coach-layer">
+    <div className={cn('om-coach-layer', current?.gate === 'panelOpen' && !addPanelOpen && 'gated')}>
       {!rect && <div className="om-coach-dim" />}
       {rect && (
         <div
@@ -152,7 +174,7 @@ export function Onboarding() {
           {step + 1} / {TOUR_STEPS.length}
         </span>
         <h3 className="om-coach-title">{current.title}</h3>
-        <p className="om-coach-body">{current.body}</p>
+        <p className="om-coach-body">{effectiveBody}</p>
         <div className="om-coach-actions">
           <button className="om-add-foot-btn ghost" onClick={finish}>
             Skip tour
@@ -165,7 +187,13 @@ export function Onboarding() {
             )}
             <button
               className="om-add-foot-btn primary"
-              onClick={() => (last ? finish() : setStep((s) => s + 1))}
+              disabled={!gateSatisfied}
+              title={gateSatisfied ? '' : 'Click the + button first'}
+              onClick={() => {
+                if (!gateSatisfied) return;
+                if (last) return finish();
+                setStep((s) => s + 1);
+              }}
             >
               <span>{last ? 'Done' : 'Next'}</span>
               {!last && <Icon name="arrowRight" size={12} />}

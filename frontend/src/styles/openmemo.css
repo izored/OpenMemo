@@ -2456,16 +2456,69 @@ input, textarea { font: inherit; color: inherit; }
   animation: fade .35s ease;
 }
 .om-intro-stage { position: relative; overflow: hidden; display: flex; align-items: center; justify-content: center; }
-/* Placeholder motion: a soft drifting orb. Swap for a real animation. */
-.om-intro-orb {
-  width: 320px; height: 320px; border-radius: 50%;
-  background: radial-gradient(circle at 35% 30%, var(--accent), var(--accent-deep) 70%, transparent);
-  filter: blur(20px) saturate(140%);
-  animation: omIntroFloat 6s ease-in-out infinite alternate;
+
+/* Living-cell — 4 blurred blobs drifting on independent loops at calm,
+   slow speeds. Centered, ~340px tall, blurred so motion stays soft. */
+.om-intro-cell {
+  position: relative;
+  width: 340px; height: 340px;
+  filter: blur(28px) saturate(150%);
 }
-@keyframes omIntroFloat {
-  0%   { transform: translateY(-12px) scale(1);    opacity: .85; }
-  100% { transform: translateY(12px)  scale(1.06); opacity: 1; }
+.om-intro-blob {
+  position: absolute;
+  border-radius: 50%;
+  mix-blend-mode: screen;
+  will-change: transform;
+}
+.om-intro-blob.b1 {
+  width: 200px; height: 200px; left: 40px; top: 50px;
+  background: var(--accent);
+  animation: omIntroBlob1 14s ease-in-out infinite;
+}
+.om-intro-blob.b2 {
+  width: 180px; height: 180px; right: 30px; top: 30px;
+  background: var(--accent-deep);
+  animation: omIntroBlob2 17s ease-in-out infinite;
+}
+.om-intro-blob.b3 {
+  width: 220px; height: 220px; left: 20px; bottom: 20px;
+  background: color-mix(in oklab, var(--accent) 70%, #ff7aa8);
+  animation: omIntroBlob3 19s ease-in-out infinite;
+}
+.om-intro-blob.b4 {
+  width: 170px; height: 170px; right: 40px; bottom: 50px;
+  background: color-mix(in oklab, var(--accent) 60%, #6ab1ff);
+  animation: omIntroBlob4 22s ease-in-out infinite;
+}
+[data-theme="light"] .om-intro-cell { filter: blur(28px) saturate(135%); }
+[data-theme="hi"]    .om-intro-cell { filter: blur(28px) saturate(160%); opacity: .92; }
+
+@keyframes omIntroBlob1 {
+  0%, 100% { transform: translate(0, 0)        scale(1); }
+  25%      { transform: translate(28px, -18px) scale(1.08); }
+  50%      { transform: translate(-12px, 22px) scale(0.94); }
+  75%      { transform: translate(-22px, -10px) scale(1.05); }
+}
+@keyframes omIntroBlob2 {
+  0%, 100% { transform: translate(0, 0)        scale(1); }
+  30%      { transform: translate(-26px, 16px) scale(1.1); }
+  60%      { transform: translate(14px, -20px) scale(0.92); }
+  85%      { transform: translate(22px, 10px)  scale(1.04); }
+}
+@keyframes omIntroBlob3 {
+  0%, 100% { transform: translate(0, 0)         scale(1); }
+  20%      { transform: translate(20px, 18px)   scale(1.06); }
+  55%      { transform: translate(-24px, -14px) scale(0.95); }
+  80%      { transform: translate(10px, -22px)  scale(1.09); }
+}
+@keyframes omIntroBlob4 {
+  0%, 100% { transform: translate(0, 0)         scale(1); }
+  35%      { transform: translate(-16px, -22px) scale(1.07); }
+  65%      { transform: translate(24px, 12px)   scale(0.93); }
+  90%      { transform: translate(-10px, 20px)  scale(1.06); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .om-intro-blob { animation: none; }
 }
 .om-intro-copy {
   text-align: center; padding: 0 24px 72px;
@@ -2480,6 +2533,11 @@ input, textarea { font: inherit; color: inherit; }
    card's Skip/Back/Next work (prevents confusing mid-tour interactions).
    No blur — dim via opacity only; spotlight is purely visual. */
 .om-coach-layer { position: fixed; inset: 0; z-index: 190; pointer-events: auto; }
+/* When a step gates progression on a user action (e.g. clicking the FAB),
+   let pointer events fall through to the underlying UI; the coach card stays
+   clickable so Skip / Next still work. */
+.om-coach-layer.gated { pointer-events: none; }
+.om-coach-layer.gated .om-coach-card { pointer-events: auto; }
 .om-coach-dim { position: absolute; inset: 0; background: rgba(0,0,0,0.42); animation: fade .2s ease; }
 .om-coach-spot {
   position: fixed; border-radius: 12px;
