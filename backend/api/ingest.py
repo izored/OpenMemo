@@ -58,6 +58,21 @@ class ExtensionSave(BaseModel):
     workspace_id: Optional[str] = None
 
 
+class AIIngest(BaseModel):
+    """Headless ingestion for AI agents. Pre-supply all fields — no URL fetch."""
+    type: str = "note"
+    title: str
+    content: Optional[str] = None
+    description: Optional[str] = None
+    source_url: Optional[str] = None
+    source_domain: Optional[str] = None
+    source_favicon: Optional[str] = None
+    thumbnail_url: Optional[str] = None
+    tags: list[str] = []
+    collection_id: Optional[str] = None
+    workspace_id: Optional[str] = None
+
+
 # --- Thumbnail caching ---
 
 THUMBS_DIR = Path(settings.FILES_DIR) / "thumbs"
@@ -376,6 +391,86 @@ async def process_file_memo(memo_id: str, file_path: str, memo_type: str):
                 await process_memo(memo_id)
         except Exception as e:
             print(f"Error processing file {file_path}: {e}")
+
+
+@router.post("/ai")
+async def ingest_from_ai(
+    data: AIIngest,
+    background_tasks: BackgroundTasks,
+    db: AsyncSession = Depends(get_db),
+):
+    """Headless ingestion for AI agents running locally.
+
+    Unlike /url (fetches + extracts) and /extension (DOM scrape), this endpoint
+    accepts pre-populated fields directly — the caller is the AI, so metadata is
+    already structured. Background embedding still runs so the memo is searchable.
+
+    Example (curl):
+        curl -X POST http://localhost:8099/api/ingest/ai \\
+             -H 'Content-Type: application/json' \\
+             -d '{
+               "type": "link",
+               "title": "Attention Is All You Need",
+               "source_url": "https://arxiv.org/abs/1706.03762",
+               "source_domain": "arxiv.org",
+               "description": "Transformer architecture paper.",
+               "content": "Full extracted text or summary...",
+               "tags": ["ml", "transformers"],
+               "collection_id": "optional-uuid"
+             }'
+    """
+    from urllib.parse import urlparse
+    from backend.db.models import Tag
+
+    domain = data.source_domain
+    if not domain and data.source_url:
+        try:
+            domain = urlparse(data.source_url).hostname or ''
+            domain = domain.removeprefix('www.')
+        except Exception:
+            domain = ''
+
+    memo = Memo(
+        id=str(uuid.uuid4()),
+        workspace_id=sanitize_workspace_id(data.workspace_id),
+        type=data.type,
+        title=data.title,
+        description=data.description,
+        content_text=data.content,
+        content_raw=data.content,
+        source_url=data.source_url,
+        source_domain=domain,
+        source_favicon=data.source_favicon or (
+            f"https://www.google.com/s2/favicons?domain={domain}&sz=32" if domain else None
+        ),
+        thumbnail_path=data.thumbnail_url,
+        created_at=datetime.utcnow(),
+        updated_at=datetime.utcnow(),
+    )
+
+    db.add(memo)
+    await _attach_collection(db, memo, data.collection_id)
+
+    for tag_name in data.tags:
+        tag = (await db.execute(select(Tag).where(Tag.name == tag_name))).scalar_one_or_none()
+        if not tag:
+            tag = Tag(id=str(uuid.uuid4()), name=tag_name)
+            db.add(tag)
+        memo.tags.append(tag)
+
+    await db.commit()
+
+    background_tasks.add_task(process_memo, memo.id)
+    if memo.thumbnail_path and memo.thumbnail_path.startswith("http"):
+        background_tasks.add_task(cache_thumbnail, memo.id)
+
+    return {
+        "id": memo.id,
+        "title": memo.title,
+        "type": memo.type,
+        "status": "processing",
+        "tags": data.tags,
+    }
 
 
 @router.post("/extension")

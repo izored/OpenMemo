@@ -322,7 +322,12 @@ export function AddMemoPanel() {
           {tab === 'voice' && (
             <div className="om-add-tab-pane">
               <div className="om-add-sect mono">Voice Memo</div>
-              <div className="om-add-voice">
+              <div className="om-add-coming-soon">
+                <Icon name="mic" size={20} />
+                <p>Voice capture is not yet available.</p>
+                <span className="mono">This feature is planned for a future release.</span>
+              </div>
+              <div className="om-add-voice" style={{ opacity: 0.35, pointerEvents: 'none' }}>
                 <div className="om-add-wave">
                   {Array.from({ length: 28 }).map((_, i) => (
                     <span
@@ -337,10 +342,8 @@ export function AddMemoPanel() {
                 <button className="om-add-rec" disabled>
                   <span className="om-add-rec-dot" />
                   <span>Record</span>
-                  <span className="mono">soon</span>
                 </button>
               </div>
-              <p className="om-add-hint mono">Voice capture is coming soon.</p>
             </div>
           )}
         </AnimatedHeight>

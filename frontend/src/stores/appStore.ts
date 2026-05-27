@@ -7,8 +7,8 @@ const loadTweaks = (): Tweaks => {
     const raw = localStorage.getItem('openmemo_tweaks');
     if (raw) {
       const parsed = JSON.parse(raw);
-      // Migrations for removed options: 'rich' card style, 1× blob speed.
-      if (parsed.cardStyle === 'rich') parsed.cardStyle = 'hybrid';
+      // Migrations: 'rich'/'hybrid' card style → 'normal'; 1× blob speed → 2×.
+      if (parsed.cardStyle === 'rich' || parsed.cardStyle === 'hybrid') parsed.cardStyle = 'normal';
       if (parsed.blobSpeed === 1) parsed.blobSpeed = 2;
       return { ...DEFAULT_TWEAKS, ...parsed, density: 'roomy' as const };
     }
