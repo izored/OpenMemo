@@ -30,9 +30,10 @@ interface CardProps {
   editMode: boolean;
   onOpen: () => void;
   onEdit: (e: React.MouseEvent) => void;
+  onPin: (e: React.MouseEvent) => void;
 }
 
-function CollCard({ c, total, recent, coverImg, editMode, onOpen, onEdit }: CardProps) {
+function CollCard({ c, total, recent, coverImg, editMode, onOpen, onEdit, onPin }: CardProps) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
     id: c.id,
     disabled: !editMode,
@@ -63,6 +64,14 @@ function CollCard({ c, total, recent, coverImg, editMode, onOpen, onEdit }: Card
               <Icon name="edit" size={13} />
             </span>
           )}
+          <button
+            className={cn('om-coll-pin', c.pinned && 'pinned')}
+            onClick={(e) => { e.stopPropagation(); onPin(e); }}
+            title={c.pinned ? 'Unpin collection' : 'Pin collection to sidebar'}
+            aria-label={c.pinned ? 'Unpin' : 'Pin'}
+          >
+            <Icon name="pin" size={13} />
+          </button>
         </div>
         <div className="om-coll-body">
           <div className="om-coll-meta">
@@ -183,6 +192,12 @@ export function CollectionsPage() {
                   onEdit={(e) => {
                     e.stopPropagation();
                     edit(c);
+                  }}
+                  onPin={async () => {
+                    try {
+                      await collectionApi.update(c.id, { pinned: !c.pinned });
+                      queryClient.invalidateQueries({ queryKey: ['collections'] });
+                    } catch { /* ignore */ }
                   }}
                 />
               );
