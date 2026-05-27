@@ -112,6 +112,23 @@ All notable changes to OpenMemo are documented here.
 - 🧹 **Phase out Tailwind** — documented in `CLAUDE.md`: Tailwind's `dark:` variant is incompatible with the `[data-theme]` theme system; components using Tailwind classes should be migrated to the `om-*` token system on sight.
 - 🛠️ **Local dev one-command startup** — `dev.ps1` starts uvicorn on `:8099` in its own terminal then launches `npm run dev` with the proxy pointed at it; no Docker required for raw dev. `DATABASE_URL` and `CHROMA_PERSIST_DIR` are now absolute paths anchored to the project root so the wrong DB is never created regardless of which directory uvicorn starts from. Vite proxy target is configurable via `VITE_API_TARGET` env var (now defaults to `:8099` for local dev; Docker users can override to `:8091`).
 
+### Fixed
+
+- 🎨 **Minimal card hover veil too opaque on thumbnails** — light-theme gradient over blurred thumbnails (`rgba(245,242,236,…)`) peaked at 0.92 opacity, nearly washing out the image. Reduced to `0.72 / 0.32 / 0.05` (top / mid / bottom) so the blurred thumbnail bleeds through while text and tags remain readable.
+- 🎨 **Minimal card action icons ignored light/dark theme** — buttons were hardcoded `color: #fff` with `rgba(255,255,255,0.18)` background. On light-tinted note cards they were near-invisible. Light theme now renders ink-coloured buttons (`rgba(0,0,0,0.08)` bg / `rgba(0,0,0,0.7)` color) on notes; the dark-tint variant (`data-tint="3"`) keeps white buttons since its background is `#2A2622`.
+- 📍 **Sidebar collapsed avatar off-centre** — collapsed `.om-foot-btn` used `grid-template-columns: 44px` with no item alignment, so the 32 px avatar sat left-aligned inside the 44 px column. Added `justify-items: center`; avatar now sits exactly centred.
+- 🖼️ **AVIF / HEIC / HEIF uploads rejected as "not a valid image"** — `_validate_image_magic` only knew fixed-offset magic bytes (PNG, JPEG, GIF, WEBP, BMP, TIFF). ISOBMFF-based formats (AVIF, HEIC, HEIF) carry no fixed header — their box type `ftyp` lives at bytes 4–7. Added an explicit check: `header[4:8] == b"ftyp"` passes immediately, covering all ISO Base Media File Format images.
+
+### Changed
+
+- 🔀 **Sidebar settings button toggles home ↔ settings** — clicking the foot button while already on `/settings` now navigates to `/` (home) instead of reloading settings. Title attribute reflects current action.
+- ✨ **Appearance CTA stronger visual hierarchy** — "Open live preview" button in Settings now has an accent-tinted background (`color-mix(accent 8%, surface-2)`) and an accent-weighted border instead of blending into the surface. The arrow button is accent-filled by default (not just on hover) so it reads as the primary action in the card.
+- 🎴 **Minimal mode applies to Collections page** — `[data-card="minimal"]` now flattens collection cards: stack layers (`om-coll-stack`) are hidden, the face card gets a flat `1px var(--border)` outline instead of the default shadow, and hover lift is suppressed. Consistent with minimal memo card language.
+
+### Changed
+
+- 🧩 **Chrome extension version bump to 1.8.6** — version synced with app. Options page now shows port hint: Docker `:8091` / dev server `:8099`.
+
 ---
 ## [1.8.5] - 2026-05-19
 
