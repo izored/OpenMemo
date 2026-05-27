@@ -184,8 +184,8 @@ export function AppearancePanel() {
           </div>
           <div className="om-add-segment two" role="tablist">
             {[
-              { v: 'minimal', l: 'Min' },
-              { v: 'hybrid', l: 'Hybrid' },
+              { v: 'normal', l: 'Normal' },
+              { v: 'minimal', l: 'Minimal' },
             ].map((o) => (
               <button
                 key={o.v}
@@ -280,7 +280,7 @@ export function AppearancePanel() {
                     <>
                       <Icon name="image" size={16} />
                       <span>Upload image</span>
-                      <span className="mono">JPG · PNG · auto-blurred</span>
+                      <span className="mono">JPG · PNG · blurred behind grid</span>
                     </>
                   )}
                   {t.bgImage && <span className="om-ap-bg-replace mono">Replace</span>}
@@ -294,6 +294,19 @@ export function AppearancePanel() {
                     <span>Remove</span>
                   </button>
                 )}
+                <div className="om-ap-blur-row">
+                  <span className="mono om-ap-blur-label">Blur — {Math.round(t.bgBlur ?? 64)}px</span>
+                  <input
+                    type="range"
+                    min={0}
+                    max={120}
+                    step={2}
+                    value={t.bgBlur ?? 64}
+                    onChange={(e) => setTweak('bgBlur', parseInt(e.target.value))}
+                    className="om-ap-range"
+                    aria-label="Background blur"
+                  />
+                </div>
               </div>
             ) : (
               <div className="om-ap-bg-random">

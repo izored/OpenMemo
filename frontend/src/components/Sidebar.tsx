@@ -1,3 +1,4 @@
+import React from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { useDroppable } from '@dnd-kit/core';
@@ -65,6 +66,11 @@ export function Sidebar() {
 
   const theme = (tweaks.theme as ThemeValue) || 'light';
   const setTheme = (t: ThemeValue) => setTweak({ theme: t as 'light' | 'dark' });
+
+  // Expose sidebar width as a CSS var so fixed overlays (lightbox) can clear it.
+  React.useEffect(() => {
+    document.documentElement.style.setProperty('--sidebar-w', sidebarCollapsed ? '76px' : '260px');
+  }, [sidebarCollapsed]);
 
   const { data: collections = [] } = useQuery({
     queryKey: ['collections'],
