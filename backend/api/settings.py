@@ -11,6 +11,10 @@ router = APIRouter(prefix="/api/settings", tags=["settings"])
 
 class SettingsPatch(BaseModel):
     max_upload_mb: Optional[int] = None
+    display_name: Optional[str] = None
+    email: Optional[str] = None
+    avatar_data_url: Optional[str] = None
+    mailing_list_consent: Optional[bool] = None
 
 
 @router.get("")

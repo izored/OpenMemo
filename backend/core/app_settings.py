@@ -20,6 +20,16 @@ _LOCK = threading.Lock()
 # value can't pin a uvicorn worker into a multi-petabyte read loop.
 _DEFAULTS: dict[str, Any] = {
     "max_upload_mb": 5 * 1024,
+    # Profile — displayed in the sidebar foot and used to address the user
+    # in copy. Avatar is a small data URL (resized client-side) so the
+    # server never has to host static user images.
+    "display_name": "",
+    "email": "",
+    "avatar_data_url": "",
+    # Opt-in for the creator's personal updates / new-app mailing list.
+    # Stored as a plain boolean — there is NO automatic outbound delivery
+    # from this app; the creator inspects DATA_DIR/app_settings.json.
+    "mailing_list_consent": False,
 }
 
 _UNCAPPED_SENTINEL = 0

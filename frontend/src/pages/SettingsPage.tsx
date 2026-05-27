@@ -1,11 +1,12 @@
 import { useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { useQueryClient } from '@tanstack/react-query';
 import { motion } from 'framer-motion';
 import { Icon } from '@/components/Icon';
 import { ChangelogModal, cmpVersion } from '@/components/ChangelogModal';
 import { ONBOARDING_KEY } from '@/lib/onboarding';
 import { useAppStore } from '@/stores/appStore';
-import { systemApi, maintenanceApi, backupApi, settingsApi } from '@/lib/api';
+import { systemApi, maintenanceApi, backupApi, settingsApi, type AppSettings } from '@/lib/api';
 import type { OllamaModel } from '@/types';
 
 type BuiltWithEntry = { name: string; url: string; desc: string };
@@ -103,6 +104,7 @@ export function SettingsPage() {
   const t = useAppStore((s) => s.tweaks);
   const setAppearancePanelOpen = useAppStore((s) => s.setAppearancePanelOpen);
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
 
   const openAppearance = () => {
     navigate('/');
@@ -118,6 +120,9 @@ export function SettingsPage() {
   const [restoring, setRestoring] = useState(false);
   const [maxUploadMb, setMaxUploadMb] = useState<number | null>(null);
   const [maxUploadSaved, setMaxUploadSaved] = useState(false);
+  const [profile, setProfile] = useState<AppSettings | null>(null);
+  const [profileSaved, setProfileSaved] = useState(false);
+  const avatarInputRef = useRef<HTMLInputElement>(null);
   const [localizing, setLocalizing] = useState(false);
   const [localizeResult, setLocalizeResult] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -142,8 +147,59 @@ export function SettingsPage() {
       .catch(() => setOllamaConnected(false));
     systemApi.models().then((d) => setOllamaModels(d.models || [])).catch(() => setOllamaModels([]));
     systemApi.stats().then(setStats).catch(() => setStats(null));
-    settingsApi.get().then((s) => setMaxUploadMb(s.max_upload_mb)).catch(() => setMaxUploadMb(5120));
+    settingsApi.get()
+      .then((s) => {
+        setMaxUploadMb(s.max_upload_mb);
+        setProfile(s);
+      })
+      .catch(() => {
+        setMaxUploadMb(5120);
+        setProfile({ max_upload_mb: 5120, display_name: '', email: '', avatar_data_url: '', mailing_list_consent: false });
+      });
   }, []);
+
+  const saveProfile = async (patch: Partial<AppSettings>) => {
+    try {
+      const next = await settingsApi.update(patch);
+      setProfile(next);
+      queryClient.invalidateQueries({ queryKey: ['settings'] });
+      setProfileSaved(true);
+      setTimeout(() => setProfileSaved(false), 1500);
+    } catch {
+      /* ignore */
+    }
+  };
+
+  const pickAvatar = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const f = e.target.files?.[0];
+    if (!f) return;
+    if (f.size > 2 * 1024 * 1024) {
+      alert('Image too large. Max 2 MB before resize.');
+      e.target.value = '';
+      return;
+    }
+    const r = new FileReader();
+    r.onload = () => {
+      const img = new Image();
+      img.onload = () => {
+        // Downscale to a 256px square JPEG so settings.json stays small.
+        const size = 256;
+        const c = document.createElement('canvas');
+        c.width = c.height = size;
+        const ctx = c.getContext('2d');
+        if (!ctx) return;
+        const min = Math.min(img.width, img.height);
+        const sx = (img.width - min) / 2;
+        const sy = (img.height - min) / 2;
+        ctx.drawImage(img, sx, sy, min, min, 0, 0, size, size);
+        const dataUrl = c.toDataURL('image/jpeg', 0.82);
+        saveProfile({ avatar_data_url: dataUrl });
+      };
+      img.src = r.result as string;
+    };
+    r.readAsDataURL(f);
+    e.target.value = '';
+  };
 
   const runLocalize = async () => {
     if (localizing) return;
@@ -221,6 +277,69 @@ export function SettingsPage() {
 
         {/* ── Left column ─────────────────────────────────────── */}
         <div className="om-settings-col">
+          {profile && (
+            <SettingCard title="Profile" eyebrow="You">
+              <div className="om-profile-grid">
+                <button
+                  className="om-profile-avatar"
+                  onClick={() => avatarInputRef.current?.click()}
+                  title="Change profile picture"
+                  style={profile.avatar_data_url ? { backgroundImage: `url(${profile.avatar_data_url})` } : undefined}
+                >
+                  {!profile.avatar_data_url && (
+                    <span>{(profile.display_name || 'You').slice(0, 2).toUpperCase()}</span>
+                  )}
+                  <span className="om-profile-avatar-edit"><Icon name="image" size={12} /></span>
+                </button>
+                <input
+                  ref={avatarInputRef}
+                  type="file"
+                  accept="image/*"
+                  hidden
+                  onChange={pickAvatar}
+                />
+                <div className="om-profile-fields">
+                  <label className="om-profile-field">
+                    <span className="mono">Display name</span>
+                    <input
+                      className="om-input"
+                      type="text"
+                      value={profile.display_name}
+                      placeholder="Your name"
+                      onChange={(e) => setProfile({ ...profile, display_name: e.target.value })}
+                      onBlur={() => saveProfile({ display_name: profile.display_name })}
+                    />
+                  </label>
+                  <label className="om-profile-field">
+                    <span className="mono">Email</span>
+                    <input
+                      className="om-input"
+                      type="email"
+                      value={profile.email}
+                      placeholder="you@example.com"
+                      onChange={(e) => setProfile({ ...profile, email: e.target.value })}
+                      onBlur={() => saveProfile({ email: profile.email })}
+                    />
+                  </label>
+                </div>
+              </div>
+              <label className="om-profile-consent">
+                <input
+                  type="checkbox"
+                  checked={profile.mailing_list_consent}
+                  onChange={(e) => saveProfile({ mailing_list_consent: e.target.checked })}
+                />
+                <div>
+                  <p>Personal email list</p>
+                  <span className="mono">
+                    Hear about openMemo updates and new apps from the creator. No marketing third parties.
+                  </span>
+                </div>
+              </label>
+              {profileSaved && <span className="mono om-profile-saved">Saved ✓</span>}
+            </SettingCard>
+          )}
+
           <SettingCard title="Appearance" eyebrow="Look & feel">
             <button className="om-appearance-cta" onClick={openAppearance}>
               <div className="om-appearance-cta-preview" aria-hidden>

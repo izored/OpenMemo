@@ -155,11 +155,19 @@ export const backupApi = {
   },
 };
 
-// Maintenance
+// Runtime user-configurable settings (persisted as JSON server-side).
+export interface AppSettings {
+  max_upload_mb: number;
+  display_name: string;
+  email: string;
+  avatar_data_url: string;
+  mailing_list_consent: boolean;
+}
+
 export const settingsApi = {
-  get: () => fetchJSON<{ max_upload_mb: number }>('/settings'),
-  update: (patch: { max_upload_mb?: number }) =>
-    fetchJSON<{ max_upload_mb: number }>('/settings', { method: 'PUT', body: JSON.stringify(patch) }),
+  get: () => fetchJSON<AppSettings>('/settings'),
+  update: (patch: Partial<AppSettings>) =>
+    fetchJSON<AppSettings>('/settings', { method: 'PUT', body: JSON.stringify(patch) }),
 };
 
 export const maintenanceApi = {

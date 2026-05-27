@@ -3,7 +3,7 @@ import { useQuery } from '@tanstack/react-query';
 import { useDroppable } from '@dnd-kit/core';
 import { motion } from 'framer-motion';
 import { Icon } from './Icon';
-import { collectionApi, memoApi, systemApi } from '@/lib/api';
+import { collectionApi, memoApi, systemApi, settingsApi } from '@/lib/api';
 import { useAppStore } from '@/stores/appStore';
 import type { Collection } from '@/types';
 import { cn } from '@/lib/utils';
@@ -77,6 +77,10 @@ export function Sidebar() {
   const { data: stats } = useQuery({
     queryKey: ['stats'],
     queryFn: systemApi.stats,
+  });
+  const { data: appSettings } = useQuery({
+    queryKey: ['settings'],
+    queryFn: settingsApi.get,
   });
 
   const navItems = [
@@ -249,11 +253,21 @@ export function Sidebar() {
           onClick={() => goRoute('/settings')}
           title="Settings"
         >
-          <div className="om-avatar">RI</div>
+          <div
+            className="om-avatar"
+            style={appSettings?.avatar_data_url ? {
+              backgroundImage: `url(${appSettings.avatar_data_url})`,
+              backgroundSize: 'cover',
+              backgroundPosition: 'center',
+              color: 'transparent',
+            } : undefined}
+          >
+            {(appSettings?.display_name || 'You').slice(0, 2).toUpperCase()}
+          </div>
           {!sidebarCollapsed && (
             <>
               <div className="om-foot-info">
-                <span className="om-foot-name">Reda Izo</span>
+                <span className="om-foot-name">{appSettings?.display_name || 'openMemo'}</span>
                 <span className="om-foot-meta mono">
                   {stats ? `${stats.total_memos.toLocaleString()} Memos` : 'openMemo'}
                 </span>
