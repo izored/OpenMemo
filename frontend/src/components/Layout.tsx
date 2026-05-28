@@ -59,15 +59,21 @@ export function Layout() {
 
   // Drive theme / accent / background CSS vars from persisted tweaks.
   useEffect(() => {
-    applyTweaks(tweaks);
-    if (!mounted.current) { mounted.current = true; return; }
+    if (!mounted.current) { mounted.current = true; applyTweaks(tweaks); return; }
     if (prevTheme.current !== tweaks.theme) {
+      const oldTheme = prevTheme.current;
       prevTheme.current = tweaks.theme;
+      // Hold old theme visually so overlay has a head start
+      applyTweaks({ ...tweaks, theme: oldTheme });
       setOverlayTheme(tweaks.theme);
       setOverlayKey((k) => k + 1);
       setBlobsHidden(true);
       if (blobTimer.current) clearTimeout(blobTimer.current);
+      // 100ms later: flip theme — UI starts 3s color transition
+      setTimeout(() => applyTweaks(tweaks), 100);
       blobTimer.current = setTimeout(() => setBlobsHidden(false), 12000);
+    } else {
+      applyTweaks(tweaks);
     }
   }, [tweaks]);
 
@@ -129,7 +135,7 @@ export function Layout() {
             style={{
               position: 'fixed', inset: 0, zIndex: 0, pointerEvents: 'none',
               background: overlayTheme === 'dark'
-                ? 'radial-gradient(ellipse var(--r) var(--r) at 50% 0%, rgba(140, 70, 200, 0.95) 0%, rgba(60, 30, 110, 0.88) 40%, rgba(10, 8, 22, 0.72) 70%, rgba(6, 5, 14, 0.35) 88%, rgba(6, 5, 14, 0) 100%)'
+                ? 'radial-gradient(ellipse var(--r) var(--r) at 50% 0%, rgba(25, 55, 140, 0.95) 0%, rgba(12, 25, 75, 0.88) 40%, rgba(5, 8, 22, 0.72) 70%, rgba(4, 5, 14, 0.35) 88%, rgba(4, 5, 14, 0) 100%)'
                 : 'radial-gradient(ellipse var(--r) var(--r) at 50% 100%, rgba(255, 200, 140, 0.95) 0%, rgba(255, 220, 180, 0.88) 40%, rgba(255, 245, 225, 0.72) 70%, rgba(255, 253, 248, 0.35) 88%, rgba(255, 253, 248, 0) 100%)',
             }}
           />

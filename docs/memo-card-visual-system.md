@@ -19,6 +19,42 @@ All tables below use **Light** and **Dark** only.
 
 ---
 
+## Theme Transition — Sunset / Sunrise Animation
+
+**Decision:** Theme switches use a full-screen radial gradient overlay that animates before the UI repaints, creating a cinematic day/night transition instead of an instant color flash.
+
+### Sequence
+
+```
+t=0ms    User clicks theme toggle
+t=0ms    Overlay starts growing (radial bloom from horizon edge)
+t=0ms    All UI elements begin 3s color crossfade via CSS transitions
+t=100ms  data-theme attribute flips — CSS vars update underneath
+t=0–6s   Overlay expands 3% → 180% radius, covers background blob layer
+t=6s     Overlay at peak coverage, starts fading
+t=6–12s  Overlay fades out, new theme fully revealed
+t=12s    theme-transitioning class removed, background blobs fade in
+```
+
+### Overlay lives under UI (deliberate)
+
+The overlay is `z-index: 0` — it sits behind sidebar, cards, and all interactive elements. This was a hard design decision: keeping UI always accessible and visible during the animation, at the cost of not being able to mask the UI color transition. The 3s CSS color crossfade compensates.
+
+### Gradient colors
+
+| Direction | Anchor | Center color | Purpose |
+|---|---|---|---|
+| Night falls (→ dark) | `50% 0%` top | `rgba(25, 55, 140)` midnight blue | Sky darkening from above |
+| Sun rises (→ light) | `50% 100%` bottom | `rgba(255, 200, 140)` warm amber | Dawn lifting from horizon |
+
+### CSS mechanics
+
+- **Overlay:** `motion.div` with Framer Motion animating `--r` CSS var (radial size) + opacity
+- **UI crossfade:** `.om-app.theme-transitioning *` adds `transition: background-color 3s, color 3s, border-color 3s, box-shadow 3s` scoped to the 12s transition window only
+- **Blob hide:** `.om-app.theme-transitioning::before { opacity: 0 }` — blobs hidden during transition, fade in when class removes via `[data-theme="light"] .om-app::before { transition: opacity 2s }`
+
+---
+
 ## Action Buttons — `.om-action` (open · pin · delete)
 
 Single unified rule across all themes and card styles. No per-theme variants.
