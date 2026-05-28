@@ -140,6 +140,10 @@ input, textarea { font: inherit; color: inherit; }
 [data-theme="light"] .om-app::before { opacity: 0.95; transition: opacity 2s ease; }
 [data-theme="hi"]   .om-app::before { opacity: 0; }
 .om-app.theme-transitioning::before { opacity: 0 !important; transition: opacity 0s !important; }
+/* Slow crossfade all UI color tokens during theme switch — scoped to transition window only */
+.om-app.theme-transitioning * {
+  transition: background-color 3s ease, color 3s ease, border-color 3s ease, box-shadow 3s ease !important;
+}
 
 @keyframes omIridescent {
   0%   { transform: translate(0, 0)     rotate(0deg)   scale(1);    filter: blur(80px) saturate(130%); }
