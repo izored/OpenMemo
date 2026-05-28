@@ -422,6 +422,30 @@ input, textarea { font: inherit; color: inherit; }
   transition: background .15s;
 }
 .om-lightbox-open:hover { background: rgba(255,255,255,0.22); }
+.om-lightbox-nav {
+  position: absolute; top: 50%; transform: translateY(-50%);
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 48px; height: 48px; border-radius: 50%;
+  background: rgba(255,255,255,0.12); color: #F5F2EC;
+  border: 1px solid rgba(255,255,255,0.18);
+  transition: background .15s;
+}
+.om-lightbox-nav:hover { background: rgba(255,255,255,0.22); }
+.om-lightbox-nav.prev { left: 24px; }
+.om-lightbox-nav.next { right: 24px; }
+.om-lightbox-count {
+  position: absolute; bottom: 20px; left: 50%; transform: translateX(-50%);
+  padding: 6px 14px; border-radius: 999px;
+  background: rgba(255,255,255,0.12); color: #F5F2EC;
+  border: 1px solid rgba(255,255,255,0.18);
+  font-size: 12.5px; font-weight: 500;
+  font-variant-numeric: tabular-nums;
+}
+.om-lightbox-empty {
+  color: rgba(245,242,236,0.7); font-size: 14px;
+  padding: 40px; border-radius: 12px;
+  background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.12);
+}
 
 /* ─ Branded confirm modal (delete prompt) ─────────────────────────────── */
 .om-confirm-overlay {
@@ -1052,6 +1076,33 @@ input, textarea { font: inherit; color: inherit; }
 .om-ai-summary-head { display: flex; align-items: center; gap: 8px; }
 .om-ai-summary-label { font-size: 13px; font-weight: 600; color: var(--text); }
 .om-accent-icon     { color: var(--accent); }
+
+/* Report card for file-backed memos (document / code / generic file) */
+.om-doc-report      { border: 1px solid var(--border); border-radius: var(--r-lg);
+                      background: var(--surface-2); overflow: hidden; margin-bottom: 24px; }
+.om-doc-report-head { display: flex; align-items: center; gap: 14px;
+                      padding: 18px 20px; border-bottom: 1px solid var(--border); }
+.om-doc-report-badge { flex-shrink: 0; width: 52px; height: 52px; border-radius: var(--r-md);
+                      display: inline-flex; align-items: center; justify-content: center;
+                      background: color-mix(in oklab, var(--accent) 12%, var(--surface));
+                      color: var(--accent); font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+                      font-size: 13px; font-weight: 600; letter-spacing: .02em; }
+.om-doc-report-headtext { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.om-doc-report-eyebrow { font-size: 10.5px; letter-spacing: .1em; text-transform: uppercase;
+                      color: var(--text-4); }
+.om-doc-report-title { font-size: 16px; font-weight: 600; color: var(--text);
+                      overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.om-doc-report-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr));
+                      gap: 1px; background: var(--border); }
+.om-doc-report-stat { background: var(--surface-2); padding: 14px 20px;
+                      display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.om-doc-report-stat-label { font-size: 10.5px; letter-spacing: .08em; text-transform: uppercase;
+                      color: var(--text-4); }
+.om-doc-report-stat-value { font-size: 13.5px; color: var(--text);
+                      overflow: hidden; text-overflow: ellipsis; }
+@media (max-width: 720px) {
+  .om-doc-report-grid { grid-template-columns: minmax(0, 1fr); }
+}
 
 /* Section utility */
 .om-section-icon    { color: var(--text-4); display: inline-flex; align-items: center; }

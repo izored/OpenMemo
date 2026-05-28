@@ -428,40 +428,27 @@ export function SettingsPage() {
             </div>
           </SettingCard>
 
-          <SettingCard title="Uploads" eyebrow="Limits">
-            <div className="om-setting-row">
-              <div className="om-setting-row-text">
-                <p>Max upload size</p>
-                <span className="mono">Per file. Any file type is accepted. Default 5120 MB (5 GB).</span>
-              </div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                <input
-                  type="number"
-                  min={1}
-                  max={51200}
-                  value={maxUploadMb ?? ''}
-                  onChange={(e) => setMaxUploadMb(e.target.value === '' ? null : Number(e.target.value))}
-                  className="om-input"
-                  style={{ width: 110, textAlign: 'right' }}
-                />
-                <span className="mono om-setting-val">MB</span>
-                <button className="om-btn-secondary" onClick={saveMaxUpload} disabled={maxUploadMb == null}>
-                  {maxUploadSaved ? 'Saved ✓' : 'Save'}
-                </button>
+          <div className="om-setting-card om-creator-card">
+            <div className="om-setting-head">
+              <span className="mono om-setting-eyebrow">Made by</span>
+            </div>
+            <div className="om-setting-body">
+              <p className="om-creator-name">Reda Izo</p>
+              <span className="om-creator-role">Creative Director · openMemo</span>
+              <p className="om-creator-bio">
+                I build tools I want to use. openMemo keeps the links, files,
+                notes and videos worth saving. On your machine.
+              </p>
+              <div className="om-creator-links">
+                <a className="om-creator-link" href="https://dev.izo.red" target="_blank" rel="noopener noreferrer">
+                  <Icon name="globe" size={12} /> dev.izo.red
+                </a>
+                <a className="om-creator-link" href="https://github.com/izored/OpenMemo" target="_blank" rel="noopener noreferrer">
+                  <Icon name="github" size={12} /> GitHub
+                </a>
               </div>
             </div>
-            <div className="om-setting-row" style={{ borderTop: '1px solid var(--border)', marginTop: 8, paddingTop: 8 }}>
-              <div className="om-setting-row-text">
-                <p>Localize saved content</p>
-                <span className="mono">
-                  {localizeResult || 'Download remote images in saved articles so memos survive source deletion'}
-                </span>
-              </div>
-              <button className="om-btn-secondary" onClick={runLocalize} disabled={localizing}>
-                {localizing ? 'Localizing…' : 'Localize'}
-              </button>
-            </div>
-          </SettingCard>
+          </div>
 
           <SettingCard title="Backup & Restore" eyebrow="Data safety">
             <div className="om-setting-row">
@@ -557,27 +544,40 @@ export function SettingsPage() {
             </div>
           </SettingCard>
 
-          <div className="om-setting-card om-creator-card">
-            <div className="om-setting-head">
-              <span className="mono om-setting-eyebrow">Made by</span>
-            </div>
-            <div className="om-setting-body">
-              <p className="om-creator-name">Reda Izo</p>
-              <span className="om-creator-role">Creative Director · openMemo</span>
-              <p className="om-creator-bio">
-                I build tools I want to use. openMemo keeps the links, files,
-                notes and videos worth saving. On your machine.
-              </p>
-              <div className="om-creator-links">
-                <a className="om-creator-link" href="https://dev.izo.red" target="_blank" rel="noopener noreferrer">
-                  <Icon name="globe" size={12} /> dev.izo.red
-                </a>
-                <a className="om-creator-link" href="https://github.com/izored/OpenMemo" target="_blank" rel="noopener noreferrer">
-                  <Icon name="github" size={12} /> GitHub
-                </a>
+          <SettingCard title="Uploads" eyebrow="Limits">
+            <div className="om-setting-row">
+              <div className="om-setting-row-text">
+                <p>Max upload size</p>
+                <span className="mono">Per file. Any file type is accepted. Default 5120 MB (5 GB).</span>
+              </div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <input
+                  type="number"
+                  min={1}
+                  max={51200}
+                  value={maxUploadMb ?? ''}
+                  onChange={(e) => setMaxUploadMb(e.target.value === '' ? null : Number(e.target.value))}
+                  className="om-input"
+                  style={{ width: 110, textAlign: 'right' }}
+                />
+                <span className="mono om-setting-val">MB</span>
+                <button className="om-btn-secondary" onClick={saveMaxUpload} disabled={maxUploadMb == null}>
+                  {maxUploadSaved ? 'Saved ✓' : 'Save'}
+                </button>
               </div>
             </div>
-          </div>
+            <div className="om-setting-row" style={{ borderTop: '1px solid var(--border)', marginTop: 8, paddingTop: 8 }}>
+              <div className="om-setting-row-text">
+                <p>Localize saved content</p>
+                <span className="mono">
+                  {localizeResult || 'Download remote images in saved articles so memos survive source deletion'}
+                </span>
+              </div>
+              <button className="om-btn-secondary" onClick={runLocalize} disabled={localizing}>
+                {localizing ? 'Localizing…' : 'Localize'}
+              </button>
+            </div>
+          </SettingCard>
 
           <SettingCard title="Built with ❤️" eyebrow="Open source">
             <p className="om-built-with-lead">

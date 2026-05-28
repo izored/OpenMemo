@@ -10,6 +10,7 @@ import { FullscreenWriter } from './FullscreenWriter';
 import { SearchOverlay } from './SearchOverlay';
 import { Onboarding } from './Onboarding';
 import { AddCollectionModal } from './AddCollectionModal';
+import { Lightbox } from './Lightbox';
 import { Icon } from './Icon';
 import { useTransitionConfig, type TransitionConfig } from '@/lib/transitionConfig';
 import { useAppStore } from '@/stores/appStore';
@@ -18,10 +19,14 @@ import { cn } from '@/lib/utils';
 
 // Dev panel is gitignored (frontend/src/dev/). Load it optionally — import.meta.glob
 // returns {} when the folder is absent, so production / fresh clones still build.
-const devPanelModules = import.meta.glob('../dev/DevPanel.tsx', { eager: true }) as Record<
-  string,
-  { DevPanel: (p: { txConfig: TransitionConfig; setTxConfig: (patch: Partial<TransitionConfig>) => void; resetTxConfig: () => void; onTestTransition: () => void }) => ReactElement }
->;
+// The folder can still be present in a Docker build context (gitignore ≠ dockerignore),
+// so the actual render is also gated on import.meta.env.DEV below — it never ships.
+const devPanelModules = import.meta.env.DEV
+  ? (import.meta.glob('../dev/DevPanel.tsx', { eager: true }) as Record<
+      string,
+      { DevPanel: (p: { txConfig: TransitionConfig; setTxConfig: (patch: Partial<TransitionConfig>) => void; resetTxConfig: () => void; onTestTransition: () => void }) => ReactElement }
+    >)
+  : {};
 const DevPanel = Object.values(devPanelModules)[0]?.DevPanel;
 
 export function Layout() {
@@ -182,7 +187,9 @@ export function Layout() {
         </span>
       </button>
 
-      {DevPanel && (
+      <Lightbox />
+
+      {import.meta.env.DEV && DevPanel && (
         <DevPanel
           txConfig={txConfig}
           setTxConfig={setTxConfig}
