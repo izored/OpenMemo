@@ -2114,12 +2114,14 @@ input, textarea { font: inherit; color: inherit; }
   perspective: 800px;
 }
 
-/* Ghost stacked layers — hidden at rest, fan out on hover */
+/* Ghost stacked layers — hidden at rest, fan out on hover.
+   Background follows theme (dimmed in dark, bright in light).
+   Top highlight is hardcoded strong across all themes — consistent paper-like quality. */
 .om-coll-stack {
   position: absolute; inset: 0;
   border-radius: var(--r-xl);
   background: var(--surface-2);
-  box-shadow: var(--shadow-card);
+  box-shadow: 0 1px 0 rgba(255,255,255,0.60) inset, 0 1px 3px rgba(0,0,0,0.10);
   border: 1px solid var(--border);
   opacity: 0; pointer-events: none;
   transition: transform .35s cubic-bezier(.2,.7,.2,1), opacity .25s ease;
