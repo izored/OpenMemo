@@ -23,6 +23,18 @@ from backend.db.models import (
 router = APIRouter(prefix="/api/maintenance", tags=["maintenance"])
 
 
+@router.post("/reclassify-types")
+async def reclassify_types(dry_run: bool = False, db: AsyncSession = Depends(get_db)):
+    """Re-file every memo to its canonical type (the background sorter, on demand).
+
+    Pass ?dry_run=true to preview the changes without writing. Returns
+    {scanned, changed, changes, dry_run}.
+    """
+    from backend.core.classify import reclassify_all
+
+    return await reclassify_all(db, dry_run=dry_run)
+
+
 @router.post("/backfill-video-thumbs")
 async def backfill_video_thumbnails(db: AsyncSession = Depends(get_db)):
     """Re-run thumbnail extraction for all video memos missing thumbnail_path.

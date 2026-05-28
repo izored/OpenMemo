@@ -18,6 +18,7 @@ import {
   Expand,
   Pin,
   PinOff,
+  FileText,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { BackButton } from '@/components/BackButton';
@@ -114,6 +115,57 @@ function MediaPreview({ src, alt, kind }: { src: string; alt: string; kind: 'ima
         </div>
       )}
     </>
+  );
+}
+
+// Report card for file-backed memos (documents, code, generic files). These
+// often have little or no extracted text, so the detail page would otherwise
+// be a bare title. The card surfaces the key metadata at a glance.
+function DocReportCard({ memo }: { memo: Memo }) {
+  const ext = memo.title.includes('.') ? memo.title.split('.').pop()!.toUpperCase() : '';
+  const text = memo.content_text || memo.content_raw || '';
+  const wordCount = text.trim() ? text.trim().split(/\s+/).length : 0;
+  const readMins = wordCount ? Math.max(1, Math.round(wordCount / 200)) : 0;
+  const added = new Date(memo.created_at).toLocaleDateString('en-US', {
+    year: 'numeric', month: 'long', day: 'numeric',
+  });
+
+  const typeLabel =
+    ({ document: 'Document', code: 'Source file', file: 'File' } as Record<string, string>)[memo.type] || 'File';
+
+  const stats: { label: string; value: string }[] = [
+    { label: 'Added', value: added },
+    { label: 'Kind', value: ext ? `${ext} · ${typeLabel}` : typeLabel },
+  ];
+  if (wordCount) stats.push({ label: 'Length', value: `${wordCount.toLocaleString()} words · ${readMins} min read` });
+  stats.push({
+    label: 'Collections',
+    value: memo.collections?.length ? memo.collections.map((c) => c.name).join(', ') : 'None',
+  });
+  stats.push({
+    label: 'Tags',
+    value: memo.tags?.length ? memo.tags.join(', ') : 'None',
+  });
+  stats.push({ label: 'AI summary', value: memo.ai_summary ? 'Generated' : 'Not yet' });
+
+  return (
+    <div className="om-doc-report">
+      <div className="om-doc-report-head">
+        <div className="om-doc-report-badge">{ext ? `.${ext.toLowerCase()}` : <FileText size={22} />}</div>
+        <div className="om-doc-report-headtext">
+          <span className="mono om-doc-report-eyebrow">{typeLabel}</span>
+          <h2 className="om-doc-report-title">{memo.title}</h2>
+        </div>
+      </div>
+      <div className="om-doc-report-grid">
+        {stats.map((s) => (
+          <div key={s.label} className="om-doc-report-stat">
+            <span className="mono om-doc-report-stat-label">{s.label}</span>
+            <span className="om-doc-report-stat-value">{s.value}</span>
+          </div>
+        ))}
+      </div>
+    </div>
   );
 }
 
@@ -477,6 +529,11 @@ export function MemoDetail() {
                   <ReactMarkdown remarkPlugins={[remarkGfm]}>{memo.ai_summary}</ReactMarkdown>
                 </div>
               </div>
+            )}
+
+            {/* Report card for file-backed memos (doc / code / generic file) */}
+            {!isEditing && (memo.type === 'document' || memo.type === 'code' || memo.type === 'file') && (
+              <DocReportCard memo={memo} />
             )}
 
             {/* Header action row — same component, same metrics, real gap */}

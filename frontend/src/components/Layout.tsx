@@ -1,6 +1,14 @@
 import { useEffect, useRef, useState, type ReactElement } from 'react';
 import { Outlet, useLocation } from 'react-router-dom';
 import { AnimatePresence, motion } from 'framer-motion';
+import {
+  DndContext,
+  PointerSensor,
+  useSensor,
+  useSensors,
+  pointerWithin,
+} from '@dnd-kit/core';
+import { DndBusContext, type GridDragHandlers } from '@/lib/dndBus';
 import Lenis from 'lenis';
 import 'lenis/dist/lenis.css';
 import { Sidebar } from './Sidebar';
@@ -10,6 +18,7 @@ import { FullscreenWriter } from './FullscreenWriter';
 import { SearchOverlay } from './SearchOverlay';
 import { Onboarding } from './Onboarding';
 import { AddCollectionModal } from './AddCollectionModal';
+import { Lightbox } from './Lightbox';
 import { Icon } from './Icon';
 import { useTransitionConfig, type TransitionConfig } from '@/lib/transitionConfig';
 import { useAppStore } from '@/stores/appStore';
@@ -18,10 +27,14 @@ import { cn } from '@/lib/utils';
 
 // Dev panel is gitignored (frontend/src/dev/). Load it optionally — import.meta.glob
 // returns {} when the folder is absent, so production / fresh clones still build.
-const devPanelModules = import.meta.glob('../dev/DevPanel.tsx', { eager: true }) as Record<
-  string,
-  { DevPanel: (p: { txConfig: TransitionConfig; setTxConfig: (patch: Partial<TransitionConfig>) => void; resetTxConfig: () => void; onTestTransition: () => void }) => ReactElement }
->;
+// The folder can still be present in a Docker build context (gitignore ≠ dockerignore),
+// so the actual render is also gated on import.meta.env.DEV below — it never ships.
+const devPanelModules = import.meta.env.DEV
+  ? (import.meta.glob('../dev/DevPanel.tsx', { eager: true }) as Record<
+      string,
+      { DevPanel: (p: { txConfig: TransitionConfig; setTxConfig: (patch: Partial<TransitionConfig>) => void; resetTxConfig: () => void; onTestTransition: () => void }) => ReactElement }
+    >)
+  : {};
 const DevPanel = Object.values(devPanelModules)[0]?.DevPanel;
 
 export function Layout() {
@@ -93,6 +106,14 @@ export function Layout() {
     }
   }, [tweaks]);
 
+  // App-level drag-and-drop. Hosting the DndContext here (above both the
+  // Sidebar and the routed page) is what lets a memo card be dragged onto a
+  // sidebar collection — both live under the same provider. The active page's
+  // grid registers its handlers via the bus ref. distance:8 preserves card
+  // clicks (see CLAUDE.md dnd-kit gotcha).
+  const dndBusRef = useRef<GridDragHandlers>({});
+  const dndSensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 8 } }));
+
   // Global shortcuts: ⌘K search, N new memo (when not typing).
   useEffect(() => {
     const h = (e: KeyboardEvent) => {
@@ -112,6 +133,14 @@ export function Layout() {
 
   return (
     <div className={cn('om-app', sidebarCollapsed && 'sidebar-collapsed', colorTransition && 'theme-transitioning')}>
+      <DndBusContext.Provider value={dndBusRef}>
+      <DndContext
+        sensors={dndSensors}
+        collisionDetection={pointerWithin}
+        onDragStart={(e) => dndBusRef.current.onDragStart?.(e)}
+        onDragOver={(e) => dndBusRef.current.onDragOver?.(e)}
+        onDragEnd={(e) => dndBusRef.current.onDragEnd?.(e)}
+      >
       <div className="om-bg-veil" style={{ opacity: tweaks.bgFade ?? 0 }} aria-hidden />
       <Sidebar />
 
@@ -182,7 +211,9 @@ export function Layout() {
         </span>
       </button>
 
-      {DevPanel && (
+      <Lightbox />
+
+      {import.meta.env.DEV && DevPanel && (
         <DevPanel
           txConfig={txConfig}
           setTxConfig={setTxConfig}
@@ -190,6 +221,8 @@ export function Layout() {
           onTestTransition={() => setTweak('theme', tweaks.theme === 'light' ? 'dark' : 'light')}
         />
       )}
+      </DndContext>
+      </DndBusContext.Provider>
     </div>
   );
 }

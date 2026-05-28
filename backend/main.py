@@ -15,6 +15,25 @@ from backend.core.security import SafePath
 from backend.core.file_paths import resolve_memo_path
 
 
+async def _run_reclassify_job():
+    """Background sorter — re-file every memo to its canonical type.
+
+    Safe to run anytime: idempotent, only rewrites mismatched types. Wired to
+    run once on startup and twice weekly (see lifespan). Never raises out.
+    """
+    try:
+        from backend.core.classify import reclassify_all
+
+        async with AsyncSessionLocal() as db:
+            result = await reclassify_all(db)
+        if result.get("changed"):
+            print(f"[sorter] reclassified {result['changed']} memo(s): {result['changes']}")
+        else:
+            print("[sorter] all memos already correctly typed")
+    except Exception as e:  # never let the scheduler die on a bad run
+        print(f"[sorter] reclassify job failed (non-critical): {e}")
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Initialize database and default workspace on startup."""
@@ -54,8 +73,31 @@ async def lifespan(app: FastAPI):
             )
             db.add(workspace)
             await db.commit()
-    
+
+    # Background sorter: run once now (catch up immediately), then twice weekly.
+    import asyncio
+    from apscheduler.schedulers.asyncio import AsyncIOScheduler
+    from apscheduler.triggers.cron import CronTrigger
+
+    asyncio.create_task(_run_reclassify_job())
+
+    scheduler = AsyncIOScheduler()
+    scheduler.add_job(
+        _run_reclassify_job,
+        CronTrigger(day_of_week="mon,thu", hour=3, minute=0),
+        id="reclassify_memo_types",
+        replace_existing=True,
+    )
+    scheduler.start()
+    app.state.scheduler = scheduler
+
     yield
+
+    # Shutdown — stop the scheduler cleanly.
+    try:
+        scheduler.shutdown(wait=False)
+    except Exception:
+        pass
 
 
 app = FastAPI(

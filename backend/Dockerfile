@@ -2,9 +2,11 @@ FROM python:3.12-slim
 
 WORKDIR /app
 
-# Install system deps
+# Install system deps. ffmpeg is required for video thumbnail extraction
+# (backend/core/video.py shells out to it); without it video memos render blank.
 RUN apt-get update && apt-get install -y --no-install-recommends \
     build-essential \
+    ffmpeg \
     && rm -rf /var/lib/apt/lists/*
 
 # Create backend package directory

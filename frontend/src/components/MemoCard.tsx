@@ -5,6 +5,8 @@ import type { DraggableAttributes } from '@dnd-kit/core';
 import { Icon } from './Icon';
 import { cn } from '@/lib/utils';
 import { memoApi } from '@/lib/api';
+import { mediaSrc, youtubeEmbed } from '@/lib/media';
+import { useAppStore } from '@/stores/appStore';
 import type { Memo, MemoType } from '@/types';
 
 // Warm tint palette for cards without media (notes / plain docs).
@@ -20,19 +22,6 @@ function hashId(id: string): number {
   let h = 0;
   for (const c of id) h = (h * 31 + c.charCodeAt(0)) >>> 0;
   return h;
-}
-
-function youtubeEmbed(url?: string | null): string | null {
-  if (!url) return null;
-  try {
-    const u = new URL(url);
-    let id: string | null = null;
-    if (u.hostname.includes('youtube.com')) id = u.searchParams.get('v');
-    else if (u.hostname === 'youtu.be') id = u.pathname.slice(1);
-    return id ? `https://www.youtube.com/embed/${id}?autoplay=1&rel=0` : null;
-  } catch {
-    return null;
-  }
 }
 
 function rootDomain(domain?: string | null): string {
@@ -55,9 +44,6 @@ function typeLabel(t: MemoType) {
     { note: 'Note', link: 'Link', article: 'Article', image: 'Image', video: 'Video', document: 'File', audio: 'Audio' } as Record<string, string>
   )[t] || 'Memo';
 }
-
-// Domains that use hotlink protection — proxy through backend
-const HOTLINK_DOMAINS = ['dribbble.com', 'behance.net', 'pinterest.com', 'cdn.dribbble.com'];
 
 // Inline SVG file icon with the extension burned in. Single component, the
 // extension is passed in as a prop — avoids maintaining a library of per-type
@@ -105,19 +91,6 @@ function FileBadge({ ext }: { ext: string }) {
       )}
     </svg>
   );
-}
-
-function mediaSrc(memo: Memo): string | null {
-  if (memo.thumbnail_path) {
-    if (memo.thumbnail_path.startsWith('http')) {
-      const needsProxy = HOTLINK_DOMAINS.some((d) => memo.thumbnail_path!.includes(d));
-      if (needsProxy)
-        return `/api/proxy/image?url=${encodeURIComponent(memo.thumbnail_path)}&memo_id=${memo.id}`;
-    }
-    return memo.thumbnail_path;
-  }
-  if (memo.type === 'image' && memo.file_path) return `/api/memos/${memo.id}/file`;
-  return null;
 }
 
 interface DragProps {
@@ -216,26 +189,32 @@ function Meta({ memo }: { memo: Memo }) {
 interface CardProps {
   memo: Memo;
   dragHandleProps?: DragProps;
+  // Ordered media memos in the same grid — lets the shared lightbox page
+  // prev/next across siblings. Falls back to just this memo when absent.
+  lightboxGroup?: Memo[];
 }
 
-export function MemoCard({ memo, dragHandleProps }: CardProps) {
+export function MemoCard({ memo, dragHandleProps, lightboxGroup }: CardProps) {
   const queryClient = useQueryClient();
   const navigate = useNavigate();
+  const openLightbox = useAppStore((s) => s.openLightbox);
   const [imageOrient, setImageOrient] = React.useState<'landscape' | 'portrait'>('landscape');
-  const [lightboxOpen, setLightboxOpen] = React.useState(false);
   const [confirmDeleteOpen, setConfirmDeleteOpen] = React.useState(false);
 
+  const showInLightbox = () => {
+    const group = lightboxGroup && lightboxGroup.length ? lightboxGroup : [memo];
+    const idx = group.findIndex((m) => m.id === memo.id);
+    openLightbox(group, idx >= 0 ? idx : 0);
+  };
+
   React.useEffect(() => {
-    if (!lightboxOpen && !confirmDeleteOpen) return;
+    if (!confirmDeleteOpen) return;
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') {
-        setLightboxOpen(false);
-        setConfirmDeleteOpen(false);
-      }
+      if (e.key === 'Escape') setConfirmDeleteOpen(false);
     };
     document.addEventListener('keydown', onKey);
     return () => document.removeEventListener('keydown', onKey);
-  }, [lightboxOpen, confirmDeleteOpen]);
+  }, [confirmDeleteOpen]);
 
   const goDetail = (e: React.MouseEvent) => {
     e.stopPropagation();
@@ -338,7 +317,7 @@ export function MemoCard({ memo, dragHandleProps }: CardProps) {
           onPin={handlePin}
           bgSrc={src}
           className="om-card-image"
-          onCardClick={() => setLightboxOpen(true)}
+          onCardClick={showInLightbox}
           onOpen={goDetail}
         >
           <div className="om-image-frame" data-orient={imageOrient} style={{ background: heroBg }}>
@@ -367,23 +346,6 @@ export function MemoCard({ memo, dragHandleProps }: CardProps) {
             <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{memo.title}</span>
           </div>
         </Chrome>
-        {lightboxOpen && src && (
-          <div className="om-lightbox" role="dialog" aria-modal="true" onClick={() => setLightboxOpen(false)}>
-            <img src={src} alt={memo.title} onClick={(e) => e.stopPropagation()} />
-            <div className="om-lightbox-toolbar" onClick={(e) => e.stopPropagation()}>
-              <button
-                className="om-lightbox-open"
-                onClick={() => { setLightboxOpen(false); navigate(`/memo/${memo.id}`); }}
-              >
-                <Icon name="arrowUpRight" size={14} />
-                <span>Open memo page</span>
-              </button>
-              <button className="om-lightbox-close" onClick={() => setLightboxOpen(false)} aria-label="Close">
-                <Icon name="x" size={20} />
-              </button>
-            </div>
-          </div>
-        )}
         {confirmModal}
       </>
     );
@@ -403,7 +365,7 @@ export function MemoCard({ memo, dragHandleProps }: CardProps) {
           onPin={handlePin}
           bgSrc={src}
           className="om-card-video"
-          onCardClick={canPlay ? () => setLightboxOpen(true) : undefined}
+          onCardClick={canPlay ? showInLightbox : undefined}
           onOpen={goDetail}
         >
           <div className="om-video-frame" style={{ background: heroBg }}>
@@ -431,40 +393,6 @@ export function MemoCard({ memo, dragHandleProps }: CardProps) {
             <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{memo.title}</span>
           </div>
         </Chrome>
-        {lightboxOpen && canPlay && (
-          <div className="om-lightbox" role="dialog" aria-modal="true" onClick={() => setLightboxOpen(false)}>
-            {ytEmbed ? (
-              <iframe
-                src={ytEmbed}
-                title={memo.title}
-                allow="autoplay; encrypted-media; picture-in-picture"
-                allowFullScreen
-                onClick={(e) => e.stopPropagation()}
-                style={{ width: 'min(90vw, 1280px)', aspectRatio: '16/9', border: 0, borderRadius: 12, boxShadow: '0 30px 80px rgba(0,0,0,0.5)' }}
-              />
-            ) : (
-              <video
-                src={localVideo!}
-                controls
-                autoPlay
-                onClick={(e) => e.stopPropagation()}
-                style={{ maxWidth: '100%', maxHeight: '100%', borderRadius: 12 }}
-              />
-            )}
-            <div className="om-lightbox-toolbar" onClick={(e) => e.stopPropagation()}>
-              <button
-                className="om-lightbox-open"
-                onClick={() => { setLightboxOpen(false); navigate(`/memo/${memo.id}`); }}
-              >
-                <Icon name="arrowUpRight" size={14} />
-                <span>Open memo page</span>
-              </button>
-              <button className="om-lightbox-close" onClick={() => setLightboxOpen(false)} aria-label="Close">
-                <Icon name="x" size={20} />
-              </button>
-            </div>
-          </div>
-        )}
         {confirmModal}
       </>
     );
