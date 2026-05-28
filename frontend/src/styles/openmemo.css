@@ -561,8 +561,8 @@ input, textarea { font: inherit; color: inherit; }
 /* Dominant-color backdrop glows through transparent minimal cards — disable it */
 [data-card="minimal"] .om-card-dom { display: none; }
 /* Dark theme: stroke is dark so it reads as a real edge, not a bright halo */
-[data-theme="hi"] [data-card="minimal"] .om-card { border-color: rgba(0,0,0,0.55); }
-[data-theme="hi"] [data-card="minimal"] .om-card-hover:hover { border-color: rgba(0,0,0,0.75); }
+[data-theme="hi"][data-card="minimal"] .om-card { border-color: rgba(0,0,0,0.55); }
+[data-theme="hi"][data-card="minimal"] .om-card-hover:hover { border-color: rgba(0,0,0,0.75); }
 
 /* Notes in minimal: title always; body text fades in on hover; footer stays hidden. */
 [data-card="minimal"] .om-card-note { padding: 22px; min-height: 260px; }
@@ -733,8 +733,8 @@ input, textarea { font: inherit; color: inherit; }
   background: color-mix(in srgb, var(--accent) 30%, rgba(255,255,255,0.55));
 }
 /* Dark theme: dark base tinted with accent. White text reads on dark tint. */
-[data-theme="hi"] [data-card="minimal"] .om-card-link .om-min-hover:has(.om-min-hover-desc:not(:empty)),
-[data-theme="hi"] [data-card="minimal"] .om-card-video .om-min-hover:has(.om-min-hover-desc:not(:empty)) {
+[data-theme="hi"][data-card="minimal"] .om-card-link .om-min-hover:has(.om-min-hover-desc:not(:empty)),
+[data-theme="hi"][data-card="minimal"] .om-card-video .om-min-hover:has(.om-min-hover-desc:not(:empty)) {
   background: color-mix(in srgb, var(--accent) 20%, rgba(0,0,0,0.65));
   color: rgba(255,255,255,0.96);
 }
