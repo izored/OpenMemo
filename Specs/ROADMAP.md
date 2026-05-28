@@ -147,6 +147,44 @@ Single source of truth for all planned work. Versioned milestones + unversioned 
 
 ---
 
+## v1.10.5 — Background Maintenance & DB Health
+
+Silent scheduled jobs that keep a user's database tidy, searchable, and lean —
+no user action required. All run on the existing APScheduler instance wired in
+`backend/main.py` lifespan (startup + cron), each idempotent and best-effort
+(never crash the app), each with a manual `POST /api/maintenance/*` trigger +
+`?dry_run=true` preview. Pattern established by the memo-type sorter below.
+
+**Shipped (foundation):**
+- [x] **Memo-type sorter** — `backend/core/classify.py` (`derive_memo_type` + `reclassify_all`). Re-files every memo to its canonical type (file→extension, youtube/social→video, direct media link→image/document, web page→link, text→note). Runs on startup + Mon & Thu 03:00. `POST /api/maintenance/reclassify-types`. *(shipped 1.8.6)*
+- [x] **Video thumbnail backfill** — `POST /api/maintenance/backfill-video-thumbs` regenerates thumbs for videos missing them (ffmpeg now baked into the API image). *(shipped 1.8.6)*
+
+**Top priority (silent breakage — highest user value):**
+- [ ] **Re-embed backfill** — find memos with no `embedding_ids` (Ollama down at ingest, or failed) and re-embed them. Without this they never surface in RAG/chat. Schedule + `POST /api/maintenance/reembed-missing`.
+- [ ] **Chroma↔SQLite consistency** — prune vector chunks whose memo was deleted; re-add chunks missing from Chroma. Stops phantom and missing search hits.
+- [ ] **Orphan file cleanup** — delete files in `FILES_DIR` with no owning memo row (failed/abandoned uploads); reclaim disk. Report freed bytes.
+- [ ] **Dead-link checker** — periodic HEAD on `source_url`; flag 4xx/dead links (new `link_status` field) so the user knows a saved page is gone. Pairs with Localize.
+
+**Content enrichment (memos more useful over time):**
+- [ ] **Auto AI summary** — generate `ai_summary` in the background for memos over N words that lack one (reuses `/api/memos/{id}/summary`).
+- [ ] **Auto-tagging** — LLM suggests tags for untagged memos; improves filtering/grouping.
+- [ ] **Title / favicon refresh** — refetch OG title + favicon for link memos missing them.
+- [ ] **Web-card thumbnail backfill** — extend thumb backfill to article/link memos missing a preview image.
+
+**Storage hygiene (lean, fast, no clutter):**
+- [ ] **Duplicate detection** — same `source_url` or near-identical content → flag (or offer merge).
+- [ ] **Empty / failed-memo flag** — memos with no content + no file = broken ingest; surface for retry or delete.
+- [ ] **SQLite VACUUM + ANALYZE** — periodic optimize so the DB stays fast as it grows.
+- [ ] **FTS5 index repair** — rebuild full-text index if it drifts from the memo table.
+
+**Data safety:**
+- [ ] **Scheduled auto-backup** — periodic structure/full export to disk (reuses backup endpoint); keep last N.
+
+**UX surface (optional):**
+- [ ] **Maintenance panel in Settings** — show last-run time + result per job, manual "Run now" buttons, enable/disable toggles.
+
+---
+
 ## v1.11.0 — Settings & Identity *(P5)*
 
 - [x] **[G] Feature request flow** — "Send Feedback / Feature Request" button in Settings; pre-filled `mailto:dev@izo.red` with `[OpenMemo Feature Request]` subject + body template. Zero infra *(shipped in v1.7.3)*
