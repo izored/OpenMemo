@@ -13,10 +13,11 @@ const FILTERS = [
   { id: 'link', label: 'Links' },
   { id: 'image', label: 'Images' },
   { id: 'video', label: 'Videos' },
-  // Files tab covers every file-backed type, not just 'document' (also 'file'
-  // for generic uploads, 'code' for source files, 'audio'). Comma group is
-  // expanded server-side into a Memo.type IN (...) filter.
-  { id: 'document,file,code,audio', label: 'Files' },
+  { id: 'audio', label: 'Audio' },
+  { id: 'code', label: 'Code' },
+  // Files = real documents + generic uploads. Code and audio are their own
+  // tabs. Comma group expands server-side into a Memo.type IN (...) filter.
+  { id: 'document,file', label: 'Files' },
 ];
 
 export function Dashboard() {
