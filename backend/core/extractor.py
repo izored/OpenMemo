@@ -220,7 +220,9 @@ async def extract_url(url: str) -> dict:
         "source_domain": domain,
         "source_favicon": favicon,
         "thumbnail_path": thumbnail,
-        "type": "article",
+        # Saved web pages are filed as "link" (the UI has no Article tab — a
+        # webpage IS a link). See backend/core/classify.py for the taxonomy.
+        "type": "link",
     }
 
 

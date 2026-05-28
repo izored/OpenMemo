@@ -14,6 +14,7 @@ from sqlalchemy import select
 
 from backend.db.models import Memo, Collection
 from backend.core.security import sanitize_workspace_id, validate_url, FileUploadHandler
+from backend.core.classify import derive_memo_type
 
 router = APIRouter(prefix="/api/ingest", tags=["ingest"])
 
@@ -215,7 +216,7 @@ async def ingest_url(
     memo = Memo(
         id=str(uuid.uuid4()),
         workspace_id=sanitize_workspace_id(data.workspace_id),
-        type=extracted.get("type", "article"),
+        type=extracted.get("type", "link"),
         title=extracted.get("title", data.url),
         description=extracted.get("description"),
         content_text=extracted.get("content_text"),
@@ -227,7 +228,9 @@ async def ingest_url(
         created_at=datetime.utcnow(),
         updated_at=datetime.utcnow(),
     )
-    
+    # Canonical type from URL signal (video aggregator / direct file / web page).
+    memo.type = derive_memo_type(memo)
+
     db.add(memo)
     await _attach_collection(db, memo, data.collection_id)
     await db.commit()
@@ -502,7 +505,7 @@ async def ingest_from_extension(
     memo = Memo(
         id=str(uuid.uuid4()),
         workspace_id=sanitize_workspace_id(data.workspace_id),
-        type=data.type or extracted.get("type", "article"),
+        type=data.type or extracted.get("type", "link"),
         title=data.title or extracted.get("title") or data.url,
         description=data.description or extracted.get("description"),
         content_text=data.content_text or extracted.get("content_text"),
@@ -514,7 +517,9 @@ async def ingest_from_extension(
         created_at=datetime.utcnow(),
         updated_at=datetime.utcnow(),
     )
-    
+    # Canonical type — the extension's DOM scrape may mislabel (e.g. "article").
+    memo.type = derive_memo_type(memo)
+
     db.add(memo)
     await _attach_collection(db, memo, data.collection_id)
     await db.commit()

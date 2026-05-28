@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import type { Collection } from '@/types';
+import type { Collection, Memo } from '@/types';
 import { DEFAULT_TWEAKS, applyTweaks, type Tweaks } from '@/lib/appearance';
 
 const loadTweaks = (): Tweaks => {
@@ -31,6 +31,20 @@ const loadSettings = () => {
 
 const saved = loadSettings();
 
+const FILTER_ORDER_KEY = 'openmemo_filter_order';
+const loadFilterOrder = (): string[] => {
+  try {
+    const raw = localStorage.getItem(FILTER_ORDER_KEY);
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      if (Array.isArray(parsed)) return parsed.filter((x) => typeof x === 'string');
+    }
+  } catch {
+    /* ignore */
+  }
+  return [];
+};
+
 interface AppState {
   // Sidebar
   sidebarOpen: boolean;
@@ -39,6 +53,10 @@ interface AppState {
   // Filter
   activeFilter: string;
   setActiveFilter: (filter: string) => void;
+
+  // Dashboard filter-tab order (user-draggable, persisted)
+  filterOrder: string[];
+  setFilterOrder: (order: string[]) => void;
 
   // Active collection
   activeCollection: string | null;
@@ -86,6 +104,13 @@ interface AppState {
   searchOpen: boolean;
   setSearchOpen: (open: boolean) => void;
 
+  // Media lightbox (shared across grid — supports prev/next navigation)
+  lightboxGroup: Memo[];
+  lightboxIndex: number;
+  openLightbox: (group: Memo[], index: number) => void;
+  closeLightbox: () => void;
+  lightboxStep: (delta: number) => void;
+
   // Appearance tweaks (theme / accent / card / density / grid / background)
   tweaks: Tweaks;
   setTweak: (keyOrPatch: keyof Tweaks | Partial<Tweaks>, value?: unknown) => void;
@@ -103,6 +128,12 @@ export const useAppStore = create<AppState>((set) => ({
 
   activeFilter: 'all',
   setActiveFilter: (filter) => set({ activeFilter: filter }),
+
+  filterOrder: loadFilterOrder(),
+  setFilterOrder: (order) => {
+    localStorage.setItem(FILTER_ORDER_KEY, JSON.stringify(order));
+    set({ filterOrder: order });
+  },
 
   activeCollection: null,
   setActiveCollection: (id) => set({ activeCollection: id }),
@@ -142,6 +173,17 @@ export const useAppStore = create<AppState>((set) => ({
 
   searchOpen: false,
   setSearchOpen: (open) => set({ searchOpen: open }),
+
+  lightboxGroup: [],
+  lightboxIndex: -1,
+  openLightbox: (group, index) => set({ lightboxGroup: group, lightboxIndex: index }),
+  closeLightbox: () => set({ lightboxGroup: [], lightboxIndex: -1 }),
+  lightboxStep: (delta) =>
+    set((s) => {
+      if (s.lightboxIndex < 0 || s.lightboxGroup.length === 0) return {};
+      const n = s.lightboxGroup.length;
+      return { lightboxIndex: (s.lightboxIndex + delta + n) % n };
+    }),
 
   tweaks: loadTweaks(),
   setTweak: (keyOrPatch, value) =>
