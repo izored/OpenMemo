@@ -43,9 +43,9 @@
   --shadow-card-hover: 0 1px 0 rgba(255,255,255,0.08) inset, 0 12px 32px rgba(0,0,0,0.5), 0 0 0 1px rgba(255,255,255,0.06);
   --shadow-elev:       0 1px 0 rgba(255,255,255,0.05) inset, 0 24px 64px rgba(0,0,0,0.55);
   --grain: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='180' height='180'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2'/%3E%3CfeColorMatrix values='0 0 0 0 1 0 0 0 0 1 0 0 0 0 1 0 0 0 0.045 0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
-  --min-action-bg:       rgba(255,255,255,0.18);
-  --min-action-bg-hover: rgba(255,255,255,0.32);
-  --min-action-border:   rgba(255,255,255,0.22);
+  --min-action-bg:       rgba(255,255,255,0.38);
+  --min-action-bg-hover: rgba(255,255,255,0.55);
+  --min-action-border:   rgba(255,255,255,0.28);
   --min-action-color:    #fff;
   --min-action-blur:     blur(12px);
 }
@@ -68,9 +68,9 @@
   --shadow-card-hover: 0 1px 0 rgba(255,255,255,0.8) inset, 0 16px 36px rgba(20,18,14,0.08), 0 0 0 1px rgba(20,18,14,0.05);
   --shadow-elev:       0 1px 0 rgba(255,255,255,0.6) inset, 0 24px 60px rgba(20,18,14,0.16);
   --grain: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='180' height='180'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2'/%3E%3CfeColorMatrix values='0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0.04 0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
-  --min-action-bg:       rgba(49,49,49,0.40);
-  --min-action-bg-hover: rgba(49,49,49,0.55);
-  --min-action-border:   rgba(0,0,0,0.12);
+  --min-action-bg:       rgba(49,49,49,0.62);
+  --min-action-bg-hover: rgba(49,49,49,0.78);
+  --min-action-border:   rgba(0,0,0,0.18);
   --min-action-color:    #000000;
   --min-action-blur:     none;
 }
@@ -91,9 +91,9 @@
   --shadow-card-hover: 0 0 0 1px rgba(255,255,255,0.32), 0 12px 32px rgba(0,0,0,0.7);
   --shadow-elev:       0 0 0 1px rgba(255,255,255,0.22), 0 24px 64px rgba(0,0,0,0.8);
   --grain: none;
-  --min-action-bg:       rgba(255,255,255,0.18);
-  --min-action-bg-hover: rgba(255,255,255,0.32);
-  --min-action-border:   rgba(255,255,255,0.22);
+  --min-action-bg:       rgba(255,255,255,0.38);
+  --min-action-bg-hover: rgba(255,255,255,0.55);
+  --min-action-border:   rgba(255,255,255,0.28);
   --min-action-color:    #fff;
   --min-action-blur:     blur(12px);
 }
@@ -762,12 +762,14 @@ input, textarea { font: inherit; color: inherit; }
 }
 /* Token-driven — colors set per theme in :root / [data-theme] blocks above */
 [data-card="minimal"] .om-card-actions .om-action {
+  width: 20px; height: 20px; border-radius: 5px;
   background: var(--min-action-bg);
   backdrop-filter: var(--min-action-blur);
   -webkit-backdrop-filter: var(--min-action-blur);
   border: 1px solid var(--min-action-border);
   color: var(--min-action-color);
 }
+[data-card="minimal"] .om-card-actions .om-action svg { width: 9px; height: 9px; }
 [data-card="minimal"] .om-card-actions .om-action:hover { background: var(--min-action-bg-hover); }
 [data-card="minimal"] .om-card-actions .om-action.pinned { background: var(--accent); color: var(--accent-text, #fff); border-color: transparent; }
 
