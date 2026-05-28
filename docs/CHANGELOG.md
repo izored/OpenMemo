@@ -35,6 +35,8 @@ All notable changes to OpenMemo are documented here.
 
 ### Fixed
 
+- 📂 **Files tab showed nothing despite having file memos** — the Files filter tab sent `type=document`, but uploaded files are stored as `file` / `code` / `audio` (only true documents are `document`), so they never matched. The Files tab now maps to a type group (`document,file,code,audio`) and the `GET /api/memos` `type` param accepts a comma-separated list → `Memo.type IN (...)`. All file-backed memos now appear under Files.
+- 🚫 **Drag-over collection showed a left-edge accent bar** — the sidebar collection drop-target highlight used `inset 2px 0 0 var(--accent)` (a colored left strip), which violates the project's no-left-edge-bar rule. Replaced with a `.om-coll.drop-over` class: full inset ring (`inset 0 0 0 1px var(--accent)`) + soft accent fill.
 - 🎯 **Memo detail loading spinner not centred** — `.om-detail-loading` used `height: 100%`, which collapsed because the parent had no fixed height, pinning the spinner to the top. Switched to `min-height: 80vh` so it centres in the visible area.
 - 🪟 **Header backdrop hard-flipped on theme change** — the header `::before` carried a hardcoded `rgba()` gradient wash that snapped between themes (CSS can't interpolate between two gradients). Removed the background fill, kept only `backdrop-filter: blur()`. Note: full-width layout will need a token-safe wash restored later.
 - 🪞 **Lightbox covered the sidebar** — used `inset: 0` on `position: fixed`, blanketing the whole viewport. New `--sidebar-w` CSS var (set on `:root` by `<Sidebar>` based on `sidebarCollapsed` state) drives `.om-lightbox { left: var(--sidebar-w, 0) }`. Sidebar stays visible and interactive when the lightbox is open.

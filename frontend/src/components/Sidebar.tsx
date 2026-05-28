@@ -26,8 +26,7 @@ function CollectionRow({
   return (
     <button
       ref={setNodeRef}
-      className={cn('om-coll', pinned && 'pinned', active && 'active')}
-      style={isOver ? { boxShadow: 'inset 2px 0 0 var(--accent)', background: 'var(--accent-soft)' } : undefined}
+      className={cn('om-coll', pinned && 'pinned', active && 'active', isOver && 'drop-over')}
       onClick={onSelect}
     >
       <span
