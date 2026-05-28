@@ -43,6 +43,11 @@
   --shadow-card-hover: 0 1px 0 rgba(255,255,255,0.08) inset, 0 12px 32px rgba(0,0,0,0.5), 0 0 0 1px rgba(255,255,255,0.06);
   --shadow-elev:       0 1px 0 rgba(255,255,255,0.05) inset, 0 24px 64px rgba(0,0,0,0.55);
   --grain: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='180' height='180'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2'/%3E%3CfeColorMatrix values='0 0 0 0 1 0 0 0 0 1 0 0 0 0 1 0 0 0 0.045 0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+  --min-action-bg:       rgba(255,255,255,0.18);
+  --min-action-bg-hover: rgba(255,255,255,0.32);
+  --min-action-border:   rgba(255,255,255,0.22);
+  --min-action-color:    #fff;
+  --min-action-blur:     blur(12px);
 }
 [data-theme="light"] {
   --bg:        color-mix(in oklab, var(--accent) 5%, #EFEAE0);
@@ -63,6 +68,11 @@
   --shadow-card-hover: 0 1px 0 rgba(255,255,255,0.8) inset, 0 16px 36px rgba(20,18,14,0.08), 0 0 0 1px rgba(20,18,14,0.05);
   --shadow-elev:       0 1px 0 rgba(255,255,255,0.6) inset, 0 24px 60px rgba(20,18,14,0.16);
   --grain: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='180' height='180'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2'/%3E%3CfeColorMatrix values='0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0.04 0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+  --min-action-bg:       rgba(49,49,49,0.40);
+  --min-action-bg-hover: rgba(49,49,49,0.55);
+  --min-action-border:   rgba(0,0,0,0.12);
+  --min-action-color:    #000000;
+  --min-action-blur:     none;
 }
 [data-theme="hi"] {
   --bg:        color-mix(in oklab, var(--accent) 3%, #000);
@@ -81,6 +91,11 @@
   --shadow-card-hover: 0 0 0 1px rgba(255,255,255,0.32), 0 12px 32px rgba(0,0,0,0.7);
   --shadow-elev:       0 0 0 1px rgba(255,255,255,0.22), 0 24px 64px rgba(0,0,0,0.8);
   --grain: none;
+  --min-action-bg:       rgba(255,255,255,0.18);
+  --min-action-bg-hover: rgba(255,255,255,0.32);
+  --min-action-border:   rgba(255,255,255,0.22);
+  --min-action-color:    #fff;
+  --min-action-blur:     blur(12px);
 }
 
 /* Density */
@@ -745,28 +760,16 @@ input, textarea { font: inherit; color: inherit; }
   top: 12px; right: 12px;
   z-index: 4; pointer-events: auto;
 }
+/* Token-driven — colors set per theme in :root / [data-theme] blocks above */
 [data-card="minimal"] .om-card-actions .om-action {
-  background: rgba(255,255,255,0.18);
-  backdrop-filter: blur(12px);
-  border: 1px solid rgba(255,255,255,0.22);
-  color: #fff;
+  background: var(--min-action-bg);
+  backdrop-filter: var(--min-action-blur);
+  -webkit-backdrop-filter: var(--min-action-blur);
+  border: 1px solid var(--min-action-border);
+  color: var(--min-action-color);
 }
-[data-card="minimal"] .om-card-actions .om-action:hover { background: rgba(255,255,255,0.32); }
+[data-card="minimal"] .om-card-actions .om-action:hover { background: var(--min-action-bg-hover); }
 [data-card="minimal"] .om-card-actions .om-action.pinned { background: var(--accent); color: var(--accent-text, #fff); border-color: transparent; }
-/* Light theme: compound selector — both attrs on <html>, no descendant combinator */
-[data-theme="light"][data-card="minimal"] .om-card-actions .om-action {
-  background: rgba(49,49,49,0.40) !important;
-  backdrop-filter: none !important;
-  -webkit-backdrop-filter: none !important;
-  border: 1px solid rgba(0,0,0,0.12) !important;
-  color: #000000 !important;
-}
-[data-theme="light"][data-card="minimal"] .om-card-actions .om-action:hover { background: rgba(49,49,49,0.55) !important; }
-/* Dark-tint note (index 3): keep white */
-[data-theme="light"][data-card="minimal"] .om-card-note[data-tint="3"] .om-card-actions .om-action {
-  background: rgba(255,255,255,0.40); border: 1px solid rgba(255,255,255,0.22); color: rgba(255,255,255,0.9);
-}
-[data-theme="light"][data-card="minimal"] .om-card-note[data-tint="3"] .om-card-actions .om-action:hover { background: rgba(255,255,255,0.55); }
 
 .om-card-actions {
   position: absolute; top: 10px; right: 10px; z-index: 10;
