@@ -1,0 +1,105 @@
+"""Canonical memo-type classification.
+
+Single source of truth for "what type is this memo really?" Used both at
+ingest time (so memos are filed correctly when saved) and by the background
+sorter (a safety net that re-files anything that slipped through wrong).
+
+Type taxonomy (matches the UI filter tabs + card renderers):
+    note, link, image, video, audio, document, code, file
+
+There is intentionally NO "article" type — saved web pages are `link`. Any
+legacy `article` memo is migrated to `link` by derive_memo_type.
+"""
+
+from pathlib import Path
+from urllib.parse import urlparse
+
+from backend.core.security.upload import categorize_extension
+
+
+# URL path extensions that mean the link points straight at a media/doc file
+# (e.g. https://site.com/photo.jpg) rather than a web page. Mirrors the
+# categorisation map in upload.py so a direct file link is filed like an upload.
+def _ext_from_url(url: str) -> str:
+    try:
+        path = urlparse(url).path
+        return Path(path).suffix.lower()
+    except Exception:
+        return ""
+
+
+def derive_memo_type(memo) -> str:
+    """Return the canonical type for a memo from its strongest signal.
+
+    Priority: uploaded file (extension) > source URL (host + extension) > note.
+    Never returns "article" — web pages are "link". Never raises.
+    """
+    # 1) Uploaded file — the extension is authoritative.
+    file_path = getattr(memo, "file_path", None)
+    if file_path:
+        ext = Path(str(file_path)).suffix.lower()
+        if ext:
+            return categorize_extension(ext)
+        return "file"
+
+    # 2) Source URL — video aggregators, then direct-file extensions, else link.
+    source_url = getattr(memo, "source_url", None)
+    if source_url:
+        # Local import avoids a circular import (extractor imports nothing from
+        # here, but keep the dependency one-directional and lazy to be safe).
+        from backend.core.extractor import detect_url_type
+
+        url_type = detect_url_type(source_url)
+        if url_type in ("youtube", "social_video"):
+            return "video"
+
+        ext = _ext_from_url(source_url)
+        if ext:
+            cat = categorize_extension(ext)
+            # A page URL with a stray extension (".html", ".php", unknown) is
+            # still a web page → link. Only file-like categories win.
+            if cat in ("image", "video", "audio", "document"):
+                return cat
+        return "link"
+
+    # 3) No file, no URL → it's a written note.
+    return "note"
+
+
+# Types the sorter is allowed to overwrite. We never touch a memo whose current
+# type isn't in this set (defensive — keeps unknown/custom types intact).
+_KNOWN_TYPES = {
+    "note", "link", "article", "image", "video", "audio", "document", "code", "file",
+}
+
+
+async def reclassify_all(db, *, dry_run: bool = False) -> dict:
+    """Re-file every memo to its canonical type. Returns a summary.
+
+    Idempotent and safe to run repeatedly. Only updates memos whose stored
+    type differs from the derived type AND whose stored type is known. Returns
+    {scanned, changed, changes: {"old->new": count}}.
+    """
+    from sqlalchemy import select
+
+    from backend.db.models import Memo
+
+    rows = (await db.execute(select(Memo))).scalars().all()
+
+    changed = 0
+    breakdown: dict[str, int] = {}
+    for memo in rows:
+        current = (memo.type or "").lower()
+        if current not in _KNOWN_TYPES:
+            continue
+        derived = derive_memo_type(memo)
+        if derived and derived != current:
+            breakdown[f"{current}->{derived}"] = breakdown.get(f"{current}->{derived}", 0) + 1
+            changed += 1
+            if not dry_run:
+                memo.type = derived
+
+    if changed and not dry_run:
+        await db.commit()
+
+    return {"scanned": len(rows), "changed": changed, "changes": breakdown, "dry_run": dry_run}

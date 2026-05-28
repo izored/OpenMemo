@@ -1,10 +1,6 @@
 import {
-  DndContext,
-  useSensor,
-  useSensors,
-  PointerSensor,
   DragOverlay,
-  pointerWithin,
+  type DragStartEvent,
   type DragEndEvent,
   type DragOverEvent,
 } from '@dnd-kit/core';
@@ -18,6 +14,7 @@ import { collectionApi, memoApi } from '@/lib/api';
 import { useQueryClient } from '@tanstack/react-query';
 import type { Memo } from '@/types';
 import { useAppStore } from '@/stores/appStore';
+import { useDndBus } from '@/lib/dndBus';
 
 interface MemoGridProps {
   memos: Memo[];
@@ -61,6 +58,7 @@ export function MemoGrid({ memos: serverMemos }: MemoGridProps) {
   const columns = useViewportColumns(tweaks.gridColumns || 4);
   const gap = tweaks.density === 'compact' ? 12 : tweaks.density === 'roomy' ? 28 : 20;
 
+  const dndBus = useDndBus();
   const [activeId, setActiveId] = useState<string | null>(null);
   const [localMemos, setLocalMemos] = useState(serverMemos);
   const reorderingRef = useRef(false);
@@ -71,7 +69,11 @@ export function MemoGrid({ memos: serverMemos }: MemoGridProps) {
     if (!activeId && !reorderingRef.current) setLocalMemos(serverMemos);
   }, [serverMemos, activeId]);
 
-  const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 8 } }));
+  const handleDragStart = (event: DragStartEvent) => {
+    setActiveId(String(event.active.id));
+    lastOverIdRef.current = null;
+    dragOrderRef.current = [...localMemos];
+  };
 
   const handleDragOver = (event: DragOverEvent) => {
     const { active, over } = event;
@@ -135,6 +137,21 @@ export function MemoGrid({ memos: serverMemos }: MemoGridProps) {
   // Ordered image/video memos — the lightbox pages prev/next across these.
   const mediaGroup = localMemos.filter((m) => m.type === 'image' || m.type === 'video');
 
+  // Register drag handlers with the app-level DndContext (hosted in Layout so
+  // the Sidebar's collection drop targets share the same provider). Cleared on
+  // unmount so leaving the dashboard doesn't leave stale handlers wired up.
+  useEffect(() => {
+    if (!dndBus) return;
+    dndBus.current = {
+      onDragStart: handleDragStart,
+      onDragOver: handleDragOver,
+      onDragEnd: handleDragEnd,
+    };
+    return () => {
+      if (dndBus) dndBus.current = {};
+    };
+  });
+
   if (localMemos.length === 0) {
     return (
       <div className="om-empty">
@@ -156,21 +173,9 @@ export function MemoGrid({ memos: serverMemos }: MemoGridProps) {
   };
 
   return (
-    <DndContext
-      sensors={sensors}
-      collisionDetection={pointerWithin}
-      onDragStart={(e) => {
-        setActiveId(String(e.active.id));
-        lastOverIdRef.current = null;
-        dragOrderRef.current = [...localMemos];
-      }}
-      onDragOver={handleDragOver}
-      onDragEnd={handleDragEnd}
-    >
+    <>
       <SortableContext items={localMemos.map((m) => m.id)} strategy={verticalListSortingStrategy}>
-        <div
-          className="om-grid-wrap"
-        >
+        <div className="om-grid-wrap">
           <Masonry
             breakpointCols={breakpointCols}
             className="om-masonry"
@@ -186,6 +191,7 @@ export function MemoGrid({ memos: serverMemos }: MemoGridProps) {
         </div>
       </SortableContext>
 
+      {/* Rendered into the app-level DndContext hosted by Layout. */}
       <DragOverlay dropAnimation={null}>
         {activeMemo ? (
           <motion.div
@@ -197,6 +203,6 @@ export function MemoGrid({ memos: serverMemos }: MemoGridProps) {
           </motion.div>
         ) : null}
       </DragOverlay>
-    </DndContext>
+    </>
   );
 }
