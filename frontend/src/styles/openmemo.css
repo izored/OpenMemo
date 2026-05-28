@@ -137,8 +137,9 @@ input, textarea { font: inherit; color: inherit; }
   animation: omIridescent var(--blob-duration, 42s) ease-in-out infinite alternate;
   animation-play-state: var(--blob-play-state, running);
 }
-[data-theme="light"] .om-app::before { opacity: 0.95; }
+[data-theme="light"] .om-app::before { opacity: 0.95; transition: opacity 2s ease; }
 [data-theme="hi"]   .om-app::before { opacity: 0; }
+.om-app.theme-transitioning::before { opacity: 0 !important; transition: opacity 0s !important; }
 
 @keyframes omIridescent {
   0%   { transform: translate(0, 0)     rotate(0deg)   scale(1);    filter: blur(80px) saturate(130%); }

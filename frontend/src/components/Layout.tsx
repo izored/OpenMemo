@@ -25,9 +25,11 @@ export function Layout() {
 
   const [overlayKey, setOverlayKey] = useState(0);
   const [overlayTheme, setOverlayTheme] = useState(tweaks.theme);
+  const [blobsHidden, setBlobsHidden] = useState(false);
   const prevTheme = useRef(tweaks.theme);
   const mounted = useRef(false);
   const mainRef = useRef<HTMLElement | null>(null);
+  const blobTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Smooth scroll on the main content pane. Lenis hijacks wheel/touch and
   // eases the scrollTop with rAF — same easing-driven feel as motion sites.
@@ -63,6 +65,9 @@ export function Layout() {
       prevTheme.current = tweaks.theme;
       setOverlayTheme(tweaks.theme);
       setOverlayKey((k) => k + 1);
+      setBlobsHidden(true);
+      if (blobTimer.current) clearTimeout(blobTimer.current);
+      blobTimer.current = setTimeout(() => setBlobsHidden(false), 12000);
     }
   }, [tweaks]);
 
@@ -84,7 +89,7 @@ export function Layout() {
   }, [setSearchOpen, setAddPanelOpen]);
 
   return (
-    <div className={cn('om-app', sidebarCollapsed && 'sidebar-collapsed')}>
+    <div className={cn('om-app', sidebarCollapsed && 'sidebar-collapsed', blobsHidden && 'theme-transitioning')}>
       <div className="om-bg-veil" style={{ opacity: tweaks.bgFade ?? 0 }} aria-hidden />
       <Sidebar />
 
