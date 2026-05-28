@@ -753,17 +753,17 @@ input, textarea { font: inherit; color: inherit; }
 }
 [data-card="minimal"] .om-card-actions .om-action:hover { background: rgba(255,255,255,0.32); }
 [data-card="minimal"] .om-card-actions .om-action.pinned { background: var(--accent); color: var(--accent-text, #fff); border-color: transparent; }
-/* Light theme: all minimal cards get dark ink action buttons */
-[data-theme="light"] [data-card="minimal"] .om-card-actions .om-action {
-  background: #3131312e; backdrop-filter: blur(12px);
+/* Light theme: compound selector — both attrs on <html>, no descendant combinator */
+[data-theme="light"][data-card="minimal"] .om-card-actions .om-action {
+  background: rgba(49,49,49,0.40);
   border: 1px solid rgba(255,255,255,0.22); color: #000000;
 }
-[data-theme="light"] [data-card="minimal"] .om-card-actions .om-action:hover { background: rgba(49,49,49,0.24); }
-/* Dark-tint note (index 3) and hi-contrast: keep white */
-[data-theme="light"] [data-card="minimal"] .om-card-note[data-tint="3"] .om-card-actions .om-action {
-  background: rgba(255,255,255,0.18); border: 1px solid rgba(255,255,255,0.22); color: rgba(255,255,255,0.9);
+[data-theme="light"][data-card="minimal"] .om-card-actions .om-action:hover { background: rgba(49,49,49,0.55); }
+/* Dark-tint note (index 3): keep white */
+[data-theme="light"][data-card="minimal"] .om-card-note[data-tint="3"] .om-card-actions .om-action {
+  background: rgba(255,255,255,0.40); border: 1px solid rgba(255,255,255,0.22); color: rgba(255,255,255,0.9);
 }
-[data-theme="light"] [data-card="minimal"] .om-card-note[data-tint="3"] .om-card-actions .om-action:hover { background: rgba(255,255,255,0.32); }
+[data-theme="light"][data-card="minimal"] .om-card-note[data-tint="3"] .om-card-actions .om-action:hover { background: rgba(255,255,255,0.55); }
 
 .om-card-actions {
   position: absolute; top: 10px; right: 10px; z-index: 10;
