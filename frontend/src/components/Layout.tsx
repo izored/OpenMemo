@@ -124,8 +124,8 @@ export function Layout() {
             style={{
               position: 'fixed', inset: 0, zIndex: 0, pointerEvents: 'none',
               background: overlayTheme === 'dark'
-                ? 'radial-gradient(ellipse var(--r) var(--r) at 50% 100%, rgba(140, 70, 200, 0.95) 0%, rgba(60, 30, 110, 0.88) 40%, rgba(10, 8, 22, 0.72) 70%, rgba(6, 5, 14, 0.35) 88%, rgba(6, 5, 14, 0) 100%)'
-                : 'radial-gradient(ellipse var(--r) var(--r) at 50% 0%, rgba(255, 200, 140, 0.95) 0%, rgba(255, 220, 180, 0.88) 40%, rgba(255, 245, 225, 0.72) 70%, rgba(255, 253, 248, 0.35) 88%, rgba(255, 253, 248, 0) 100%)',
+                ? 'radial-gradient(ellipse var(--r) var(--r) at 50% 0%, rgba(140, 70, 200, 0.95) 0%, rgba(60, 30, 110, 0.88) 40%, rgba(10, 8, 22, 0.72) 70%, rgba(6, 5, 14, 0.35) 88%, rgba(6, 5, 14, 0) 100%)'
+                : 'radial-gradient(ellipse var(--r) var(--r) at 50% 100%, rgba(255, 200, 140, 0.95) 0%, rgba(255, 220, 180, 0.88) 40%, rgba(255, 245, 225, 0.72) 70%, rgba(255, 253, 248, 0.35) 88%, rgba(255, 253, 248, 0) 100%)',
             }}
           />
         )}
