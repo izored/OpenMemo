@@ -660,12 +660,19 @@ input, textarea { font: inherit; color: inherit; }
   max-width: 220px; opacity: 1; padding-left: 6px;
 }
 
-/* Media img: scale runs slower + bigger than blur (subtle parallax feel) */
+/* Media img: link/video — blur + scale; image-only cards — scale only */
 [data-card="minimal"] .om-media-img {
   transition: filter 0.7s ease, transform 1.8s ease;
 }
 [data-card="minimal"] .om-card:hover .om-media-img {
   filter: blur(12px);
+  transform: scale(1.10);
+}
+[data-card="minimal"] .om-card-image .om-media-img {
+  transition: transform 1.8s ease;
+}
+[data-card="minimal"] .om-card-image:hover .om-media-img {
+  filter: none;
   transform: scale(1.10);
 }
 
