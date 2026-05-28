@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import type { Collection } from '@/types';
+import type { Collection, Memo } from '@/types';
 import { DEFAULT_TWEAKS, applyTweaks, type Tweaks } from '@/lib/appearance';
 
 const loadTweaks = (): Tweaks => {
@@ -86,6 +86,13 @@ interface AppState {
   searchOpen: boolean;
   setSearchOpen: (open: boolean) => void;
 
+  // Media lightbox (shared across grid — supports prev/next navigation)
+  lightboxGroup: Memo[];
+  lightboxIndex: number;
+  openLightbox: (group: Memo[], index: number) => void;
+  closeLightbox: () => void;
+  lightboxStep: (delta: number) => void;
+
   // Appearance tweaks (theme / accent / card / density / grid / background)
   tweaks: Tweaks;
   setTweak: (keyOrPatch: keyof Tweaks | Partial<Tweaks>, value?: unknown) => void;
@@ -142,6 +149,17 @@ export const useAppStore = create<AppState>((set) => ({
 
   searchOpen: false,
   setSearchOpen: (open) => set({ searchOpen: open }),
+
+  lightboxGroup: [],
+  lightboxIndex: -1,
+  openLightbox: (group, index) => set({ lightboxGroup: group, lightboxIndex: index }),
+  closeLightbox: () => set({ lightboxGroup: [], lightboxIndex: -1 }),
+  lightboxStep: (delta) =>
+    set((s) => {
+      if (s.lightboxIndex < 0 || s.lightboxGroup.length === 0) return {};
+      const n = s.lightboxGroup.length;
+      return { lightboxIndex: (s.lightboxIndex + delta + n) % n };
+    }),
 
   tweaks: loadTweaks(),
   setTweak: (keyOrPatch, value) =>
