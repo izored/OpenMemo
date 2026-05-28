@@ -178,6 +178,7 @@ It started with **Kimi 2.6 Pro**, then **Claude Code (Opus 4.7 / Sonnet 4.6)**, 
 Most of the code is AI-assisted—but not directionless. I knew what I wanted to build from the start, and used AI as a tool to steer execution, iterate faster, and explore solutions.
 
 This project is also a learning record: a messy, practical discovery step into AI-powered software building.
+
 ---
 
 ## Contributing
