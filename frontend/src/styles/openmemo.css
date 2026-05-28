@@ -139,8 +139,11 @@ input, textarea { font: inherit; color: inherit; }
 }
 [data-theme="light"] .om-app::before { opacity: 0.95; transition: opacity 2s ease; }
 [data-theme="hi"]   .om-app::before { opacity: 0; }
-.om-app.theme-transitioning::before { opacity: 0 !important; transition: opacity 0s !important; }
+/* Fast fade-OUT when class added; the theme rules above carry the slow 2s fade-IN
+   when the class is removed. Different durations per state on purpose. */
+.om-app.blobs-hidden::before { opacity: 0; transition: opacity 0.3s ease; }
 /* Slow crossfade all UI color tokens during theme switch — scoped to transition window only */
+.om-app.theme-transitioning,
 .om-app.theme-transitioning * {
   transition: background-color 3s ease, color 3s ease, border-color 3s ease, box-shadow 3s ease !important;
 }
@@ -300,16 +303,13 @@ input, textarea { font: inherit; color: inherit; }
   isolation: isolate;
   display: flex; flex-direction: column; gap: 28px;
 }
-/* Full-bleed atmosphere — projects the blur/wash outside the centered content
-   container so the header feels like the page background, not a frosted panel.
-   Negative inset matches the .om-main horizontal padding for the current density. */
+/* Full-bleed atmosphere — backdrop blur only, no background fill (avoids theme-flip artifacts). */
 .om-header::before {
   content: '';
   position: absolute;
   top: 0; bottom: 0;
   left: calc(var(--header-bleed, 48px) * -1);
   right: calc(var(--header-bleed, 48px) * -1);
-  background: linear-gradient(to bottom, var(--bg) 0, var(--bg) 60%, transparent);
   -webkit-backdrop-filter: blur(8px);
           backdrop-filter: blur(8px);
   z-index: -1;
@@ -317,12 +317,6 @@ input, textarea { font: inherit; color: inherit; }
 }
 [data-density="compact"] .om-header { --header-bleed: 32px; }
 [data-density="roomy"]   .om-header { --header-bleed: 64px; }
-[data-theme="light"] .om-header::before {
-  background: linear-gradient(to bottom, rgba(239,234,224,0.78) 0, rgba(239,234,224,0.45) 65%, transparent);
-}
-[data-theme="hi"] .om-header::before {
-  background: linear-gradient(to bottom, var(--bg) 0, var(--bg) 60%, transparent);
-}
 .om-grid-wrap { padding-top: 4px; max-width: 1180px; margin-inline: auto; }
 [data-layout="full"] .om-grid-wrap { max-width: none; margin-inline: 0; }
 .om-greet { display: flex; flex-direction: column; gap: 8px; max-width: 720px; }
@@ -1009,7 +1003,7 @@ input, textarea { font: inherit; color: inherit; }
 .om-detail-content  { max-width: 720px; margin: 0 auto; }
 
 /* Loading / spinner */
-.om-detail-loading  { display: flex; align-items: center; justify-content: center; height: 100%; }
+.om-detail-loading  { display: flex; align-items: center; justify-content: center; min-height: 80vh; }
 .om-detail-spinner  { width: 28px; height: 28px; border: 2px solid var(--border-2);
                       border-top-color: var(--accent); border-radius: 50%;
                       animation: omSpin .7s linear infinite; }
