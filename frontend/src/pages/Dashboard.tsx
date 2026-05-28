@@ -52,7 +52,7 @@ export function Dashboard() {
       <header className="om-header">
         <div className="om-greet">
           <span className="om-greet-eyebrow mono">{today}</span>
-          <h1 className="om-greet-title">{collection ? collection.name : 'Today'}</h1>
+          <h1 className="om-greet-title">{collection ? collection.name : 'Today'}{import.meta.env.DEV && <span style={{color:'red',fontSize:'0.5em'}}> DEV</span>}</h1>
           <p className="om-greet-sub">
             {collection
               ? `Everything filed under ${collection.name}.`

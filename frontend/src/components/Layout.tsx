@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, type ReactElement } from 'react';
 import { Outlet, useLocation } from 'react-router-dom';
 import { AnimatePresence, motion } from 'framer-motion';
 import Lenis from 'lenis';
@@ -11,9 +11,18 @@ import { SearchOverlay } from './SearchOverlay';
 import { Onboarding } from './Onboarding';
 import { AddCollectionModal } from './AddCollectionModal';
 import { Icon } from './Icon';
+import { useTransitionConfig, type TransitionConfig } from '@/lib/transitionConfig';
 import { useAppStore } from '@/stores/appStore';
 import { applyTweaks } from '@/lib/appearance';
 import { cn } from '@/lib/utils';
+
+// Dev panel is gitignored (frontend/src/dev/). Load it optionally — import.meta.glob
+// returns {} when the folder is absent, so production / fresh clones still build.
+const devPanelModules = import.meta.glob('../dev/DevPanel.tsx', { eager: true }) as Record<
+  string,
+  { DevPanel: (p: { txConfig: TransitionConfig; setTxConfig: (patch: Partial<TransitionConfig>) => void; resetTxConfig: () => void; onTestTransition: () => void }) => ReactElement }
+>;
+const DevPanel = Object.values(devPanelModules)[0]?.DevPanel;
 
 export function Layout() {
   const sidebarCollapsed = useAppStore((s) => s.sidebarCollapsed);
@@ -21,15 +30,20 @@ export function Layout() {
   const addPanelOpen = useAppStore((s) => s.addPanelOpen);
   const setAddPanelOpen = useAppStore((s) => s.setAddPanelOpen);
   const setSearchOpen = useAppStore((s) => s.setSearchOpen);
+  const setTweak = useAppStore((s) => s.setTweak);
   const location = useLocation();
+
+  const [txConfig, setTxConfig, resetTxConfig] = useTransitionConfig();
 
   const [overlayKey, setOverlayKey] = useState(0);
   const [overlayTheme, setOverlayTheme] = useState(tweaks.theme);
-  const [blobsHidden, setBlobsHidden] = useState(false);
+  const [colorTransition, setColorTransition] = useState(false);
   const prevTheme = useRef(tweaks.theme);
   const mounted = useRef(false);
   const mainRef = useRef<HTMLElement | null>(null);
-  const blobTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const colorTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const txConfigRef = useRef(txConfig);
+  txConfigRef.current = txConfig;
 
   // Smooth scroll on the main content pane. Lenis hijacks wheel/touch and
   // eases the scrollTop with rAF — same easing-driven feel as motion sites.
@@ -67,11 +81,13 @@ export function Layout() {
       applyTweaks({ ...tweaks, theme: oldTheme });
       setOverlayTheme(tweaks.theme);
       setOverlayKey((k) => k + 1);
-      setBlobsHidden(true);
-      if (blobTimer.current) clearTimeout(blobTimer.current);
-      // 100ms later: flip theme — UI starts 3s color transition
-      setTimeout(() => applyTweaks(tweaks), 100);
-      blobTimer.current = setTimeout(() => setBlobsHidden(false), 12000);
+      setColorTransition(true);
+      if (colorTimer.current) clearTimeout(colorTimer.current);
+      // flip theme after delay — happens UNDER the opaque radial cover, so the
+      // blob/UI swap is hidden. Radial then fades out, revealing the new theme.
+      setTimeout(() => applyTweaks(tweaks), txConfigRef.current.themeFlipDelay);
+      // color override removed after window so FM card animations recover
+      colorTimer.current = setTimeout(() => setColorTransition(false), txConfigRef.current.colorWindow);
     } else {
       applyTweaks(tweaks);
     }
@@ -95,7 +111,7 @@ export function Layout() {
   }, [setSearchOpen, setAddPanelOpen]);
 
   return (
-    <div className={cn('om-app', sidebarCollapsed && 'sidebar-collapsed', blobsHidden && 'theme-transitioning')}>
+    <div className={cn('om-app', sidebarCollapsed && 'sidebar-collapsed', colorTransition && 'theme-transitioning')}>
       <div className="om-bg-veil" style={{ opacity: tweaks.bgFade ?? 0 }} aria-hidden />
       <Sidebar />
 
@@ -126,19 +142,32 @@ export function Layout() {
         {overlayKey > 0 && (
           <motion.div
             key={overlayKey}
-            initial={{ '--r': '3%', opacity: 1 } as any}
-            animate={{ '--r': '180%', opacity: [1, 1, 0] } as any}
-            transition={{
-              '--r': { duration: 6, ease: [0.2, 0.8, 0.2, 1] as [number, number, number, number] },
-              opacity: { duration: 12, times: [0, 0.5, 1], ease: [0.4, 0, 0.2, 1] as [number, number, number, number] },
-            }}
-            style={{
-              position: 'fixed', inset: 0, zIndex: 0, pointerEvents: 'none',
-              background: overlayTheme === 'dark'
-                ? 'radial-gradient(ellipse var(--r) var(--r) at 50% 0%, rgba(25, 55, 140, 0.95) 0%, rgba(12, 25, 75, 0.88) 40%, rgba(5, 8, 22, 0.72) 70%, rgba(4, 5, 14, 0.35) 88%, rgba(4, 5, 14, 0) 100%)'
-                : 'radial-gradient(ellipse var(--r) var(--r) at 50% 100%, rgba(255, 200, 140, 0.95) 0%, rgba(255, 220, 180, 0.88) 40%, rgba(255, 245, 225, 0.72) 70%, rgba(255, 253, 248, 0.35) 88%, rgba(255, 253, 248, 0) 100%)',
-            }}
-          />
+            style={{ position: 'fixed', inset: 0, zIndex: 0, pointerEvents: 'none', filter: `blur(${txConfig.blur}px)` }}
+          >
+            <motion.div
+              key={`inner-${overlayKey}`}
+              initial={{ clipPath: overlayTheme === 'dark' ? 'circle(0% at 50% 0%)' : 'circle(0% at 50% 100%)', opacity: 1 }}
+              animate={{
+                clipPath: overlayTheme === 'dark'
+                  ? `circle(${txConfig.maxRadius}% at 50% 0%)`
+                  : `circle(${txConfig.maxRadius}% at 50% 100%)`,
+                opacity: [1, 1, 0],
+              }}
+              transition={{
+                clipPath: { duration: txConfig.clipDuration, ease: [0.15, 0.85, 0.25, 1] as [number, number, number, number] },
+                opacity: { duration: txConfig.opacityDuration, times: [0, txConfig.holdPct, 1], ease: [0.4, 0, 0.2, 1] as [number, number, number, number] },
+              }}
+              style={{
+                position: 'absolute', inset: 0,
+                // OPAQUE fill (no transparent stops). The clip-path circle + blur
+                // give the soft growing edge. Inside the circle it fully covers the
+                // blobs; outside, blobs stay untouched until the circle reaches them.
+                background: overlayTheme === 'dark'
+                  ? `radial-gradient(ellipse ${txConfig.gradientSize} at 50% 0%, color-mix(in srgb, var(--accent-deep) ${txConfig.accentTint}%, #0a1640) 0%, color-mix(in srgb, var(--accent-deep) ${Math.round(txConfig.accentTint * 0.6)}%, #0a1438) 70%, color-mix(in srgb, var(--accent-deep) ${Math.round(txConfig.accentTint * 0.4)}%, #060e2a) 100%)`
+                  : `radial-gradient(ellipse ${txConfig.gradientSize} at 50% 100%, color-mix(in srgb, var(--accent) ${txConfig.accentTint}%, #ff8c3c) 0%, color-mix(in srgb, var(--accent) ${Math.round(txConfig.accentTint * 0.6)}%, #ffb87a) 70%, color-mix(in srgb, var(--accent) ${Math.round(txConfig.accentTint * 0.4)}%, #ffe0c0) 100%)`,
+              }}
+            />
+          </motion.div>
         )}
       </AnimatePresence>
 
@@ -152,6 +181,15 @@ export function Layout() {
           <Icon name={addPanelOpen ? 'x' : 'plus'} size={18} />
         </span>
       </button>
+
+      {DevPanel && (
+        <DevPanel
+          txConfig={txConfig}
+          setTxConfig={setTxConfig}
+          resetTxConfig={resetTxConfig}
+          onTestTransition={() => setTweak('theme', tweaks.theme === 'light' ? 'dark' : 'light')}
+        />
+      )}
     </div>
   );
 }

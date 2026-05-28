@@ -12,6 +12,10 @@ dist
 dist-ssr
 *.local
 
+# Local-only dev tooling (dev panel, scratch tools). Wired in code via
+# import.meta.glob so the build still works when this folder is absent.
+src/dev/
+
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json
