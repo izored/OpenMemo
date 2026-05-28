@@ -167,10 +167,10 @@ openmemo/
 │       └── lib/          # API client, utilities
 ├── chrome-extension/     # Manifest V3 browser extension
 ├── docs/
-│   ├── INSTALL.md        # Full installation & troubleshooting
-│   ├── MEMORY.md             # Architecture, findings, roadmap
-│   ├── DESIGN.md             # Design system tokens
-│   └── CHANGELOG.md      # Release history
+│   ├── INSTALL.md                  # Full installation & troubleshooting
+│   ├── DESIGN.md                   # Design system tokens
+│   ├── memo-card-visual-system.md  # Card UI design reference
+│   └── CHANGELOG.md                # Release history
 └── docker-compose.yml
 ```
 
@@ -178,10 +178,9 @@ openmemo/
 
 ## Roadmap
 
-**v1.7** — Collection detail pages, tag system, full-text search UI, inline note editing
-**v1.8** — Voice memos, mobile responsive, PWA offline support, dashboard file drop
-**v1.9** — AI-suggested collections, similar memos, smart summaries, dark mode
-**v2.0** — Multi-user workspaces, Notion/Obsidian import, plugin system
+**v1.8** *(current)* — Minimal card mode, lightbox, AI ingestion endpoint, pinning, video thumbnails, living-cell intro, drag-to-reorder
+**v1.9** — Inline audio player, audio card minimal, AI-suggested collections, similar memos, smart summaries
+**v2.0** — Multi-user workspaces, Notion/Obsidian import, mobile responsive, PWA offline support, plugin system
 
 See [`Specs/ROADMAP.md`](Specs/ROADMAP.md) for the full roadmap, architectural findings, and contributor guide.
 
