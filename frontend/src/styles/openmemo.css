@@ -566,7 +566,7 @@ input, textarea { font: inherit; color: inherit; }
 
 /* Notes in minimal: title always; body text fades in on hover; footer stays hidden. */
 [data-card="minimal"] .om-card-note { padding: 22px; min-height: 260px; }
-[data-card="minimal"] .om-card-note .om-note-title { font-size: 21px; line-height: 1.25; letter-spacing: -0.015em; }
+[data-card="minimal"] .om-card-note .om-note-title { font-size: 18px; line-height: 1.25; letter-spacing: -0.015em; }
 [data-card="minimal"] .om-card-note .om-meta { display: none; }
 /* Notes in minimal: stack action buttons vertically (more breathing room over text) */
 [data-card="minimal"] .om-card-note .om-card-actions { flex-direction: column; }
