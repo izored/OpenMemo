@@ -102,7 +102,13 @@ async def list_memos(
     if workspace_id:
         query = query.where(Memo.workspace_id == workspace_id)
     if type and type != "all":
-        query = query.where(Memo.type == type)
+        # `type` may be a comma-separated group (e.g. the Files tab maps to
+        # document,file,code,audio) so one tab can cover several memo types.
+        types = [t.strip() for t in type.split(",") if t.strip()]
+        if len(types) == 1:
+            query = query.where(Memo.type == types[0])
+        elif types:
+            query = query.where(Memo.type.in_(types))
     if collection_id:
         query = query.join(memo_collections).where(
             memo_collections.c.collection_id == collection_id

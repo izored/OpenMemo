@@ -243,6 +243,13 @@ input, textarea { font: inherit; color: inherit; }
 }
 .om-coll:hover { background: var(--surface-2); color: var(--text); }
 .om-coll.active { background: var(--surface-2); color: var(--text); }
+/* Drop target while dragging a memo over a collection. Full inset ring + soft
+   fill — never a left-edge bar (project rule: no colored left-edge strips). */
+.om-coll.drop-over {
+  background: var(--accent-soft);
+  color: var(--text);
+  box-shadow: inset 0 0 0 1px var(--accent);
+}
 .om-coll-dot {
   width: 8px; height: 8px; border-radius: 50%;
   background: var(--text-4);
