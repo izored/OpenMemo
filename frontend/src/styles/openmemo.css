@@ -624,8 +624,8 @@ input, textarea { font: inherit; color: inherit; }
 [data-card="minimal"] .om-card-doc .om-card-title { font-size: 13px; }
 [data-card="minimal"] .om-card-doc .om-card-desc,
 [data-card="minimal"] .om-card-doc .om-meta { display: none; }
-[data-card="minimal"] .om-card-doc { transition: transform .3s ease; }
-[data-card="minimal"] .om-card-doc:hover { transform: scale(0.95); }
+[data-card="minimal"] .om-card-doc .om-doc-frame { transition: transform .3s ease; }
+[data-card="minimal"] .om-card-doc:hover .om-doc-frame { transform: scale(0.95); }
 
 /* Audio card minimal — waveform background tile + play button stub.
    Play button is visual only; inline playback wiring is a future feature. */
