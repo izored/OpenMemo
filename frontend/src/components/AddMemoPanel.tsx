@@ -53,6 +53,7 @@ export function AddMemoPanel() {
   const [collection, setCollection] = useState<string>('');
   const [collOpen, setCollOpen] = useState(false);
   const [busy, setBusy] = useState(false);
+  const [progress, setProgress] = useState<{ done: number; total: number } | null>(null);
   const [error, setError] = useState('');
   const fileRef = useRef<HTMLInputElement>(null);
 
@@ -125,14 +126,32 @@ export function AddMemoPanel() {
 
     setBusy(true);
     setError('');
-    try {
-      for (const f of Array.from(files)) await ingestApi.file(f, collection || undefined);
-      done();
-    } catch (e) {
-      setError((e as Error).message || 'Failed to upload');
-    } finally {
-      setBusy(false);
+    const arr = Array.from(files);
+    setProgress({ done: 0, total: arr.length });
+    const failed: string[] = [];
+    // Bulk: upload each file independently so one failure doesn't abort the
+    // rest. Progress ticks per file.
+    for (let i = 0; i < arr.length; i++) {
+      try {
+        await ingestApi.file(arr[i], collection || undefined);
+      } catch {
+        failed.push(arr[i].name);
+      }
+      setProgress({ done: i + 1, total: arr.length });
     }
+    setProgress(null);
+    setBusy(false);
+
+    if (failed.length === 0) {
+      done();
+      return;
+    }
+    // Some (or all) failed — refresh whatever did import, keep the panel open
+    // and report which files failed.
+    queryClient.invalidateQueries({ queryKey: ['memos'] });
+    queryClient.invalidateQueries({ queryKey: ['stats'] });
+    const names = failed.slice(0, 3).join(', ') + (failed.length > 3 ? '…' : '');
+    setError(`${failed.length} of ${arr.length} failed: ${names}`);
   };
 
   const tabs: { id: Tab; icon: string; label: string }[] = [
@@ -306,15 +325,24 @@ export function AddMemoPanel() {
                 }}
               >
                 <Icon name={mediaKind === 'image' ? 'image' : mediaKind === 'video' ? 'video' : 'file'} size={20} />
-                <p>
-                  Drop {mediaKind === 'image' ? 'an image' : mediaKind === 'video' ? 'a video' : 'a file'} or{' '}
-                  <span className="om-add-link">browse</span>
-                </p>
-                <span className="mono">
-                  {mediaKind === 'image' && 'JPG · PNG · WebP · GIF · SVG'}
-                  {mediaKind === 'video' && 'MP4 · MOV · WebM · MKV'}
-                  {mediaKind === 'file' && 'Any file type — code, archives, 3D, docs…'}
-                </span>
+                {progress ? (
+                  <>
+                    <p>Uploading {progress.done} / {progress.total}…</p>
+                    <span className="mono">Keep this panel open until it finishes</span>
+                  </>
+                ) : (
+                  <>
+                    <p>
+                      Drop {mediaKind === 'image' ? 'images' : mediaKind === 'video' ? 'videos' : 'files'} or{' '}
+                      <span className="om-add-link">browse</span>
+                    </p>
+                    <span className="mono">
+                      {mediaKind === 'image' && 'JPG · PNG · WebP · GIF · SVG — select multiple'}
+                      {mediaKind === 'video' && 'MP4 · MOV · WebM · MKV — select multiple'}
+                      {mediaKind === 'file' && 'Any file type — select multiple'}
+                    </span>
+                  </>
+                )}
               </div>
             </div>
           )}
@@ -397,7 +425,7 @@ export function AddMemoPanel() {
           Cancel
         </button>
         <button className="om-add-foot-btn primary" onClick={save} disabled={busy}>
-          <span>{busy ? 'Saving…' : tab === 'multimedia' ? 'Choose file' : 'Save'}</span>
+          <span>{progress ? `Uploading ${progress.done}/${progress.total}…` : busy ? 'Saving…' : tab === 'multimedia' ? 'Choose files' : 'Save'}</span>
           <span className="mono om-add-kbd-inv">⏎</span>
         </button>
       </div>
