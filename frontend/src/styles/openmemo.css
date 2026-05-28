@@ -676,7 +676,7 @@ input, textarea { font: inherit; color: inherit; }
    Light gradient (default) for light theme; dark variant for hi-contrast theme. */
 .om-min-hover {
   position: absolute; inset: 0;
-  background: linear-gradient(to bottom, rgba(245,242,236,0.72) 0%, rgba(245,242,236,0.32) 50%, rgba(245,242,236,0.05) 100%);
+  background: linear-gradient(to bottom, rgba(245,242,236,0.50) 0%, rgba(245,242,236,0.15) 55%, rgba(245,242,236,0.0) 100%);
   opacity: 0; transition: opacity .25s;
   pointer-events: none; z-index: 1;
   /* Bottom padding leaves room for the tags/pill row at the very bottom. */
@@ -743,13 +743,13 @@ input, textarea { font: inherit; color: inherit; }
 }
 [data-card="minimal"] .om-card-actions .om-action:hover { background: rgba(255,255,255,0.32); }
 [data-card="minimal"] .om-card-actions .om-action.pinned { background: var(--accent); color: var(--accent-text, #fff); border-color: transparent; }
-/* Light theme: note cards have light tint bg — use dark action buttons */
-[data-theme="light"] [data-card="minimal"] .om-card-note .om-card-actions .om-action {
+/* Light theme: all minimal cards get dark ink action buttons */
+[data-theme="light"] [data-card="minimal"] .om-card-actions .om-action {
   background: rgba(0,0,0,0.08); backdrop-filter: blur(12px);
-  border: 1px solid rgba(0,0,0,0.14); color: rgba(0,0,0,0.7);
+  border: 1px solid rgba(0,0,0,0.14); color: rgba(0,0,0,0.75);
 }
-[data-theme="light"] [data-card="minimal"] .om-card-note .om-card-actions .om-action:hover { background: rgba(0,0,0,0.16); }
-/* Dark tint (index 3) note in light theme — keep white buttons */
+[data-theme="light"] [data-card="minimal"] .om-card-actions .om-action:hover { background: rgba(0,0,0,0.16); }
+/* Dark-tint note (index 3) and hi-contrast: keep white */
 [data-theme="light"] [data-card="minimal"] .om-card-note[data-tint="3"] .om-card-actions .om-action {
   background: rgba(255,255,255,0.18); border: 1px solid rgba(255,255,255,0.22); color: rgba(255,255,255,0.9);
 }
@@ -2102,17 +2102,44 @@ input, textarea { font: inherit; color: inherit; }
 .om-coll-card:hover .om-coll-stack-1 { transform: translate(-10px, -8px) rotate(-4deg); opacity: 0.85; }
 .om-coll-card:hover .om-coll-stack-2 { transform: translate(10px, -14px) rotate(4deg); opacity: 0.65; }
 
-/* Minimal card style: flat collection cards — no stacking, no lift */
-[data-card="minimal"] .om-coll-card .om-coll-stack { display: none; }
+/* ─ Minimal collection cards ────────────────────────────────────────────
+   Same language as minimal image cards: full-bleed cover fills the face,
+   body overlays at bottom and fades in on hover. Stacks fan out on hover
+   (same as normal) — flat face + overlay is the minimal change. */
+
 [data-card="minimal"] .om-coll-face {
-  border: 1px solid var(--border);
+  aspect-ratio: 4 / 3;
   box-shadow: none;
+  border: 1px solid var(--border);
+  background: transparent;
 }
 [data-card="minimal"] .om-coll-card:hover .om-coll-face {
   transform: none;
   box-shadow: none;
   border-color: var(--border-2);
 }
+
+/* Cover stretches to fill the entire face */
+[data-card="minimal"] .om-coll-cover {
+  position: absolute;
+  inset: 0;
+  aspect-ratio: auto;
+}
+
+/* Body: dark-gradient overlay pinned to bottom, hidden at rest */
+[data-card="minimal"] .om-coll-body {
+  position: absolute;
+  bottom: 0; left: 0; right: 0;
+  background: linear-gradient(to top, rgba(0,0,0,0.82) 0%, rgba(0,0,0,0.30) 55%, transparent 100%);
+  padding: 14px 16px 16px;
+  display: flex; flex-direction: column; justify-content: flex-end; gap: 3px;
+  opacity: 0; transition: opacity .2s ease;
+  z-index: 2;
+}
+[data-card="minimal"] .om-coll-card:hover .om-coll-body { opacity: 1; }
+[data-card="minimal"] .om-coll-title { color: rgba(255,255,255,0.96); font-size: 16px; }
+[data-card="minimal"] .om-coll-meta { color: rgba(255,255,255,0.60); }
+[data-card="minimal"] .om-coll-recent { color: rgba(255,255,255,0.52); }
 
 .om-coll-face {
   position: relative; z-index: 1;
