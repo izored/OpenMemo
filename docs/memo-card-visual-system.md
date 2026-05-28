@@ -44,8 +44,8 @@ The `.om-min-hover` overlay fades in on card hover (opacity 0 → 1). Gradient a
 | Type | Action buttons | Footer pill | Blur on hover | Scale on hover | Overlay · Light | Overlay · Dark | Overlay text |
 |------|:-:|:-:|:-:|:-:|:-:|:-:|:-:|
 | `om-card-image` | ✓ | expands on hover | ✗ | ✓ | ✗ | ✗ | — |
-| `om-card-link` | ✓ | always visible | ✓ | ✓ | accent tint if desc | dark veil if desc | near-black / white |
-| `om-card-video` | ✓ | expands on hover | ✓ | ✓ | accent tint if desc | dark veil if desc | near-black / white |
+| `om-card-link` | ✓ | always visible | ✓ | ✓ | accent+white tint if desc | accent+dark tint if desc | dark / white |
+| `om-card-video` | ✓ | expands on hover | ✓ | ✓ | accent+white tint if desc | accent+dark tint if desc | dark / white |
 | `om-card-audio` | ✓ | expands on hover | ✗ | ✗ | accent tint if desc | dark veil if desc | near-black / white |
 | `om-card-note` | ✓ stacked | — | — | — | body text fades in | body text fades in | — |
 | `om-card-doc` | ✓ | — | — | scale down 5% | — | — | — |
@@ -57,7 +57,7 @@ The `.om-min-hover` overlay fades in on card hover (opacity 0 → 1). Gradient a
 
 **Overlay gradient** only renders when a description is present (`:has` guard). Image cards never show an overlay — clean image, scale only.
 
-**Overlay tint** uses `color-mix(in srgb, var(--accent) 18%, transparent)` in light theme — adapts to the user's chosen accent color. Dark theme uses a black veil.
+**Overlay tint** is a flat frosted layer scoped to link and video cards only (the two card types with blur and description). Light theme: white base tinted with the user's accent (`color-mix(accent 30%, rgba(white,0.55))`). Dark theme: dark base tinted with the user's accent (`color-mix(accent 20%, rgba(black,0.65))`). Text is dark on light tint, white on dark tint. Readable against any thumbnail regardless of image content.
 
 ---
 

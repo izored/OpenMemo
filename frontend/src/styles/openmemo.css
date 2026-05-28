@@ -713,8 +713,8 @@ input, textarea { font: inherit; color: inherit; }
 /* Icon inside expanding pill must not shrink during text reveal animation */
 .om-min-domain > svg { flex-shrink: 0; }
 
-/* Hover overlay — gradient veil + structured content.
-   Light gradient (default) for light theme; dark variant for hi-contrast theme. */
+/* Hover overlay — flat frosted tint scoped to card types that have blur + description.
+   Image / note / doc cards are untouched — they have their own hover rules. */
 .om-min-hover {
   position: absolute; inset: 0;
   opacity: 0; transition: opacity .25s;
@@ -725,17 +725,21 @@ input, textarea { font: inherit; color: inherit; }
   display: flex; flex-direction: column;
   color: var(--text);
 }
-/* Gradient only when description text is present — aids readability over image.
-   Uses accent tint so overlay adapts to user's chosen accent color. */
-.om-min-hover:has(.om-min-hover-desc:not(:empty)) {
-  background: linear-gradient(to bottom,
-    color-mix(in srgb, var(--accent) 22%, transparent) 0%,
-    color-mix(in srgb, var(--accent) 10%, transparent) 55%,
-    transparent 100%);
+/* Flat accent-tinted tint — link + video only (blur ✓, desc ✓).
+   Light theme: white base tinted with accent. Dark text reads on light tint. */
+[data-card="minimal"] .om-card-link .om-min-hover:has(.om-min-hover-desc:not(:empty)),
+[data-card="minimal"] .om-card-video .om-min-hover:has(.om-min-hover-desc:not(:empty)) {
+  background: color-mix(in srgb, var(--accent) 30%, rgba(255,255,255,0.55));
+}
+/* Dark theme: dark base tinted with accent. White text reads on dark tint. */
+[data-theme="hi"] [data-card="minimal"] .om-card-link .om-min-hover:has(.om-min-hover-desc:not(:empty)),
+[data-theme="hi"] [data-card="minimal"] .om-card-video .om-min-hover:has(.om-min-hover-desc:not(:empty)) {
+  background: color-mix(in srgb, var(--accent) 20%, rgba(0,0,0,0.65));
+  color: rgba(255,255,255,0.96);
 }
 .om-min-hover-desc { margin: 0; }
 /* Invisible float gives description text a virtual obstacle to flow around —
-   sits where the action cluster (arrow + pin + delete = ~98px) renders.
+   sits where the action cluster (arrow + pin + delete) renders.
    Once description text passes the float bottom, it wraps to full width. */
 .om-min-hover-desc::before {
   content: "";
@@ -744,13 +748,6 @@ input, textarea { font: inherit; color: inherit; }
   height: 26px;
   shape-outside: inset(0);
   margin: 0 0 6px 10px;
-}
-/* Dark veil only when description present — image cards get no overlay */
-[data-theme="hi"] .om-min-hover:has(.om-min-hover-desc:not(:empty)) {
-  background:
-    radial-gradient(ellipse 110% 110% at center, transparent 40%, rgba(0,0,0,0.55) 100%),
-    linear-gradient(to bottom, rgba(0,0,0,0.7) 0%, rgba(0,0,0,0.25) 55%, transparent 100%);
-  color: #fff;
 }
 .om-min-hover-desc {
   font-size: 13px; line-height: 1.4; color: var(--text);
