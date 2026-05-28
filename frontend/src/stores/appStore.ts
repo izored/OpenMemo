@@ -31,6 +31,20 @@ const loadSettings = () => {
 
 const saved = loadSettings();
 
+const FILTER_ORDER_KEY = 'openmemo_filter_order';
+const loadFilterOrder = (): string[] => {
+  try {
+    const raw = localStorage.getItem(FILTER_ORDER_KEY);
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      if (Array.isArray(parsed)) return parsed.filter((x) => typeof x === 'string');
+    }
+  } catch {
+    /* ignore */
+  }
+  return [];
+};
+
 interface AppState {
   // Sidebar
   sidebarOpen: boolean;
@@ -39,6 +53,10 @@ interface AppState {
   // Filter
   activeFilter: string;
   setActiveFilter: (filter: string) => void;
+
+  // Dashboard filter-tab order (user-draggable, persisted)
+  filterOrder: string[];
+  setFilterOrder: (order: string[]) => void;
 
   // Active collection
   activeCollection: string | null;
@@ -110,6 +128,12 @@ export const useAppStore = create<AppState>((set) => ({
 
   activeFilter: 'all',
   setActiveFilter: (filter) => set({ activeFilter: filter }),
+
+  filterOrder: loadFilterOrder(),
+  setFilterOrder: (order) => {
+    localStorage.setItem(FILTER_ORDER_KEY, JSON.stringify(order));
+    set({ filterOrder: order });
+  },
 
   activeCollection: null,
   setActiveCollection: (id) => set({ activeCollection: id }),
