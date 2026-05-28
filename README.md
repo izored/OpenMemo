@@ -30,42 +30,25 @@ Drop a PDF. Paste a URL. Jot a quick note. Record a voice memo. The Chrome Exten
 
 ## What's Inside
 
-### 🔍 Hybrid AI Search
-**Semantic + Full-Text.** ChromaDB finds things by *meaning*. SQLite FTS5 finds things by *exact words*. Combined, they surface what you need even when you can't describe it perfectly.
-
 ### 📚 Smart Collections
-Organise memos into themed collections with emoji icons and descriptions. Drag and drop cards directly into collections. Chat is scoped to the active collection — ask questions within a single project or topic.
-
-### 🧠 AI-Powered Ingestion
-Every saved item is automatically:
-- **Extracted** — PDFs, DOCX, images, audio, and webpages parsed into clean text
-- **Embedded** — Vectorised by `nomic-embed-text` for semantic search
-- **Indexed** — Added to FTS5 for instant keyword retrieval
-- **Summarised** — Optional AI summary generated on demand
+Organise Memos into themed collections with emoji icons and descriptions. Drag and drop cards directly into collections. Scope your AI chat to a single project or topic.
 
 ### 🔌 Chrome Extension
 One-click save from any webpage. Site-specific extractors pull clean article text, video metadata, and source attribution automatically.
 
-### ⚡ Streaming Chat
-Real-time token streaming via Server-Sent Events. See the AI think as it types. No spinning loaders, no waiting for the full response.
+### 🔍 Hybrid Search
+**Semantic + Full-Text.** ChromaDB finds things by *meaning*. SQLite FTS5 finds things by *exact words*. Combined, they surface what you need even when you can't describe it perfectly.
+
+### ⚙️ Everything Gets Indexed
+Every saved item is automatically processed in the background:
+- **Extracted:** PDFs, DOCX, images, audio, and webpages parsed into clean text
+- **Embedded:** Vectorised by `nomic-embed-text` for semantic search
+- **Indexed:** Added to FTS5 for instant keyword retrieval
+
+### ⚡ AI Chat *(work in progress)*
+Ask questions in plain language. Get answers grounded in your actual saved content, with citations back to the source. Real-time streaming via Server-Sent Events. Prefix with `@` to skip your Memos and ask the model directly.
 
 ---
-
-## Chat With Everything You've Ever Saved *(work in progress)*
-
-Ask natural-language questions. Get answers grounded in *your* actual content, with clickable citations back to the source.
-
-> **"What have I saved about marketing strategy?"**
-> Pulls the exact article you read last month, the PDF you downloaded, and the note you jotted — even if you can't remember the title.
-
-> **"How do I raise funding as a first-time founder?"**
-> Synthesises across your saved articles, videos, and personal notes into one actionable answer.
-
-> **"Summarise the key points from that 40-page report."**
-> Instant TL;DR with section breakdowns, ready to share.
-
-> **"@What is the capital of Mongolia?"**
-> Prefix with `@` to skip your saved content and ask the LLM anything directly.
 
 ---
 
@@ -92,7 +75,7 @@ cd OpenMemo
 docker-compose up -d
 ```
 
-Open **http://localhost:8091** — that's it.
+Open **http://localhost:8091**. That's it.
 
 ### Prerequisites
 
@@ -129,7 +112,7 @@ Open **http://localhost:3000**. See [`docs/INSTALL.md`](docs/INSTALL.md) for the
 
 | Layer | Technology |
 | --- | --- |
-| **Frontend** | React 19 + Vite + Tailwind CSS v4 (TypeScript, strict mode) |
+| **Frontend** | React 19 + Vite + TypeScript (strict mode), custom token CSS system |
 | **State** | Zustand + TanStack Query |
 | **Backend** | FastAPI (async Python 3.12) |
 | **Vector DB** | ChromaDB (local persistence) |
@@ -178,9 +161,9 @@ openmemo/
 
 ## Roadmap
 
-**v1.8** *(current)* — Minimal card mode, lightbox, AI ingestion endpoint, pinning, video thumbnails, living-cell intro, drag-to-reorder
-**v1.9** — Inline audio player, audio card minimal, AI-suggested collections, similar memos, smart summaries
-**v2.0** — Multi-user workspaces, Notion/Obsidian import, mobile responsive, PWA offline support, plugin system
+**v1.8** *(current)*: Minimal card mode, lightbox, AI ingestion endpoint, pinning, video thumbnails, living-cell intro, drag-to-reorder
+**v1.9**: Inline audio player, audio card minimal, AI-suggested collections, similar Memos, smart summaries
+**v2.0**: Multi-user workspaces, Notion/Obsidian import, mobile responsive, PWA offline support, plugin system
 
 See [`Specs/ROADMAP.md`](Specs/ROADMAP.md) for the full roadmap, architectural findings, and contributor guide.
 
@@ -192,7 +175,7 @@ openMemo was my first serious attempt at building something useful for myself wi
 
 It started with **Kimi 2.6 Pro**, then **Claude Code (Opus 4.7 / Sonnet 4.6)**, and later **Perplexity** for quick fixes and release help.
 
-Most of the code is AI-assisted. This project is also a learning record — a messy, useful discovery step into AI-powered software building.
+Most of the code is AI-assisted. This project is also a learning record. A messy, useful discovery step into AI-powered software building.
 
 ---
 
@@ -213,4 +196,4 @@ openMemo stands on the shoulders of incredible open-source projects: MDXEditor, 
 
 ## Licence
 
-AGPL 3.0 — free to use, modify, and self-host. Any derivative work or service must remain open source and share improvements back to the community.
+AGPL 3.0. Free to use, modify, and self-host. Any derivative work or service must remain open source and share improvements back to the community.
