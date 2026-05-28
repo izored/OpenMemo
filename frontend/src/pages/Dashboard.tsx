@@ -1,11 +1,60 @@
+import { useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { motion } from 'framer-motion';
+import {
+  DndContext,
+  closestCenter,
+  PointerSensor,
+  useSensor,
+  useSensors,
+  type DragEndEvent,
+} from '@dnd-kit/core';
+import {
+  SortableContext,
+  horizontalListSortingStrategy,
+  useSortable,
+  arrayMove,
+} from '@dnd-kit/sortable';
+import { CSS } from '@dnd-kit/utilities';
 import { MemoGrid } from '@/components/MemoGrid';
 import { Icon } from '@/components/Icon';
 import { useAppStore } from '@/stores/appStore';
 import { memoApi, collectionApi } from '@/lib/api';
 import { cn } from '@/lib/utils';
 import type { Collection } from '@/types';
+
+interface FilterDef { id: string; label: string }
+
+// One draggable filter tab. distance:8 on the sensor keeps plain clicks
+// (selecting a filter) working — only a real drag starts a reorder.
+function SortableFilterTab({ f, active, onSelect }: { f: FilterDef; active: boolean; onSelect: () => void }) {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: f.id });
+  return (
+    <button
+      ref={setNodeRef}
+      className={cn('om-filter-tab', active && 'active')}
+      onClick={onSelect}
+      style={{
+        position: 'relative',
+        transform: CSS.Transform.toString(transform),
+        transition,
+        zIndex: isDragging ? 2 : undefined,
+        cursor: isDragging ? 'grabbing' : 'pointer',
+      }}
+      {...attributes}
+      {...listeners}
+    >
+      {active && (
+        <motion.span
+          layoutId="om-filter-pill"
+          className="om-filter-pill"
+          transition={{ type: 'spring', stiffness: 480, damping: 38 }}
+        />
+      )}
+      <span style={{ position: 'relative', zIndex: 1 }}>{f.label}</span>
+    </button>
+  );
+}
 
 const FILTERS = [
   { id: 'all', label: 'All' },
@@ -21,7 +70,33 @@ const FILTERS = [
 ];
 
 export function Dashboard() {
-  const { activeFilter, setActiveFilter, activeCollection } = useAppStore();
+  const { activeFilter, setActiveFilter, activeCollection, filterOrder, setFilterOrder } = useAppStore();
+
+  // Apply the user's saved tab order, reconciled with the current FILTERS set
+  // (new tabs like Code/Audio get appended; removed ids are dropped).
+  const orderedFilters = useMemo(() => {
+    const byId = new Map(FILTERS.map((f) => [f.id, f]));
+    const seen = new Set<string>();
+    const out: FilterDef[] = [];
+    for (const id of filterOrder) {
+      const f = byId.get(id);
+      if (f && !seen.has(id)) { out.push(f); seen.add(id); }
+    }
+    for (const f of FILTERS) if (!seen.has(f.id)) out.push(f);
+    return out;
+  }, [filterOrder]);
+
+  const tabSensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 8 } }));
+
+  const handleTabDragEnd = (e: DragEndEvent) => {
+    const { active, over } = e;
+    if (!over || active.id === over.id) return;
+    const ids = orderedFilters.map((f) => f.id);
+    const from = ids.indexOf(String(active.id));
+    const to = ids.indexOf(String(over.id));
+    if (from === -1 || to === -1) return;
+    setFilterOrder(arrayMove(ids, from, to));
+  };
 
   const { data: collections = [] } = useQuery({
     queryKey: ['collections'],
@@ -64,25 +139,20 @@ export function Dashboard() {
           </p>
         </div>
         <div className="om-filter-rail">
-          <div className="om-filter-tabs">
-            {FILTERS.map((f) => (
-              <button
-                key={f.id}
-                className={cn('om-filter-tab', activeFilter === f.id && 'active')}
-                onClick={() => setActiveFilter(f.id)}
-                style={{ position: 'relative' }}
-              >
-                {activeFilter === f.id && (
-                  <motion.span
-                    layoutId="om-filter-pill"
-                    className="om-filter-pill"
-                    transition={{ type: 'spring', stiffness: 480, damping: 38 }}
+          <DndContext sensors={tabSensors} collisionDetection={closestCenter} onDragEnd={handleTabDragEnd}>
+            <SortableContext items={orderedFilters.map((f) => f.id)} strategy={horizontalListSortingStrategy}>
+              <div className="om-filter-tabs">
+                {orderedFilters.map((f) => (
+                  <SortableFilterTab
+                    key={f.id}
+                    f={f}
+                    active={activeFilter === f.id}
+                    onSelect={() => setActiveFilter(f.id)}
                   />
-                )}
-                <span style={{ position: 'relative', zIndex: 1 }}>{f.label}</span>
-              </button>
-            ))}
-          </div>
+                ))}
+              </div>
+            </SortableContext>
+          </DndContext>
         </div>
       </header>
 
