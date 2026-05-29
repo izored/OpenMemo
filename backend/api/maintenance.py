@@ -15,7 +15,6 @@ from backend.db.models import (
     Tag,
     ChatSession,
     Message,
-    MemoCast,
     memo_collections,
     memo_tags,
 )
@@ -147,7 +146,7 @@ async def reset_workspace(body: ResetRequest, db: AsyncSession = Depends(get_db)
     # DB rows — associations first, then entities.
     await db.execute(memo_tags.delete())
     await db.execute(memo_collections.delete())
-    for model in (Message, ChatSession, MemoCast, Tag, Collection, Memo):
+    for model in (Message, ChatSession, Tag, Collection, Memo):
         await db.execute(delete(model))
     await db.commit()
 

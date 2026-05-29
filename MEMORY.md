@@ -32,7 +32,6 @@ Save articles, notes, PDFs, images, voice memos, and videos — then query your 
 | Vector DB | ChromaDB (local persistence) |
 | AI/LLM | Ollama (multi-host fallback) |
 | Search | FTS5 (SQLite) + ChromaDB semantic hybrid |
-| TTS | Coqui TTS (MemoCast podcast generation) |
 | Deploy | Docker Compose (nginx + API + web + ChromaDB) |
 
 ### Key Design Decisions

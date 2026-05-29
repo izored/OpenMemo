@@ -34,7 +34,7 @@ def _sqlite_backup(src_path: Path, dst_path: Path) -> None:
 @router.post("")
 async def create_backup(scope: Literal["structure", "full"] = Query("structure")):
     """Create a downloadable backup zip.
-    scope=structure → DB only (memos, collections, tags, chats, memocasts).
+    scope=structure → DB only (memos, collections, tags, chats).
     scope=full → DB + all uploaded files (excludes thumbnail cache).
     """
     db_path = Path(settings.DATA_DIR) / "openmemo.db"
