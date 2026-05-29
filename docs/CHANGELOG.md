@@ -52,6 +52,10 @@ All notable changes to OpenMemo are documented here.
 - 🎬 **Video thumbnails never generated in Docker — final fix** (ENTRY OPNMMO-0005) — root cause was `ffmpeg` missing from the backend Docker image: `backend/core/video.py` shells out to it, so `ffmpeg_available()` returned `false` inside the container and every uploaded video rendered a blank card. The extraction code, classification (`.mp4`/`.mov`/… → `video`), and backfill endpoint were all already correct — only the runtime binary was absent. Added `ffmpeg` to `backend/Dockerfile`'s `apt-get install`. After rebuilding the image, `POST /api/maintenance/backfill-video-thumbs` regenerates thumbnails for already-imported videos.
 - 🛠️ **Dev panel rendered in production builds** (ENTRY OPNMMO-0001) — `frontend/src/dev/` is gitignored but a Docker build context still copies it (gitignore ≠ dockerignore), so the dev panel shipped in built images. The `import.meta.glob` import and the render are now both gated on `import.meta.env.DEV`, so Vite dead-code-eliminates the panel from any production build regardless of whether the folder is present.
 
+### Removed
+
+- 🗑️ **Retired audio-digest feature fully pruned from the source tree** — a long-disabled feature (its router was never mounted, its page never routed, its model only touched by the workspace-reset wipe) left dead code scattered across backend and frontend. All of it is now gone: the dead API router, its TTS helper (plus the archived copy), the unrouted page (plus its archived copy), the unused API client and type, the orphaned script-generation helper in `core/rag.py`, and the unused ORM model along with its lone reference in the `/api/maintenance/reset` loop. No runtime behaviour changes — verified backend imports clean and `tsc -b` passes. (Any orphaned table on existing databases is inert; nothing references it.)
+
 ### Migration notes
 
 - localStorage `openmemo_tweaks.cardStyle === 'hybrid'` or `'rich'` is rewritten to `'normal'` the next time `loadTweaks()` runs (first page load after upgrade). No user action required.
@@ -228,7 +232,7 @@ All notable changes to OpenMemo are documented here.
 
 ### Added
 
-- 💾 **Backup & Restore** — `POST /api/backup?scope=structure` downloads a hot SQLite snapshot (memos, collections, tags, chats, memocasts) as a zip; `scope=full` also bundles all uploaded files (thumbnail cache excluded). `POST /api/backup/restore` accepts the zip, disposes the SQLAlchemy pool atomically, replaces the database, and restores files for full-scope backups. Settings page gains a **Backup & Restore** card with Download buttons for each scope and a double-confirmed Restore flow.
+- 💾 **Backup & Restore** — `POST /api/backup?scope=structure` downloads a hot SQLite snapshot (memos, collections, tags, chats) as a zip; `scope=full` also bundles all uploaded files (thumbnail cache excluded). `POST /api/backup/restore` accepts the zip, disposes the SQLAlchemy pool atomically, replaces the database, and restores files for full-scope backups. Settings page gains a **Backup & Restore** card with Download buttons for each scope and a double-confirmed Restore flow.
 
 ---
 ## [1.8.1] - 2026-05-19
@@ -284,7 +288,6 @@ All notable changes to OpenMemo are documented here.
 ### Removed
 
 - 🧹 **Floating FAB wiring** — removed floating FAB usage from `Layout.tsx` along with stale related imports and unused state.
-- 🗑️ **MemoCast surface removal** — continued cleanup of MemoCast-facing navigation and routing in the active UI flow while preserving archived code where needed.
 - 🚫 **Broken settings collapse pattern** — removed the inconsistent keyboard-shortcuts collapse behavior from Settings so the full shortcuts grid stays visible.
 
 ### Fixed
@@ -317,7 +320,6 @@ All notable changes to OpenMemo are documented here.
 
 - ⚡ **FAB click** — Main Speed Dial FAB button now opens the new-note modal directly on click. Hover still opens the full dial (Note / Link / Multimedia) with ease-in animation.
 - 📐 **Filter pills centered** — Type filters (All / Image / Links / Videos / Notes / Files) are centered within the header flex row.
-- 🗑️ **MemoCast removed** — Removed from sidebar nav and frontend routing. Backend memocast router disabled. Code preserved at `frontend/src/pages/_archived/MemoCastPage.tsx` and `backend/core/_archived/tts.py`.
 - 🔲 **5-column memo grid** — Dashboard grid is now `grid-cols-5` at `xl` breakpoint (was 4). Gap reduced to `gap-6`.
 
 ### Fixed
@@ -400,7 +402,7 @@ All notable changes to OpenMemo are documented here.
 
 - 🎨 Removed `bgColor` from Zustand store — background now pure CSS-driven
 - 📐 Standardized inner content padding — no arbitrary `p-3`, `p-7` scattered around
-- 📐 `MemoCastPage`, `AskMemoPage`: `rounded-2xl overflow-hidden` containers
+- 📐 `AskMemoPage`: `rounded-2xl overflow-hidden` containers
 - 📐 Back button moved above title in `MemoDetail`, inline style
 - 🔍 Removed `Ctrl+K` kbd badge from search input
 - 🔍 Placeholder text: `"Search memos…  Ctrl+K"`
@@ -487,7 +489,6 @@ All notable changes to OpenMemo are documented here.
 ### Changed
 
 - **Inline search bar** — Replaced centered `SearchModal` popup with a real search input in the Dashboard header. Type directly, see dropdown results, `Ctrl+K` to focus, `Escape` to clear
-- **MemoCast audio playback** — Play/pause now wires to a real `<audio>` element with progress tracking and time display
 - **Dedicated Docker port** — Default access URL changed from `localhost:80` to `localhost:8091`. No hosts file or port conflicts needed
 - **Removed dead UI** — Hidden Voice tab, Share/Tag/More buttons in MemoDetail until implemented
 
@@ -498,7 +499,7 @@ All notable changes to OpenMemo are documented here.
 ### Sidebar & Navigation
 
 - **Push sidebar layout** — Sidebar is now a true flex push layout (`width: 0 ↔ 240px`) instead of an absolute overlay. Main content shrinks naturally when sidebar opens. Removed `backdrop-blur-sm` overlay entirely.
-- **Global hamburger menu** — Moved the sidebar toggle from Dashboard to `Layout.tsx` so it's accessible on **all pages** (Dashboard, AskMemo, MemoCast, MemoDetail, Settings).
+- **Global hamburger menu** — Moved the sidebar toggle from Dashboard to `Layout.tsx` so it's accessible on **all pages** (Dashboard, AskMemo, MemoDetail, Settings).
 
 ### Collections Enhancement
 
@@ -547,7 +548,7 @@ All notable changes to OpenMemo are documented here.
   - **Code blocks:** Dark `#24292e` background with JetBrains Mono, matching GitHub's code aesthetic.
   - **Links:** Dotted underline decoration (Replicate signature pattern) for external/source links.
   - **Borders:** Subtle `#e5e5e5` borders that darken to `#202020` on hover for interactive cards.
-  - **Components updated:** Sidebar, Dashboard, MemoCard, MemoGrid, MemoDetail, AskMemoPage, AskMemoPanel, MemoCastPage, AddMemoModal, SearchModal, Layout.
+  - **Components updated:** Sidebar, Dashboard, MemoCard, MemoGrid, MemoDetail, AskMemoPage, AskMemoPanel, AddMemoModal, SearchModal, Layout.
 
 ### Documentation
 

@@ -1,0 +1,771 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>OpenMemo — Architecture Map</title>
+<style>
+  :root{
+    --bg:#0F0F0F; --panel:#161616; --panel-2:#1c1c1c; --border:#2a2a2a;
+    --text:#e8e8e8; --muted:#8a8a8a;
+    --client:#4ea1ff; --route:#7bd389; --service:#c792ea; --db:#ffb86b;
+    --external:#ff6b9d; --critical:#ff3860; --accent:#f5b942; --accent-2:#ff7a45;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;height:100%;background:var(--bg);color:var(--text);
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    overflow:hidden}
+  #app{display:flex;height:100vh;width:100vw}
+  /* ---- canvas ---- */
+  #stage{position:relative;flex:1;overflow:hidden;cursor:grab}
+  #stage.grabbing{cursor:grabbing}
+  svg{width:100%;height:100%;display:block}
+  .clusterBox{fill-opacity:.18;stroke-width:1.2;rx:14}
+  .clusterLabel{font-size:13px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;fill:var(--muted)}
+  .node{cursor:pointer}
+  .node rect{fill:var(--panel-2);stroke-width:1.6;rx:9;transition:opacity .15s}
+  .node .nlabel{font-size:12.5px;font-weight:650;fill:var(--text)}
+  .node .nsub{font-size:10px;fill:var(--muted)}
+  .node.dimmed{opacity:.13}
+  .node.crit rect{stroke-width:2.4}
+  .edge{fill:none;stroke-width:1.4;opacity:.5;transition:opacity .15s}
+  .edge.dimmed{opacity:.05}
+  .edgeLabel{font-size:9.5px;fill:var(--muted);opacity:.85}
+  .edgeLabel.dimmed{opacity:.05}
+  .badge-fix{fill:#2ecc71}
+  .badge-bug{fill:var(--critical)}
+  .badge-txt{font-size:9px;font-weight:700;fill:#0b0b0b}
+  /* ---- top bar ---- */
+  #topbar{position:absolute;top:0;left:0;right:0;display:flex;gap:6px;flex-wrap:wrap;
+    align-items:center;padding:10px 14px;background:linear-gradient(180deg,rgba(15,15,15,.96),rgba(15,15,15,.6));
+    z-index:5;pointer-events:none}
+  #topbar .chip,#topbar .brand,#zoomctl button{pointer-events:auto}
+  .brand{font-weight:800;font-size:14px;margin-right:8px;color:var(--text)}
+  .brand small{color:var(--muted);font-weight:500;margin-left:6px}
+  .chip{font-size:11.5px;padding:5px 11px;border-radius:20px;border:1px solid var(--border);
+    background:var(--panel);color:var(--muted);cursor:pointer;transition:all .12s;user-select:none}
+  .chip:hover{color:var(--text);border-color:#3a3a3a}
+  .chip.active{background:var(--accent);color:#101010;border-color:var(--accent);font-weight:700}
+  .chip.roadmap.active{background:var(--accent-2);border-color:var(--accent-2);color:#fff}
+  #zoomctl{position:absolute;bottom:16px;left:16px;display:flex;gap:6px;z-index:5}
+  #zoomctl button{width:34px;height:34px;border-radius:9px;border:1px solid var(--border);
+    background:var(--panel);color:var(--text);font-size:16px;cursor:pointer}
+  #zoomctl button:hover{border-color:#3a3a3a;background:var(--panel-2)}
+  #zoomctl .lbl{width:auto;padding:0 12px;font-size:12px}
+  /* ---- sidebar ---- */
+  #side{width:380px;min-width:380px;background:var(--panel);border-left:1px solid var(--border);
+    overflow-y:auto;padding:22px 22px 60px}
+  #side h2{font-size:15px;margin:0 0 3px}
+  #side .path{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:11px;
+    color:var(--accent);word-break:break-all;margin-bottom:14px}
+  #side .kind{display:inline-block;font-size:10px;padding:2px 8px;border-radius:6px;
+    background:var(--panel-2);border:1px solid var(--border);color:var(--muted);margin-bottom:10px}
+  #side .sec{font-size:10.5px;font-weight:700;letter-spacing:.09em;text-transform:uppercase;
+    color:var(--muted);margin:18px 0 7px}
+  #side p.role{font-size:13px;line-height:1.5;margin:6px 0}
+  #side p.plain{font-size:12.5px;line-height:1.55;color:#cfcfcf;background:var(--panel-2);
+    border-left:3px solid var(--client);padding:10px 12px;border-radius:0 8px 8px 0;margin:8px 0}
+  #side ul{margin:6px 0;padding-left:17px}
+  #side li{font-size:12px;line-height:1.5;color:#cdcdcd;margin:3px 0}
+  #side .edgerow{font-size:11.5px;color:#bdbdbd;padding:4px 0;border-bottom:1px solid #202020}
+  #side .edgerow b{color:var(--text)}
+  #side .arrow{color:var(--accent);font-weight:700}
+  .fix{font-size:12px;line-height:1.45;background:rgba(46,204,113,.08);border-left:3px solid #2ecc71;
+    padding:7px 10px;border-radius:0 6px 6px 0;margin:5px 0;color:#d4f5e2}
+  .bug{font-size:12px;line-height:1.45;border-left:3px solid var(--critical);padding:7px 10px;
+    border-radius:0 6px 6px 0;margin:5px 0;color:#ffd6de;background:rgba(255,56,96,.07)}
+  .bug .sev{font-weight:700;text-transform:uppercase;font-size:9.5px;margin-right:6px;
+    padding:1px 6px;border-radius:5px;background:var(--critical);color:#fff}
+  .bug .ref{font-family:ui-monospace,monospace;font-size:10px;color:var(--accent);display:block;margin-top:3px}
+  .find{font-size:12.5px;line-height:1.5;margin:10px 0;padding-left:20px;position:relative;color:#d2d2d2}
+  .find:before{content:"▸";position:absolute;left:2px;color:var(--accent)}
+  .find b{color:#fff}
+  .legend{display:flex;flex-wrap:wrap;gap:8px;margin-top:6px}
+  .legend span{font-size:10.5px;color:var(--muted);display:flex;align-items:center;gap:5px}
+  .swatch{width:11px;height:11px;border-radius:3px;display:inline-block}
+  .hint{font-size:11px;color:var(--muted);margin-top:18px;line-height:1.5;border-top:1px solid var(--border);padding-top:14px}
+</style>
+</head>
+<body>
+<div id="app">
+  <div id="stage">
+    <div id="topbar">
+      <span class="brand">OpenMemo <small>architecture map</small></span>
+      <span id="chips"></span>
+    </div>
+    <svg id="svg"></svg>
+    <div id="zoomctl">
+      <button id="zfit" class="lbl" title="Fit to screen">Fit</button>
+      <button id="zin" title="Zoom in">+</button>
+      <button id="zout" title="Zoom out">−</button>
+    </div>
+  </div>
+  <aside id="side"></aside>
+</div>
+
+<script>
+/* ============================================================
+   DATA — edit nodes / edges / clusters by hand below.
+   ============================================================ */
+
+const COLORS = {
+  client:'#4ea1ff', entry:'#4ea1ff', route:'#7bd389', service:'#c792ea',
+  db:'#ffb86b', external:'#ff6b9d', critical:'#ff3860'
+};
+
+const clusters = [
+  { id:'client',   label:'Client · React SPA',  x:20,   y:50,  w:250, h:780, color:'client'  },
+  { id:'entry',    label:'Server Entry',        x:300,  y:50,  w:250, h:530, color:'entry'    },
+  { id:'route',    label:'API Routes',          x:580,  y:50,  w:250, h:870, color:'route'    },
+  { id:'core',     label:'Core · Services',     x:860,  y:50,  w:250, h:1185,color:'service'  },
+  { id:'data',     label:'Data Stores',         x:1140, y:50,  w:250, h:640, color:'db'       },
+  { id:'external', label:'External APIs',       x:1420, y:50,  w:250, h:500, color:'external' },
+];
+
+// N(id, cluster, label, sub, x, y, w, h, color, opts)
+const N = (id,cluster,label,sub,x,y,w,h,color,opts={}) =>
+  ({ id,cluster,label,sub,x,y,w,h,color,...opts });
+
+const NW=210, NH=56;
+
+const nodes = [
+  /* ---------- CLIENT ---------- */
+  N('app-router','client','App.tsx','react-router routes',40,90,NW,NH,'client',{
+    role:'Declares the 5 client routes inside a single <Layout> shell.',
+    plain:'The switchboard for the website. Decides which screen to show for each web address.',
+    path:'frontend/src/App.tsx:12',
+    notes:['Routes: / , /collections , /memo/:id , /ask , /settings','Exactly 5 routes — no dead or unrouted screens'],
+    tag:['overview','all'] }),
+  N('layout','client','Layout.tsx','sidebar + outlet',40,164,NW,NH,'client',{
+    role:'App shell: push-sidebar + <Outlet> for the active page.',
+    plain:'The frame around every screen — the left menu and the main area that swaps content.',
+    path:'frontend/src/components/Layout.tsx',
+    notes:['Flex-width sidebar transition (not absolute overlay)','Hosts Sidebar + SpeedDialFAB'],
+    tag:['overview','all'] }),
+  N('dashboard','client','Dashboard.tsx','memo grid + filters',40,238,NW,NH,'client',{
+    role:'Home grid: lists memos with type-filter tabs, search, drag reorder.',
+    plain:'The home page showing all your saved items as cards, with tabs to filter by kind.',
+    path:'frontend/src/pages/Dashboard.tsx',
+    notes:['Type tabs map to comma-separated groups (Files = document,file,code,audio)','dnd-kit drag writes recency via memoApi.setRecency'],
+    tag:['overview','ingest','all'] }),
+  N('memo-detail','client','MemoDetail.tsx','view + edit memo',40,312,NW,NH,'client',{
+    role:'Single-memo view: media preview, markdown editor, related, per-memo AskMemo.',
+    plain:'The full page for one saved item where you read it, edit notes, and ask questions about it.',
+    path:'frontend/src/pages/MemoDetail.tsx',
+    notes:['Renders MediaPreview + MarkdownEditor','Hosts AskMemoPanel scoped to this memo'],
+    tag:['overview','media','chat','all'] }),
+  N('settings-page','client','SettingsPage.tsx','bento settings',40,386,NW,NH,'client',{
+    role:'Bento-grid settings: stats, theme toggle, backup/restore, maintenance.',
+    plain:'The settings screen — appearance, storage stats, backups, and danger-zone reset.',
+    path:'frontend/src/pages/SettingsPage.tsx',
+    notes:['Owns the manual dark-mode toggle (.dark class)','Calls backupApi / maintenanceApi / settingsApi'],
+    tag:['settings','all'] }),
+  N('app-store','client','appStore.ts','Zustand UI state',40,460,NW,NH,'client',{
+    role:'Zustand store: sidebar, filters, active collection, theme, chatModel.',
+    plain:'A small in-browser memory holding UI preferences like the chosen chat model and theme.',
+    path:'frontend/src/stores/appStore.ts',
+    notes:['UI-only state; data lives in TanStack Query cache','Persists theme to localStorage key openmemo_settings','bgColor was removed — never re-add'],
+    tag:['overview','chat','all'] }),
+  N('ask-panel','client','AskMemoPanel.tsx','chat + SSE reader',40,560,NW,NH,'client',{
+    role:'Chat UI: sends query, reads the SSE stream, renders tokens + source chips.',
+    plain:'The chat box. You type a question and it shows the answer streaming in word-by-word.',
+    path:'frontend/src/components/AskMemoPanel.tsx:44',
+    notes:['Parses "data: " SSE lines for sources/token/done','Reuses chatModel from appStore','line 126: still uses Tailwind prose (theming bug)'],
+    tag:['overview','chat','all'], critical:true }),
+  N('api-client','client','lib/api.ts','fetch wrappers',40,634,NW,NH,'client',{
+    role:'Single source for every fetch call — memo/ingest/collection/chat/search/...',
+    plain:'The one place that knows how to talk to the server. All network calls go through here.',
+    path:'frontend/src/lib/api.ts',
+    notes:['API_BASE = /api (Vite proxy → nginx :8091 → backend)','chatApi.stream returns the raw Response for SSE reading','memo/ingest/collection/chat/backup/settings/maintenance/search clients'],
+    tag:['overview','chat','ingest','search','settings','all'], critical:true }),
+  /* ---------- ENTRY ---------- */
+  N('config','entry','config.py','pydantic Settings',320,90,NW,NH,'service',{
+    role:'All runtime config via pydantic-settings; reads .env.',
+    plain:'The central settings file — model names, folder paths, server ports — read once at startup.',
+    path:'backend/config.py:6',
+    notes:['DEFAULT_CHAT_MODEL=qwen2.5:7b, EMBED_MODEL=nomic-embed-text','OLLAMA_HOSTS list with localhost + host.docker.internal','VERSION="1.8.5" but README ships 1.8.6 (drift)'],
+    tag:['overview','all'] }),
+  N('main-app','entry','main.py','FastAPI + lifespan',320,200,NW,NH,'route',{
+    role:'Builds the FastAPI app, CORS, mounts 9 routers, runs startup lifespan.',
+    plain:'The server’s front door. Boots the database, wires up every feature, and starts listening.',
+    path:'backend/main.py:103',
+    notes:['lifespan: init_db + FTS5 + default user/workspace + scheduler','Mounts memos/chat/collections/ingest/export/search/maintenance/backup/settings','9 routers, all live'],
+    tag:['overview','all'], critical:true }),
+  N('serve-file','entry','serve_file','/api/files/{path}',320,300,NW,NH,'route',{
+    role:'Serves uploads only after confirming the path belongs to a Memo row.',
+    plain:'Hands back a saved file (image, PDF) but first checks you actually own it.',
+    path:'backend/main.py:170',
+    notes:['SafePath guards traversal; falls back to resolve_memo_path','thumb/ and extracted/ routes registered BEFORE this catch-all'],
+    tag:['media','all'] }),
+  N('proxy-image','entry','proxy_image','/api/proxy/image',320,374,NW,NH,'route',{
+    role:'Fetches a remote image with browser headers to beat hotlink protection; caches it.',
+    plain:'Grabs a picture from another website that would otherwise block us, and stores a copy.',
+    path:'backend/main.py:213',
+    notes:['Reuses _download_thumb + _thumb_headers from ingest','Streams fallback when caching not possible'],
+    tag:['media','ingest','all'] }),
+  N('reclassify-job','entry','_run_reclassify_job','APScheduler cron',320,470,NW,NH,'service',{
+    role:'Background sorter: re-files every memo to its canonical type. Mon/Thu 03:00 + on boot.',
+    plain:'A janitor that runs on a timer and fixes any saved item filed under the wrong category.',
+    path:'backend/main.py:18',
+    notes:['Idempotent; only rewrites mismatched + known types','Delegates to core/classify.reclassify_all'],
+    tag:['ingest','all'] }),
+
+  /* ---------- ROUTES ---------- */
+  N('chat-router','route','chat.py','/api/chat/stream',600,90,NW,NH,'route',{
+    role:'Streaming RAG endpoint: persists messages, detects @general, pipes rag_chat to SSE.',
+    plain:'Receives your question, saves it, runs the answer engine, and streams the reply back live.',
+    path:'backend/api/chat.py:41',
+    notes:['First SSE event = sources, then token events, then done','@/@general prefix flips off retrieval (use_rag=False)','Opens a 2nd DB session to save the assistant reply after streaming'],
+    tag:['overview','chat','all'], critical:true }),
+  N('ingest-router','route','ingest.py','/api/ingest/*',600,180,NW,NH,'route',{
+    role:'URL/note/file/extension/ai ingestion → creates Memo → schedules background embed.',
+    plain:'The intake desk. Takes a link, file, or note, saves it, then queues it for AI indexing.',
+    path:'backend/api/ingest.py:193',
+    notes:['process_memo() background task chunks+embeds content','derive_memo_type() sets canonical type at save','validate_url imported (line 16) but never called — SSRF gap'],
+    tag:['overview','ingest','all'] }),
+  N('memos-router','route','memos.py','/api/memos/*',600,270,NW,NH,'route',{
+    role:'Memo CRUD, recency reorder, pin, summary, related. Direct SQLAlchemy (no service layer).',
+    plain:'Create, read, edit, delete saved items — plus pinning, reordering, and "find similar".',
+    path:'backend/api/memos.py:84',
+    notes:['Sort = recency_at desc, created_at tiebreak','PUT triggers background re-embed when content changes','Bypasses MemoService entirely (writes inline)'],
+    tag:['overview','ingest','chat','all'] }),
+  N('search-router','route','search.py','/api/search',600,360,NW,NH,'route',{
+    role:'Hybrid search: semantic (Chroma) + full-text (FTS5), merged & de-duplicated.',
+    plain:'The search bar’s brain — blends meaning-based and keyword matches into one result list.',
+    path:'backend/api/search.py:17',
+    notes:['Semantic via search_similar; text via search_fts5','FTS5 path currently errors → silently falls back to ilike'],
+    tag:['overview','search','all'] }),
+  N('collections-router','route','collections.py','/api/collections/*',600,450,NW,NH,'route',{
+    role:'Collection CRUD + add/remove memo membership.',
+    plain:'Manage folders that group your saved items together.',
+    path:'backend/api/collections.py:35',
+    notes:['Many-to-many via memo_collections table','Deleting a collection keeps its memos'],
+    tag:['ingest','all'] }),
+  N('export-router','route','export.py','/api/export/*',600,540,NW,NH,'route',{
+    role:'Export one memo or a zip of memos as Markdown.',
+    plain:'Download your notes as plain Markdown files, one or many at once.',
+    path:'backend/api/export.py:42',
+    notes:['memo_to_markdown builds the file body','Bulk export streams a ZIP'],
+    tag:['settings','all'] }),
+  N('backup-router','route','backup.py','/api/backup/*',600,614,NW,NH,'route',{
+    role:'Downloadable zip snapshots (DB-only or DB+files) and one-click restore.',
+    plain:'Make a backup file of everything, or restore from one you saved earlier.',
+    path:'backend/api/backup.py:34',
+    notes:['Uses sqlite .backup() for a consistent DB copy','Restore disposes the engine before swapping the DB file'],
+    tag:['settings','all'] }),
+  N('maintenance-router','route','maintenance.py','/api/maintenance/*',600,688,NW,NH,'route',{
+    role:'Clear thumb cache, localize images, reclassify, backfill video thumbs, reset workspace.',
+    plain:'Housekeeping tools — clear caches, re-tidy types, or wipe everything and start over.',
+    path:'backend/api/maintenance.py:23',
+    notes:['/reset wipes DB rows + files + Chroma collection','/reclassify-types is the sorter on-demand'],
+    tag:['settings','all'] }),
+  N('settings-router','route','settings.py','/api/settings',600,762,NW,NH,'route',{
+    role:'Get/patch runtime user settings (upload cap, display name, avatar, consent).',
+    plain:'Reads and saves the preferences you change on the settings screen.',
+    path:'backend/api/settings.py:20',
+    notes:['Delegates to core/app_settings JSON store','max_upload_mb feeds the FileUploadHandler cap'],
+    tag:['settings','all'] }),
+  /* ---------- CORE ---------- */
+  N('rag','core','rag.py','RAG pipeline',880,90,NW,NH,'service',{
+    role:'Retrieves chunks, builds the context prompt, streams the LLM answer. The spine.',
+    plain:'The answer engine: finds the most relevant saved text, feeds it to the AI, and streams the reply.',
+    path:'backend/core/rag.py:35',
+    notes:['SYSTEM_PROMPT injected as role:system (rag.py:76)','build_context_prompt formats [1][2] citations','Also exposes generate_summary (used by memos /summary)'],
+    tag:['overview','chat','all'], critical:true }),
+  N('embedder','core','embedder.py','chunk + vectors',880,180,NW,NH,'service',{
+    role:'Chunks text, embeds via Ollama, upserts/queries ChromaDB.',
+    plain:'Turns text into numeric fingerprints so the system can find passages by meaning, not keywords.',
+    path:'backend/core/embedder.py:65',
+    notes:['search_similar hardcodes n_results=8 (RAG_TOP_K unused)','Chroma calls wrapped in asyncio.to_thread (blocking I/O)','where filter supports workspace_id + memo_id'],
+    tag:['overview','chat','ingest','search','all'], critical:true }),
+  N('ollama-client','core','ollama_client.py','Ollama HTTP',880,270,NW,NH,'service',{
+    role:'Multi-host Ollama client: embed, embed_batch, chat (stream), chat_sync, vision.',
+    plain:'The phone line to the local AI engine — tries several addresses and picks one that answers.',
+    path:'backend/core/ollama_client.py:10',
+    notes:['_get_working_host caches the live host for 30s','Falls back /api/embed → legacy /api/embeddings','Single shared instance: ollama_client'],
+    tag:['overview','chat','ingest','search','all'], critical:true }),
+  N('chunker','core','chunker.py','token-ish splitter',880,360,NW,NH,'service',{
+    role:'Word-based overlapping chunker (~0.75 words/token) with sentence-boundary breaks.',
+    plain:'Cuts long text into bite-size overlapping pieces so the AI can index each part.',
+    path:'backend/core/chunker.py:6',
+    notes:['CHUNK_SIZE=512 / OVERLAP=50 tokens from config','Approximates tokens by word count'],
+    tag:['ingest','chat','all'] }),
+  N('extractor','core','extractor.py','content scrapers',880,450,NW,NH,'service',{
+    role:'Defuddle-style HTML extract, YouTube/social via yt-dlp, PDF/DOCX/image readers.',
+    plain:'Pulls the real article text, title and image out of a web page, video, PDF or document.',
+    path:'backend/core/extractor.py:141',
+    notes:['_minimal_link chain: Microlink → OG scrape fallback','extract_image uses the Ollama vision model for captions','yt-dlp shells out via subprocess'],
+    tag:['ingest','media','all'] }),
+  N('classify','core','classify.py','type taxonomy',880,540,NW,NH,'service',{
+    role:'Single source of truth for a memo’s canonical type. No "article" type — pages are "link".',
+    plain:'Decides what category each saved item is (note, link, image, video...) from its strongest clue.',
+    path:'backend/core/classify.py:31',
+    notes:['Priority: file extension > source URL > note','reclassify_all powers the scheduled sorter','Reuses categorize_extension from upload.py'],
+    tag:['ingest','all'] }),
+  N('localizer','core','localizer.py','image localize',880,614,NW,NH,'service',{
+    role:'Downloads remote images inside extracted content so memos survive source deletion.',
+    plain:'Saves copies of pictures from articles so they still show even if the original site disappears.',
+    path:'backend/core/localizer.py',
+    notes:['Best-effort background task; never blocks ingest','Serves localized assets under /api/files/extracted/'],
+    tag:['ingest','media','all'] }),
+  N('video','core','video.py','ffmpeg thumbs',880,688,NW,NH,'service',{
+    role:'Grabs a still frame from uploaded video for the grid thumbnail (ffmpeg).',
+    plain:'Takes a snapshot from a video so it has a preview picture in the grid.',
+    path:'backend/core/video.py',
+    notes:['ffmpeg_available() gate; skips gracefully if missing','Used by ingest file path + maintenance backfill'],
+    tag:['ingest','media','all'] }),
+  N('upload-handler','core','upload.py','secure uploads',880,762,NW,NH,'service',{
+    role:'Streams uploads to disk in 1MiB chunks, enforces size cap, validates image magic bytes.',
+    plain:'Safely saves files you upload — checks the size and that an "image" really is an image.',
+    path:'backend/core/security/upload.py:90',
+    notes:['categorize_extension maps ext → memo type (unknown=file)','Uploaded files are never executed, only stored','max_size resolved from app_settings each save'],
+    tag:['ingest','all'] }),
+  N('sanitize','core','sanitize.py','input guards',880,836,NW,NH,'service',{
+    role:'workspace_id / filename / FTS5 / URL / string sanitizers + SafePath.',
+    plain:'The security checkpoint that cleans any text users send so it can’t break out or attack the system.',
+    path:'backend/core/security/sanitize.py',
+    notes:['escape_fts5_query lives here (the real one)','validate_url exists but ingest never calls it','SafePath blocks path-traversal on file serving'],
+    tag:['overview','ingest','search','all'] }),
+  N('app-settings','core','app_settings.py','JSON settings store',880,910,NW,NH,'service',{
+    role:'Persists runtime user settings as JSON; exposes get_max_upload_bytes.',
+    plain:'Stores the preferences from the settings screen in a small file on disk.',
+    path:'backend/core/app_settings.py',
+    notes:['Backs the /api/settings router','Feeds upload cap into FileUploadHandler'],
+    tag:['settings','all'] }),
+  N('file-paths','core','file_paths.py','cross-env resolver',880,984,NW,NH,'service',{
+    role:'Re-anchors stored file_path across Docker (/app/files) vs Windows (D:\\...\\files).',
+    plain:'Finds a saved file even when the app moved between Docker and your PC and the path changed.',
+    path:'backend/core/file_paths.py:43',
+    notes:['Used by serve_file + /memos/{id}/file','Splits on the last "files" segment'],
+    tag:['media','all'] }),
+  N('memo-service','core','memo_service.py','DEAD · 0 callers',880,1080,NW,NH,'service',{
+    role:'MemoService CRUD — never instantiated. CLAUDE.md claims all writes go here; they don’t.',
+    plain:'A tidy data-access class nobody actually uses — the real code writes to the database directly.',
+    path:'backend/services/memo_service.py:14',
+    notes:['Only import is services/__init__.py (re-export)','ingest.py + memos.py both write Memo() inline','Doc/intent vs reality mismatch'],
+    tag:['dead','all'] }),
+  /* ---------- DATA ---------- */
+  N('chroma','data','chroma_client.py','ChromaDB vectors',1140,180,NW,NH,'db',{
+    role:'Persistent ChromaDB client; cosine HNSW collection "memos".',
+    plain:'The vector library — stores text fingerprints and finds the closest matches to a question.',
+    path:'backend/db/chroma_client.py:10',
+    notes:['Persisted at ./data/chroma','get_or_create_collection(metadata hnsw:space=cosine)','Telemetry disabled'],
+    tag:['overview','chat','search','ingest','all'], critical:true }),
+  N('models','data','models.py','SQLAlchemy ORM',1140,300,NW,NH,'db',{
+    role:'ORM models: User, Workspace, Memo, Collection, Tag, ChatSession, Message.',
+    plain:'The blueprint of the database — what a memo, collection, chat and message look like.',
+    path:'backend/db/models.py:60',
+    notes:['Memo.embedding_ids stores Chroma chunk IDs','content_text = ingested body; notes = user scratchpad','recency_at drives the single sort order'],
+    tag:['overview','chat','ingest','search','all'] }),
+  N('database','data','database.py','async engine',1140,374,NW,NH,'db',{
+    role:'Async SQLAlchemy engine + session factory; lightweight ALTER-TABLE migrations.',
+    plain:'Opens the connection to the database and adds any missing columns on startup.',
+    path:'backend/db/database.py:31',
+    notes:['aiosqlite; expire_on_commit=False','_run_migrations adds notes/sort_order/pinned/recency_at','No migration framework — manual ALTERs'],
+    tag:['overview','all'] }),
+  N('sqlite','data','openmemo.db','SQLite file',1140,470,NW,NH,'db',{
+    role:'On-disk relational store for all structured data + FTS5 virtual table.',
+    plain:'The single database file on disk that holds your memos, folders and chat history.',
+    path:'data/openmemo.db',
+    notes:['Dual storage: this + ChromaDB vectors','memos_fts mirror kept in sync by triggers'],
+    tag:['overview','search','all'] }),
+  N('fts5','data','fts5.py','full-text index',1140,560,NW,NH,'db',{
+    role:'SQLite FTS5 virtual table + sync triggers; search_fts5 ranked query.',
+    plain:'A keyword search index that finds memos by the exact words they contain.',
+    path:'backend/db/fts5.py:67',
+    notes:['Triggers keep memos_fts synced on insert/update/delete','BUG: search_fts5 calls escape_fts5_query (never imported)','_escape_fts5 defined here but unused'],
+    tag:['search','all'] }),
+
+  /* ---------- EXTERNAL ---------- */
+  N('ollama-server','external','Ollama','localhost:11434',1440,180,NW,NH,'external',{
+    role:'Local LLM runtime: nomic-embed-text (embeddings) + qwen2.5:7b (chat) + gemma3:4b (vision).',
+    plain:'The AI program running on your own machine that does the thinking and writes the answers.',
+    path:'OLLAMA_HOSTS (config.py:20)',
+    notes:['Embeddings: nomic-embed-text','Chat: qwen2.5:7b · Vision: gemma3:4b','Multi-host fallback incl. host.docker.internal'],
+    tag:['overview','chat','ingest','search','media','all'], critical:true }),
+  N('yt-dlp','external','yt-dlp','subprocess',1440,300,NW,NH,'external',{
+    role:'CLI tool shelled out for YouTube/social video metadata + thumbnails.',
+    plain:'A downloader program used to read titles and pictures from video links.',
+    path:'extractor.py:245',
+    notes:['--dump-json --no-download','Failure falls through to Microlink/OG scrape'],
+    tag:['ingest','media','all'] }),
+  N('microlink','external','Microlink API','api.microlink.io',1440,374,NW,NH,'external',{
+    role:'Free OG metadata + screenshot service for bot-walled / SPA pages.',
+    plain:'An outside service that fetches a page’s preview when our own scraper gets blocked.',
+    path:'extractor.py:464',
+    notes:['No API key (free tier)','First link in the _minimal_link fallback chain'],
+    tag:['ingest','all'] }),
+  N('favicons','external','Google Favicons','s2/favicons',1440,448,NW,NH,'external',{
+    role:'Favicon image service used for memo source icons.',
+    plain:'Where the little site icons next to each saved link come from.',
+    path:'extractor.py:191',
+    notes:['https://www.google.com/s2/favicons?domain=...&sz=32'],
+    tag:['ingest','media','all'] }),
+];
+
+const edges = [
+  /* ---- CRITICAL SPINE (RAG chat) ---- */
+  { from:'ask-panel', to:'api-client',  kind:'critical', label:'1 · chatApi.stream', tag:['overview','chat','all'] },
+  { from:'api-client', to:'chat-router', kind:'critical', label:'2 · POST /chat/stream', tag:['overview','chat','all'] },
+  { from:'chat-router', to:'rag',        kind:'critical', label:'3 · rag_chat()', tag:['overview','chat','all'] },
+  { from:'rag', to:'embedder',           kind:'critical', label:'4 · search_similar', tag:['overview','chat','all'] },
+  { from:'embedder', to:'ollama-client', kind:'critical', label:'5 · embed query', tag:['overview','chat','all'] },
+  { from:'ollama-client', to:'ollama-server', kind:'critical', label:'6 · POST /api/embed', tag:['overview','chat','ingest','search','all'] },
+  { from:'embedder', to:'chroma',        kind:'critical', label:'7 · collection.query', tag:['overview','chat','search','all'] },
+  { from:'rag', to:'ollama-client',      kind:'critical', label:'8 · chat stream', tag:['overview','chat','all'] },
+  { from:'chat-router', to:'models',     kind:'db',       label:'save msgs', tag:['overview','chat','all'] },
+
+  /* ---- entry mounts ---- */
+  { from:'main-app', to:'chat-router',   kind:'mount', label:'include', tag:['overview','chat','all'] },
+  { from:'main-app', to:'ingest-router', kind:'mount', label:'include', tag:['overview','ingest','all'] },
+  { from:'main-app', to:'memos-router',  kind:'mount', label:'include', tag:['overview','all'] },
+  { from:'main-app', to:'search-router', kind:'mount', label:'include', tag:['overview','search','all'] },
+  { from:'main-app', to:'collections-router', kind:'mount', label:'include', tag:['all'] },
+  { from:'main-app', to:'export-router', kind:'mount', label:'include', tag:['settings','all'] },
+  { from:'main-app', to:'backup-router', kind:'mount', label:'include', tag:['settings','all'] },
+  { from:'main-app', to:'maintenance-router', kind:'mount', label:'include', tag:['settings','all'] },
+  { from:'main-app', to:'settings-router', kind:'mount', label:'include', tag:['settings','all'] },
+  { from:'config', to:'main-app',        kind:'normal', label:'settings', tag:['overview','all'] },
+  { from:'main-app', to:'database',      kind:'normal', label:'init_db', tag:['overview','all'] },
+  { from:'main-app', to:'fts5',          kind:'normal', label:'init_fts5', tag:['overview','search','all'] },
+  { from:'reclassify-job', to:'classify',kind:'normal', label:'reclassify_all', tag:['ingest','all'] },
+
+  /* ---- client wiring ---- */
+  { from:'app-router', to:'layout',      kind:'mount', label:'shell', tag:['overview','all'] },
+  { from:'layout', to:'dashboard',       kind:'mount', label:'route /', tag:['overview','all'] },
+  { from:'layout', to:'memo-detail',     kind:'mount', label:'/memo/:id', tag:['overview','media','all'] },
+  { from:'layout', to:'settings-page',   kind:'mount', label:'/settings', tag:['settings','all'] },
+  { from:'memo-detail', to:'ask-panel',  kind:'normal', label:'hosts', tag:['chat','all'] },
+  { from:'dashboard', to:'api-client',   kind:'normal', label:'memoApi.list', tag:['overview','ingest','all'] },
+  { from:'settings-page', to:'api-client',kind:'normal', label:'backup/stats', tag:['settings','all'] },
+  { from:'ask-panel', to:'app-store',    kind:'normal', label:'chatModel', tag:['chat','all'] },
+
+  /* ---- ingest pipeline ---- */
+  { from:'api-client', to:'ingest-router', kind:'normal', label:'POST /ingest/*', tag:['ingest','all'] },
+  { from:'ingest-router', to:'extractor', kind:'normal', label:'extract_url/yt', tag:['ingest','all'] },
+  { from:'ingest-router', to:'classify',  kind:'normal', label:'derive_memo_type', tag:['ingest','all'] },
+  { from:'ingest-router', to:'upload-handler', kind:'normal', label:'file save', tag:['ingest','all'] },
+  { from:'ingest-router', to:'embedder',  kind:'normal', label:'process_memo', tag:['ingest','all'] },
+  { from:'ingest-router', to:'localizer', kind:'normal', label:'localize', tag:['ingest','media','all'] },
+  { from:'ingest-router', to:'video',     kind:'normal', label:'thumb frame', tag:['ingest','media','all'] },
+  { from:'ingest-router', to:'models',    kind:'db', label:'INSERT memo', tag:['ingest','all'] },
+  { from:'embedder', to:'chunker',        kind:'normal', label:'chunk_text', tag:['ingest','chat','all'] },
+  { from:'embedder', to:'chroma',         kind:'db', label:'upsert chunks', tag:['ingest','all'] },
+  { from:'extractor', to:'ollama-client', kind:'normal', label:'vision caption', tag:['ingest','media','all'] },
+  { from:'extractor', to:'yt-dlp',        kind:'api', label:'subprocess', tag:['ingest','media','all'] },
+  { from:'extractor', to:'microlink',     kind:'api', label:'GET og meta', tag:['ingest','all'] },
+  { from:'extractor', to:'favicons',      kind:'api', label:'favicon url', tag:['ingest','media','all'] },
+  { from:'upload-handler', to:'sanitize', kind:'normal', label:'sanitize ws/name', tag:['ingest','all'] },
+  { from:'upload-handler', to:'app-settings', kind:'normal', label:'max_upload', tag:['ingest','settings','all'] },
+
+  /* ---- search ---- */
+  { from:'api-client', to:'search-router', kind:'normal', label:'GET /search', tag:['search','all'] },
+  { from:'search-router', to:'embedder',  kind:'normal', label:'semantic', tag:['search','all'] },
+  { from:'search-router', to:'fts5',      kind:'normal', label:'search_fts5', tag:['search','all'] },
+  { from:'fts5', to:'sqlite',             kind:'db', label:'MATCH', tag:['search','all'] },
+  { from:'search-router', to:'models',    kind:'db', label:'fetch memos', tag:['search','all'] },
+
+  /* ---- memos / misc ---- */
+  { from:'api-client', to:'memos-router', kind:'normal', label:'CRUD', tag:['overview','all'] },
+  { from:'memos-router', to:'models',     kind:'db', label:'read/write', tag:['overview','all'] },
+  { from:'memos-router', to:'embedder',   kind:'normal', label:'re-embed/related', tag:['chat','ingest','all'] },
+  { from:'memos-router', to:'rag',        kind:'normal', label:'generate_summary', tag:['chat','all'] },
+  { from:'memos-router', to:'file-paths', kind:'normal', label:'resolve path', tag:['media','all'] },
+  { from:'collections-router', to:'models', kind:'db', label:'collections', tag:['all'] },
+  { from:'maintenance-router', to:'classify', kind:'normal', label:'reclassify', tag:['settings','all'] },
+  { from:'maintenance-router', to:'video', kind:'normal', label:'backfill thumbs', tag:['settings','media','all'] },
+  { from:'settings-router', to:'app-settings', kind:'normal', label:'get/update', tag:['settings','all'] },
+  { from:'serve-file', to:'file-paths',   kind:'normal', label:'resolve', tag:['media','all'] },
+  { from:'serve-file', to:'models',       kind:'db', label:'ownership check', tag:['media','all'] },
+  { from:'proxy-image', to:'ingest-router', kind:'normal', label:'_download_thumb', tag:['media','ingest','all'] },
+  { from:'models', to:'sqlite',           kind:'db', label:'tables', tag:['overview','all'] },
+  { from:'database', to:'sqlite',         kind:'db', label:'engine', tag:['overview','all'] },
+];
+
+/* ---- ROADMAP fixes (open items mapped to nodes) ---- */
+const FIXES = {
+  'rag': [
+    {n:'R', t:'Seamless RAG default — drop the @general requirement; auto-query the knowledge base on every message.'},
+    {n:'Q', t:'System-prompt injection — already done at rag.py:76; ROADMAP item can be closed.'},
+  ],
+  'chat-router': [
+    {n:'R', t:'@general detection (chat.py:74) is slated for removal in the seamless-RAG change.'},
+  ],
+  'search-router': [
+    {n:'P', t:'RAG audit — add GET /api/debug/rag?q=... returning the retrieved chunks.'},
+  ],
+  'fts5': [
+    {n:'P', t:'Hybrid-search audit — verify FTS5 + Chroma both return; FTS5 currently broken (see bug).'},
+  ],
+  'dashboard': [
+    {n:'A', t:'Note card content preview — show a 3–4 line snippet for type=="note", not just the title.'},
+  ],
+};
+
+/* ---- KNOWN BUGS (each cites file:line confirmed by reading source) ---- */
+const KNOWN_BUGS = {
+  'fts5': [
+    {sev:'high', ref:'backend/db/fts5.py:69', t:'search_fts5 calls escape_fts5_query, which is never imported into this module (only the unused _escape_fts5 is local). Raises NameError → caught by search.py → FTS5 silently degrades to a LIKE substring scan on every search.'},
+  ],
+  'ingest-router': [
+    {sev:'med', ref:'backend/api/ingest.py:16', t:'validate_url is imported but never called. /ingest/url fetches arbitrary user-supplied URLs server-side with no scheme/host check — an SSRF surface for a future networked deployment.'},
+  ],
+  'ask-panel': [
+    {sev:'low', ref:'frontend/src/components/AskMemoPanel.tsx:126', t:'Uses Tailwind prose / prose-xs. Per CLAUDE.md the theme is attribute-based, so prose renders broken in at least one theme; should migrate to .om-prose.'},
+  ],
+  'config': [
+    {sev:'low', ref:'backend/config.py:8', t:'VERSION is pinned to 1.8.5 while README/app shipped 1.8.6 — version drift between the badge and the served value.'},
+  ],
+  'embedder': [
+    {sev:'low', ref:'backend/core/embedder.py:70', t:'search_similar hardcodes n_results=8; settings.RAG_TOP_K (also 8) is imported but never referenced, so tuning the config knob does nothing.'},
+  ],
+};
+
+/* ============================================================
+   RENDER ENGINE — no need to edit below for normal map edits.
+   ============================================================ */
+const SVGNS='http://www.w3.org/2000/svg';
+const svg=document.getElementById('svg');
+const nodeById=Object.fromEntries(nodes.map(n=>[n.id,n]));
+const VBW=1720, VBH=1260;
+
+// adjacency
+const adj={}; nodes.forEach(n=>adj[n.id]={in:[],out:[]});
+edges.forEach(e=>{ if(adj[e.from])adj[e.from].out.push(e); if(adj[e.to])adj[e.to].in.push(e); });
+
+// filter chips
+const chipDefs=[
+  {id:'overview',label:'Overview'},
+  {id:'chat',label:'AskMemo · RAG'},
+  {id:'ingest',label:'Ingest'},
+  {id:'search',label:'Search'},
+  {id:'media',label:'Media / Files'},
+  {id:'settings',label:'Settings'},
+  {id:'dead',label:'Dead code'},
+  {id:'all',label:'Show all wires'},
+  {id:'roadmap',label:'Roadmap & bugs',roadmap:true},
+];
+let activeFilter='overview';
+let selected=null, hovered=null;
+
+const chipWrap=document.getElementById('chips');
+chipDefs.forEach(c=>{
+  const b=document.createElement('span');
+  b.className='chip'+(c.roadmap?' roadmap':'')+(c.id==='overview'?' active':'');
+  b.textContent=c.label; b.dataset.id=c.id;
+  b.onclick=()=>{activeFilter=c.id;document.querySelectorAll('.chip').forEach(x=>x.classList.toggle('active',x.dataset.id===c.id));draw();};
+  chipWrap.appendChild(b);
+});
+
+// layers
+const gEdges=mk('g'), gEdgeLabels=mk('g'), gNodes=mk('g'), gClusters=mk('g');
+const root=mk('g'); root.appendChild(gClusters); root.appendChild(gEdges); root.appendChild(gEdgeLabels); root.appendChild(gNodes);
+svg.appendChild(defsArrow()); svg.appendChild(root);
+
+function mk(t){return document.createElementNS(SVGNS,t);}
+function attr(el,o){for(const k in o)el.setAttribute(k,o[k]);return el;}
+
+function defsArrow(){
+  const defs=mk('defs');
+  const kinds={critical:'#ff3860',api:'#ff7a45',db:'#ffb86b',mount:'#4ea1ff',normal:'#5a5a5a'};
+  for(const k in kinds){
+    const m=attr(mk('marker'),{id:'arr-'+k,viewBox:'0 0 10 10',refX:9,refY:5,markerWidth:7,markerHeight:7,orient:'auto-start-reverse'});
+    const p=attr(mk('path'),{d:'M0,0 L10,5 L0,10 z',fill:kinds[k]});
+    m.appendChild(p); defs.appendChild(m);
+  }
+  return defs;
+}
+
+function visibleByFilter(tags){
+  if(activeFilter==='all'||activeFilter==='roadmap')return true;
+  return tags && tags.includes(activeFilter);
+}
+function nodeHasBadges(id){return (FIXES[id]&&FIXES[id].length)||(KNOWN_BUGS[id]&&KNOWN_BUGS[id].length);}
+
+function draw(){
+  gClusters.innerHTML='';gEdges.innerHTML='';gEdgeLabels.innerHTML='';gNodes.innerHTML='';
+
+  // clusters
+  clusters.forEach(c=>{
+    const col=COLORS[c.color];
+    const r=attr(mk('rect'),{x:c.x,y:c.y,width:c.w,height:c.h,rx:14,class:'clusterBox',fill:col,stroke:col});
+    gClusters.appendChild(r);
+    const t=attr(mk('text'),{x:c.x+16,y:c.y+26,class:'clusterLabel'});t.textContent=c.label;
+    gClusters.appendChild(t);
+  });
+
+  // determine highlight set (selection/hover)
+  const focus=selected||hovered;
+  let connected=null;
+  if(focus){
+    connected=new Set([focus]);
+    adj[focus].in.forEach(e=>connected.add(e.from));
+    adj[focus].out.forEach(e=>connected.add(e.to));
+  }
+
+  // edges
+  edges.forEach(e=>{
+    const a=nodeById[e.from],b=nodeById[e.to];if(!a||!b)return;
+    const showF=visibleByFilter(e.tag);
+    const x1=a.x+a.w, y1=a.y+a.h/2, x2=b.x, y2=b.y+b.h/2;
+    // route right-to-right (back edge) handle
+    let d;
+    if(x2>=x1){const dx=Math.max(60,(x2-x1)*0.5);d=`M${x1},${y1} C${x1+dx},${y1} ${x2-dx},${y2} ${x2},${y2}`;}
+    else{const dx=80;d=`M${x1},${y1} C${x1+dx},${y1-40} ${x2-dx},${y2-40} ${x2},${y2}`;}
+    const col={critical:'#ff3860',api:'#ff7a45',db:'#ffb86b',mount:'#4ea1ff',normal:'#5a5a5a'}[e.kind];
+    const p=attr(mk('path'),{d,class:'edge',stroke:col,'marker-end':`url(#arr-${e.kind})`});
+    if(e.kind==='critical')p.setAttribute('stroke-width','2.3');
+    let dim=!showF;
+    if(focus){const onPath=(e.from===focus||e.to===focus);if(!onPath)dim=true;}
+    if(activeFilter==='roadmap')dim=!(nodeHasBadges(e.from)&&nodeHasBadges(e.to));
+    if(dim)p.classList.add('dimmed');
+    gEdges.appendChild(p);
+    // label
+    if(e.label && (showF||(focus&&(e.from===focus||e.to===focus)))){
+      const mx=(x1+x2)/2,my=(y1+y2)/2-4;
+      const tl=attr(mk('text'),{x:mx,y:my,class:'edgeLabel','text-anchor':'middle'});
+      tl.textContent=e.label;if(dim)tl.classList.add('dimmed');
+      gEdgeLabels.appendChild(tl);
+    }
+  });
+
+  // nodes
+  nodes.forEach(n=>{
+    const g=attr(mk('g'),{class:'node'+(n.critical?' crit':'')});
+    const col=COLORS[n.color];
+    const rect=attr(mk('rect'),{x:n.x,y:n.y,width:n.w,height:n.h,rx:9,stroke:col});
+    const isDead=(n.tag||[]).includes('dead');
+    if(isDead)rect.setAttribute('stroke-dasharray','5 4');
+    g.appendChild(rect);
+    const lab=attr(mk('text'),{x:n.x+13,y:n.y+23,class:'nlabel'});lab.textContent=n.label;g.appendChild(lab);
+    const sub=attr(mk('text'),{x:n.x+13,y:n.y+41,class:'nsub'});
+    sub.textContent=n.sub;if(isDead)sub.setAttribute('fill','#ff6b6b');g.appendChild(sub);
+
+    // badges
+    const fixes=FIXES[n.id]||[],bugs=KNOWN_BUGS[n.id]||[];
+    let bx=n.x+n.w-14;
+    if(bugs.length){badge(g,bx,n.y+13,bugs.length,'bug');bx-=22;}
+    if(fixes.length){badge(g,bx,n.y+13,fixes.length,'fix');}
+
+    // dim logic
+    let dim=!visibleByFilter(n.tag);
+    if(focus){dim=!connected.has(n.id);}
+    if(activeFilter==='roadmap')dim=!nodeHasBadges(n.id);
+    if(dim)g.classList.add('dimmed');
+
+    g.onclick=(ev)=>{ev.stopPropagation();selected=(selected===n.id?null:n.id);renderSide(selected);draw();};
+    g.onmouseenter=()=>{if(!selected){hovered=n.id;renderSide(n.id);draw();}};
+    g.onmouseleave=()=>{if(!selected){hovered=null;renderSide(null);draw();}};
+    gNodes.appendChild(g);
+  });
+}
+
+function badge(g,cx,cy,num,type){
+  const c=attr(mk('circle'),{cx,cy,r:9,class:type==='bug'?'badge-bug':'badge-fix'});g.appendChild(c);
+  const t=attr(mk('text'),{x:cx,y:cy+3.2,class:'badge-txt','text-anchor':'middle'});t.textContent=num;g.appendChild(t);
+}
+
+/* ---------- sidebar ---------- */
+const side=document.getElementById('side');
+function renderSide(id){
+  if(!id){side.innerHTML=defaultSide();return;}
+  const n=nodeById[id];if(!n)return;
+  const fixes=FIXES[id]||[],bugs=KNOWN_BUGS[id]||[];
+  const ins=adj[id].in, outs=adj[id].out;
+  let h='';
+  h+=`<h2>${esc(n.label)}</h2>`;
+  h+=`<div class="path">${esc(n.path||'')}</div>`;
+  h+=`<span class="kind" style="border-color:${COLORS[n.color]};color:${COLORS[n.color]}">${clusterName(n.cluster)}${n.critical?' · critical path':''}</span>`;
+  h+=`<p class="role">${esc(n.role||'')}</p>`;
+  if(n.plain)h+=`<p class="plain">${esc(n.plain)}</p>`;
+  if(n.notes&&n.notes.length){h+=`<div class="sec">Notes</div><ul>`+n.notes.map(x=>`<li>${esc(x)}</li>`).join('')+`</ul>`;}
+  if(bugs.length){h+=`<div class="sec">Known bugs</div>`+bugs.map(b=>`<div class="bug"><span class="sev">${b.sev}</span>${esc(b.t)}<span class="ref">${esc(b.ref)}</span></div>`).join('');}
+  if(fixes.length){h+=`<div class="sec">Roadmap fixes</div>`+fixes.map(f=>`<div class="fix"><b>[${f.n}]</b> ${esc(f.t)}</div>`).join('');}
+  if(ins.length){h+=`<div class="sec">Incoming (${ins.length})</div>`+ins.map(e=>`<div class="edgerow"><b>${esc(nodeById[e.from].label)}</b> <span class="arrow">→</span> ${esc(e.label||'')}</div>`).join('');}
+  if(outs.length){h+=`<div class="sec">Outgoing (${outs.length})</div>`+outs.map(e=>`<div class="edgerow"><span class="arrow">→</span> <b>${esc(nodeById[e.to].label)}</b> · ${esc(e.label||'')}</div>`).join('');}
+  side.innerHTML=h;
+}
+function clusterName(cid){return (clusters.find(c=>c.id===cid)||{}).label||cid;}
+
+function defaultSide(){
+  return `
+  <h2>OpenMemo</h2>
+  <div class="path">Local AI Knowledge OS · FastAPI + React + Ollama</div>
+  <p class="role">${nodes.length} nodes · ${edges.length} edges. Hover or click a box for detail. Click empty canvas to deselect.</p>
+  <p class="plain">Save articles, notes, files and videos, then chat with them. Everything runs on your own machine — a local AI engine (Ollama) does the embedding and the answering; nothing leaves your computer except optional metadata fetches.</p>
+
+  <div class="sec">Critical path — the spine</div>
+  <ul>
+    <li><b>AskMemoPanel</b> → api.ts → <b>/api/chat/stream</b> → <b>rag.py</b> → embedder → Ollama (embed) + ChromaDB (search) → Ollama (chat stream) → SSE back to the panel.</li>
+    <li>First SSE event is the source list, then one event per generated token.</li>
+  </ul>
+
+  <div class="sec">Notable findings from this map</div>
+  <div class="find"><b>FTS5 full-text search is broken.</b> <code>fts5.py:69</code> calls <code>escape_fts5_query</code> but only imports nothing — the name is undefined. Every search throws, is swallowed, and silently degrades to a LIKE substring scan. The "hybrid" search is keyword-half-down.</div>
+  <div class="find"><b>MemoService is dead code.</b> CLAUDE.md states "all DB writes go through services/memo_service.py" — but nothing instantiates it. Both ingest.py and memos.py write <code>Memo()</code> rows inline. Doc vs reality mismatch.</div>
+  <div class="find"><b>validate_url is imported but never called</b> (<code>ingest.py:16</code>). User URLs are fetched server-side with no scheme/host check — a latent SSRF surface.</div>
+  <div class="find"><b>Config knob with no effect.</b> <code>RAG_TOP_K=8</code> is imported in embedder.py but the retrieval count is hardcoded to 8 — tuning the setting changes nothing.</div>
+  <div class="find"><b>Three Ollama models, one host.</b> nomic-embed-text (embeddings), qwen2.5:7b (chat) and gemma3:4b (vision) all flow through one multi-host client with a 30s live-host cache.</div>
+
+  <div class="sec">Edge legend</div>
+  <div class="legend">
+    <span><i class="swatch" style="background:#ff3860"></i>critical path</span>
+    <span><i class="swatch" style="background:#ff7a45"></i>external API</span>
+    <span><i class="swatch" style="background:#ffb86b"></i>DB read/write</span>
+    <span><i class="swatch" style="background:#4ea1ff"></i>mount/route</span>
+    <span><i class="swatch" style="background:#5a5a5a"></i>normal call</span>
+  </div>
+  <div class="sec" style="margin-top:14px">Node badges</div>
+  <div class="legend">
+    <span><i class="swatch" style="background:#2ecc71;border-radius:50%"></i>roadmap fixes touching this node</span>
+    <span><i class="swatch" style="background:#ff3860;border-radius:50%"></i>known bugs (cited file:line)</span>
+  </div>
+  <p class="hint">Dashed boxes = dead / unreachable code. Use the <b>Roadmap &amp; bugs</b> chip to isolate every node carrying a badge.</p>`;
+}
+function esc(s){return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
+
+/* ---------- pan + zoom ---------- */
+let tx=0,ty=0,scale=1;
+const stage=document.getElementById('stage');
+function applyT(){root.setAttribute('transform',`translate(${tx},${ty}) scale(${scale})`);}
+function fit(){
+  const r=stage.getBoundingClientRect();
+  const pad=40;
+  const s=Math.min((r.width-pad*2)/VBW,(r.height-pad*2)/VBH);
+  scale=s; tx=(r.width-VBW*s)/2; ty=(r.height-VBH*s)/2+10; applyT();
+}
+svg.setAttribute('viewBox',`0 0 ${VBW} ${VBH}`);
+svg.setAttribute('preserveAspectRatio','xMidYMid meet');
+// we drive transform manually, so set viewBox to pixel space instead:
+function setupViewport(){
+  const r=stage.getBoundingClientRect();
+  svg.setAttribute('viewBox',`0 0 ${r.width} ${r.height}`);
+  fit();
+}
+window.addEventListener('resize',setupViewport);
+
+let dragging=false,lx=0,ly=0;
+stage.addEventListener('mousedown',e=>{if(e.target.closest('.node'))return;dragging=true;lx=e.clientX;ly=e.clientY;stage.classList.add('grabbing');});
+window.addEventListener('mousemove',e=>{if(!dragging)return;tx+=e.clientX-lx;ty+=e.clientY-ly;lx=e.clientX;ly=e.clientY;applyT();});
+window.addEventListener('mouseup',()=>{dragging=false;stage.classList.remove('grabbing');});
+stage.addEventListener('click',e=>{if(!e.target.closest('.node')){selected=null;hovered=null;renderSide(null);draw();}});
+stage.addEventListener('wheel',e=>{
+  e.preventDefault();
+  const r=stage.getBoundingClientRect();
+  const mx=e.clientX-r.left,my=e.clientY-r.top;
+  const f=e.deltaY<0?1.12:1/1.12;
+  const ns=Math.max(0.25,Math.min(3,scale*f));
+  tx=mx-(mx-tx)*(ns/scale); ty=my-(my-ty)*(ns/scale); scale=ns; applyT();
+},{passive:false});
+
+document.getElementById('zfit').onclick=fit;
+document.getElementById('zin').onclick=()=>{scale=Math.min(3,scale*1.2);applyT();};
+document.getElementById('zout').onclick=()=>{scale=Math.max(0.25,scale/1.2);applyT();};
+
+// init
+draw();
+renderSide(null);
+setupViewport();
+</script>
+</body>
+</html>

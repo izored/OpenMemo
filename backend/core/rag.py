@@ -104,24 +104,3 @@ async def generate_summary(text: str, model: str | None = None) -> str:
         {"role": "user", "content": prompt},
     ]
     return await ollama_client.chat_sync(messages=messages, model=model)
-
-
-async def generate_memocast_script(memo_texts: list[dict], model: str | None = None) -> str:
-    """Generate a podcast script from memo texts."""
-    content = "\n\n---\n\n".join(
-        [f"**{m['title']}**\n{m['text'][:500]}" for m in memo_texts]
-    )
-    
-    prompt = (
-        "Write a 3-minute podcast script (~450 words) reviewing these saved items. "
-        "Host tone: curious, friendly, conversational. "
-        "Introduce each topic naturally with smooth transitions. "
-        "End with a thought-provoking reflection question.\n\n"
-        f"Items to cover:\n{content}"
-    )
-    
-    messages = [
-        {"role": "system", "content": "You are a podcast script writer. Write engaging, natural-sounding scripts."},
-        {"role": "user", "content": prompt},
-    ]
-    return await ollama_client.chat_sync(messages=messages, model=model)
