@@ -141,16 +141,3 @@ class Message(Base):
     created_at = Column(DateTime, default=datetime.utcnow)
     
     session = relationship("ChatSession", back_populates="messages")
-
-
-class MemoCast(Base):
-    __tablename__ = "memocasts"
-    
-    id = Column(String, primary_key=True, default=generate_uuid)
-    workspace_id = Column(String, ForeignKey("workspaces.id"))
-    title = Column(String, nullable=False)
-    script_text = Column(Text, nullable=True)
-    audio_path = Column(String, nullable=True)
-    duration = Column(Integer, nullable=True)  # seconds
-    memos_json = Column(JSON, nullable=True)  # list of memo IDs
-    created_at = Column(DateTime, default=datetime.utcnow)

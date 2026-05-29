@@ -61,7 +61,6 @@ Single source of truth for all planned work. Versioned milestones + unversioned 
 - [x] **Filters on search bar line** — Type filters (All / Image / Links / Videos / Notes / Files) moved to same line as search box, compact pill style
 - [x] **FAB-dial** ease-in animation on hover; main FAB click opens note directly
 - [x] **Greeting left-align** — Left-justified greeting on same header row as filters + search
-- [x] **Remove MemoCast** — Removed from sidebar nav and routing; `MemoCastPage.tsx` archived to `_archived/`; `backend/core/tts.py` archived to `_archived/`; memocast router disabled in `main.py`
 
 ---
 
@@ -128,7 +127,7 @@ Single source of truth for all planned work. Versioned milestones + unversioned 
 - [ ] **PWA / offline support**
 
 **AskMemo polish (P4):**
-- [ ] **[U] Chat history panel** — Repurpose MemoCast-style side panel as chat history (two-column: history left, active chat right). Each entry: truncated first user message + timestamp
+- [ ] **[U] Chat history panel** — Two-column side panel as chat history (history left, active chat right). Each entry: truncated first user message + timestamp
 - [ ] **[T] Info dropdown on model selector** — ℹ️ icon left of selector → dropdown panel with AskMemo description, best practices, example queries
 - [ ] **[S] Disclaimer banner** — Small `--color-text-muted` centered banner under chat header: "Chat history is not saved — this session will be cleared on refresh. AskMemo is a work in progress." Dismissible × per session
 
@@ -220,7 +219,6 @@ no user action required. All run on the existing APScheduler instance wired in
 
 ## Archived / Cancelled
 
-- ~~**MemoCast**~~ — Podcast-style audio episode generation via Coqui TTS. Fully removed in v1.7.4. Code archived: `frontend/src/pages/_archived/MemoCastPage.tsx`, `backend/core/_archived/tts.py`.
 - ~~**v1.7.1 Public Sandbox**~~ — Live demo instance resetting nightly. Deprioritized indefinitely.
 
 ---
