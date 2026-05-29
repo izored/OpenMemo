@@ -65,16 +65,6 @@ export interface ChatSession {
   created_at: string;
 }
 
-export interface MemoCastEpisode {
-  id: string;
-  title: string;
-  script_text?: string;
-  audio_path?: string;
-  duration?: number;
-  memos_json?: string[];
-  created_at: string;
-}
-
 export interface OllamaModel {
   name: string;
   model: string;

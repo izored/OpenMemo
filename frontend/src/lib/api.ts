@@ -117,14 +117,6 @@ export const chatApi = {
   },
 };
 
-// MemoCast
-export const memocastApi = {
-  list: () => fetchJSON<any[]>('/memocast'),
-  get: (id: string) => fetchJSON<any>(`/memocast/${id}`),
-  create: (memo_ids?: string[], model?: string) =>
-    fetchJSON<any>('/memocast', { method: 'POST', body: JSON.stringify({ memo_ids, model }) }),
-};
-
 // Backup & Restore
 export const backupApi = {
   download: async (scope: 'structure' | 'full'): Promise<void> => {
