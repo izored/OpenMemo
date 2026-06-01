@@ -147,6 +147,17 @@ input, textarea { font: inherit; color: inherit; }
 .om-app.theme-transitioning * {
   transition: background-color 3s ease, color 3s ease, border-color 3s ease, box-shadow 3s ease !important;
 }
+/* Bug B fix (ENTRY OPNMMO-0007): the background blob (::before) is NOT matched
+   by the `*` rule above, so during a theme flip it keeps its own
+   `transition: background 0.7s` AND its drift keyframe. When applyTweaks()
+   rewrites the --bg-* vars at flip time, that 0.7s re-interpolation + the
+   animation made the blobs visibly twitch (opacity/position bump) a beat before
+   the radial sunrise covered them. Freeze BOTH during the transition window so
+   the blobs hold perfectly still until the radial hides the swap. */
+.om-app.theme-transitioning::before {
+  transition: none !important;
+  animation-play-state: paused !important;
+}
 
 @keyframes omIridescent {
   0%   { transform: translate(0, 0)     rotate(0deg)   scale(1);    filter: blur(80px) saturate(130%); }
@@ -690,6 +701,11 @@ input, textarea { font: inherit; color: inherit; }
 }
 [data-card="minimal"] .om-card-audio:hover::after { opacity: 1; }
 
+/* Brand glyphs in the minimal video pill — official-ish brand tints. The pill
+   has a dark frosted bg, so both read clearly. */
+.om-brand-youtube { color: #FF0000; }
+.om-brand-vimeo   { color: #1AB7EA; }
+
 /* Domain pill (always visible in minimal for links) */
 .om-min-domain {
   position: absolute; bottom: 12px; left: 12px;
@@ -888,9 +904,14 @@ input, textarea { font: inherit; color: inherit; }
   transform: translate(-50%, -50%);
   box-shadow: 0 6px 20px rgba(0,0,0,0.35);
   transition: transform .2s;
+  /* Button reset — audio cards render .om-play as a real <button>; video
+     cards as a <div>. These are inert on the div, so the visual is identical. */
+  border: 0; padding: 0; cursor: pointer;
 }
 .om-play.lg { width: 72px; height: 72px; }
 .om-card:hover .om-play { transform: translate(-50%, -50%) scale(1.06); }
+.om-play:active { transform: translate(-50%, -50%) scale(0.96); }
+.om-play:disabled { opacity: 0.5; cursor: default; }
 
 /* Card body */
 .om-card-body { padding: var(--pad-card); display: flex; flex-direction: column; gap: 10px; }
@@ -1931,6 +1952,9 @@ input, textarea { font: inherit; color: inherit; }
   background: rgba(0,0,0,0.18); border-radius: 7px;
 }
 [data-theme="light"] .om-add-segment { background: rgba(0,0,0,0.05); }
+/* 2x2 grid for the Media kind selector (Image/Video/Audio/File). */
+.om-add-segment.grid-2x2 { grid-template-columns: repeat(2, 1fr); }
+.om-add-segment.grid-2x2 .om-add-seg { padding: 8px 4px; }
 .om-add-seg {
   display: inline-flex; align-items: center; justify-content: center; gap: 5px;
   padding: 6px 4px; border-radius: 5px;
@@ -2006,6 +2030,168 @@ input, textarea { font: inherit; color: inherit; }
 .om-add-rec .mono { color: var(--text-4); font-size: 9.5px; }
 .om-add-voice-meta { font-size: 10px; color: var(--text-4); text-align: center; }
 [data-theme="light"] .om-add-rec { background: rgba(255,255,255,0.7); border-color: rgba(0,0,0,0.08); }
+
+/* ============================================================
+   AUDIO — header mini-player · audio card · detail player ·
+   transcript · recorder controls. Token-driven (theme-safe).
+   ============================================================ */
+
+/* Live level meter: heights are JS-driven now, so kill the looping CSS pulse
+   and just ease between values. (.om-add-wave is only used by the recorder.) */
+.om-add-wave span { width: 3px; animation: none; transition: height .08s linear; }
+.om-add-voice.recording .om-add-wave span {
+  box-shadow: 0 0 6px color-mix(in oklab, var(--accent) 50%, transparent);
+}
+.om-add-voice-timer { font-size: 13px; color: var(--text-2); font-variant-numeric: tabular-nums; }
+.om-add-voice-actions { display: flex; gap: 8px; justify-content: center; }
+.om-add-voice-preview { width: 100%; height: 34px; margin-top: 2px; }
+.om-add-rec.recording {
+  background: color-mix(in oklab, #EF5048 16%, transparent);
+  border-color: color-mix(in oklab, #EF5048 40%, transparent);
+  color: var(--text);
+}
+.om-add-rec.primary { background: var(--accent); color: var(--bg); border-color: transparent; }
+.om-add-rec.primary:hover { filter: brightness(1.06); }
+.om-add-rec:disabled { opacity: 0.5; cursor: default; }
+.om-add-rec-stop { width: 9px; height: 9px; border-radius: 2px; background: #EF5048; }
+
+/* Transcribe toggle */
+.om-add-toggle {
+  display: flex; align-items: center; gap: 10px;
+  width: 100%; margin-top: 10px; padding: 8px 4px;
+  background: none; border: 0; cursor: pointer; text-align: left;
+}
+.om-add-toggle-switch {
+  flex-shrink: 0; width: 34px; height: 20px; border-radius: 999px; position: relative;
+  background: color-mix(in oklab, var(--text) 18%, transparent);
+  transition: background .18s ease;
+}
+.om-add-toggle-switch.on { background: var(--accent); }
+.om-add-toggle-knob {
+  position: absolute; top: 2px; left: 2px; width: 16px; height: 16px; border-radius: 50%;
+  background: #fff; box-shadow: 0 1px 3px rgba(0,0,0,0.3); transition: transform .18s ease;
+}
+.om-add-toggle-switch.on .om-add-toggle-knob { transform: translateX(14px); }
+.om-add-toggle-label { display: flex; flex-direction: column; gap: 1px; font-size: 12px; color: var(--text); font-weight: 500; }
+.om-add-toggle-label .mono { font-size: 9.5px; color: var(--text-4); font-weight: 400; }
+
+/* Persistent mini-player — pinned top-right of the shell, shown while a track
+   is loaded (playing or paused) until the user closes it. */
+.om-mini-player {
+  position: fixed; top: 14px; right: 16px; z-index: 50;
+  display: flex; align-items: center; gap: 10px;
+  width: min(340px, calc(100vw - 32px));
+  padding: 8px 10px; border-radius: 999px;
+  background: color-mix(in oklab, var(--surface) 90%, transparent);
+  backdrop-filter: blur(16px) saturate(1.2);
+  border: 1px solid var(--border);
+  box-shadow: 0 12px 32px rgba(0,0,0,0.22);
+  animation: omMiniIn .28s cubic-bezier(0.16, 0.84, 0.34, 1);
+}
+@keyframes omMiniIn { from { opacity: 0; transform: translateY(-8px); } to { opacity: 1; transform: none; } }
+.om-mini-play {
+  flex-shrink: 0; width: 34px; height: 34px; border-radius: 50%;
+  display: grid; place-items: center; cursor: pointer; border: 0;
+  /* Use text/bg inversion (not --accent): the accent is user-customizable to
+     any color incl. near-white, which would vanish on a light surface. Inverted
+     fill always contrasts — dark in light mode, light in dark. */
+  background: var(--text); color: var(--bg);
+  transition: transform .15s ease, filter .15s ease;
+}
+.om-mini-play:hover { filter: brightness(1.08); transform: scale(1.05); }
+.om-mini-play:active { transform: scale(0.96); }
+.om-mini-body { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 4px; }
+.om-mini-title {
+  background: none; border: 0; padding: 0; cursor: pointer; text-align: left;
+  font-size: 12.5px; font-weight: 600; color: var(--text);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%;
+}
+.om-mini-title:hover { color: var(--accent); }
+.om-mini-row { display: flex; align-items: center; gap: 8px; }
+.om-mini-time { font-size: 9.5px; color: var(--text-4); flex-shrink: 0; font-variant-numeric: tabular-nums; }
+.om-mini-track {
+  flex: 1; height: 5px; border-radius: 999px; cursor: pointer; overflow: hidden;
+  background: color-mix(in oklab, var(--text) 14%, transparent);
+}
+.om-mini-fill { height: 100%; border-radius: 999px; background: var(--text); transition: width .1s linear; }
+.om-mini-close {
+  flex-shrink: 0; width: 26px; height: 26px; border-radius: 50%;
+  display: grid; place-items: center; cursor: pointer; border: 0;
+  background: transparent; color: var(--text-4);
+  transition: background .15s ease, color .15s ease;
+}
+.om-mini-close:hover { background: var(--surface-2); color: var(--text); }
+
+/* Audio card (dashboard grid) — waveform tile + real play/pause button.
+   Bars are a MASK (not a baked-in color) so they take `var(--text)` — black in
+   light, near-white in dark — automatically. The mask SVG uses solid-white
+   rects (mask reads alpha); the visible color comes from background-color. */
+.om-card-audio .om-audio-frame {
+  position: relative; aspect-ratio: 16 / 10; display: grid; place-items: center;
+  background-color: var(--bg-rail);
+  border-radius: var(--r-xl) var(--r-xl) 0 0;
+  overflow: hidden;
+}
+.om-card-audio .om-audio-frame::before {
+  content: ""; position: absolute; inset: 0; pointer-events: none;
+  background-color: var(--text);
+  opacity: 0.55;
+  --om-wave: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 200 60'%3E%3Crect x='10' y='24' width='4' height='12' rx='2' fill='%23fff'/%3E%3Crect x='20' y='18' width='4' height='24' rx='2' fill='%23fff'/%3E%3Crect x='30' y='10' width='4' height='40' rx='2' fill='%23fff'/%3E%3Crect x='40' y='20' width='4' height='20' rx='2' fill='%23fff'/%3E%3Crect x='50' y='14' width='4' height='32' rx='2' fill='%23fff'/%3E%3Crect x='60' y='22' width='4' height='16' rx='2' fill='%23fff'/%3E%3Crect x='70' y='8' width='4' height='44' rx='2' fill='%23fff'/%3E%3Crect x='80' y='16' width='4' height='28' rx='2' fill='%23fff'/%3E%3Crect x='90' y='24' width='4' height='12' rx='2' fill='%23fff'/%3E%3Crect x='100' y='12' width='4' height='36' rx='2' fill='%23fff'/%3E%3Crect x='110' y='20' width='4' height='20' rx='2' fill='%23fff'/%3E%3Crect x='120' y='6' width='4' height='48' rx='2' fill='%23fff'/%3E%3Crect x='130' y='18' width='4' height='24' rx='2' fill='%23fff'/%3E%3Crect x='140' y='26' width='4' height='8' rx='2' fill='%23fff'/%3E%3Crect x='150' y='14' width='4' height='32' rx='2' fill='%23fff'/%3E%3Crect x='160' y='22' width='4' height='16' rx='2' fill='%23fff'/%3E%3Crect x='170' y='10' width='4' height='40' rx='2' fill='%23fff'/%3E%3Crect x='180' y='20' width='4' height='20' rx='2' fill='%23fff'/%3E%3C/svg%3E");
+  -webkit-mask: var(--om-wave) center / auto 52% repeat-x;
+  mask: var(--om-wave) center / auto 52% repeat-x;
+}
+.om-card-audio.is-active .om-audio-frame {
+  background-color: color-mix(in oklab, var(--accent) 18%, var(--bg-rail));
+}
+/* Active track: bars glow in the accent instead of the text color. */
+.om-card-audio.is-active .om-audio-frame::before {
+  background-color: var(--accent);
+  opacity: 0.7;
+}
+/* Play/pause button reuses the shared `.om-play` token (identical to video
+   cards) for shape/size/shadow. But video's fixed white fill sits over a dark
+   thumbnail; the audio waveform tile is a light surface (--bg-rail), so a white
+   button vanishes. Override the fill to text/bg inversion → always visible. */
+.om-card-audio .om-play {
+  background: var(--text); color: var(--bg);
+}
+.om-card-audio .om-play:disabled { opacity: 0.5; }
+/* Minimal mode: keep the title + meta visible (audio cards are unlabeled
+   otherwise) — waveform strip on top, title row below, like the doc card. */
+[data-card="minimal"] .om-card-audio { background-image: none; display: flex; flex-direction: column; min-height: 200px; }
+[data-card="minimal"] .om-card-audio::after { content: none; }
+[data-card="minimal"] .om-card-audio .om-audio-frame { aspect-ratio: auto; flex: 1; min-height: 120px; border-radius: var(--r-xl) var(--r-xl) 0 0; }
+[data-card="minimal"] .om-card-audio .om-card-body { display: block; padding: 12px 16px 14px; border-top: 1px solid var(--border); background: transparent; }
+[data-card="minimal"] .om-card-audio .om-card-title { font-size: 13px; }
+[data-card="minimal"] .om-card-audio .om-meta { display: none; }
+
+/* Audio detail player */
+.om-audio-detail {
+  display: flex; align-items: center; gap: 14px;
+  padding: 14px 16px; border-radius: 16px;
+  background: var(--surface-2); border: 1px solid var(--border);
+}
+.om-audio-detail-play {
+  flex-shrink: 0; width: 48px; height: 48px; border-radius: 50%; border: 0; cursor: pointer;
+  /* text/bg inversion, not --accent — see .om-mini-play note. */
+  display: grid; place-items: center; background: var(--text); color: var(--bg);
+  transition: transform .15s ease, filter .15s ease;
+}
+.om-audio-detail-play:hover { transform: scale(1.05); filter: brightness(1.06); }
+.om-audio-detail-body { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 7px; }
+.om-audio-detail-track {
+  height: 7px; border-radius: 999px; cursor: pointer; overflow: hidden;
+  background: color-mix(in oklab, var(--text) 12%, transparent);
+}
+.om-audio-detail-fill { height: 100%; background: var(--text); border-radius: 999px; transition: width .1s linear; }
+.om-audio-detail-meta { display: flex; justify-content: space-between; font-size: 10.5px; color: var(--text-4); font-variant-numeric: tabular-nums; }
+.om-audio-detail-dl {
+  flex-shrink: 0; width: 38px; height: 38px; border-radius: 10px;
+  display: grid; place-items: center; color: var(--text-2);
+  background: var(--surface); border: 1px solid var(--border);
+  transition: background .15s ease, color .15s ease;
+}
+.om-audio-detail-dl:hover { background: var(--surface-2); color: var(--text); }
 
 /* Footer */
 .om-add-foot {

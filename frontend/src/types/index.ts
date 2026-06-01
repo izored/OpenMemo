@@ -12,6 +12,11 @@ export interface Memo {
   thumbnail_path?: string;
   ai_summary?: string;
   notes?: string;
+  // Speech-to-text state for audio memos. The transcript text itself lives in
+  // content_text (so it embeds + is searchable); these track UI state + the
+  // detected language.
+  transcript_status?: 'pending' | 'processing' | 'done' | 'error' | null;
+  transcript_lang?: string | null;
   sort_order?: number;
   pinned?: boolean;
   is_processed: boolean;

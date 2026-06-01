@@ -19,6 +19,8 @@ import { SearchOverlay } from './SearchOverlay';
 import { Onboarding } from './Onboarding';
 import { AddCollectionModal } from './AddCollectionModal';
 import { Lightbox } from './Lightbox';
+import { HeaderAudioPlayer } from './HeaderAudioPlayer';
+import { AudioPlayerProvider } from '@/lib/audioPlayer';
 import { Icon } from './Icon';
 import { useTransitionConfig, type TransitionConfig } from '@/lib/transitionConfig';
 import { useAppStore } from '@/stores/appStore';
@@ -60,7 +62,19 @@ export function Layout() {
 
   // Smooth scroll on the main content pane. Lenis hijacks wheel/touch and
   // eases the scrollTop with rAF — same easing-driven feel as motion sites.
+  //
+  // <main> carries key={location.pathname}, so React swaps in a FRESH DOM node
+  // on every route change. This effect must re-run per route to tear down the
+  // old Lenis (bound to the now-detached node) and rebind to the new one —
+  // otherwise navigating away and back leaves the page unscrollable until a
+  // full refresh. Hence location.pathname in the deps.
+  //
+  // The memo detail page is the exception: it manages its own native scroll on
+  // an inner pane (.om-detail-scroll) while .om-main is overflow:hidden. Running
+  // Lenis there would hijack the wheel for the unscrollable main and starve the
+  // inner scroll — so we skip Lenis entirely on /memo/* routes.
   useEffect(() => {
+    if (location.pathname.startsWith('/memo/')) return;
     const wrapper = mainRef.current;
     if (!wrapper) return;
     const lenis = new Lenis({
@@ -82,7 +96,7 @@ export function Layout() {
       cancelAnimationFrame(raf);
       lenis.destroy();
     };
-  }, []);
+  }, [location.pathname]);
 
   // Drive theme / accent / background CSS vars from persisted tweaks.
   useEffect(() => {
@@ -133,6 +147,7 @@ export function Layout() {
 
   return (
     <div className={cn('om-app', sidebarCollapsed && 'sidebar-collapsed', colorTransition && 'theme-transitioning')}>
+      <AudioPlayerProvider>
       <DndBusContext.Provider value={dndBusRef}>
       <DndContext
         sensors={dndSensors}
@@ -143,6 +158,7 @@ export function Layout() {
       >
       <div className="om-bg-veil" style={{ opacity: tweaks.bgFade ?? 0 }} aria-hidden />
       <Sidebar />
+      <HeaderAudioPlayer />
 
       <main className="om-main" key={location.pathname} ref={mainRef}>
         <div className="om-main-inner">
@@ -223,6 +239,7 @@ export function Layout() {
       )}
       </DndContext>
       </DndBusContext.Provider>
+      </AudioPlayerProvider>
     </div>
   );
 }

@@ -3,6 +3,24 @@ import type { Memo } from '@/types';
 // Domains that use hotlink protection — proxy through backend.
 export const HOTLINK_DOMAINS = ['dribbble.com', 'behance.net', 'pinterest.com', 'cdn.dribbble.com'];
 
+// Which video platform a memo comes from — drives the brand glyph shown on the
+// minimal video card. 'local' = an uploaded file (no source URL); 'video' =
+// any other remote source we don't have a dedicated logo for.
+export type VideoSource = 'youtube' | 'vimeo' | 'local' | 'video';
+
+export function videoSource(memo: Memo): VideoSource {
+  const url = memo.source_url;
+  if (!url) return memo.file_path ? 'local' : 'video';
+  try {
+    const host = new URL(url).hostname.replace(/^www\./, '');
+    if (host.includes('youtube.com') || host === 'youtu.be') return 'youtube';
+    if (host.includes('vimeo.com')) return 'vimeo';
+  } catch {
+    /* fall through */
+  }
+  return memo.file_path ? 'local' : 'video';
+}
+
 export function youtubeEmbed(url?: string | null): string | null {
   if (!url) return null;
   try {
