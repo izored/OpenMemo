@@ -59,7 +59,7 @@ async def lifespan(app: FastAPI):
         async with AsyncSessionLocal() as db:
             cols = (await db.execute(_sql_text("PRAGMA table_info(memos)"))).fetchall()
             names = {c[1] for c in cols}
-            for col in ("transcript_status", "transcript_lang"):
+            for col in ("transcript_status", "transcript_lang", "localize_status"):
                 if col not in names:
                     await db.execute(_sql_text(f"ALTER TABLE memos ADD COLUMN {col} VARCHAR"))
             await db.commit()

@@ -17,32 +17,41 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Generate release notes
-        uses: orhun/git-cliff-action@v3
-        id: cliff
-        with:
-          config: cliff.toml
-          args: --latest --strip header
-
-      - name: Update CHANGELOG.md
-        uses: orhun/git-cliff-action@v3
-        with:
-          config: cliff.toml
-          args: --latest --prepend docs/CHANGELOG.md
-
-      - name: Commit updated CHANGELOG
-        uses: stefanzweifel/git-auto-commit-action@v5
-        with:
-          commit_message: "docs: update CHANGELOG for ${{ github.ref_name }} [skip ci]"
-          file_pattern: docs/CHANGELOG.md
-          commit_user_name: github-actions[bot]
-          commit_user_email: github-actions[bot]@users.noreply.github.com
+      # Use the hand-written section from docs/CHANGELOG.md as the release body,
+      # verbatim. The release body must carry the FULL formatted changelog for
+      # the tagged version (no auto-summarised git-cliff notes) — it is what
+      # GitHub shows AND what gets dispatched to the izored/izored profile repo
+      # by notify-changelog.yml. The tag (e.g. v2.0.0) maps to the [2.0.0]
+      # heading in the changelog.
+      - name: Extract changelog section for this tag
+        id: notes
+        run: |
+          set -euo pipefail
+          VERSION="${GITHUB_REF_NAME#v}"
+          CHANGELOG="docs/CHANGELOG.md"
+          echo "Extracting [$VERSION] from $CHANGELOG"
+          # Pull everything from "## [VERSION]" up to (but not including) the
+          # next "## [" heading.
+          section="$(awk -v ver="$VERSION" '
+            $0 ~ "^## \\[" ver "\\]" { capture=1; print; next }
+            capture && /^## \[/ { exit }
+            capture { print }
+          ' "$CHANGELOG")"
+          if [ -z "$section" ]; then
+            echo "::error::No changelog section found for [$VERSION] in $CHANGELOG"
+            exit 1
+          fi
+          {
+            echo "body<<__RELEASE_EOF__"
+            echo "$section"
+            echo "__RELEASE_EOF__"
+          } >> "$GITHUB_OUTPUT"
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ github.ref_name }}
-          name: "OpenMemo ${{ github.ref_name }}"
-          body: ${{ steps.cliff.outputs.content }}
+          name: "openMemo ${{ github.ref_name }}"
+          body: ${{ steps.notes.outputs.body }}
           draft: false
           prerelease: false

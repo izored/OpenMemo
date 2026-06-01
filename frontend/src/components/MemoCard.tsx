@@ -8,6 +8,7 @@ import { memoApi } from '@/lib/api';
 import { mediaSrc, youtubeEmbed, videoSource } from '@/lib/media';
 import { useAppStore } from '@/stores/appStore';
 import { useAudioPlayer } from '@/lib/audioPlayer';
+import { LiveWaveform } from './LiveWaveform';
 import type { Memo, MemoType } from '@/types';
 
 // Warm tint palette for cards without media (notes / plain docs).
@@ -479,6 +480,7 @@ export function MemoCard({ memo, dragHandleProps, lightboxGroup }: CardProps) {
           className={cn('om-card-audio', active && 'is-active')}
         >
           <div className="om-audio-frame">
+            <LiveWaveform memoId={memo.id} active={active} />
             <button
               className="om-play"
               onClick={onPlayClick}

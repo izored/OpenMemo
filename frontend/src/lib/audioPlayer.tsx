@@ -28,6 +28,13 @@ interface AudioPlayerContextValue {
   close: () => void;
   /** True when `memoId` is the track currently loaded in the player. */
   isActive: (memoId: string) => boolean;
+  /**
+   * Fill `out` with the current frequency spectrum (0..1 per bin) from the
+   * WebAudio analyser, for live waveform visualization. Returns true if real
+   * data was written (audio graph ready + a track loaded), false otherwise so
+   * callers can fall back to a static bar pattern. Cheap to call each rAF.
+   */
+  getLevels: (out: number[]) => boolean;
 }
 
 const AudioPlayerContext = createContext<AudioPlayerContextValue | null>(null);
@@ -45,10 +52,55 @@ export function AudioPlayerProvider({ children }: { children: React.ReactNode })
   const [currentTime, setCurrentTime] = useState(0);
   const [duration, setDuration] = useState(0);
 
+  // WebAudio analyser graph for the live waveform. A MediaElementSource can be
+  // created only ONCE per <audio> element (a second call throws), so the ctx,
+  // source, and analyser are built lazily on first play and kept in refs.
+  const audioCtxRef = useRef<AudioContext | null>(null);
+  const analyserRef = useRef<AnalyserNode | null>(null);
+  // Backed by a concrete ArrayBuffer so the type matches getByteFrequencyData's
+  // Uint8Array<ArrayBuffer> signature across TS lib versions.
+  const freqRef = useRef<Uint8Array<ArrayBuffer> | null>(null);
+
+  const ensureGraph = useCallback(() => {
+    const audio = audioRef.current;
+    if (!audio || audioCtxRef.current) return;
+    try {
+      const Ctx = window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
+      const ctx = new Ctx();
+      const source = ctx.createMediaElementSource(audio);
+      const analyser = ctx.createAnalyser();
+      analyser.fftSize = 128;
+      analyser.smoothingTimeConstant = 0.8;
+      source.connect(analyser);
+      analyser.connect(ctx.destination);
+      audioCtxRef.current = ctx;
+      analyserRef.current = analyser;
+      freqRef.current = new Uint8Array(new ArrayBuffer(analyser.frequencyBinCount));
+    } catch {
+      /* analyser is decorative — playback still works without it */
+    }
+  }, []);
+
+  const getLevels = useCallback((out: number[]): boolean => {
+    const analyser = analyserRef.current;
+    const buf = freqRef.current;
+    if (!analyser || !buf || !track) return false;
+    analyser.getByteFrequencyData(buf);
+    const n = out.length;
+    const step = Math.max(1, Math.floor(buf.length / n));
+    for (let i = 0; i < n; i++) {
+      out[i] = buf[i * step] / 255;
+    }
+    return true;
+  }, [track]);
+
   const play = useCallback(
     (next: AudioTrack) => {
       const audio = audioRef.current;
       if (!audio) return;
+      ensureGraph();
+      // A suspended context (autoplay policy) must be resumed on user gesture.
+      audioCtxRef.current?.resume?.().catch(() => {});
       // Same track already loaded → just toggle, don't restart it.
       if (track && track.memoId === next.memoId) {
         if (audio.paused) audio.play().catch(() => {});
@@ -62,12 +114,13 @@ export function AudioPlayerProvider({ children }: { children: React.ReactNode })
       audio.load();
       audio.play().catch(() => {});
     },
-    [track],
+    [track, ensureGraph],
   );
 
   const toggle = useCallback(() => {
     const audio = audioRef.current;
     if (!audio || !track) return;
+    audioCtxRef.current?.resume?.().catch(() => {});
     if (audio.paused) audio.play().catch(() => {});
     else audio.pause();
   }, [track]);
@@ -96,8 +149,8 @@ export function AudioPlayerProvider({ children }: { children: React.ReactNode })
   const isActive = useCallback((memoId: string) => track?.memoId === memoId, [track]);
 
   const value = useMemo<AudioPlayerContextValue>(
-    () => ({ track, playing, currentTime, duration, play, toggle, seek, close, isActive }),
-    [track, playing, currentTime, duration, play, toggle, seek, close, isActive],
+    () => ({ track, playing, currentTime, duration, play, toggle, seek, close, isActive, getLevels }),
+    [track, playing, currentTime, duration, play, toggle, seek, close, isActive, getLevels],
   );
 
   return (

@@ -1,4 +1,4 @@
-# OpenMemo Release Procedure
+# openMemo Release Procedure
 
 ## Prerequisites
 
@@ -10,9 +10,21 @@ git checkout main && git pull
 
 ## Flow
 
-1. Write `TEMP_CHANGELOG_vX.Y.Z.md` in repo root with release notes
-2. Run `.\bump-version.ps1 <patch|minor|major> -Title "short description"`
-3. Verify
+1. **Finalize the changelog first.** In `docs/CHANGELOG.md`, the version section
+   must already be written under `## [X.Y.Z] - <date>` (flip it from
+   `Unreleased` to the release date). This hand-written section IS the release
+   body — the GitHub Release workflow extracts it verbatim.
+2. Run `.\bump-version.ps1 <patch|minor|major>` — bumps the version files,
+   commits `release: vX.Y.Z`, tags, and pushes `main` + the tag.
+3. The tag push triggers `.github/workflows/release.yml`, which extracts the
+   matching `## [X.Y.Z]` section from `docs/CHANGELOG.md` and publishes it as the
+   GitHub Release body. That body is then dispatched to `izored/izored` by
+   `notify-changelog.yml`.
+4. Verify the release page + the profile-repo changelog entry.
+
+> The release body must carry the **full formatted changelog** for the version,
+> verbatim — no summaries, no git-cliff auto-notes. The workflow reads the
+> hand-written section so the source of truth is `docs/CHANGELOG.md`.
 
 ---
 
@@ -63,11 +75,12 @@ git checkout main && git pull
 
 1. Pre-flight — branch=main, clean tree, gh auth
 2. Bumps version in `backend/config.py`, `chrome-extension/manifest.json`, `README.md`
-3. Prepends `## [X.Y.Z] - date — Title` + notes to `docs/CHANGELOG.md`
-4. Commits `release: vX.Y.Z - Title`, creates annotated tag (local only)
-5. Creates GitHub Release from TEMP_CHANGELOG (before push — safe to retry on failure)
-6. Pushes `main` + tags
-7. Deletes TEMP_CHANGELOG
+3. Commits `release: vX.Y.Z`, creates annotated tag `vX.Y.Z`
+4. Pushes `main` + the tag
+
+The script does **not** write the changelog or create the GitHub Release. Those
+are handled by `docs/CHANGELOG.md` (hand-written, ahead of time) and the
+`release.yml` workflow (triggered by the tag push), respectively.
 
 ---
 
@@ -91,16 +104,18 @@ git checkout main && git pull
 
 ## Manual Fallback
 
-**If `gh release create` fails** (commit + tag are local, not pushed):
+**If the `release.yml` workflow fails** to create the GitHub Release after the
+tag is pushed, create it by hand from the changelog section (extract the
+`## [X.Y.Z]` block from `docs/CHANGELOG.md` into a temp file first):
 
 ```powershell
-gh release create vX.Y.Z --title "OpenMemo vX.Y.Z — Title" --notes-file TEMP_CHANGELOG_vX.Y.Z.md
-git push origin main --tags
-Remove-Item TEMP_CHANGELOG_vX.Y.Z.md
+# Extract the section, then:
+gh release create vX.Y.Z --title "openMemo vX.Y.Z" --notes-file release-body.md
 ```
 
-**If push fails** after release was created:
+**If the tag never pushed** (script failed mid-flow):
 
 ```powershell
-git push origin main --tags
+git push origin main
+git push origin vX.Y.Z
 ```

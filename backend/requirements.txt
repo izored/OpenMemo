@@ -12,7 +12,10 @@ openpyxl==3.1.5
 PyPDF2==3.0.1
 pydantic==2.9.2
 pydantic-settings==2.5.2
-yt-dlp==2024.8.6
+# yt-dlp breaks whenever YouTube changes its player (every few weeks), so a
+# hard pin guarantees staleness. Floor-pin to a recent release and let the
+# Docker entrypoint self-update to the newest nightly on container start.
+yt-dlp>=2025.1.0
 readability-lxml==0.8.1
 lxml==5.3.0
 pillow==10.4.0

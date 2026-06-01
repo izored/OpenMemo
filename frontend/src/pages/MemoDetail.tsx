@@ -21,6 +21,10 @@ import {
   FileText,
   Play,
   Pause,
+  HardDriveDownload,
+  Film,
+  Music,
+  Check,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { BackButton } from '@/components/BackButton';
@@ -310,6 +314,85 @@ function AudioTranscript({ memo }: { memo: Memo }) {
   );
 }
 
+// "Make it local" — download a remote video/audio source via yt-dlp so the memo
+// survives the original being deleted/privated. Offers three modes; polls
+// localize_status (driven by the page's refetchInterval) and shows progress.
+function MakeItLocalPanel({ memo }: { memo: Memo }) {
+  const queryClient = useQueryClient();
+  const [mode, setMode] = useState<'video' | 'audio' | 'audio_transcript'>('video');
+  const [starting, setStarting] = useState(false);
+  const status = memo.localize_status;
+  const busy = status === 'pending' || status === 'processing' || starting;
+
+  const start = async () => {
+    setStarting(true);
+    try {
+      await memoApi.localize(memo.id, mode);
+      queryClient.invalidateQueries({ queryKey: ['memo', memo.id] });
+    } catch (e) {
+      console.error(e);
+      alert((e as Error).message || 'Failed to start download');
+    } finally {
+      setStarting(false);
+    }
+  };
+
+  const modes: { id: typeof mode; label: string; icon: React.ElementType; hint: string }[] = [
+    { id: 'video', label: 'Video', icon: Film, hint: 'Download the video (up to 1080p)' },
+    { id: 'audio', label: 'Audio only', icon: Music, hint: 'Just the audio track' },
+    { id: 'audio_transcript', label: 'Audio + transcript', icon: FileText, hint: 'Audio, then transcribe it' },
+  ];
+
+  return (
+    <div className="om-localize" style={{ marginBottom: '24px' }}>
+      <div className="om-notes-label" style={{ marginBottom: '10px' }}>
+        <HardDriveDownload size={16} className="om-section-icon" />
+        <h3 className="om-section-h">Make it local</h3>
+        {status === 'done' && <span className="om-tag" style={{ color: 'var(--accent)' }}>Saved locally</span>}
+      </div>
+
+      {busy ? (
+        <p className="om-detail-desc">
+          <Loader2 size={14} className="om-spin" style={{ verticalAlign: -2, marginRight: 6 }} />
+          Downloading from {memo.source_domain || 'source'}… this can take a while for long videos.
+        </p>
+      ) : status === 'error' ? (
+        <div>
+          <p className="om-detail-desc" style={{ marginBottom: 10 }}>
+            Download failed. The source may be private, region-locked, or unsupported by yt-dlp.
+          </p>
+          <button className="om-btn-ghost om-btn-pill" onClick={start}>
+            <HardDriveDownload size={14} /> Try again
+          </button>
+        </div>
+      ) : (
+        <>
+          <p className="om-detail-desc" style={{ marginBottom: 12 }}>
+            Save a copy to OpenMemo so it keeps working even if the original is taken down.
+          </p>
+          <div className="om-localize-modes">
+            {modes.map((m) => (
+              <button
+                key={m.id}
+                className={cn('om-localize-mode', mode === m.id && 'active')}
+                onClick={() => setMode(m.id)}
+                title={m.hint}
+              >
+                <m.icon size={15} />
+                <span>{m.label}</span>
+                {mode === m.id && <Check size={13} className="om-localize-check" />}
+              </button>
+            ))}
+          </div>
+          <button className="om-btn-primary om-btn-pill" onClick={start} style={{ marginTop: 12 }}>
+            <HardDriveDownload size={14} /> Download &amp; save
+          </button>
+        </>
+      )}
+    </div>
+  );
+}
+
 function getYouTubeVideoId(url: string): string | null {
   try {
     const u = new URL(url);
@@ -349,11 +432,12 @@ export function MemoDetail() {
     queryKey: ['memo', id],
     queryFn: () => memoApi.get(id!),
     enabled: !!id,
-    // While a transcription is running in the background, poll so the
-    // transcript appears under the player as soon as it lands.
+    // While a transcription OR a "make it local" download is running in the
+    // background, poll so the result appears as soon as it lands.
     refetchInterval: (q) => {
-      const st = (q.state.data as Memo | undefined)?.transcript_status;
-      return st === 'pending' || st === 'processing' ? 2500 : false;
+      const m = q.state.data as Memo | undefined;
+      const busy = (s?: string | null) => s === 'pending' || s === 'processing';
+      return busy(m?.transcript_status) || busy(m?.localize_status) ? 2500 : false;
     },
   });
 
@@ -746,6 +830,18 @@ export function MemoDetail() {
                   title={memo.title}
                 />
               </div>
+            )}
+
+            {/* Make it local — for memos backed by a remote URL with no local
+                file yet (YouTube/Vimeo/social video or any yt-dlp-able link). */}
+            {!isEditing && memo.source_url && !memo.file_path && (
+              <MakeItLocalPanel memo={memo} />
+            )}
+
+            {/* Transcript for a localized video (audio_transcript / on-demand) */}
+            {!isEditing && memo.type === 'video' && memo.file_path &&
+              (memo.transcript_status || memo.content_text) && (
+              <AudioTranscript memo={memo} />
             )}
 
             {/* Rich Web Preview for article/link */}
