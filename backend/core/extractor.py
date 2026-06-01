@@ -226,95 +226,6 @@ async def extract_url(url: str) -> dict:
     }
 
 
-async def extract_youtube(url: str) -> dict:
-    """Extract YouTube video metadata and transcript."""
-    import subprocess
-    import json
-    
-    parsed = urlparse(url)
-    video_id = ""
-    if "youtube.com" in parsed.netloc:
-        from urllib.parse import parse_qs
-        params = parse_qs(parsed.query)
-        video_id = params.get("v", [""])[0]
-    elif "youtu.be" in parsed.netloc:
-        video_id = parsed.path.strip("/")
-    
-    # Use yt-dlp to extract metadata
-    try:
-        result = subprocess.run(
-            ["yt-dlp", "--dump-json", "--no-download", url],
-            capture_output=True, text=True, timeout=30,
-        )
-        if result.returncode == 0:
-            data = json.loads(result.stdout)
-            title = data.get("title", "")
-            description = data.get("description", "")
-            thumbnail = data.get("thumbnail", "")
-            duration = data.get("duration", 0)
-            
-            # Try to get subtitles
-            transcript = ""
-            sub_result = subprocess.run(
-                ["yt-dlp", "--write-auto-sub", "--sub-lang", "en",
-                 "--skip-download", "--print", "%(subtitles)j", url],
-                capture_output=True, text=True, timeout=30,
-            )
-            
-            return {
-                "title": title,
-                "description": description[:500],
-                "content_text": description,
-                "source_url": url,
-                "source_domain": "youtube.com",
-                "source_favicon": "https://www.google.com/s2/favicons?domain=youtube.com&sz=32",
-                "thumbnail_path": thumbnail,
-                "type": "video",
-            }
-    except Exception as e:
-        pass
-
-    # Fallback: scrape YouTube page for og:title
-    title = f"YouTube Video ({video_id})"
-    description = ""
-    try:
-        async with httpx.AsyncClient(
-            timeout=15.0,
-            follow_redirects=True,
-            headers={
-                "User-Agent": (
-                    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
-                    "AppleWebKit/537.36 (KHTML, like Gecko) "
-                    "Chrome/124.0.0.0 Safari/537.36"
-                ),
-                "Accept-Language": "en-US,en;q=0.9",
-            },
-        ) as client:
-            resp = await client.get(url)
-            if resp.status_code == 200:
-                soup = BeautifulSoup(resp.text, "lxml")
-                og_title = soup.find("meta", property="og:title")
-                if og_title and og_title.get("content"):
-                    title = og_title["content"]
-                elif soup.title and soup.title.string:
-                    # Strip " - YouTube" suffix
-                    title = soup.title.string.replace(" - YouTube", "").strip()
-                og_desc = soup.find("meta", property="og:description")
-                if og_desc and og_desc.get("content"):
-                    description = og_desc["content"]
-    except Exception:
-        pass
-
-    return {
-        "title": title,
-        "description": description,
-        "content_text": description,
-        "source_url": url,
-        "source_domain": "youtube.com",
-        "source_favicon": "https://www.google.com/s2/favicons?domain=youtube.com&sz=32",
-        "thumbnail_path": f"https://img.youtube.com/vi/{video_id}/maxresdefault.jpg",
-        "type": "video",
-    }
 
 
 async def extract_pdf(file_path: str) -> dict:
@@ -389,47 +300,58 @@ async def extract_image(file_path: str) -> dict:
     }
 
 
-_SOCIAL_VIDEO_DOMAINS = (
+# Domains where yt-dlp should be tried first before article scraping.
+# yt-dlp supports 1000+ sites; this list just gates the fast path so we
+# don't run yt-dlp on every article URL. Add domains here as needed.
+_VIDEO_DOMAINS = (
+    "youtube.com", "youtu.be",
+    "vimeo.com",
+    "dailymotion.com",
+    "twitch.tv",
     "facebook.com", "fb.com", "fb.watch",
     "instagram.com",
     "tiktok.com",
     "twitter.com", "x.com",
     "threads.net",
-    "pinterest.com",
-    "snapchat.com",
-    "vimeo.com",
-    "twitch.tv",
     "reddit.com",
+    "rumble.com",
+    "odysee.com",
+    "bitchute.com",
+    "bilibili.com",
+    "nicovideo.jp",
+    "streamable.com",
+    "streamja.com",
+    "clips.twitch.tv",
+    "medal.tv",
+    "mixcloud.com",
+    "soundcloud.com",
+    "bandcamp.com",
+    "pornhub.com",
 )
 
 
 def detect_url_type(url: str) -> str:
-    """Detect content type from URL."""
-    parsed = urlparse(url)
-    domain = parsed.netloc.lower()
-
-    if "youtube.com" in domain or "youtu.be" in domain:
-        return "youtube"
-    if any(d in domain for d in _SOCIAL_VIDEO_DOMAINS):
-        return "social_video"
+    """Return 'video' if the URL is from a known video/media platform, else 'article'."""
+    domain = urlparse(url).netloc.lower()
+    if any(d in domain for d in _VIDEO_DOMAINS):
+        return "video"
     return "article"
 
 
-async def extract_social_video(url: str) -> dict:
-    """Extract metadata from social/video platforms via yt-dlp.
+async def extract_video(url: str) -> dict:
+    """Extract metadata from any yt-dlp-supported video platform.
 
-    Falls back to a minimal link memo when yt-dlp can't access the content
-    (private posts, login-required, unsupported pages).
+    Uses yt-dlp --dump-json universally — no per-site code. yt-dlp handles
+    1000+ sites natively. Falls back to _minimal_link if yt-dlp fails.
     """
     import subprocess
-    from urllib.parse import urlparse as _up
 
-    parsed = _up(url)
+    parsed = urlparse(url)
     domain = parsed.netloc.lstrip("www.")
 
     try:
         result = subprocess.run(
-            ["yt-dlp", "--dump-json", "--no-download",
+            ["yt-dlp", "--dump-json", "--no-playlist",
              "--no-warnings", "--socket-timeout", "20", url],
             capture_output=True, text=True, timeout=30,
         )
@@ -439,15 +361,16 @@ async def extract_social_video(url: str) -> dict:
             description = data.get("description") or ""
             thumbnail = (
                 data.get("thumbnail")
-                or (data.get("thumbnails") or [{}])[-1].get("url", "")
+                or ((data.get("thumbnails") or [{}])[-1]).get("url", "")
             )
             uploader = data.get("uploader") or data.get("channel") or ""
-            if uploader and title:
-                description = f"{uploader}\n\n{description}" if description else uploader
+            # Prepend uploader to description so it's searchable/contextual.
+            video_desc = f"{uploader}\n\n{description}".strip() if uploader else description
             return {
                 "title": title or url,
-                "description": description[:500],
-                "content_text": description,
+                "description": video_desc[:500],
+                "content_text": video_desc,
+                "video_description": video_desc,
                 "source_url": url,
                 "source_domain": domain,
                 "source_favicon": f"https://www.google.com/s2/favicons?domain={domain}&sz=32",
@@ -457,8 +380,10 @@ async def extract_social_video(url: str) -> dict:
     except Exception:
         pass
 
-    # yt-dlp failed — try Microlink for OG metadata + thumbnail
-    return await _minimal_link(url, domain)
+    # yt-dlp failed (private, login-required, unsupported) — enrich via Microlink + OG.
+    result = await _minimal_link(url, domain)
+    result["type"] = "video"
+    return result
 
 
 async def _fetch_microlink(url: str) -> dict:

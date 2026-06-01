@@ -198,16 +198,14 @@ async def ingest_url(
 ):
     """Ingest content from a URL."""
     from backend.core.extractor import (
-        extract_url, extract_youtube, extract_social_video, detect_url_type,
+        extract_url, extract_video, detect_url_type,
     )
 
     url_type = detect_url_type(data.url)
 
     try:
-        if url_type == "youtube":
-            extracted = await extract_youtube(data.url)
-        elif url_type == "social_video":
-            extracted = await extract_social_video(data.url)
+        if url_type == "video":
+            extracted = await extract_video(data.url)
         else:
             extracted = await extract_url(data.url)
     except Exception as e:
@@ -221,6 +219,7 @@ async def ingest_url(
         description=extracted.get("description"),
         content_text=extracted.get("content_text"),
         content_raw=extracted.get("content_raw"),
+        video_description=extracted.get("video_description"),
         source_url=data.url,
         source_domain=extracted.get("source_domain"),
         source_favicon=extracted.get("source_favicon"),

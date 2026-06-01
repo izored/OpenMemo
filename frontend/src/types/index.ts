@@ -5,6 +5,7 @@ export interface Memo {
   description?: string;
   content_text?: string;
   content_raw?: string;
+  video_description?: string;
   source_url?: string;
   source_domain?: string;
   source_favicon?: string;

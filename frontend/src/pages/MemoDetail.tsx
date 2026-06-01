@@ -26,6 +26,7 @@ import {
   Music,
   Check,
   Trash2,
+  AlignLeft,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { BackButton } from '@/components/BackButton';
@@ -317,6 +318,98 @@ function AudioTranscript({ memo }: { memo: Memo }) {
               Transcribe
             </button>
           </div>
+        )
+      )}
+    </div>
+  );
+}
+
+// Two-tab panel for video memos sourced from YouTube/social platforms.
+// "Video description" = platform metadata. "Transcript" = Whisper STT result.
+// Fixes the bug where content_text (YouTube description) was mislabeled "Transcript".
+function VideoContentPanel({ memo }: { memo: Memo }) {
+  const queryClient = useQueryClient();
+  const [tab, setTab] = useState<'description' | 'transcript'>('description');
+  const [starting, setStarting] = useState(false);
+  const status = memo.transcript_status;
+  const pending = status === 'pending' || status === 'processing' || starting;
+  const descText = memo.video_description || memo.description || '';
+
+  const startTranscribe = async () => {
+    setStarting(true);
+    try {
+      await memoApi.transcribe(memo.id);
+      queryClient.invalidateQueries({ queryKey: ['memo', memo.id] });
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setStarting(false);
+    }
+  };
+
+  if (!descText && !status && !memo.file_path) return null;
+
+  return (
+    <div style={{ marginBottom: '24px' }}>
+      <div style={{ display: 'flex', gap: '4px', marginBottom: '12px' }}>
+        <button
+          className={cn('om-tab-btn', tab === 'description' && 'active')}
+          onClick={() => setTab('description')}
+        >
+          <AlignLeft size={13} />
+          Video description
+        </button>
+        <button
+          className={cn('om-tab-btn', tab === 'transcript' && 'active')}
+          onClick={() => setTab('transcript')}
+        >
+          <FileText size={13} />
+          Transcript
+          {pending && <Loader2 size={12} className="om-spin" style={{ marginLeft: 4 }} />}
+          {status === 'done' && memo.transcript_lang && (
+            <span className="om-tag" style={{ textTransform: 'uppercase', marginLeft: 4 }}>{memo.transcript_lang}</span>
+          )}
+        </button>
+      </div>
+
+      {tab === 'description' && (
+        descText ? (
+          <p className="om-detail-desc" style={{ whiteSpace: 'pre-wrap' }}>{descText}</p>
+        ) : (
+          <p className="om-detail-desc" style={{ fontStyle: 'italic' }}>No description available.</p>
+        )
+      )}
+
+      {tab === 'transcript' && (
+        pending ? (
+          <p className="om-detail-desc">Transcribing audio… this runs locally and may take a moment.</p>
+        ) : status === 'done' && memo.content_text ? (
+          <div className="om-prose">
+            <ReactMarkdown remarkPlugins={[remarkGfm]}>{memo.content_text}</ReactMarkdown>
+          </div>
+        ) : status === 'error' ? (
+          <div>
+            <p className="om-detail-desc" style={{ marginBottom: 10 }}>
+              Transcription failed. Check that the speech-to-text model is installed on the server.
+            </p>
+            {memo.file_path && (
+              <button className="om-btn-ghost om-btn-pill" onClick={startTranscribe} disabled={starting}>
+                <Sparkles size={14} /> Try again
+              </button>
+            )}
+          </div>
+        ) : memo.file_path ? (
+          <div>
+            <p className="om-detail-desc" style={{ marginBottom: 10 }}>No transcript yet. Transcribe the audio with Whisper.</p>
+            <button className="om-btn-primary om-btn-pill" onClick={startTranscribe} disabled={starting}>
+              {starting ? <Loader2 size={14} className="om-spin" /> : <Sparkles size={14} />}
+              Transcribe
+            </button>
+          </div>
+        ) : (
+          <p className="om-detail-desc">
+            Download first using <strong>Make it local &rarr; Audio + transcript</strong> to generate a real transcript.
+          </p>
         )
       )}
     </div>
@@ -890,8 +983,13 @@ export function MemoDetail() {
               <MakeItLocalPanel memo={memo} />
             )}
 
-            {/* Transcript for a localized video (audio_transcript / on-demand) */}
-            {!isEditing && memo.type === 'video' && memo.file_path &&
+            {/* Video description + transcript tabs for YouTube/social video memos */}
+            {!isEditing && memo.type === 'video' && memo.source_url && (
+              <VideoContentPanel memo={memo} />
+            )}
+
+            {/* Transcript for locally uploaded video files (no source URL) */}
+            {!isEditing && memo.type === 'video' && !memo.source_url && memo.file_path &&
               (memo.transcript_status || memo.content_text) && (
               <AudioTranscript memo={memo} />
             )}

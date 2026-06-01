@@ -195,6 +195,7 @@ async def get_memo(memo_id: str, db: AsyncSession = Depends(get_db)):
         "description": memo.description,
         "content_text": memo.content_text,
         "content_raw": memo.content_raw,
+        "video_description": memo.video_description,
         "transcript_status": memo.transcript_status,
         "transcript_lang": memo.transcript_lang,
         "localize_status": memo.localize_status,
