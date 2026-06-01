@@ -3,6 +3,40 @@
 All notable changes to OpenMemo are documented here.
 
 ---
+## [2.0.1] - 2026-06-01
+
+A polish pass on top of 2.0.0. Smaller scope, but every item is something you
+probably ran into on day one. The MemoDetail page can scroll again, the Settings
+"What's New" modal scrolls cleanly without dragging the page behind it, deleting a
+memo no longer feels like a one-way door, and a "Make it local" download finally
+keeps the YouTube thumbnail instead of replacing it with a random ffmpeg frame.
+
+### Added
+
+- 🗑️ **Soft delete with 5-second undo** — deleting a memo now slides a toast in at the bottom-center with **Undo** and a live countdown bar. Hit Undo and the card pops back. Backed by new `is_deleted` + `deleted_at` columns on `memos` and new `POST /api/memos/{id}/restore` + `GET /api/memos/deleted/list` endpoints.
+- ♻️ **Recently Deleted modal in Settings** — a new "Trash" card under Settings opens a scrollable modal of recently deleted memos with one-click **Restore**. Native wheel-stop on the modal root so Lenis can't intercept the scroll (same fix as the changelog modal).
+- 🪟 **Full-bleed in-card delete confirm** — clicking the × on a card now darkens that card edge-to-edge with a frosted overlay and a "Delete memo? Cancel / Delete" prompt that respects the card's rounded corners. Confirm triggers the soft delete + undo toast.
+- 🗑️ **Delete in MemoDetail header** — a small trash button top-right of the memo detail header opens an inline confirm popover, deletes, and navigates back.
+- 🎬 **Video description & transcript tabs** — video Memos now show two tabs on the detail page: "Video description" (the platform's own text, pulled by yt-dlp) and "Transcript" (your local Whisper text). The transcript tab only fills in once you actually transcribe, so a YouTube description never masquerades as a transcript again.
+
+### Changed
+
+- 🎞️ **"Make it local" keeps the source thumbnail** — yt-dlp now reports the source thumbnail URL during a localize, and openMemo caches that instead of overwriting the memo's thumbnail with an ffmpeg frame. The dashboard card keeps showing the YouTube/Vimeo poster after the video is downloaded. ffmpeg frame remains a fallback only when neither memo nor source has a thumbnail.
+- 📺 **Transcript is a collapsed toggle by default** — audio and video memo transcripts no longer dump the full text inline. The "Transcript" header is now a chevron toggle; click to expand. Keeps long video pages short until you ask for the text.
+- 🔝 **MemoDetail header layout** — the back arrow moves to the top-left of the header where you expect it; the memo type label moves into the content area above the title.
+- 🛠️ **Dev `npm run dev` proxies to Docker by default** — `vite.config.ts` default `apiTarget` is now `http://localhost:8091` (Docker/nginx, always running) instead of `:8099` (local uvicorn). Override with `VITE_API_TARGET` when running `dev.ps1`.
+- 🌐 **One video extractor for every site** — the separate YouTube and social-video code paths are gone, replaced by a single yt-dlp path that handles all 1000+ sites yt-dlp supports. Vimeo, Dailymotion, Rumble, Bilibili and the rest now extract exactly the way YouTube does.
+- 🎵 **Audio platforms save as audio** — links from SoundCloud, Bandcamp and Mixcloud are detected as audio-only (via yt-dlp's codec info) and filed as audio Memos instead of video.
+- 🗂️ **Video description stored separately** — a new `video_description` column keeps the platform's text apart from `content_text`, which is now reserved for the real transcript. A migration backfills existing video Memos.
+- 🎙️ **Transcript is always opt-in** — "Make it local" no longer has a combined "Audio + transcript" mode. Download audio or video, then transcribe on demand with the Transcribe button. Recordings still offer transcription at capture time.
+
+### Fixed
+
+- 📜 **MemoDetail scroll works again** — long memo pages were unscrollable since 2.0.0. The `om-main-inner` wrapper inside `<main>` had no height, so `om-detail-scroll`'s `flex: 1` resolved to zero. One CSS rule (`.om-main:has(.om-detail-page) .om-main-inner { height: 100% }`) restores the chain.
+- 📜 **"What's New" modal scrolls correctly on long releases** — 2.0.0's release notes overflowed and clipped at the viewport edges. The modal now uses `max-height: calc(100vh - 80px)` with a flex layout and an internal `overflow-y: auto` body, and a native (non-React) wheel listener on the modal root stops Lenis from hijacking the wheel and scrolling the Settings page behind it.
+- 🏷️ **YouTube description no longer mislabeled as a transcript** — video Memos were showing the pulled platform description under a "Transcript" heading even when nothing had been transcribed. The transcript view now renders only real Whisper output (when `transcript_status` is done).
+
+---
 ## [2.0.0] - 2026-06-01
 
 The biggest release yet, by a wide margin. This is months of work and fine-tuning
