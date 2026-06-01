@@ -34,6 +34,8 @@ export const memoApi = {
   delete: (id: string) => fetchJSON<any>(`/memos/${id}`, { method: 'DELETE' }),
   summary: (id: string) => fetchJSON<{ summary: string }>(`/memos/${id}/summary`, { method: 'POST' }),
   related: (id: string) => fetchJSON<any[]>(`/memos/${id}/related`),
+  transcribe: (id: string) =>
+    fetchJSON<{ id: string; status: string }>(`/memos/${id}/transcribe`, { method: 'POST' }),
 };
 
 // Ingestion
@@ -48,11 +50,20 @@ export const ingestApi = {
       method: 'POST',
       body: JSON.stringify({ title, content, collection_id }),
     }),
-  file: async (file: File, collection_id?: string, workspace_id?: string) => {
+  file: async (
+    file: File,
+    collection_id?: string,
+    workspace_id?: string,
+    opts?: { typeOverride?: string; transcribe?: boolean },
+  ) => {
     const form = new FormData();
     form.append('file', file);
     if (collection_id) form.append('collection_id', collection_id);
     if (workspace_id) form.append('workspace_id', workspace_id);
+    // type_override pins the memo type when the extension would mis-file it
+    // (a mic recording lands in a .webm container → would be "video").
+    if (opts?.typeOverride) form.append('type_override', opts.typeOverride);
+    if (opts?.transcribe) form.append('transcribe', 'true');
     let resp: Response;
     try {
       resp = await fetch(`${API_BASE}/ingest/file`, { method: 'POST', body: form });

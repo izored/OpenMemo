@@ -22,6 +22,7 @@ const ICON_PATHS: Record<string, string> = {
   globe: 'M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18zM3 12h18M12 3a14.5 14.5 0 0 1 4 9 14.5 14.5 0 0 1-4 9 14.5 14.5 0 0 1-4-9 14.5 14.5 0 0 1 4-9z',
   mic: 'M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3zM19 10a7 7 0 0 1-14 0M12 17v6M8 23h8',
   play: 'M6 4l14 8-14 8z',
+  pause: 'M6 4h4v16H6z M14 4h4v16h-4z',
   home: 'M3 9 12 2l9 7v11a2 2 0 0 1-2 2h-4v-7H9v7H5a2 2 0 0 1-2-2z',
   inbox: 'M22 12h-6l-2 3h-4l-2-3H2M5.45 5.11 2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z',
   bookmark: 'M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z',
@@ -62,6 +63,13 @@ const ICON_PATHS: Record<string, string> = {
   target: 'M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18zM12 17a5 5 0 1 0 0-10 5 5 0 0 0 0 10zM12 13a1 1 0 1 0 0-2 1 1 0 0 0 0 2z',
 };
 
+// Filled brand glyphs (rendered with fill, not stroke) — kept separate from the
+// stroke-based ICON_PATHS above. Used for platform badges on media cards.
+const BRAND_PATHS: Record<string, string> = {
+  youtube: 'M23.5 6.5a3 3 0 0 0-2.1-2.1C19.5 4 12 4 12 4s-7.5 0-9.4.4A3 3 0 0 0 .5 6.5 31 31 0 0 0 0 12a31 31 0 0 0 .5 5.5 3 3 0 0 0 2.1 2.1C4.5 20 12 20 12 20s7.5 0 9.4-.4a3 3 0 0 0 2.1-2.1A31 31 0 0 0 24 12a31 31 0 0 0-.5-5.5zM9.6 15.6V8.4l6.3 3.6z',
+  vimeo: 'M23.98 7.12c-.11 2.36-1.76 5.6-4.95 9.71C15.73 21.12 13 23.2 10.78 23.2c-1.37 0-2.53-1.27-3.48-3.8l-1.9-6.97c-.7-2.54-1.46-3.8-2.27-3.8-.18 0-.79.36-1.85 1.1L0 8.31a318 318 0 0 0 3.5-3.12C5.08 3.82 6.27 3.1 7.06 3c1.87-.18 3.02 1.1 3.46 3.84.47 2.96.8 4.8.98 5.52.54 2.46 1.13 3.69 1.78 3.69.5 0 1.27-.8 2.28-2.4 1.01-1.6 1.55-2.81 1.62-3.65.14-1.32-.38-1.98-1.55-1.98-.55 0-1.13.13-1.7.38 1.13-3.7 3.3-5.5 6.5-5.4 2.37.07 3.49 1.61 3.36 4.62z',
+};
+
 export function Icon({
   name,
   size = 16,
@@ -75,6 +83,24 @@ export function Icon({
   className?: string;
   style?: React.CSSProperties;
 }) {
+  // Brand glyphs are fill-based, single-path, no stroke.
+  const brand = BRAND_PATHS[name];
+  if (brand) {
+    return (
+      <svg
+        xmlns="http://www.w3.org/2000/svg"
+        width={size}
+        height={size}
+        viewBox="0 0 24 24"
+        fill="currentColor"
+        className={className}
+        style={style}
+        aria-hidden="true"
+      >
+        <path d={brand} />
+      </svg>
+    );
+  }
   const d = ICON_PATHS[name];
   if (!d) return null;
   return (

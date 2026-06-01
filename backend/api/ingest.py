@@ -271,27 +271,52 @@ async def ingest_note(
     return {"id": memo.id, "title": memo.title, "type": "note", "status": "processing"}
 
 
+# Types a caller may force via `type_override` on /file. Mirrors the taxonomy
+# in core/classify.py. Used by the mic recorder: a browser records audio into a
+# WebM container (.webm), which the extension map files as "video" — the
+# override lets the client declare it is really an audio memo.
+_OVERRIDABLE_TYPES = {
+    "note", "link", "image", "video", "audio", "document", "code", "file",
+}
+
+
 @router.post("/file")
 async def ingest_file(
     background_tasks: BackgroundTasks,
     file: UploadFile = File(...),
     workspace_id: str = Form(default="default"),
     collection_id: Optional[str] = Form(default=None),
+    type_override: Optional[str] = Form(default=None),
+    transcribe: bool = Form(default=False),
     db: AsyncSession = Depends(get_db),
 ):
-    """Upload and ingest a file (PDF, DOCX, image, audio)."""
+    """Upload and ingest a file (PDF, DOCX, image, audio).
+
+    `type_override` lets a trusted client pin the memo type when the file
+    extension would categorize it wrong (e.g. a mic recording in a .webm
+    container is audio, not video). Ignored unless it is a known type.
+
+    `transcribe` (audio only) schedules background speech-to-text after save.
+    """
     ws = sanitize_workspace_id(workspace_id)
 
     # Use secure upload handler
     result = await _upload_handler.save(file, workspace_id=ws)
 
+    memo_type = result.type
+    if type_override and type_override in _OVERRIDABLE_TYPES:
+        memo_type = type_override
+
+    want_transcript = bool(transcribe) and memo_type == "audio"
+
     # Create memo
     memo = Memo(
         id=Path(result.path).stem,
         workspace_id=ws,
-        type=result.type,
+        type=memo_type,
         title=result.filename,
         file_path=result.path,
+        transcript_status="pending" if want_transcript else None,
         created_at=datetime.utcnow(),
         updated_at=datetime.utcnow(),
     )
@@ -301,9 +326,55 @@ async def ingest_file(
     await db.commit()
 
     # Process in background (extract text from file)
-    background_tasks.add_task(process_file_memo, memo.id, result.path, result.type)
+    background_tasks.add_task(process_file_memo, memo.id, result.path, memo_type)
+    if want_transcript:
+        background_tasks.add_task(transcribe_memo_task, memo.id)
 
-    return {"id": memo.id, "title": memo.title, "type": result.type, "status": "processing"}
+    return {"id": memo.id, "title": memo.title, "type": memo_type, "status": "processing"}
+
+
+async def transcribe_memo_task(memo_id: str):
+    """Background: transcribe an audio memo, store the cleaned text in
+    content_text (so it embeds + is searchable), record the detected language,
+    then embed it. Status flows pending → processing → done | error.
+    """
+    from backend.core.transcribe import transcribe_audio
+    from backend.core.file_paths import resolve_memo_path
+
+    async with AsyncSessionLocal() as db:
+        memo = await db.get(Memo, memo_id)
+        if not memo or not memo.file_path:
+            return
+        file_path = memo.file_path
+        memo.transcript_status = "processing"
+        await db.commit()
+
+    p = resolve_memo_path(file_path) or Path(file_path)
+    try:
+        result = await transcribe_audio(str(p))
+        text = (result.get("text") or "").strip()
+        lang = result.get("language")
+        status = "done"
+    except Exception as e:
+        print(f"Transcription failed for {memo_id}: {e}")
+        text, lang, status = "", None, "error"
+
+    async with AsyncSessionLocal() as db:
+        memo = await db.get(Memo, memo_id)
+        if not memo:
+            return
+        if text:
+            memo.content_text = text
+            memo.content_raw = text
+            if not memo.description:
+                memo.description = text[:200]
+        memo.transcript_lang = lang
+        memo.transcript_status = status
+        memo.updated_at = datetime.utcnow()
+        await db.commit()
+
+    if status == "done" and text:
+        await process_memo(memo_id)
 
 
 # Map code/text extensions to a Markdown fence language for syntax rendering.

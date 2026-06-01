@@ -19,12 +19,15 @@ import {
   Pin,
   PinOff,
   FileText,
+  Play,
+  Pause,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { BackButton } from '@/components/BackButton';
 import { MarkdownEditor } from '@/components/MarkdownEditor';
 import { memoApi, collectionApi } from '@/lib/api';
 import { AskMemoPanel } from '@/components/AskMemoPanel';
+import { useAudioPlayer, formatTime } from '@/lib/audioPlayer';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import type { Memo, Collection } from '@/types';
@@ -169,6 +172,144 @@ function DocReportCard({ memo }: { memo: Memo }) {
   );
 }
 
+// Inline audio player for the detail page. Drives the SAME shared <audio> as
+// the header mini-player (via the audio context), so playback continues and
+// stays in sync if the user navigates away. Probes duration up-front so the
+// total length shows before the first play.
+function AudioMemoPlayer({ memo }: { memo: Memo }) {
+  const { play, toggle, seek, isActive, playing, currentTime, duration } = useAudioPlayer();
+  const src = `/api/memos/${memo.id}/file`;
+  const active = isActive(memo.id);
+  const [probeDur, setProbeDur] = useState(0);
+
+  useEffect(() => {
+    const a = new Audio();
+    a.preload = 'metadata';
+    a.src = src;
+    const on = () => setProbeDur(Number.isFinite(a.duration) ? a.duration : 0);
+    a.addEventListener('loadedmetadata', on);
+    return () => {
+      a.removeEventListener('loadedmetadata', on);
+      a.src = '';
+    };
+  }, [src]);
+
+  const dur = active && Number.isFinite(duration) && duration > 0 ? duration : probeDur;
+  const cur = active ? currentTime : 0;
+  const isPlaying = active && playing;
+  const pct = dur > 0 ? Math.min(100, (cur / dur) * 100) : 0;
+
+  const onPlay = () => {
+    if (active) toggle();
+    else play({ memoId: memo.id, title: memo.title, src, subtitle: memo.source_domain || undefined });
+  };
+  const onScrub = (e: React.MouseEvent<HTMLDivElement>) => {
+    if (!active || dur <= 0) return;
+    const rect = e.currentTarget.getBoundingClientRect();
+    seek(((e.clientX - rect.left) / rect.width) * dur);
+  };
+
+  return (
+    <div className="om-audio-detail" style={{ marginBottom: '20px' }}>
+      <button
+        className={cn('om-audio-detail-play', isPlaying && 'playing')}
+        onClick={onPlay}
+        aria-label={isPlaying ? 'Pause' : 'Play'}
+      >
+        {isPlaying ? <Pause size={20} /> : <Play size={20} />}
+      </button>
+      <div className="om-audio-detail-body">
+        <div
+          className="om-audio-detail-track"
+          onClick={onScrub}
+          role="slider"
+          aria-label="Seek"
+          aria-valuemin={0}
+          aria-valuemax={100}
+          aria-valuenow={Math.round(pct)}
+          tabIndex={0}
+        >
+          <div className="om-audio-detail-fill" style={{ width: `${pct}%` }} />
+        </div>
+        <div className="om-audio-detail-meta mono">
+          <span>{formatTime(cur)}</span>
+          <span>{dur > 0 ? formatTime(dur) : '--:--'}</span>
+        </div>
+      </div>
+      <a
+        className="om-audio-detail-dl"
+        href={`/api/memos/${memo.id}/file?download=1`}
+        download
+        title="Download original"
+        aria-label="Download original"
+      >
+        <Download size={16} />
+      </a>
+    </div>
+  );
+}
+
+// Transcript block, rendered directly under the audio player. Shows the cleaned
+// speech-to-text result, a live "transcribing…" state, or an on-demand
+// Transcribe button for audio that was uploaded (rather than recorded).
+function AudioTranscript({ memo }: { memo: Memo }) {
+  const queryClient = useQueryClient();
+  const [starting, setStarting] = useState(false);
+  const status = memo.transcript_status;
+  const text = memo.content_text || '';
+  const pending = status === 'pending' || status === 'processing' || starting;
+
+  const startTranscribe = async () => {
+    setStarting(true);
+    try {
+      await memoApi.transcribe(memo.id);
+      queryClient.invalidateQueries({ queryKey: ['memo', memo.id] });
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setStarting(false);
+    }
+  };
+
+  return (
+    <div className="om-transcript" style={{ marginBottom: '24px' }}>
+      <div className="om-notes-label" style={{ marginBottom: '10px' }}>
+        <FileText size={16} className="om-section-icon" />
+        <h3 className="om-section-h">Transcript</h3>
+        {memo.transcript_lang && (
+          <span className="om-tag" style={{ textTransform: 'uppercase' }}>{memo.transcript_lang}</span>
+        )}
+        {pending && <Loader2 size={14} className="om-section-icon om-spin" />}
+      </div>
+
+      {pending ? (
+        <p className="om-detail-desc">Transcribing audio… this runs locally and may take a moment.</p>
+      ) : text ? (
+        <div className="om-prose">
+          <ReactMarkdown remarkPlugins={[remarkGfm]}>{memo.content_raw || text}</ReactMarkdown>
+        </div>
+      ) : status === 'error' ? (
+        <div>
+          <p className="om-detail-desc" style={{ marginBottom: 10 }}>
+            Transcription failed. Check that the speech-to-text model is installed on the server.
+          </p>
+          <button className="om-btn-ghost om-btn-pill" onClick={startTranscribe} disabled={starting}>
+            <Sparkles size={14} /> Try again
+          </button>
+        </div>
+      ) : (
+        <div>
+          <p className="om-detail-desc" style={{ marginBottom: 10 }}>No transcript yet.</p>
+          <button className="om-btn-primary om-btn-pill" onClick={startTranscribe} disabled={starting}>
+            {starting ? <Loader2 size={14} className="om-spin" /> : <Sparkles size={14} />}
+            Transcribe
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
+
 function getYouTubeVideoId(url: string): string | null {
   try {
     const u = new URL(url);
@@ -208,6 +349,12 @@ export function MemoDetail() {
     queryKey: ['memo', id],
     queryFn: () => memoApi.get(id!),
     enabled: !!id,
+    // While a transcription is running in the background, poll so the
+    // transcript appears under the player as soon as it lands.
+    refetchInterval: (q) => {
+      const st = (q.state.data as Memo | undefined)?.transcript_status;
+      return st === 'pending' || st === 'processing' ? 2500 : false;
+    },
   });
 
   const { data: related = [] } = useQuery<Memo[]>({
@@ -580,6 +727,14 @@ export function MemoDetail() {
             {/* Local video preview — with theater + fullscreen */}
             {memo.type === 'video' && memo.file_path && !isEditing && (
               <MediaPreview src={`/api/memos/${memo.id}/file`} alt={memo.title} kind="video" />
+            )}
+
+            {/* Audio memo — inline player + transcript below it */}
+            {memo.type === 'audio' && memo.file_path && !isEditing && (
+              <>
+                <AudioMemoPlayer memo={memo} />
+                <AudioTranscript memo={memo} />
+              </>
             )}
 
             {/* YouTube embed */}

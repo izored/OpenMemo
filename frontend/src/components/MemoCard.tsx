@@ -5,8 +5,9 @@ import type { DraggableAttributes } from '@dnd-kit/core';
 import { Icon } from './Icon';
 import { cn } from '@/lib/utils';
 import { memoApi } from '@/lib/api';
-import { mediaSrc, youtubeEmbed } from '@/lib/media';
+import { mediaSrc, youtubeEmbed, videoSource } from '@/lib/media';
 import { useAppStore } from '@/stores/appStore';
+import { useAudioPlayer } from '@/lib/audioPlayer';
 import type { Memo, MemoType } from '@/types';
 
 // Warm tint palette for cards without media (notes / plain docs).
@@ -91,6 +92,15 @@ function FileBadge({ ext }: { ext: string }) {
       )}
     </svg>
   );
+}
+
+// Brand glyph for the minimal video card's bottom-left pill: YouTube/Vimeo
+// logo for those platforms, generic video icon for local uploads / other hosts.
+function VideoSourceIcon({ memo }: { memo: Memo }) {
+  const kind = videoSource(memo);
+  if (kind === 'youtube') return <Icon name="youtube" size={13} className="om-brand-youtube" />;
+  if (kind === 'vimeo') return <Icon name="vimeo" size={13} className="om-brand-vimeo" />;
+  return <Icon name="video" size={12} />;
 }
 
 interface DragProps {
@@ -198,6 +208,7 @@ export function MemoCard({ memo, dragHandleProps, lightboxGroup }: CardProps) {
   const queryClient = useQueryClient();
   const navigate = useNavigate();
   const openLightbox = useAppStore((s) => s.openLightbox);
+  const { play, playing, isActive } = useAudioPlayer();
   const [imageOrient, setImageOrient] = React.useState<'landscape' | 'portrait'>('landscape');
   const [confirmDeleteOpen, setConfirmDeleteOpen] = React.useState(false);
 
@@ -389,7 +400,7 @@ export function MemoCard({ memo, dragHandleProps, lightboxGroup }: CardProps) {
             <Meta memo={memo} />
           </div>
           <div className="om-min-domain">
-            <Icon name="video" size={12} />
+            <VideoSourceIcon memo={memo} />
             <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{memo.title}</span>
           </div>
         </Chrome>
@@ -446,7 +457,49 @@ export function MemoCard({ memo, dragHandleProps, lightboxGroup }: CardProps) {
     );
   }
 
-  // ── Link / Article / Audio / fallback ──
+  // ── Audio ── play/pause drives the shared header player; clicking the card
+  // body still opens the detail page (Chrome default).
+  if (memo.type === 'audio') {
+    const audioSrc = memo.file_path ? `/api/memos/${memo.id}/file` : null;
+    const active = isActive(memo.id);
+    const isThisPlaying = active && playing;
+    const onPlayClick = (e: React.MouseEvent) => {
+      e.stopPropagation();
+      if (!audioSrc) return;
+      play({ memoId: memo.id, title: memo.title, src: audioSrc, subtitle: memo.source_domain || undefined });
+    };
+    return (
+      <>
+        <Chrome
+          memo={memo}
+          dragHandleProps={dragHandleProps}
+          onDelete={handleDelete}
+          onPin={handlePin}
+          onOpen={goDetail}
+          className={cn('om-card-audio', active && 'is-active')}
+        >
+          <div className="om-audio-frame">
+            <button
+              className="om-play"
+              onClick={onPlayClick}
+              disabled={!audioSrc}
+              title={isThisPlaying ? 'Pause' : 'Play'}
+              aria-label={isThisPlaying ? 'Pause' : 'Play'}
+            >
+              <Icon name={isThisPlaying ? 'pause' : 'play'} size={16} stroke={0} style={{ fill: 'currentColor' }} />
+            </button>
+          </div>
+          <div className="om-card-body">
+            <h3 className="om-card-title">{memo.title}</h3>
+            <Meta memo={memo} />
+          </div>
+        </Chrome>
+        {confirmModal}
+      </>
+    );
+  }
+
+  // ── Link / Article / fallback ──
   const domain = rootDomain(memo.source_domain);
   return (
     <>

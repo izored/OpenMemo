@@ -50,6 +50,21 @@ async def lifespan(app: FastAPI):
         await init_fts5()
     except Exception as e:
         print(f"FTS5 init warning (non-critical): {e}")
+
+    # Lightweight additive migrations (no migration framework — see CLAUDE.md).
+    # Add transcript columns to existing memos tables if missing.
+    try:
+        from sqlalchemy import text as _sql_text
+
+        async with AsyncSessionLocal() as db:
+            cols = (await db.execute(_sql_text("PRAGMA table_info(memos)"))).fetchall()
+            names = {c[1] for c in cols}
+            for col in ("transcript_status", "transcript_lang"):
+                if col not in names:
+                    await db.execute(_sql_text(f"ALTER TABLE memos ADD COLUMN {col} VARCHAR"))
+            await db.commit()
+    except Exception as e:
+        print(f"Schema migration warning (non-critical): {e}")
     
     # Create default user and workspace if not exist
     async with AsyncSessionLocal() as db:

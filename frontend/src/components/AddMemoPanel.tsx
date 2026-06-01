@@ -1,6 +1,7 @@
 import React, { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Icon } from './Icon';
+import { VoiceRecorder } from './VoiceRecorder';
 import { ingestApi, collectionApi } from '@/lib/api';
 import { useAppStore } from '@/stores/appStore';
 import { cn } from '@/lib/utils';
@@ -45,7 +46,7 @@ export function AddMemoPanel() {
   });
 
   const [tab, setTab] = useState<Tab>('link');
-  const [mediaKind, setMediaKind] = useState<'image' | 'video' | 'file'>('image');
+  const [mediaKind, setMediaKind] = useState<'image' | 'video' | 'audio' | 'file'>('image');
   const [url, setUrl] = useState('');
   const [note, setNote] = useState('');
   const [noteTitle, setNoteTitle] = useState('');
@@ -152,6 +153,23 @@ export function AddMemoPanel() {
     queryClient.invalidateQueries({ queryKey: ['stats'] });
     const names = failed.slice(0, 3).join(', ') + (failed.length > 3 ? '…' : '');
     setError(`${failed.length} of ${arr.length} failed: ${names}`);
+  };
+
+  // Mic recording → upload as audio, with optional background transcription.
+  const handleSaveRecording = async (file: File, opts: { transcribe: boolean }) => {
+    setBusy(true);
+    setError('');
+    try {
+      await ingestApi.file(file, collection || undefined, undefined, {
+        typeOverride: 'audio',
+        transcribe: opts.transcribe,
+      });
+      done();
+    } catch (e) {
+      setError((e as Error).message || 'Failed to save recording');
+    } finally {
+      setBusy(false);
+    }
   };
 
   const tabs: { id: Tab; icon: string; label: string }[] = [
@@ -299,16 +317,17 @@ export function AddMemoPanel() {
           {tab === 'multimedia' && (
             <div className="om-add-tab-pane">
               <div className="om-add-sect mono">Kind</div>
-              <div className="om-add-segment">
+              <div className="om-add-segment grid-2x2">
                 {[
                   { id: 'image', label: 'Image', icon: 'image' },
                   { id: 'video', label: 'Video', icon: 'video' },
+                  { id: 'audio', label: 'Audio', icon: 'mic' },
                   { id: 'file', label: 'File', icon: 'file' },
                 ].map((k) => (
                   <button
                     key={k.id}
                     className={cn('om-add-seg', mediaKind === k.id && 'active')}
-                    onClick={() => setMediaKind(k.id as 'image' | 'video' | 'file')}
+                    onClick={() => setMediaKind(k.id as 'image' | 'video' | 'audio' | 'file')}
                   >
                     <Icon name={k.icon} size={11} />
                     <span>{k.label}</span>
@@ -324,7 +343,7 @@ export function AddMemoPanel() {
                   onFile(e.dataTransfer.files);
                 }}
               >
-                <Icon name={mediaKind === 'image' ? 'image' : mediaKind === 'video' ? 'video' : 'file'} size={20} />
+                <Icon name={mediaKind === 'image' ? 'image' : mediaKind === 'video' ? 'video' : mediaKind === 'audio' ? 'mic' : 'file'} size={20} />
                 {progress ? (
                   <>
                     <p>Uploading {progress.done} / {progress.total}…</p>
@@ -333,12 +352,13 @@ export function AddMemoPanel() {
                 ) : (
                   <>
                     <p>
-                      Drop {mediaKind === 'image' ? 'images' : mediaKind === 'video' ? 'videos' : 'files'} or{' '}
+                      Drop {mediaKind === 'image' ? 'images' : mediaKind === 'video' ? 'videos' : mediaKind === 'audio' ? 'audio files' : 'files'} or{' '}
                       <span className="om-add-link">browse</span>
                     </p>
                     <span className="mono">
                       {mediaKind === 'image' && 'JPG · PNG · WebP · GIF · SVG — select multiple'}
                       {mediaKind === 'video' && 'MP4 · MOV · WebM · MKV — select multiple'}
+                      {mediaKind === 'audio' && 'MP3 · WAV · FLAC · M4A · OGG — lossless supported'}
                       {mediaKind === 'file' && 'Any file type — select multiple'}
                     </span>
                   </>
@@ -348,31 +368,7 @@ export function AddMemoPanel() {
           )}
 
           {tab === 'voice' && (
-            <div className="om-add-tab-pane">
-              <div className="om-add-sect mono">Voice Memo</div>
-              <div className="om-add-coming-soon">
-                <Icon name="mic" size={20} />
-                <p>Voice capture is not yet available.</p>
-                <span className="mono">This feature is planned for a future release.</span>
-              </div>
-              <div className="om-add-voice" style={{ opacity: 0.35, pointerEvents: 'none' }}>
-                <div className="om-add-wave">
-                  {Array.from({ length: 28 }).map((_, i) => (
-                    <span
-                      key={i}
-                      style={{
-                        height: `${30 + Math.sin(i * 0.7) * 35 + Math.cos(i * 0.3) * 20}%`,
-                        animationDelay: `${i * 40}ms`,
-                      }}
-                    />
-                  ))}
-                </div>
-                <button className="om-add-rec" disabled>
-                  <span className="om-add-rec-dot" />
-                  <span>Record</span>
-                </button>
-              </div>
-            </div>
+            <VoiceRecorder onSave={handleSaveRecording} busy={busy} />
           )}
         </AnimatedHeight>
 
@@ -415,7 +411,7 @@ export function AddMemoPanel() {
         ref={fileRef}
         type="file"
         multiple
-        accept={mediaKind === 'image' ? 'image/*' : mediaKind === 'video' ? 'video/*' : undefined}
+        accept={mediaKind === 'image' ? 'image/*' : mediaKind === 'video' ? 'video/*' : mediaKind === 'audio' ? 'audio/*' : undefined}
         hidden
         onChange={(e) => onFile(e.target.files)}
       />
@@ -424,10 +420,12 @@ export function AddMemoPanel() {
         <button className="om-add-foot-btn ghost" onClick={close}>
           Cancel
         </button>
-        <button className="om-add-foot-btn primary" onClick={save} disabled={busy}>
-          <span>{progress ? `Uploading ${progress.done}/${progress.total}…` : busy ? 'Saving…' : tab === 'multimedia' ? 'Choose files' : 'Save'}</span>
-          <span className="mono om-add-kbd-inv">⏎</span>
-        </button>
+        {tab !== 'voice' && (
+          <button className="om-add-foot-btn primary" onClick={save} disabled={busy}>
+            <span>{progress ? `Uploading ${progress.done}/${progress.total}…` : busy ? 'Saving…' : tab === 'multimedia' ? 'Choose files' : 'Save'}</span>
+            <span className="mono om-add-kbd-inv">⏎</span>
+          </button>
+        )}
       </div>
     </aside>
     </>
