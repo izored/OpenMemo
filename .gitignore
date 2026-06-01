@@ -5,6 +5,9 @@ CLAUDE.local.md
 *.local.md
 *.local.json
 
+# EntryBox (local task tracking)
+.entrybox/
+
 # Specs folder (local planning docs) — except public-facing roadmap + linked specs
 Specs/*
 !Specs/ROADMAP.md
