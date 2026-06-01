@@ -5,8 +5,8 @@ from datetime import datetime
 from pathlib import Path
 from typing import Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Query
-from fastapi.responses import FileResponse
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, Request
+from fastapi.responses import FileResponse, StreamingResponse
 from sqlalchemy import select, func, desc, asc
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
@@ -18,6 +18,21 @@ from backend.core.security import sanitize_workspace_id
 from backend.core.file_paths import resolve_memo_path
 
 router = APIRouter(prefix="/api/memos", tags=["memos"])
+
+
+# Explicit audio MIME map. `mimetypes.guess_type` is unreliable for these on
+# many systems (returns None / octet-stream for .flac, .opus, .weba), and the
+# browser's <audio> element refuses to play a non-audio Content-Type. Forcing a
+# correct audio/* type makes lossless (FLAC/WAV) and recorded (WebM/Opus) memos
+# play and seek. FileResponse already emits Accept-Ranges + handles Range, so
+# seeking works for free.
+_AUDIO_MIME = {
+    ".mp3": "audio/mpeg", ".wav": "audio/wav", ".m4a": "audio/mp4",
+    ".aac": "audio/aac", ".ogg": "audio/ogg", ".oga": "audio/ogg",
+    ".opus": "audio/ogg", ".flac": "audio/flac", ".weba": "audio/webm",
+    ".webm": "audio/webm", ".wma": "audio/x-ms-wma", ".aiff": "audio/aiff",
+    ".aif": "audio/aiff", ".mka": "audio/x-matroska",
+}
 
 
 # --- Schemas ---
@@ -179,6 +194,8 @@ async def get_memo(memo_id: str, db: AsyncSession = Depends(get_db)):
         "description": memo.description,
         "content_text": memo.content_text,
         "content_raw": memo.content_raw,
+        "transcript_status": memo.transcript_status,
+        "transcript_lang": memo.transcript_lang,
         "notes": memo.notes,
         "source_url": memo.source_url,
         "source_domain": memo.source_domain,
@@ -197,8 +214,53 @@ async def get_memo(memo_id: str, db: AsyncSession = Depends(get_db)):
     }
 
 
+def _parse_range(range_header: str, file_size: int) -> tuple[int, int] | None:
+    """Parse a single 'bytes=start-end' range against file_size.
+
+    Returns an inclusive (start, end) byte range, or None if the header is
+    absent/malformed/unsatisfiable (caller then serves the full file). Only the
+    first range of a (rare) multi-range request is honored — enough for media
+    seeking, which always sends a single range.
+    """
+    if not range_header or not range_header.strip().lower().startswith("bytes="):
+        return None
+    spec = range_header.split("=", 1)[1].split(",")[0].strip()
+    start_s, _, end_s = spec.partition("-")
+    try:
+        if start_s == "":
+            # Suffix range: bytes=-N → last N bytes.
+            n = int(end_s)
+            if n <= 0:
+                return None
+            start = max(0, file_size - n)
+            end = file_size - 1
+        else:
+            start = int(start_s)
+            end = int(end_s) if end_s else file_size - 1
+    except ValueError:
+        return None
+    end = min(end, file_size - 1)
+    if start > end or start >= file_size:
+        return None
+    return start, end
+
+
+async def _stream_file_range(path, start: int, end: int, chunk_size: int = 1024 * 1024):
+    """Yield a byte range of a file in chunks (keeps RSS flat for big files)."""
+    remaining = end - start + 1
+    with open(path, "rb") as f:
+        f.seek(start)
+        while remaining > 0:
+            chunk = f.read(min(chunk_size, remaining))
+            if not chunk:
+                break
+            remaining -= len(chunk)
+            yield chunk
+
+
 @router.get("/{memo_id}/file")
 async def get_memo_file(
+    request: Request,
     memo_id: str,
     download: bool = False,
     db: AsyncSession = Depends(get_db),
@@ -206,7 +268,10 @@ async def get_memo_file(
     """Serve the original uploaded file for a memo.
 
     Inline by default (used for image rendering); pass ?download=1 to force a
-    download with the original filename.
+    download with the original filename. Honors HTTP Range requests explicitly
+    (206 Partial Content) so audio/video can seek — we don't rely on the
+    framework's implicit Range handling, which proved unreliable behind the
+    proxy. Always advertises Accept-Ranges so players show a seekable scrubber.
     """
     memo = (
         await db.execute(select(Memo).where(Memo.id == memo_id))
@@ -218,11 +283,66 @@ async def get_memo_file(
     if p is None:
         raise HTTPException(status_code=404, detail="File not found")
 
+    ext = p.suffix.lower()
     media_type = mimetypes.guess_type(str(p))[0] or "application/octet-stream"
+    # Audio memos: always serve an audio/* type so <audio> will play them.
+    # (A .webm recording is stored as type "audio" but guesses to video/webm.)
+    if memo.type == "audio" and ext in _AUDIO_MIME:
+        media_type = _AUDIO_MIME[ext]
+    elif ext in _AUDIO_MIME and media_type in (None, "application/octet-stream"):
+        media_type = _AUDIO_MIME[ext]
+
     if download:
         filename = (memo.title or p.name).replace('"', "")
         return FileResponse(str(p), media_type=media_type, filename=filename)
-    return FileResponse(str(p), media_type=media_type)
+
+    file_size = p.stat().st_size
+    rng = _parse_range(request.headers.get("range", ""), file_size)
+
+    if rng is None:
+        # Full file — still advertise range support so players enable seeking.
+        return FileResponse(
+            str(p),
+            media_type=media_type,
+            headers={"Accept-Ranges": "bytes"},
+        )
+
+    start, end = rng
+    headers = {
+        "Content-Range": f"bytes {start}-{end}/{file_size}",
+        "Accept-Ranges": "bytes",
+        "Content-Length": str(end - start + 1),
+    }
+    return StreamingResponse(
+        _stream_file_range(p, start, end),
+        status_code=206,
+        media_type=media_type,
+        headers=headers,
+    )
+
+
+@router.post("/{memo_id}/transcribe")
+async def transcribe_memo(
+    memo_id: str,
+    background_tasks: BackgroundTasks,
+    db: AsyncSession = Depends(get_db),
+):
+    """Kick off (or re-run) speech-to-text for an audio memo. Runs in the
+    background; the client polls the memo until transcript_status is done."""
+    memo = await db.get(Memo, memo_id)
+    if not memo:
+        raise HTTPException(status_code=404, detail="Memo not found")
+    if memo.type != "audio" or not memo.file_path:
+        raise HTTPException(status_code=400, detail="Memo is not an audio file")
+
+    memo.transcript_status = "pending"
+    memo.updated_at = datetime.utcnow()
+    await db.commit()
+
+    from backend.api.ingest import transcribe_memo_task
+
+    background_tasks.add_task(transcribe_memo_task, memo_id)
+    return {"id": memo_id, "status": "pending"}
 
 
 @router.post("")

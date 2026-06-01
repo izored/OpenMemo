@@ -29,6 +29,14 @@ class Settings(BaseSettings):
     # Chunking
     CHUNK_SIZE: int = 512
     CHUNK_OVERLAP: int = 50
+
+    # Speech-to-text (faster-whisper). Multilingual, runs locally. Override via
+    # env (e.g. WHISPER_MODEL=large-v3) — see docs. On CPU, "small" is a good
+    # accuracy/speed balance; "medium"/"large-v3" need a GPU to stay snappy.
+    WHISPER_MODEL: str = "small"          # tiny|base|small|medium|large-v3
+    WHISPER_DEVICE: str = "auto"          # auto|cpu|cuda
+    WHISPER_COMPUTE_TYPE: str = "auto"    # auto|int8|float16|float32
+    WHISPER_BEAM_SIZE: int = 1
     
     # RAG
     RAG_TOP_K: int = 8

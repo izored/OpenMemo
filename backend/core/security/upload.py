@@ -28,7 +28,8 @@ DEFAULT_MAX_FILE_SIZE = 5 * 1024 * 1024 * 1024
 # are shown with a generic file icon + extension badge in the UI.
 _IMAGE = {".png", ".jpg", ".jpeg", ".gif", ".webp", ".svg", ".bmp", ".tiff",
           ".tif", ".heic", ".heif", ".avif", ".ico"}
-_AUDIO = {".mp3", ".wav", ".m4a", ".ogg", ".flac", ".aac", ".opus", ".wma"}
+_AUDIO = {".mp3", ".wav", ".m4a", ".ogg", ".oga", ".flac", ".aac", ".opus",
+          ".wma", ".weba", ".aiff", ".aif", ".mka", ".mid", ".midi"}
 _VIDEO = {".mp4", ".mov", ".webm", ".mkv", ".avi", ".m4v", ".wmv", ".flv"}
 _DOCUMENT = {".pdf", ".doc", ".docx", ".xls", ".xlsx", ".ppt", ".pptx",
              ".odt", ".ods", ".odp", ".rtf", ".txt", ".csv", ".epub"}

@@ -75,6 +75,10 @@ class Memo(Base):
     ai_summary = Column(Text, nullable=True)
     embedding_ids = Column(JSON, nullable=True)  # list of chunk IDs in ChromaDB
     notes = Column(Text, nullable=True)
+    # Speech-to-text state for audio memos. Transcript text lives in
+    # content_text (so it embeds + is searchable); these track UI state.
+    transcript_status = Column(String, nullable=True)  # pending|processing|done|error
+    transcript_lang = Column(String, nullable=True)    # detected language code
     sort_order = Column(Integer, default=0)
     pinned = Column(Boolean, default=False)
     is_processed = Column(Boolean, default=False)
