@@ -33,6 +33,7 @@ import { BackButton } from '@/components/BackButton';
 import { MarkdownEditor } from '@/components/MarkdownEditor';
 import { memoApi, collectionApi } from '@/lib/api';
 import { AskMemoPanel } from '@/components/AskMemoPanel';
+import { audioEmbed } from '@/lib/media';
 import { useAudioPlayer, formatTime } from '@/lib/audioPlayer';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
@@ -217,6 +218,14 @@ function AudioMemoPlayer({ memo }: { memo: Memo }) {
 
   return (
     <div className="om-audio-detail" style={{ marginBottom: '20px' }}>
+      {memo.thumbnail_path && (
+        <img
+          className="om-audio-detail-cover"
+          src={memo.thumbnail_path}
+          alt=""
+          onError={(e) => ((e.target as HTMLImageElement).style.display = 'none')}
+        />
+      )}
       <button
         className={cn('om-audio-detail-play', isPlaying && 'playing')}
         onClick={onPlay}
@@ -416,12 +425,63 @@ function VideoContentPanel({ memo }: { memo: Memo }) {
   );
 }
 
+// Remote audio (yt-dlp pull) when auto-download is OFF: stream it inline via the
+// platform's embed widget (SoundCloud/Mixcloud), with options to open the
+// original or save a local copy for offline + transcription.
+function AudioStreamEmbed({ memo }: { memo: Memo }) {
+  const queryClient = useQueryClient();
+  const [saving, setSaving] = useState(false);
+  const embed = audioEmbed(memo);
+
+  const save = async () => {
+    setSaving(true);
+    try {
+      await memoApi.localize(memo.id, 'audio');
+      queryClient.invalidateQueries({ queryKey: ['memo', memo.id] });
+    } catch (e) {
+      alert((e as Error).message || 'Failed to start download');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div style={{ marginBottom: '24px' }}>
+      {embed ? (
+        <iframe className="om-audio-embed" src={embed} title={memo.title} allow="autoplay" loading="lazy" />
+      ) : (
+        <div className="om-audio-embed-fallback">
+          {memo.thumbnail_path && (
+            <img src={memo.thumbnail_path} alt="" onError={(e) => ((e.target as HTMLImageElement).style.display = 'none')} />
+          )}
+          <p className="om-detail-desc">
+            No inline player for {memo.source_domain || 'this source'}. Open the original or save a local copy.
+          </p>
+        </div>
+      )}
+      <div style={{ display: 'flex', gap: 8, marginTop: 10, flexWrap: 'wrap' }}>
+        {memo.source_url && (
+          <a href={memo.source_url} target="_blank" rel="noopener noreferrer" className="om-btn-ghost om-btn-pill">
+            Open original <ExternalLink size={14} />
+          </a>
+        )}
+        <button className="om-btn-primary om-btn-pill" onClick={save} disabled={saving}>
+          {saving ? <Loader2 size={14} className="om-spin" /> : <HardDriveDownload size={14} />} Save audio offline
+        </button>
+      </div>
+    </div>
+  );
+}
+
 // "Make it local" — download a remote video/audio source via yt-dlp so the memo
 // survives the original being deleted/privated. Offers three modes; polls
 // localize_status (driven by the page's refetchInterval) and shows progress.
 function MakeItLocalPanel({ memo }: { memo: Memo }) {
   const queryClient = useQueryClient();
-  const [mode, setMode] = useState<'video' | 'audio'>('video');
+  // Audio-only sources (SoundCloud, Bandcamp, etc.) have no video track — only
+  // offer the audio download. Video sources keep both options.
+  const isAudio = memo.type === 'audio';
+  const [mode, setMode] = useState<'video' | 'audio'>(isAudio ? 'audio' : 'video');
   const [starting, setStarting] = useState(false);
   const status = memo.localize_status;
   const busy = status === 'pending' || status === 'processing' || starting;
@@ -439,10 +499,12 @@ function MakeItLocalPanel({ memo }: { memo: Memo }) {
     }
   };
 
-  const modes: { id: typeof mode; label: string; icon: React.ElementType; hint: string }[] = [
-    { id: 'video', label: 'Video', icon: Film, hint: 'Download the video (up to 1080p)' },
-    { id: 'audio', label: 'Audio only', icon: Music, hint: 'Just the audio track — transcribe later if needed' },
-  ];
+  const modes: { id: typeof mode; label: string; icon: React.ElementType; hint: string }[] = isAudio
+    ? [{ id: 'audio', label: 'Save audio', icon: Music, hint: 'Download the audio track' }]
+    : [
+        { id: 'video', label: 'Video', icon: Film, hint: 'Download the video (up to 1080p)' },
+        { id: 'audio', label: 'Audio only', icon: Music, hint: 'Just the audio track — transcribe later if needed' },
+      ];
 
   return (
     <div className="om-localize" style={{ marginBottom: '24px' }}>
@@ -976,9 +1038,20 @@ export function MemoDetail() {
               </div>
             )}
 
-            {/* Make it local — for memos backed by a remote URL with no local
-                file yet (YouTube/Vimeo/social video or any yt-dlp-able link). */}
-            {!isEditing && memo.source_url && !memo.file_path && (
+            {/* Remote audio (yt-dlp pull, no local file). Auto-download in flight
+                or errored → progress/retry panel; otherwise (auto-download off) →
+                stream it inline via the platform embed. */}
+            {!isEditing && memo.type === 'audio' && memo.source_url && !memo.file_path && (
+              memo.localize_status ? (
+                <MakeItLocalPanel memo={memo} />
+              ) : (
+                <AudioStreamEmbed memo={memo} />
+              )
+            )}
+
+            {/* Make it local — non-audio remote URL with no local file yet
+                (YouTube/Vimeo/social video or any yt-dlp-able link). */}
+            {!isEditing && memo.type !== 'audio' && memo.source_url && !memo.file_path && (
               <MakeItLocalPanel memo={memo} />
             )}
 

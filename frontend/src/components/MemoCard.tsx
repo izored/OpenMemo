@@ -457,10 +457,16 @@ export function MemoCard({ memo, dragHandleProps, lightboxGroup }: CardProps) {
     const audioSrc = memo.file_path ? `/api/memos/${memo.id}/file` : null;
     const active = isActive(memo.id);
     const isThisPlaying = active && playing;
+    const localizing = memo.localize_status === 'pending' || memo.localize_status === 'processing';
+    // Local file → play in the header player. Remote (yt-dlp, still downloading
+    // or streaming) → open the detail page, which shows progress and plays/saves.
     const onPlayClick = (e: React.MouseEvent) => {
       e.stopPropagation();
-      if (!audioSrc) return;
-      play({ memoId: memo.id, title: memo.title, src: audioSrc, subtitle: memo.source_domain || undefined });
+      if (audioSrc) {
+        play({ memoId: memo.id, title: memo.title, src: audioSrc, subtitle: memo.source_domain || undefined });
+      } else {
+        navigate(`/memo/${memo.id}`);
+      }
     };
     return (
       <>
@@ -470,17 +476,26 @@ export function MemoCard({ memo, dragHandleProps, lightboxGroup }: CardProps) {
           onDelete={handleDelete}
           onPin={handlePin}
           onOpen={goDetail}
+          bgSrc={src}
           className={cn('om-card-audio', active && 'is-active')}
           confirmOverlay={confirmOverlay}
         >
-          <div className="om-audio-frame">
-            <LiveWaveform memoId={memo.id} active={active} />
+          <div className="om-audio-frame" style={src ? undefined : { background: heroBg }}>
+            {src ? (
+              <img
+                src={src}
+                alt=""
+                className="om-media-img"
+                onError={(e) => ((e.target as HTMLImageElement).style.display = 'none')}
+              />
+            ) : (
+              <LiveWaveform memoId={memo.id} active={active} />
+            )}
             <button
               className="om-play"
               onClick={onPlayClick}
-              disabled={!audioSrc}
-              title={isThisPlaying ? 'Pause' : 'Play'}
-              aria-label={isThisPlaying ? 'Pause' : 'Play'}
+              title={localizing ? 'Downloading…' : isThisPlaying ? 'Pause' : 'Play'}
+              aria-label={localizing ? 'Downloading' : isThisPlaying ? 'Pause' : 'Play'}
             >
               <Icon name={isThisPlaying ? 'pause' : 'play'} size={16} stroke={0} style={{ fill: 'currentColor' }} />
             </button>

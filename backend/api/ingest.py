@@ -230,6 +230,21 @@ async def ingest_url(
     # Canonical type from URL signal (video aggregator / direct file / web page).
     memo.type = derive_memo_type(memo)
 
+    # Auto-download audio pulled from yt-dlp platforms (SoundCloud, Bandcamp,
+    # etc.) so it lands as a local, playable memo with no manual "Make it local"
+    # step. Gated by the auto_download_audio setting; when off, the memo stays
+    # remote and the detail page streams it via the platform embed widget.
+    from backend.core.app_settings import get_settings
+
+    auto_localize_audio = (
+        memo.type == "audio"
+        and bool(memo.source_url)
+        and not memo.file_path
+        and bool(get_settings().get("auto_download_audio", True))
+    )
+    if auto_localize_audio:
+        memo.localize_status = "pending"
+
     db.add(memo)
     await _attach_collection(db, memo, data.collection_id)
     await db.commit()
@@ -239,6 +254,8 @@ async def ingest_url(
     if memo.thumbnail_path and memo.thumbnail_path.startswith("http"):
         background_tasks.add_task(cache_thumbnail, memo.id)
     background_tasks.add_task(_localize_memo_task, memo.id)
+    if auto_localize_audio:
+        background_tasks.add_task(localize_memo_task, memo.id, "audio")
 
     return {"id": memo.id, "title": memo.title, "type": memo.type, "status": "processing"}
 

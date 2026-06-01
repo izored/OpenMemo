@@ -3,6 +3,24 @@
 All notable changes to OpenMemo are documented here.
 
 ---
+## [2.0.2] - 2026-06-01
+
+Audio memos pulled from yt-dlp platforms now behave like first-class audio: they
+download automatically, show their cover art on the card, and play from a real
+player instead of a confusing "Make it local" prompt with a Video button.
+
+### Added
+
+- 🎧 **Auto-download pulled audio** — paste a SoundCloud / Bandcamp / Mixcloud link and openMemo downloads the audio in the background on save, so it lands as a local, playable audio memo with no manual step. Survives the original being taken down. New `Auto-download pulled audio` toggle under Settings → Uploads.
+- 📻 **Stream embed for remote audio** — when auto-download is off, the memo detail streams the track inline via the platform's embed widget (SoundCloud/Mixcloud), with "Open original" and "Save audio offline" actions, instead of the make-it-local panel.
+- 🖼️ **Cover art on audio cards + player** — audio memos with artwork now show the cover on the dashboard card and beside the detail player, instead of always falling back to the waveform.
+
+### Changed
+
+- 🎵 **"Make it local" is audio-only for audio sources** — audio-only platforms no longer offer a nonsensical "Video" download option; they get a single "Save audio" action.
+- ▶️ **Remote audio is reachable from the dashboard** — the audio card play button is no longer a dead disabled control for not-yet-downloaded tracks; it opens the detail page where the track streams or finishes downloading.
+
+---
 ## [2.0.1] - 2026-06-01
 
 A polish pass on top of 2.0.0. Smaller scope, but every item is something you

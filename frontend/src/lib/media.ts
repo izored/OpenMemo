@@ -34,6 +34,26 @@ export function youtubeEmbed(url?: string | null): string | null {
   }
 }
 
+// Stream-embed URL for a remote audio memo (when auto-download is off and the
+// track hasn't been localized). Returns a platform widget iframe src, or null
+// when the host has no embeddable player (caller falls back to "open original").
+export function audioEmbed(memo: Memo): string | null {
+  const url = memo.source_url;
+  if (!url) return null;
+  try {
+    const host = new URL(url).hostname.replace(/^www\./, '');
+    if (host.includes('soundcloud.com'))
+      return `https://w.soundcloud.com/player/?url=${encodeURIComponent(url)}&color=%23ff5500&auto_play=false&hide_related=true&show_comments=false&show_user=true&visual=false`;
+    if (host.includes('mixcloud.com'))
+      return `https://www.mixcloud.com/widget/iframe/?feed=${encodeURIComponent(url)}&hide_cover=1`;
+    if (host.includes('bandcamp.com'))
+      return null; // Bandcamp embeds need a numeric track id we don't have.
+  } catch {
+    /* fall through */
+  }
+  return null;
+}
+
 export function mediaSrc(memo: Memo): string | null {
   if (memo.thumbnail_path) {
     if (memo.thumbnail_path.startsWith('http')) {

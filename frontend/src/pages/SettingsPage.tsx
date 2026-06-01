@@ -241,7 +241,7 @@ export function SettingsPage() {
       })
       .catch(() => {
         setMaxUploadMb(5120);
-        setProfile({ max_upload_mb: 5120, display_name: '', email: '', avatar_data_url: '', mailing_list_consent: false });
+        setProfile({ max_upload_mb: 5120, display_name: '', email: '', avatar_data_url: '', mailing_list_consent: false, auto_download_audio: true });
       });
   }, []);
 
@@ -654,6 +654,24 @@ export function SettingsPage() {
                   {maxUploadSaved ? 'Saved ✓' : 'Save'}
                 </button>
               </div>
+            </div>
+            <div className="om-setting-row" style={{ borderTop: '1px solid var(--border)', marginTop: 8, paddingTop: 8 }}>
+              <div className="om-setting-row-text">
+                <p>Auto-download pulled audio</p>
+                <span className="mono">
+                  Download audio from SoundCloud, Bandcamp, etc. on save so it plays locally and survives takedown. When off, the memo streams via the platform's embed instead.
+                </span>
+              </div>
+              <button
+                type="button"
+                className="om-add-toggle"
+                onClick={() => profile && saveProfile({ auto_download_audio: !profile.auto_download_audio })}
+                aria-pressed={profile?.auto_download_audio ?? true}
+              >
+                <span className={'om-add-toggle-switch' + ((profile?.auto_download_audio ?? true) ? ' on' : '')}>
+                  <span className="om-add-toggle-knob" />
+                </span>
+              </button>
             </div>
             <div className="om-setting-row" style={{ borderTop: '1px solid var(--border)', marginTop: 8, paddingTop: 8 }}>
               <div className="om-setting-row-text">

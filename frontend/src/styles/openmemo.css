@@ -2267,6 +2267,25 @@ input, textarea { font: inherit; color: inherit; }
   transition: background .15s ease, color .15s ease;
 }
 .om-audio-detail-dl:hover { background: var(--surface-2); color: var(--text); }
+/* Cover art (left of the play button) for audio memos that carry artwork. */
+.om-audio-detail-cover {
+  flex-shrink: 0; width: 56px; height: 56px; border-radius: 10px;
+  object-fit: cover; background: var(--surface);
+}
+
+/* Stream embed for remote audio when auto-download is off (SoundCloud etc.) */
+.om-audio-embed {
+  width: 100%; height: 166px; border: 1px solid var(--border);
+  border-radius: var(--r-lg); display: block; background: var(--surface-2);
+}
+.om-audio-embed-fallback {
+  display: flex; align-items: center; gap: 14px;
+  padding: 16px; border-radius: var(--r-lg);
+  background: var(--surface-2); border: 1px solid var(--border);
+}
+.om-audio-embed-fallback img {
+  width: 64px; height: 64px; border-radius: 10px; object-fit: cover; flex-shrink: 0;
+}
 
 /* Footer */
 .om-add-foot {

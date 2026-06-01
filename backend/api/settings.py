@@ -15,6 +15,7 @@ class SettingsPatch(BaseModel):
     email: Optional[str] = None
     avatar_data_url: Optional[str] = None
     mailing_list_consent: Optional[bool] = None
+    auto_download_audio: Optional[bool] = None
 
 
 @router.get("")

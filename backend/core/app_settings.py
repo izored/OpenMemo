@@ -30,6 +30,11 @@ _DEFAULTS: dict[str, Any] = {
     # Stored as a plain boolean — there is NO automatic outbound delivery
     # from this app; the creator inspects DATA_DIR/app_settings.json.
     "mailing_list_consent": False,
+    # Auto-download audio pulled from yt-dlp platforms (SoundCloud, Bandcamp,
+    # etc.) on ingest, so it becomes a local playable memo with no manual
+    # "Make it local" step. When False, the memo stays remote and the detail
+    # page streams it via the platform's embed widget instead.
+    "auto_download_audio": True,
 }
 
 _UNCAPPED_SENTINEL = 0

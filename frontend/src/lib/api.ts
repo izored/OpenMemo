@@ -172,6 +172,7 @@ export interface AppSettings {
   email: string;
   avatar_data_url: string;
   mailing_list_consent: boolean;
+  auto_download_audio: boolean;
 }
 
 export const settingsApi = {
