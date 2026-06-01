@@ -3,7 +3,54 @@
 All notable changes to OpenMemo are documented here.
 
 ---
-## [1.8.6] - Unreleased
+## [2.0.0] - 2026-06-01
+
+The biggest release yet, by a wide margin. This is months of work and fine-tuning
+landing at once, and it gets openMemo a lot closer to what it was meant to be from
+the start. Almost every part of the app got touched: capture, storage, the card
+grid, search, the detail page, settings, the whole look. Dozens of fixes too, the
+kind that turn a rough build into something that feels finished.
+
+Audio is the headline. openMemo now records, plays, and reads back sound. Capture a
+voice memo straight from your mic. Drop in any audio file, lossless WAV and FLAC
+included. Play it all from a header mini-player that follows you across the app and
+keeps going while you move between pages, with a waveform that reacts to the sound
+as it plays.
+
+And then it transcribes. This is the part I am most proud of. Every recording and
+every uploaded file gets turned into clean, searchable text by faster-whisper,
+running entirely on your own machine, in dozens of languages, on your GPU or your
+CPU. No cloud, no API key, no per-minute bill. A voice memo becomes something you
+can search, read back, and ask questions about, exactly like the rest of your
+Memos. Speech-to-text that good, fully local and free, is the feature I wanted in
+openMemo more than any other.
+
+Make it local is the other big one. Point it at any video or audio link yt-dlp can
+fetch, from YouTube and Vimeo to podcast hosts and direct media files, and openMemo
+pulls the media down and keeps it, so a Memo survives the original being taken
+offline.
+
+The minimal card mode is the one I am proudest of on the design side. It is a full
+redesign: cards drop their text and go full-bleed thumbnail, images detect their own
+orientation and switch aspect ratio, and on hover the thumbnail blurs in place under
+a soft tint while the title, tags, and source pill surface. Quiet at rest, alive on
+hover. This is the openMemo I pictured when I started, and it is finally on screen.
+
+The light and dark theme switch is the other piece I keep coming back to. It is a
+cinematic sunrise and sunset: an opaque glow grows from the horizon, sunrise lifting
+from the bottom going light, dusk rolling down from the top going dark, fully
+covering the cards as it sweeps so the theme flips hidden underneath and is revealed
+as the glow fades. I have not seen this transition anywhere else on the web, and I
+am genuinely proud of it.
+
+Around those: pin Memos and collections to the sidebar, a profile with your name
+and avatar, thumbnails for uploaded videos, upload limits you control with no real
+ceiling, far better saving of social and bot-walled links, drag a card onto a
+collection to file it, and drag to reorder your filter tabs. This is a 2.0 because
+it is not one feature, it is the release where the whole thing grew up.
+
+A note on the look: bento-grid web design kept inspiring me through this one,
+apps like Letterly and plenty of others. More to come on that front soon.
 
 ### Added
 
@@ -13,6 +60,9 @@ All notable changes to OpenMemo are documented here.
 - 📝 **Local transcription (speech-to-text)** — `faster-whisper` transcribes recordings (toggle in the Voice tab, **on by default**) and uploaded audio (on-demand **Transcribe** button on the memo page). Multilingual with automatic language detection; auto-detects CUDA (float16) and falls back to CPU (int8). The transcript is stored as the memo's `content_text`, so audio becomes **searchable and chattable via RAG**, and is rendered under the player. New module `backend/core/transcribe.py`; lazy-loaded so the app boots even without the package.
 - 🎵 **Explicit Audio uploader** — the Media panel adds an Audio kind (`accept="audio/*"`); `/api/ingest/file` gains `type_override` (pins a `.webm` recording as audio, not video) and `transcribe` flags. `/api/memos/{id}/file` now serves a correct `audio/*` MIME (incl. FLAC/Opus/WebM) so browsers play and seek. New nullable `transcript_status` / `transcript_lang` columns on `memos` (auto-migrated on startup); new dep `faster-whisper`.
 - 📺 **Platform logos on minimal video cards** (ENTRY OPNMMO-0006) — the bottom-left pill on a minimal-mode video card now shows the source platform's brand glyph: the YouTube logo (red) for YouTube links, the Vimeo logo (blue) for Vimeo, and the generic video icon for local uploads or other hosts. New fill-based `BRAND_PATHS` in `Icon` (kept separate from the stroke-based icon set) and a `videoSource()` detector in `lib/media.ts`.
+- 💾 **"Make it local" — download any video or audio link so it survives deletion** — any Memo backed by a URL that yt-dlp can fetch (YouTube, Vimeo, social video, podcast hosts, direct media files, and the long list of sites yt-dlp supports) now gets a "Make it local" panel on its detail page. Pick a mode — **Video** (up to 1080p mp4), **Audio only**, or **Audio + transcript** (downloads audio then runs faster-whisper) — and yt-dlp pulls the media into `files/`, flipping the Memo to a local video or audio that plays and seeks even if the original is taken down. Backend: `POST /api/memos/{id}/localize` + `localize_memo_task` (new `backend/core/localize_media.py`); new nullable `localize_status` column (auto-migrated); a video thumbnail is generated after download. The page polls until the download finishes. Verified end-to-end: a YouTube link → `done`, Memo flips to local audio, served with `audio/mp4` + `206` Range.
+- 🎚️ **Live waveform on audio cards while playing** — the dashboard audio card's waveform is now a `<canvas>` that animates the real frequency spectrum from the shared player's WebAudio `AnalyserNode` while that track plays (calm static bars otherwise). The `AudioPlayerProvider` builds the analyser graph once per `<audio>` (a `MediaElementSource` can only be created once) and exposes `getLevels()`; bars paint in `currentColor` so they stay theme- + accent-aware.
+- 🗣️ **Transcribe local videos too** — the transcribe path now accepts local **video** memos, not just audio (faster-whisper reads the video container and pulls the audio track itself). A localized or uploaded video shows the Transcript section + on-demand Transcribe button like audio memos do.
 - 🧲 **Drag a memo card onto a sidebar collection to file it** — dragging any card and dropping it on a collection in the sidebar now adds the memo to that collection. Previously the drop target existed but never fired because the grid's `DndContext` and the sidebar lived in separate providers. The `DndContext` was lifted to `<Layout>` (wrapping both the sidebar and the routed page) with a small ref "bus" (`lib/dndBus.ts`) so the active grid registers its drag handlers into the shared context. Card click + drag-to-reorder behaviour is unchanged (`PointerSensor` `distance: 8` preserved).
 - 🧹 **Background memo-type sorter (runs on startup + twice weekly)** — a scheduled job re-files every memo to its canonical type so the database stays tidy. `backend/core/classify.py:derive_memo_type` is the single source of truth: uploaded file → type by extension; YouTube / social-video URL → `video`; direct image/pdf/etc. link → `image`/`document`/…; any other web page → `link`; text-only → `note`. `reclassify_all` rewrites only mismatches (idempotent). Wired via APScheduler in the FastAPI lifespan: once on boot, then Mon & Thu 03:00. Manual trigger: `POST /api/maintenance/reclassify-types` (`?dry_run=true` to preview).
 - 🎴 **Minimal card mode — complete redesign with full-bleed thumbnails + hover overlays** — opt-in `cardStyle: 'minimal'` in Appearance (renamed from `min`). Image/video/link cards lose their text body in favour of a full-bleed thumbnail. Image cards auto-detect orientation on `onLoad` (`naturalHeight > naturalWidth` → `data-orient="portrait"`) and switch between `aspect-ratio: 3/4` (portrait) and `4/3` (landscape). On hover, the thumbnail itself blurs in place (`filter: blur(12px)` with `transform: scale(1.10)`, scale runs 1.8s + blur 0.7s for a subtle parallax feel). A theme-aware gradient veil fades over the blurred image — cream gradient in light, dark vignette in `[data-theme="hi"]`. Description text floats around the action cluster via `::before { float: right; shape-outside: inset(0); }`, so it wraps naturally then flows full-width below. Tags sit bottom-right on the same row as the always-visible domain pill (bottom-left).
@@ -26,11 +76,30 @@ All notable changes to OpenMemo are documented here.
 - ⬅️➡️ **Lightbox prev/next navigation across the grid** (ENTRY OPNMMO-0002) — opening any image/video card's lightbox now lets you page through every other media memo in the grid without closing it. On-screen chevron arrows (left/right), `←`/`→` arrow keys, a wrap-around `n / total` counter, and `Esc` to close. The lightbox was promoted from a per-card local component to a single shared grid-level overlay driven by a Zustand slice (`lightboxGroup` / `lightboxIndex` + `openLightbox`/`closeLightbox`/`lightboxStep`), rendered once in `<Layout>`. `MemoGrid` passes the ordered image/video memos as the navigable group.
 - 📄 **Memodoc detail report card** (ENTRY OPNMMO-0004) — document, code, and generic `file` memos (which often have little or no extracted text, leaving the detail page a bare title) now lead with a report card: a kind badge (file extension), title, and a stat grid showing Added date, Kind, Length (word count + reading time, when text exists), Collections, Tags, and AI-summary status. Sits above the pin / generate-summary / download action row.
 
+
+- 🎞️ **Local video preview + media controls in MemoDetail** — image and local video memos now share a `MediaPreview` component with three affordances: a hover-revealed Theater toggle (top-right) that expands the preview to full content width, a Fullscreen button (browser native fullscreen API), and click-to-Lightbox on images (Esc or click-outside closes). Local-file videos (`type: video` with a `file_path`) finally render at all — previously only YouTube embeds did.
+
+
+- 🗂️ **Accept any file type** — the upload handler no longer enforces an extension allow-list or magic-byte gate (images are still sanity-checked). Files are categorized into image/audio/video/document/code/file; unknown types become `file` and show a file icon + extension badge on the card.
+- 💻 **Code file handling** — source/script files are detected as a `code` memo type, stored as text and rendered as a fenced, language-tagged code block. Hardened comment + read-only handling guarantees uploaded files are never executed/interpreted.
+- ⚙️ **Configurable max upload size** — new `GET/PUT /api/settings` (JSON-persisted) and a Settings → Uploads card to set the per-file limit (default 5 GB; user can raise it up to 1 TB or set `0` for effectively uncapped — this is a local-first app, the user owns the disk).
+- 🛟 **Huge-upload disclaimer** — Add Memo's file picker now warns before sending anything ≥ 1 GiB: total size, that ingestion and embedding will take a while, and a reminder that files stay on the user's machine. One-click confirm/cancel.
+- 🧪 **Unknown extension passthrough** — Uploading a file with an extension (or no extension) the categorizer has never seen still succeeds end-to-end: the original extension is preserved on disk, the memo is created with `type: "file"`, and the background processor no longer tries to UTF-8 read a binary blob (e.g. `.blend`, `.3mf`, archives) — `content_text` stays empty for true binaries instead of being polluted with replacement characters. Known-text extensions (`.txt`, `.csv`, `.log`, `.tsv`, `.srt`, `.vtt`) still get read.
+- 🌐 **Local copies of extracted web content** — saved articles/links now download their referenced images into `files/extracted/<memo_id>/` and rewrite the Markdown to a local `/api/files/extracted/...` route, so memos survive the source being deleted. Runs automatically on new URL/extension ingests; a Settings → Uploads "Localize" button backfills existing memos. Served with a path-traversal-guarded route registered before the catch-all.
+- 📌 **Pin from card hover (memos + collections)** — pinning is no longer detail-only. MemoCard grows a pin button left of delete in `om-card-actions`; pinned cards keep the accent button visible permanently. CollectionsPage cover gains an `.om-coll-pin` button at top-left, mirroring the same accent treatment. Both flows invalidate `['memos','pinned']` and `['collections']` query keys, so the Sidebar's Pinned section refreshes instantly.
+- 🎬 **Video upload thumbnails** — new `backend/core/video.py:extract_video_thumbnail` shells out to ffmpeg (`-ss 1.0 -frames:v 1 -vf scale=480:-2 -q:v 4`) to grab a still frame from any uploaded video. Falls back to frame 0 for clips shorter than a second. Best-effort: when ffmpeg isn't on PATH the video memo simply renders without a thumb (no error). Wired into the existing `process_file_memo` background task.
+- 👤 **Profile editing — name, avatar, email, mailing list opt-in** — `app_settings.json` gains `display_name`, `email`, `avatar_data_url`, `mailing_list_consent`; `SettingsPatch` accepts them via the existing `PUT /api/settings`. New Profile SettingCard at the top of the left column with an avatar picker (resized client-side to a 256² JPEG data URL so the JSON stays small), inline name/email inputs that save on blur, and an opt-in checkbox for the creator's personal updates list. Sidebar foot now reads `display_name` + `avatar_data_url` via React Query (`['settings']`), falling back to "openMemo" / initials when unset.
+- 🌌 **Living-cell intro animation** — the welcome screen's single placeholder orb is replaced by four blurred blobs on independent 14/17/19/22s loops with `mix-blend-mode: screen` and `filter: blur(28px)`. Calm, slow, centred. Honours `prefers-reduced-motion`.
+- 🌊 **Smooth scroll (Framer-style)** — Lenis 1.3 is wired into `.om-main` with a 1.1s exp-out easing curve. New `.om-main-inner` wrapper holds the scroll content. CSS imported from `lenis/dist/lenis.css`.
+
+
 ### Changed
 
 - 🔊 **Audio play button unified with the video play button** — the dashboard audio card's play/pause control now reuses the shared `.om-play` token (same white circle, dark icon, size, shadow, and hover-scale as the video card) instead of a divergent accent-colored button. The `pause` glyph was reshaped into fillable bars so it renders under `fill` like `play`. One source of truth for the round play affordance across audio + video, both card styles.
 - 🎛️ **Media-kind selector is a 2×2 grid** — with the new Audio kind, the New Memo → Media "Kind" selector (Image / Video / Audio / File) now lays out as a 2×2 grid (`.om-add-segment.grid-2x2`) instead of squeezing four items into one row.
-- 🎵 **Audio waveform tile is theme-aware** — the dashboard audio card's waveform bars are now a CSS `mask` driven by `var(--text)` (black bars in light, near-white in dark) instead of baked-in white pixels that vanished on the light surface. The active (currently-playing) track tints its bars in the accent color.
+- 🎵 **Audio waveform tile is theme-aware** — the dashboard audio card's waveform paints in `currentColor` (dim text at rest, accent-mixed when playing) so it reads correctly in both themes, instead of the baked-in white pixels that vanished on the light surface. (Superseded mid-release by the live `<canvas>` waveform above.)
+- ⬆️ **yt-dlp now self-updates on container start (no longer hard-pinned)** — the image previously pinned `yt-dlp==2024.8.6`, which goes stale fast (YouTube breaks old builds every few weeks) and made "Make it local" / YouTube ingest fail with "Video unavailable". `requirements.txt` now floor-pins (`yt-dlp>=2025.1.0`) and the backend Dockerfile entrypoint runs `pip install --upgrade yt-dlp` on start (best-effort; skipped offline or via `YTDLP_AUTOUPDATE=0`), so it tracks the latest release without an image rebuild.
+- 🙂 **Sidebar collection emoji no longer washed out** — the right-side emoji inherited `--text-4` (32% dim) at 10.5px, so text-presentation glyphs (🖥️ ☀️ …) looked faint. Split into a dedicated `.om-coll-emoji` span at full opacity, larger (14px), with a color-emoji font stack and a hover scale.
 - 🌅 **Theme transition rebuilt — opaque sunrise/sunset reveal** — the swap is now an opaque radial glow that grows from the horizon (sunrise from the bottom, nightfall from the top) and fully covers the background blobs as it climbs. The theme flips underneath the cover (hidden), then the glow fades out to reveal the new theme. Replaces the old see-through overlay that let blobs bleed through. Built from a `clip-path: circle()` growth on an inner element with `filter: blur()` on the outer wrapper (separate elements — blur on the clipped element leaves a hard edge). Glow takes a light tint from the user's accent colour. All timing/blur/radius values live in committed `frontend/src/lib/transitionConfig.ts`, persisted to localStorage. The `theme-transitioning` `!important` colour-crossfade override is scoped to a short window so it no longer freezes Framer Motion card animations.
 - 🪟 **Card style: `hybrid` → `normal`, `Min` → `Minimal`** — `Tweaks.cardStyle: 'minimal' | 'hybrid'` becomes `'minimal' | 'normal'`. Default `DEFAULT_TWEAKS.cardStyle` is now `'normal'`. AppearancePanel labels read `Normal | Minimal` (Normal first). Migration in `appStore.loadTweaks()` converts both `'rich'` and `'hybrid'` from localStorage → `'normal'` on load. All CSS selectors `[data-card="hybrid"]` → `[data-card="normal"]`; swatch class `.s-hybrid` → `.s-normal`.
 - 🌿 **Sidebar active-state — no more left edge bar** — dropped `.om-nav-item.active::before` (2×14px accent strip) and `.om-coll.active`'s `box-shadow: inset 2px 0 0 var(--accent)`. Active state now reads purely as `background: var(--surface-2)` + `color: var(--text)` — cleaner.
@@ -44,6 +113,33 @@ All notable changes to OpenMemo are documented here.
 - 🔗 **Saved web pages are now filed as `link`, not `article`** — the Links filter tab matches `type === 'link'`, but `extract_url` (and the extension/AI ingest paths) stored most pages as `article`, so saved links never appeared under Links. Web pages now classify as `link` at save time (`extract_url`, `/url`, `/extension` all run the canonical classifier `derive_memo_type`), and the background sorter migrates existing `article` memos to `link`. There is no longer an `article` type in the taxonomy.
 - ⚙️ **Settings — swapped "Made by" and "Uploads/Limits" sections** (ENTRY OPNMMO-0003) — the creator "Made by" card moves to the left column (after Library & Storage), and the Uploads/Limits card moves to the right column (after Local AI, before Built with).
 - 🧩 **Lightbox is now a single shared component** — the duplicated per-card lightbox markup (image + video, with YouTube embed / local `<video>` handling) was consolidated into one `<Lightbox>` reading the shared store. `mediaSrc` / `youtubeEmbed` extracted to `frontend/src/lib/media.ts` and reused by both `MemoCard` and `Lightbox`.
+
+
+- 🌅 **Theme toggle — cinematic sunset/sunrise transition** — replaces the fullscreen `z-index: 9999` overlay with a `z-index: 0` layer that sits BEHIND the cards. Going dark: midnight-blue night falls from the top (`rgba(25,55,140)` center). Going light: warm amber dawn rises from the bottom. Overlay is deliberately under all UI (sidebar, cards stay accessible during animation). Theme data-attribute flip is delayed 100ms so the overlay has a head start before CSS vars change. All UI elements crossfade over 3s via `.om-app.theme-transitioning *` scoped transitions. Background blobs are hidden during the 12s animation window and fade back in after. Documented as a design decision in `docs/memo-card-visual-system.md`.
+- 🧭 **First-time tour now gates progress on a real `+` click** — the `Capture anything` step disables Next until the user actually opens the add-memo panel. The coach layer becomes `pointer-events: none` while gated so the FAB receives the click; the card buttons keep `pointer-events: auto`. Once the panel opens, the spotlight smoothly morphs from the FAB onto the panel via existing `transition: all .25s`. New `TourStep` fields: `gate`, `morphTarget`, `gateBody`.
+- 🎨 **AppearancePanel — slimmer, sidebar-aware, opens on the LEFT** — the panel is now anchored on the left side of the canvas, with the horizontal offset wired to the sidebar width (260px expanded / 76px collapsed) via a compound `.om-add-panel.om-ap-panel` selector and an `.om-app.sidebar-collapsed` ancestor rule. Dropped the `1×` animation-speed button (default bumped to `2×`) and the `Rich` card-style option (the related `[data-card="rich"]` CSS is also gone). The remaining cardStyle options use the `.two` segment modifier so Min + Hybrid fill the row evenly. Existing localStorage values for `blobSpeed: 1` and `cardStyle: 'rich'` are migrated to `2` and `'hybrid'` on load.
+- 🌀 **Background blob animation ~3× more visible** — `@keyframes omIridescent` rebuilt: translate amplitude ±6–7%, rotate ±6–7°, scale up to 1.18, with five keyframes instead of four. Default speed change to `2×` pairs with this so motion is actually felt without being distracting.
+- 🪪 **Sidebar wordmark only — logomark dropped** — removed the small `O` avatar from the sidebar header. `.om-brand-name` size bumped 15 → 19px so the wordmark carries the slot on its own.
+- 🎨 **Contrast-aware accent text colour** — new `--accent-text` CSS var derived from accent luminance (light accents → dark text, dark accents → white). Install-extension button and other accent-painted controls now read from it instead of hardcoding `#fff`, fixing invisible text on the light-grey accent. Computed in `applyTweaks` via a new exported `luminance(hex)` helper.
+- 🧬 **Settings layout polish** — Profile card lives at the top of the left column. Built-with hover panel now keeps the last hovered description after `mouseleave` (no clear) and locks `min-height: 112px` so neighbouring cards don't shift. Danger zone is nested under Built-with in the right column.
+- 🔃 **Single, recency-driven sort order** — dropped the four sort modes (Recent / Oldest / Title / Custom) from the dashboard and the appStore. There is one sort, always: `desc(recency_at)`. New `memos.recency_at` TIMESTAMP column with a migration that backfills from `created_at`. Drag-to-reorder writes `recency_at = NOW − (i × 1s)` per card; a brand-new memo created later still lands on top because its `recency_at = NOW()` is greater than every rewritten value. New `PUT /api/memos/{id}/recency` replaces the old `/sort` endpoint; the frontend `sortMode` state, `SortMode` type, sort dropdown UI, and `memoApi.updateSort` are all gone.
+
+
+- ❤️ **Settings "Built with" card rebuilt with intent** — lead paragraph now thanks the OSS authors openly; tiles still link to each project but on hover/focus a single description slot below the grid updates with a one-line "what it does" + a "Learn more →" link out, instead of every tile being a blank pill. Expanded the entry list (added MDXEditor, yt-dlp) and gave every entry a real description. Moved the Creator card *above* the Built-with card so the "Made by" attribution leads, and equalised the footer divider's vertical space (24 px above + 24 px below the rule instead of 28 px / 8 px) so the divider sits symmetrically.
+
+
+- 🧹 **Phase out Tailwind** — documented in `CLAUDE.md`: Tailwind's `dark:` variant is incompatible with the `[data-theme]` theme system; components using Tailwind classes should be migrated to the `om-*` token system on sight.
+- 🛠️ **Local dev one-command startup** — `dev.ps1` starts uvicorn on `:8099` in its own terminal then launches `npm run dev` with the proxy pointed at it; no Docker required for raw dev. `DATABASE_URL` and `CHROMA_PERSIST_DIR` are now absolute paths anchored to the project root so the wrong DB is never created regardless of which directory uvicorn starts from. Vite proxy target is configurable via `VITE_API_TARGET` env var (now defaults to `:8099` for local dev; Docker users can override to `:8091`).
+
+
+- 🔀 **Sidebar settings button toggles home ↔ settings** — clicking the foot button while already on `/settings` now navigates to `/` (home) instead of reloading settings. Title attribute reflects current action.
+- ✨ **Appearance CTA stronger visual hierarchy** — "Open live preview" button in Settings now has an accent-tinted background (`color-mix(accent 8%, surface-2)`) and an accent-weighted border instead of blending into the surface. The arrow button is accent-filled by default (not just on hover) so it reads as the primary action in the card.
+- 🎴 **Minimal mode applies to Collections page** — collection cards in minimal mode use full-bleed cover (`aspect-ratio: 4/3`, cover fills face absolutely), body text hidden at rest and overlays at the bottom on hover (dark gradient + white text). Stack fan-out on hover is preserved. Consistent with minimal image-card language.
+
+
+- 🧩 **Chrome extension version bump to 1.8.6** — version synced with app. Options page now shows port hint: Docker `:8091` / dev server `:8099`.
+
+---
 
 ### Fixed
 
@@ -65,46 +161,10 @@ All notable changes to OpenMemo are documented here.
 - 🎬 **Video thumbnails never generated in Docker — final fix** (ENTRY OPNMMO-0005) — root cause was `ffmpeg` missing from the backend Docker image: `backend/core/video.py` shells out to it, so `ffmpeg_available()` returned `false` inside the container and every uploaded video rendered a blank card. The extraction code, classification (`.mp4`/`.mov`/… → `video`), and backfill endpoint were all already correct — only the runtime binary was absent. Added `ffmpeg` to `backend/Dockerfile`'s `apt-get install`. After rebuilding the image, `POST /api/maintenance/backfill-video-thumbs` regenerates thumbnails for already-imported videos.
 - 🛠️ **Dev panel rendered in production builds** (ENTRY OPNMMO-0001) — `frontend/src/dev/` is gitignored but a Docker build context still copies it (gitignore ≠ dockerignore), so the dev panel shipped in built images. The `import.meta.glob` import and the render are now both gated on `import.meta.env.DEV`, so Vite dead-code-eliminates the panel from any production build regardless of whether the folder is present.
 
-### Removed
-
-- 🗑️ **Retired audio-digest feature fully pruned from the source tree** — a long-disabled feature (its router was never mounted, its page never routed, its model only touched by the workspace-reset wipe) left dead code scattered across backend and frontend. All of it is now gone: the dead API router, its TTS helper (plus the archived copy), the unrouted page (plus its archived copy), the unused API client and type, the orphaned script-generation helper in `core/rag.py`, and the unused ORM model along with its lone reference in the `/api/maintenance/reset` loop. No runtime behaviour changes — verified backend imports clean and `tsc -b` passes. (Any orphaned table on existing databases is inert; nothing references it.)
-
-### Migration notes
-
-- localStorage `openmemo_tweaks.cardStyle === 'hybrid'` or `'rich'` is rewritten to `'normal'` the next time `loadTweaks()` runs (first page load after upgrade). No user action required.
-- ffmpeg must be on `$PATH` for video thumbnails. Already installed on the Windows dev box; the Docker image bakes it in.
-
-- 📌 **Pin from card hover (memos + collections)** — pinning is no longer detail-only. MemoCard grows a pin button left of delete in `om-card-actions`; pinned cards keep the accent button visible permanently. CollectionsPage cover gains an `.om-coll-pin` button at top-left, mirroring the same accent treatment. Both flows invalidate `['memos','pinned']` and `['collections']` query keys, so the Sidebar's Pinned section refreshes instantly.
-- 🎬 **Video upload thumbnails** — new `backend/core/video.py:extract_video_thumbnail` shells out to ffmpeg (`-ss 1.0 -frames:v 1 -vf scale=480:-2 -q:v 4`) to grab a still frame from any uploaded video. Falls back to frame 0 for clips shorter than a second. Best-effort: when ffmpeg isn't on PATH the video memo simply renders without a thumb (no error). Wired into the existing `process_file_memo` background task.
-- 👤 **Profile editing — name, avatar, email, mailing list opt-in** — `app_settings.json` gains `display_name`, `email`, `avatar_data_url`, `mailing_list_consent`; `SettingsPatch` accepts them via the existing `PUT /api/settings`. New Profile SettingCard at the top of the left column with an avatar picker (resized client-side to a 256² JPEG data URL so the JSON stays small), inline name/email inputs that save on blur, and an opt-in checkbox for the creator's personal updates list. Sidebar foot now reads `display_name` + `avatar_data_url` via React Query (`['settings']`), falling back to "openMemo" / initials when unset.
-- 🌌 **Living-cell intro animation** — the welcome screen's single placeholder orb is replaced by four blurred blobs on independent 14/17/19/22s loops with `mix-blend-mode: screen` and `filter: blur(28px)`. Calm, slow, centred. Honours `prefers-reduced-motion`.
-- 🌊 **Smooth scroll (Framer-style)** — Lenis 1.3 is wired into `.om-main` with a 1.1s exp-out easing curve. New `.om-main-inner` wrapper holds the scroll content. CSS imported from `lenis/dist/lenis.css`.
-
-### Changed
-
-- 🌅 **Theme toggle — cinematic sunset/sunrise transition** — replaces the fullscreen `z-index: 9999` overlay with a `z-index: 0` layer that sits BEHIND the cards. Going dark: midnight-blue night falls from the top (`rgba(25,55,140)` center). Going light: warm amber dawn rises from the bottom. Overlay is deliberately under all UI (sidebar, cards stay accessible during animation). Theme data-attribute flip is delayed 100ms so the overlay has a head start before CSS vars change. All UI elements crossfade over 3s via `.om-app.theme-transitioning *` scoped transitions. Background blobs are hidden during the 12s animation window and fade back in after. Documented as a design decision in `docs/memo-card-visual-system.md`.
-- 🧭 **First-time tour now gates progress on a real `+` click** — the `Capture anything` step disables Next until the user actually opens the add-memo panel. The coach layer becomes `pointer-events: none` while gated so the FAB receives the click; the card buttons keep `pointer-events: auto`. Once the panel opens, the spotlight smoothly morphs from the FAB onto the panel via existing `transition: all .25s`. New `TourStep` fields: `gate`, `morphTarget`, `gateBody`.
-- 🎨 **AppearancePanel — slimmer, sidebar-aware, opens on the LEFT** — the panel is now anchored on the left side of the canvas, with the horizontal offset wired to the sidebar width (260px expanded / 76px collapsed) via a compound `.om-add-panel.om-ap-panel` selector and an `.om-app.sidebar-collapsed` ancestor rule. Dropped the `1×` animation-speed button (default bumped to `2×`) and the `Rich` card-style option (the related `[data-card="rich"]` CSS is also gone). The remaining cardStyle options use the `.two` segment modifier so Min + Hybrid fill the row evenly. Existing localStorage values for `blobSpeed: 1` and `cardStyle: 'rich'` are migrated to `2` and `'hybrid'` on load.
-- 🌀 **Background blob animation ~3× more visible** — `@keyframes omIridescent` rebuilt: translate amplitude ±6–7%, rotate ±6–7°, scale up to 1.18, with five keyframes instead of four. Default speed change to `2×` pairs with this so motion is actually felt without being distracting.
-- 🪪 **Sidebar wordmark only — logomark dropped** — removed the small `O` avatar from the sidebar header. `.om-brand-name` size bumped 15 → 19px so the wordmark carries the slot on its own.
-- 🎨 **Contrast-aware accent text colour** — new `--accent-text` CSS var derived from accent luminance (light accents → dark text, dark accents → white). Install-extension button and other accent-painted controls now read from it instead of hardcoding `#fff`, fixing invisible text on the light-grey accent. Computed in `applyTweaks` via a new exported `luminance(hex)` helper.
-- 🧬 **Settings layout polish** — Profile card lives at the top of the left column. Built-with hover panel now keeps the last hovered description after `mouseleave` (no clear) and locks `min-height: 112px` so neighbouring cards don't shift. Danger zone is nested under Built-with in the right column.
-- 🔃 **Single, recency-driven sort order** — dropped the four sort modes (Recent / Oldest / Title / Custom) from the dashboard and the appStore. There is one sort, always: `desc(recency_at)`. New `memos.recency_at` TIMESTAMP column with a migration that backfills from `created_at`. Drag-to-reorder writes `recency_at = NOW − (i × 1s)` per card; a brand-new memo created later still lands on top because its `recency_at = NOW()` is greater than every rewritten value. New `PUT /api/memos/{id}/recency` replaces the old `/sort` endpoint; the frontend `sortMode` state, `SortMode` type, sort dropdown UI, and `memoApi.updateSort` are all gone.
-
-### Fixed
 
 - 🪟 **Edit-collection modal hidden behind the FAB + add-panel** — `.om-modal-backdrop` `z-index` 60 → 80 so it sits above the FAB (60), AddMemoPanel (61), and the `.om-fab.open` close affordance (62). Modal scrim now properly covers everything underneath.
 - 📌 **Pinned memos in the sidebar** — pinning is no longer collection-only. New `memos.pinned BOOLEAN DEFAULT 0` column (lightweight migration), `PUT /api/memos/{id}/pin`, `GET /api/memos/pinned/list`. The Sidebar's Pinned section now renders pinned collections **and** pinned memos in one group; clicking a pinned memo navigates straight to its detail page. MemoDetail gains a "Pin to sidebar" / "Unpin" pill in the action row. Drag-to-reorder within the Pinned section is intentionally out of scope for this commit (existing `sort_order` column orders the list; UI for manual reorder will land next).
 
-### Changed
-
-- ❤️ **Settings "Built with" card rebuilt with intent** — lead paragraph now thanks the OSS authors openly; tiles still link to each project but on hover/focus a single description slot below the grid updates with a one-line "what it does" + a "Learn more →" link out, instead of every tile being a blank pill. Expanded the entry list (added MDXEditor, yt-dlp) and gave every entry a real description. Moved the Creator card *above* the Built-with card so the "Made by" attribution leads, and equalised the footer divider's vertical space (24 px above + 24 px below the rule instead of 28 px / 8 px) so the divider sits symmetrically.
-
-### Added
-
-- 🎞️ **Local video preview + media controls in MemoDetail** — image and local video memos now share a `MediaPreview` component with three affordances: a hover-revealed Theater toggle (top-right) that expands the preview to full content width, a Fullscreen button (browser native fullscreen API), and click-to-Lightbox on images (Esc or click-outside closes). Local-file videos (`type: video` with a `file_path`) finally render at all — previously only YouTube embeds did.
-
-### Fixed
 
 - 🗂️ **File-memo thumbnail now bakes the extension into the icon** — previously the file card showed a generic Icon + a tiny ".pdf" label *below* the icon. Replaced with an inline SVG file shape that draws the extension as text *inside* the icon body — one component, extension passed as a prop, no per-type icon library. Adapts to the active text color via `currentColor`, auto-shrinks the font for unusual extensions (`.markdown`, `.dockerfile`), and scales crisp at any DPR. Matches the reference example the user provided.
 
@@ -139,38 +199,22 @@ All notable changes to OpenMemo are documented here.
 
 - 📥 **Download original uploaded file** — MemoDetail now has a "Download original" action for any file-backed memo, served via `GET /api/memos/{id}/file?download=1` with the original filename.
 
-### Added
-
-- 🗂️ **Accept any file type** — the upload handler no longer enforces an extension allow-list or magic-byte gate (images are still sanity-checked). Files are categorized into image/audio/video/document/code/file; unknown types become `file` and show a file icon + extension badge on the card.
-- 💻 **Code file handling** — source/script files are detected as a `code` memo type, stored as text and rendered as a fenced, language-tagged code block. Hardened comment + read-only handling guarantees uploaded files are never executed/interpreted.
-- ⚙️ **Configurable max upload size** — new `GET/PUT /api/settings` (JSON-persisted) and a Settings → Uploads card to set the per-file limit (default 5 GB; user can raise it up to 1 TB or set `0` for effectively uncapped — this is a local-first app, the user owns the disk).
-- 🛟 **Huge-upload disclaimer** — Add Memo's file picker now warns before sending anything ≥ 1 GiB: total size, that ingestion and embedding will take a while, and a reminder that files stay on the user's machine. One-click confirm/cancel.
-- 🧪 **Unknown extension passthrough** — Uploading a file with an extension (or no extension) the categorizer has never seen still succeeds end-to-end: the original extension is preserved on disk, the memo is created with `type: "file"`, and the background processor no longer tries to UTF-8 read a binary blob (e.g. `.blend`, `.3mf`, archives) — `content_text` stays empty for true binaries instead of being polluted with replacement characters. Known-text extensions (`.txt`, `.csv`, `.log`, `.tsv`, `.srt`, `.vtt`) still get read.
-- 🌐 **Local copies of extracted web content** — saved articles/links now download their referenced images into `files/extracted/<memo_id>/` and rewrite the Markdown to a local `/api/files/extracted/...` route, so memos survive the source being deleted. Runs automatically on new URL/extension ingests; a Settings → Uploads "Localize" button backfills existing memos. Served with a path-traversal-guarded route registered before the catch-all.
-
-### Changed
-
-- 🧹 **Phase out Tailwind** — documented in `CLAUDE.md`: Tailwind's `dark:` variant is incompatible with the `[data-theme]` theme system; components using Tailwind classes should be migrated to the `om-*` token system on sight.
-- 🛠️ **Local dev one-command startup** — `dev.ps1` starts uvicorn on `:8099` in its own terminal then launches `npm run dev` with the proxy pointed at it; no Docker required for raw dev. `DATABASE_URL` and `CHROMA_PERSIST_DIR` are now absolute paths anchored to the project root so the wrong DB is never created regardless of which directory uvicorn starts from. Vite proxy target is configurable via `VITE_API_TARGET` env var (now defaults to `:8099` for local dev; Docker users can override to `:8091`).
-
-### Fixed
 
 - 🎨 **Minimal card hover veil too opaque on thumbnails** — light-theme gradient over blurred thumbnails (`rgba(245,242,236,…)`) peaked at 0.92 opacity, nearly washing out the image. Reduced to `0.72 / 0.32 / 0.05` (top / mid / bottom) so the blurred thumbnail bleeds through while text and tags remain readable.
 - 🎨 **Minimal card action icons ignored light/dark theme** — buttons were hardcoded `color: #fff` with `rgba(255,255,255,0.18)` background, invisible on any light card. Light theme now applies dark ink buttons (`rgba(0,0,0,0.08)` bg / `rgba(0,0,0,0.75)` color) to all minimal card types; dark-tint note (`data-tint="3"`) keeps white since its background is `#2A2622`.
 - 📍 **Sidebar collapsed avatar off-centre** — collapsed `.om-foot-btn` used `grid-template-columns: 44px` with no item alignment, so the 32 px avatar sat left-aligned inside the 44 px column. Added `justify-items: center`; avatar now sits exactly centred.
 - 🖼️ **AVIF / HEIC / HEIF uploads rejected as "not a valid image"** — `_validate_image_magic` only knew fixed-offset magic bytes (PNG, JPEG, GIF, WEBP, BMP, TIFF). ISOBMFF-based formats (AVIF, HEIC, HEIF) carry no fixed header — their box type `ftyp` lives at bytes 4–7. Added an explicit check: `header[4:8] == b"ftyp"` passes immediately, covering all ISO Base Media File Format images.
 
-### Changed
+### Removed
 
-- 🔀 **Sidebar settings button toggles home ↔ settings** — clicking the foot button while already on `/settings` now navigates to `/` (home) instead of reloading settings. Title attribute reflects current action.
-- ✨ **Appearance CTA stronger visual hierarchy** — "Open live preview" button in Settings now has an accent-tinted background (`color-mix(accent 8%, surface-2)`) and an accent-weighted border instead of blending into the surface. The arrow button is accent-filled by default (not just on hover) so it reads as the primary action in the card.
-- 🎴 **Minimal mode applies to Collections page** — collection cards in minimal mode use full-bleed cover (`aspect-ratio: 4/3`, cover fills face absolutely), body text hidden at rest and overlays at the bottom on hover (dark gradient + white text). Stack fan-out on hover is preserved. Consistent with minimal image-card language.
+- 🗑️ **Retired audio-digest feature fully pruned from the source tree** — a long-disabled feature (its router was never mounted, its page never routed, its model only touched by the workspace-reset wipe) left dead code scattered across backend and frontend. All of it is now gone: the dead API router, its TTS helper (plus the archived copy), the unrouted page (plus its archived copy), the unused API client and type, the orphaned script-generation helper in `core/rag.py`, and the unused ORM model along with its lone reference in the `/api/maintenance/reset` loop. No runtime behaviour changes — verified backend imports clean and `tsc -b` passes. (Any orphaned table on existing databases is inert; nothing references it.)
 
-### Changed
+### Migration notes
 
-- 🧩 **Chrome extension version bump to 1.8.6** — version synced with app. Options page now shows port hint: Docker `:8091` / dev server `:8099`.
+- localStorage `openmemo_tweaks.cardStyle === 'hybrid'` or `'rich'` is rewritten to `'normal'` the next time `loadTweaks()` runs (first page load after upgrade). No user action required.
+- ffmpeg must be on `$PATH` for video thumbnails. Already installed on the Windows dev box; the Docker image bakes it in.
 
----
+
 ## [1.8.5] - 2026-05-19
 
 ### Fixed

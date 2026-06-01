@@ -377,6 +377,77 @@ async def transcribe_memo_task(memo_id: str):
         await process_memo(memo_id)
 
 
+async def localize_memo_task(memo_id: str, mode: str):
+    """Background: download a memo's remote source via yt-dlp and re-home it as a
+    local video/audio memo. Optionally transcribes afterward (audio_transcript).
+    Status flows pending → processing → done | error on memo.localize_status.
+    """
+    from backend.core.localize_media import localize_media, LocalizeError
+
+    async with AsyncSessionLocal() as db:
+        memo = await db.get(Memo, memo_id)
+        if not memo or not memo.source_url:
+            return
+        url = memo.source_url
+        ws = memo.workspace_id or "default"
+        memo.localize_status = "processing"
+        await db.commit()
+
+    try:
+        result = await localize_media(url, ws, mode)
+    except LocalizeError as e:
+        print(f"Localize failed for {memo_id}: {e}")
+        async with AsyncSessionLocal() as db:
+            memo = await db.get(Memo, memo_id)
+            if memo:
+                memo.localize_status = "error"
+                memo.updated_at = datetime.utcnow()
+                await db.commit()
+        return
+    except Exception as e:
+        print(f"Localize crashed for {memo_id}: {e}")
+        async with AsyncSessionLocal() as db:
+            memo = await db.get(Memo, memo_id)
+            if memo:
+                memo.localize_status = "error"
+                memo.updated_at = datetime.utcnow()
+                await db.commit()
+        return
+
+    want_transcript = mode == "audio_transcript"
+    async with AsyncSessionLocal() as db:
+        memo = await db.get(Memo, memo_id)
+        if not memo:
+            return
+        memo.file_path = result["path"]
+        memo.type = result["type"]
+        memo.localize_status = "done"
+        if want_transcript:
+            memo.transcript_status = "pending"
+        memo.updated_at = datetime.utcnow()
+        await db.commit()
+
+    # Thumbnail for a freshly-downloaded video (best-effort).
+    if result["type"] == "video":
+        try:
+            from backend.core.video import extract_video_thumbnail
+
+            THUMBS_DIR.mkdir(parents=True, exist_ok=True)
+            thumb_target = THUMBS_DIR / f"{memo_id}.jpg"
+            if await extract_video_thumbnail(result["path"], thumb_target):
+                async with AsyncSessionLocal() as db:
+                    memo = await db.get(Memo, memo_id)
+                    if memo:
+                        memo.thumbnail_path = f"/api/files/thumb/{memo_id}.jpg"
+                        memo.updated_at = datetime.utcnow()
+                        await db.commit()
+        except Exception as e:
+            print(f"Thumbnail after localize failed for {memo_id}: {e}")
+
+    if want_transcript:
+        await transcribe_memo_task(memo_id)
+
+
 # Map code/text extensions to a Markdown fence language for syntax rendering.
 _CODE_LANG = {
     ".py": "python", ".js": "javascript", ".jsx": "jsx", ".ts": "typescript",

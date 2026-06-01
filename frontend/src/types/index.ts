@@ -17,6 +17,8 @@ export interface Memo {
   // detected language.
   transcript_status?: 'pending' | 'processing' | 'done' | 'error' | null;
   transcript_lang?: string | null;
+  // "Make it local" (yt-dlp download) state for link/video memos.
+  localize_status?: 'pending' | 'processing' | 'done' | 'error' | null;
   sort_order?: number;
   pinned?: boolean;
   is_processed: boolean;

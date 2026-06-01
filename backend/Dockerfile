@@ -20,4 +20,10 @@ COPY . /app/backend/
 
 EXPOSE 8000
 
-CMD ["uvicorn", "backend.main:app", "--host", "0.0.0.0", "--port", "8000"]
+# Self-update yt-dlp to the latest release on container start, THEN launch the
+# API. YouTube breaks old yt-dlp builds every few weeks, far faster than image
+# rebuilds — this keeps "Make it local" working without a rebuild. Best-effort:
+# if there's no network (offline / air-gapped), the update fails quietly and the
+# pinned floor version from requirements.txt is used. Set YTDLP_AUTOUPDATE=0 to
+# skip (e.g. fully offline deployments).
+CMD ["sh", "-c", "if [ \"$YTDLP_AUTOUPDATE\" != \"0\" ]; then pip install --no-cache-dir --upgrade yt-dlp >/dev/null 2>&1 || echo '[entrypoint] yt-dlp self-update skipped (offline?)'; fi; exec uvicorn backend.main:app --host 0.0.0.0 --port 8000"]
