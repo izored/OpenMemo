@@ -1313,6 +1313,8 @@ input, textarea { font: inherit; color: inherit; }
   position: fixed; top: 50%; left: 50%;
   transform: translate(-50%, -50%);
   width: min(560px, calc(100vw - 32px));
+  max-height: calc(100vh - 80px);
+  display: flex; flex-direction: column; overflow: hidden;
   background: var(--elev); color: var(--text);
   border: 1px solid var(--border);
   border-radius: var(--r-2xl);
@@ -1333,7 +1335,7 @@ input, textarea { font: inherit; color: inherit; }
 }
 .om-modal-tab:hover { color: var(--text); }
 .om-modal-tab.active { color: var(--text); border-bottom-color: var(--accent); }
-.om-modal-body { padding: 22px; display: flex; flex-direction: column; gap: 16px; border-top: 1px solid var(--border); }
+.om-modal-body { padding: 22px; display: flex; flex-direction: column; gap: 16px; border-top: 1px solid var(--border); flex: 1; min-height: 0; overflow-y: auto; }
 .om-modal-foot { padding: 14px 20px; display: flex; justify-content: space-between; align-items: center; border-top: 1px solid var(--border); }
 
 /* ─ Collection modal ───────────────────────────────────────────────────── */

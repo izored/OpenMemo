@@ -70,7 +70,7 @@ export function ChangelogModal({
 
         <div
           className="om-modal-body"
-          style={{ maxHeight: '52vh', overflowY: 'auto', gap: 12 }}
+          style={{ gap: 12 }}
         >
           {loading && <p className="om-hint-readable">Checking GitHub…</p>}
           {error && <p className="om-hint-readable" style={{ color: '#EF5048' }}>{error}</p>}
