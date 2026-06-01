@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { Icon } from './Icon';
@@ -33,6 +33,15 @@ export function ChangelogModal({
   const [rel, setRel] = useState<Release | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const modalRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const el = modalRef.current;
+    if (!el) return;
+    const stop = (e: WheelEvent) => e.stopPropagation();
+    el.addEventListener('wheel', stop);
+    return () => el.removeEventListener('wheel', stop);
+  }, []);
 
   const load = () => {
     setLoading(true);
@@ -57,7 +66,7 @@ export function ChangelogModal({
   return (
     <>
       <div className="om-backdrop" onClick={onClose} />
-      <div className="om-modal" role="dialog" aria-label="Changelog" style={{ width: 'min(560px, calc(100vw - 32px))' }}>
+      <div ref={modalRef} className="om-modal" role="dialog" aria-label="Changelog" style={{ width: 'min(560px, calc(100vw - 32px))' }}>
         <div className="om-modal-head">
           <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
             <span className="mono om-modal-eyebrow">What's new</span>

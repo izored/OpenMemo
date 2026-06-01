@@ -116,6 +116,7 @@ async def list_memos(
 
     if workspace_id:
         query = query.where(Memo.workspace_id == workspace_id)
+    query = query.where((Memo.is_deleted == False) | (Memo.is_deleted == None))  # noqa: E712
     if type and type != "all":
         # `type` may be a comma-separated group (e.g. the Files tab maps to
         # document,file,code,audio) so one tab can cover several memo types.
@@ -526,6 +527,7 @@ async def list_pinned_memos(db: AsyncSession = Depends(get_db)):
         await db.execute(
             select(Memo)
             .where(Memo.pinned.is_(True))
+            .where((Memo.is_deleted == False) | (Memo.is_deleted == None))  # noqa: E712
             .order_by(desc(Memo.recency_at), desc(Memo.created_at))
         )
     ).scalars().all()
@@ -546,19 +548,45 @@ async def list_pinned_memos(db: AsyncSession = Depends(get_db)):
 
 @router.delete("/{memo_id}")
 async def delete_memo(memo_id: str, db: AsyncSession = Depends(get_db)):
-    """Delete a memo."""
+    """Soft-delete a memo (recoverable from Settings within the session)."""
     memo = await db.get(Memo, memo_id)
     if not memo:
         raise HTTPException(status_code=404, detail="Memo not found")
-    
-    # Delete embeddings from ChromaDB
-    from backend.core.embedder import delete_memo_embeddings
-    await delete_memo_embeddings(memo_id)
-    
-    await db.delete(memo)
+    memo.is_deleted = True
+    memo.deleted_at = datetime.utcnow()
     await db.commit()
-    
     return {"status": "deleted"}
+
+
+@router.post("/{memo_id}/restore")
+async def restore_memo(memo_id: str, db: AsyncSession = Depends(get_db)):
+    """Restore a soft-deleted memo."""
+    memo = await db.get(Memo, memo_id)
+    if not memo:
+        raise HTTPException(status_code=404, detail="Memo not found")
+    memo.is_deleted = False
+    memo.deleted_at = None
+    await db.commit()
+    return {"status": "restored"}
+
+
+@router.get("/deleted/list")
+async def list_deleted_memos(db: AsyncSession = Depends(get_db)):
+    """Return recently soft-deleted memos, newest first."""
+    rows = (
+        await db.execute(
+            select(Memo)
+            .options(selectinload(Memo.collections), selectinload(Memo.tags))
+            .where(Memo.is_deleted == True)  # noqa: E712
+            .order_by(desc(Memo.deleted_at))
+            .limit(20)
+        )
+    ).scalars().all()
+    return [
+        {"id": m.id, "type": m.type, "title": m.title,
+         "deleted_at": m.deleted_at.isoformat() if m.deleted_at else None}
+        for m in rows
+    ]
 
 
 @router.post("/{memo_id}/summary")

@@ -114,6 +114,11 @@ interface AppState {
   // Appearance tweaks (theme / accent / card / density / grid / background)
   tweaks: Tweaks;
   setTweak: (keyOrPatch: keyof Tweaks | Partial<Tweaks>, value?: unknown) => void;
+
+  // Undo-delete toast
+  deleteToast: { memoId: string; title: string } | null;
+  showDeleteToast: (memoId: string, title: string) => void;
+  clearDeleteToast: () => void;
 }
 
 const persist = (partial: { chatModel?: string }) => {
@@ -197,4 +202,8 @@ export const useAppStore = create<AppState>((set) => ({
       applyTweaks(tweaks);
       return { tweaks };
     }),
+
+  deleteToast: null,
+  showDeleteToast: (memoId, title) => set({ deleteToast: { memoId, title } }),
+  clearDeleteToast: () => set({ deleteToast: null }),
 }));

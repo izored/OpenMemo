@@ -427,20 +427,39 @@ async def localize_memo_task(memo_id: str, mode: str):
         memo.updated_at = datetime.utcnow()
         await db.commit()
 
-    # Thumbnail for a freshly-downloaded video (best-effort).
+    # Thumbnail after localize: prefer source thumbnail (YouTube etc.) over
+    # ffmpeg frame. Only extract ffmpeg frame if no thumbnail exists at all.
     if result["type"] == "video":
         try:
-            from backend.core.video import extract_video_thumbnail
+            async with AsyncSessionLocal() as db:
+                memo = await db.get(Memo, memo_id)
+                has_thumb = memo and memo.thumbnail_path
 
-            THUMBS_DIR.mkdir(parents=True, exist_ok=True)
-            thumb_target = THUMBS_DIR / f"{memo_id}.jpg"
-            if await extract_video_thumbnail(result["path"], thumb_target):
-                async with AsyncSessionLocal() as db:
-                    memo = await db.get(Memo, memo_id)
-                    if memo:
-                        memo.thumbnail_path = f"/api/files/thumb/{memo_id}.jpg"
-                        memo.updated_at = datetime.utcnow()
-                        await db.commit()
+            ytdlp_thumb = result.get("thumbnail_url")
+            if not has_thumb and ytdlp_thumb:
+                # Cache the source thumbnail locally.
+                local = await _download_thumb(ytdlp_thumb, memo_id)
+                if local:
+                    async with AsyncSessionLocal() as db:
+                        memo = await db.get(Memo, memo_id)
+                        if memo:
+                            memo.thumbnail_path = local
+                            memo.updated_at = datetime.utcnow()
+                            await db.commit()
+                    has_thumb = True
+
+            if not has_thumb:
+                from backend.core.video import extract_video_thumbnail
+
+                THUMBS_DIR.mkdir(parents=True, exist_ok=True)
+                thumb_target = THUMBS_DIR / f"{memo_id}.jpg"
+                if await extract_video_thumbnail(result["path"], thumb_target):
+                    async with AsyncSessionLocal() as db:
+                        memo = await db.get(Memo, memo_id)
+                        if memo:
+                            memo.thumbnail_path = f"/api/files/thumb/{memo_id}.jpg"
+                            memo.updated_at = datetime.utcnow()
+                            await db.commit()
         except Exception as e:
             print(f"Thumbnail after localize failed for {memo_id}: {e}")
 

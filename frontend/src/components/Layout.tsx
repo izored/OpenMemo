@@ -19,6 +19,7 @@ import { SearchOverlay } from './SearchOverlay';
 import { Onboarding } from './Onboarding';
 import { AddCollectionModal } from './AddCollectionModal';
 import { Lightbox } from './Lightbox';
+import { DeleteToast } from './DeleteToast';
 import { HeaderAudioPlayer } from './HeaderAudioPlayer';
 import { AudioPlayerProvider } from '@/lib/audioPlayer';
 import { Icon } from './Icon';
@@ -228,6 +229,7 @@ export function Layout() {
       </button>
 
       <Lightbox />
+      <DeleteToast />
 
       {import.meta.env.DEV && DevPanel && (
         <DevPanel

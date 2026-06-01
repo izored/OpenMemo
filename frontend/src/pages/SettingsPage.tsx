@@ -1,12 +1,12 @@
 import { useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useQueryClient } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { motion } from 'framer-motion';
 import { Icon } from '@/components/Icon';
 import { ChangelogModal, cmpVersion } from '@/components/ChangelogModal';
 import { ONBOARDING_KEY } from '@/lib/onboarding';
 import { useAppStore } from '@/stores/appStore';
-import { systemApi, maintenanceApi, backupApi, settingsApi, type AppSettings } from '@/lib/api';
+import { systemApi, maintenanceApi, backupApi, settingsApi, memoApi, type AppSettings } from '@/lib/api';
 import type { OllamaModel } from '@/types';
 
 type BuiltWithEntry = { name: string; url: string; desc: string };
@@ -97,6 +97,93 @@ function SettingCard({
       </div>
       <div className="om-setting-body">{children}</div>
     </div>
+  );
+}
+
+function RecentlyDeletedModal({ onClose }: { onClose: () => void }) {
+  const queryClient = useQueryClient();
+  const modalRef = useRef<HTMLDivElement>(null);
+  const { data: deleted = [], isLoading } = useQuery({
+    queryKey: ['memos', 'deleted'],
+    queryFn: memoApi.listDeleted,
+  });
+
+  useEffect(() => {
+    const el = modalRef.current;
+    if (!el) return;
+    const stop = (e: WheelEvent) => e.stopPropagation();
+    el.addEventListener('wheel', stop);
+    const onKey = (e: KeyboardEvent) => e.key === 'Escape' && onClose();
+    window.addEventListener('keydown', onKey);
+    return () => {
+      el.removeEventListener('wheel', stop);
+      window.removeEventListener('keydown', onKey);
+    };
+  }, [onClose]);
+
+  const restore = async (id: string) => {
+    try {
+      await memoApi.restore(id);
+      queryClient.invalidateQueries({ queryKey: ['memos'] });
+      queryClient.invalidateQueries({ queryKey: ['memos', 'deleted'] });
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
+  return (
+    <>
+      <div className="om-backdrop" onClick={onClose} />
+      <div ref={modalRef} className="om-modal" role="dialog" aria-label="Recently Deleted">
+        <div className="om-modal-head">
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+            <span className="mono om-modal-eyebrow">Trash</span>
+            <b style={{ fontSize: 16, fontWeight: 600 }}>Recently Deleted</b>
+          </div>
+          <button className="om-icon-btn" onClick={onClose}>
+            <Icon name="x" size={14} />
+          </button>
+        </div>
+        <div className="om-modal-body" style={{ gap: 8 }}>
+          {isLoading && <p className="om-hint-readable">Loading…</p>}
+          {!isLoading && deleted.length === 0 && (
+            <p className="om-hint-readable" style={{ fontSize: 13, color: 'var(--text-4)' }}>No recently deleted memos.</p>
+          )}
+          {deleted.map((m) => (
+            <div key={m.id} className="om-setting-row" style={{ gap: 10 }}>
+              <div className="om-setting-row-text" style={{ minWidth: 0 }}>
+                <p style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{m.title}</p>
+                <span className="mono" style={{ fontSize: 11 }}>{m.type} · {m.deleted_at ? new Date(m.deleted_at).toLocaleDateString() : ''}</span>
+              </div>
+              <button className="om-btn-secondary" onClick={() => restore(m.id)}>Restore</button>
+            </div>
+          ))}
+        </div>
+      </div>
+    </>
+  );
+}
+
+function RecentlyDeletedCard() {
+  const [open, setOpen] = useState(false);
+  const { data: deleted = [] } = useQuery({
+    queryKey: ['memos', 'deleted'],
+    queryFn: memoApi.listDeleted,
+  });
+
+  return (
+    <>
+      <SettingCard title="Recently Deleted" eyebrow="Trash">
+        <div className="om-setting-row">
+          <div className="om-setting-row-text">
+            <p>Trash</p>
+            <span className="mono">{deleted.length} deleted memo{deleted.length === 1 ? '' : 's'} can be restored</span>
+          </div>
+          <button className="om-btn-secondary" onClick={() => setOpen(true)}>Open</button>
+        </div>
+      </SettingCard>
+      {open && <RecentlyDeletedModal onClose={() => setOpen(false)} />}
+    </>
   );
 }
 
@@ -480,6 +567,8 @@ export function SettingsPage() {
               <input type="file" ref={fileInputRef} accept=".zip" style={{ display: 'none' }} onChange={handleFileSelected} />
             </div>
           </SettingCard>
+
+          <RecentlyDeletedCard />
 
         </div>
 

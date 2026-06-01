@@ -477,14 +477,20 @@ input, textarea { font: inherit; color: inherit; }
 }
 
 /* ─ Branded confirm modal (delete prompt) ─────────────────────────────── */
-.om-confirm-overlay {
-  position: fixed; inset: 0; z-index: 250;
-  display: flex; align-items: center; justify-content: center;
-  background: rgba(8,8,10,0.62);
+.om-card > .om-card-confirm {
+  position: absolute; inset: 0; z-index: 20;
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 16px;
+  background: rgba(8,8,10,0.8);
   backdrop-filter: blur(8px);
   animation: om-fade-in .15s ease;
-  padding: 24px;
 }
+.om-card-confirm-inner {
+  display: contents;
+}
+.om-card-confirm-title {
+  font-size: 15px; font-weight: 600; color: #fff; margin: 0;
+}
+.om-card-confirm-actions { display: flex; gap: 8px; }
 .om-confirm {
   background: var(--surface-2);
   border: 1px solid var(--border-2);
@@ -1021,6 +1027,33 @@ input, textarea { font: inherit; color: inherit; }
 }
 @keyframes slide { from { transform: translateX(40px); opacity: 0; } to { transform: none; opacity: 1; } }
 .om-detail-top { display: flex; align-items: center; justify-content: space-between; padding: 16px 20px; border-bottom: 1px solid var(--border); }
+.om-delete-confirm { position: absolute; top: calc(100% + 8px); right: 0; z-index: 60; display: flex; align-items: center; gap: 8px; padding: 10px 12px; background: var(--elev); border: 1px solid var(--border); border-radius: 12px; box-shadow: var(--shadow-elev); white-space: nowrap; }
+.om-delete-confirm-label { font-size: 13px; color: var(--text-2); margin-right: 4px; }
+.om-btn-danger { background: #dc2626; color: #fff; border: 1px solid transparent; }
+.om-btn-danger:hover { background: #b91c1c; }
+
+/* Undo-delete toast */
+.om-delete-toast {
+  position: fixed; bottom: 28px; left: 50%; transform: translateX(-50%);
+  z-index: 300;
+  display: flex; align-items: center; gap: 12px;
+  padding: 12px 16px; padding-bottom: 16px;
+  background: var(--elev); border: 1px solid var(--border);
+  border-radius: 14px; box-shadow: var(--shadow-elev);
+  white-space: nowrap;
+  animation: om-toast-in .2s cubic-bezier(.2,.7,.2,1);
+  overflow: hidden;
+}
+@keyframes om-toast-in { from { opacity: 0; transform: translateX(-50%) translateY(10px); } to { opacity: 1; transform: translateX(-50%) translateY(0); } }
+.om-delete-toast-text { font-size: 13.5px; color: var(--text-2); }
+.om-delete-toast-text strong { color: var(--text); font-weight: 500; }
+.om-delete-toast-undo { height: 28px; padding: 0 12px; border-radius: 8px; font-size: 13px; font-weight: 600; background: var(--accent); color: #fff; border: none; cursor: pointer; flex-shrink: 0; }
+.om-delete-toast-undo:hover { opacity: 0.88; }
+.om-delete-toast-bar { position: absolute; bottom: 0; left: 0; height: 3px; background: var(--accent); transition: width 0.1s linear; }
+.om-delete-confirm { position: absolute; top: calc(100% + 8px); right: 0; z-index: 60; display: flex; align-items: center; gap: 8px; padding: 10px 12px; background: var(--elev); border: 1px solid var(--border); border-radius: 12px; box-shadow: var(--shadow-elev); white-space: nowrap; }
+.om-delete-confirm-label { font-size: 13px; color: var(--text-2); margin-right: 4px; }
+.om-btn-danger { background: #dc2626; color: #fff; border: none; }
+.om-btn-danger:hover { background: #b91c1c; }
 .om-detail-actions { display: flex; gap: 4px; }
 .om-detail-body { padding: 24px 32px 40px; overflow-y: auto; flex: 1; display: flex; flex-direction: column; gap: 20px; }
 .om-detail-hero { aspect-ratio: 16/9; border-radius: var(--r-lg); position: relative; overflow: hidden; }
@@ -1335,7 +1368,7 @@ input, textarea { font: inherit; color: inherit; }
 }
 .om-modal-tab:hover { color: var(--text); }
 .om-modal-tab.active { color: var(--text); border-bottom-color: var(--accent); }
-.om-modal-body { padding: 22px; display: flex; flex-direction: column; gap: 16px; border-top: 1px solid var(--border); flex: 1; min-height: 0; overflow-y: auto; }
+.om-modal-body { padding: 22px; display: flex; flex-direction: column; gap: 16px; border-top: 1px solid var(--border); flex: 1; min-height: 0; overflow-y: auto; overscroll-behavior: contain; }
 .om-modal-foot { padding: 14px 20px; display: flex; justify-content: space-between; align-items: center; border-top: 1px solid var(--border); }
 
 /* ─ Collection modal ───────────────────────────────────────────────────── */

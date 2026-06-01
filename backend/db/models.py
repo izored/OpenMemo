@@ -84,6 +84,8 @@ class Memo(Base):
     sort_order = Column(Integer, default=0)
     pinned = Column(Boolean, default=False)
     is_processed = Column(Boolean, default=False)
+    is_deleted = Column(Boolean, default=False)
+    deleted_at = Column(DateTime, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
     # Drives the single "recent on top" sort. Bumped to now() on create

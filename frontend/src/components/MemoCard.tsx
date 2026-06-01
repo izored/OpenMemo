@@ -121,6 +121,7 @@ function Chrome({
   dataTint,
   onCardClick,
   onOpen,
+  confirmOverlay,
 }: {
   memo: Memo;
   className?: string;
@@ -133,6 +134,7 @@ function Chrome({
   dataTint?: number;
   onCardClick?: () => void;
   onOpen?: (e: React.MouseEvent) => void;
+  confirmOverlay?: React.ReactNode;
 }) {
   const navigate = useNavigate();
   const handleClick = () => {
@@ -153,6 +155,7 @@ function Chrome({
           <span style={{ backgroundImage: `url(${bgSrc})` }} />
         </div>
       )}
+      {confirmOverlay}
       <div className="om-card-actions">
         {onOpen && (
           <button className="om-action" onClick={onOpen} title="Open memo page" aria-label="Open memo">
@@ -209,6 +212,7 @@ export function MemoCard({ memo, dragHandleProps, lightboxGroup }: CardProps) {
   const queryClient = useQueryClient();
   const navigate = useNavigate();
   const openLightbox = useAppStore((s) => s.openLightbox);
+  const showDeleteToast = useAppStore((s) => s.showDeleteToast);
   const { play, playing, isActive } = useAudioPlayer();
   const [imageOrient, setImageOrient] = React.useState<'landscape' | 'portrait'>('landscape');
   const [confirmDeleteOpen, setConfirmDeleteOpen] = React.useState(false);
@@ -219,34 +223,44 @@ export function MemoCard({ memo, dragHandleProps, lightboxGroup }: CardProps) {
     openLightbox(group, idx >= 0 ? idx : 0);
   };
 
-  React.useEffect(() => {
-    if (!confirmDeleteOpen) return;
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') setConfirmDeleteOpen(false);
-    };
-    document.addEventListener('keydown', onKey);
-    return () => document.removeEventListener('keydown', onKey);
-  }, [confirmDeleteOpen]);
-
   const goDetail = (e: React.MouseEvent) => {
     e.stopPropagation();
     navigate(`/memo/${memo.id}`);
-  };
-
-  const confirmDelete = async () => {
-    setConfirmDeleteOpen(false);
-    try {
-      await memoApi.delete(memo.id);
-      queryClient.invalidateQueries({ queryKey: ['memos'] });
-    } catch {
-      alert('Failed to delete memo');
-    }
   };
 
   const handleDelete = (e: React.MouseEvent) => {
     e.stopPropagation();
     setConfirmDeleteOpen(true);
   };
+
+  const confirmDelete = async (e: React.MouseEvent) => {
+    e.stopPropagation();
+    setConfirmDeleteOpen(false);
+    try {
+      await memoApi.delete(memo.id);
+      queryClient.invalidateQueries({ queryKey: ['memos'] });
+      queryClient.invalidateQueries({ queryKey: ['memos', 'pinned'] });
+      showDeleteToast(memo.id, memo.title);
+    } catch {
+      alert('Failed to delete memo');
+    }
+  };
+
+  const confirmOverlay = confirmDeleteOpen ? (
+    <div
+      className="om-card-confirm"
+      role="dialog"
+      onClick={(e) => { e.stopPropagation(); setConfirmDeleteOpen(false); }}
+    >
+      <div className="om-card-confirm-inner" onClick={(e) => e.stopPropagation()}>
+        <p className="om-card-confirm-title">Delete memo?</p>
+        <div className="om-card-confirm-actions">
+          <button className="om-confirm-btn" onClick={(e) => { e.stopPropagation(); setConfirmDeleteOpen(false); }}>Cancel</button>
+          <button className="om-confirm-btn danger" onClick={confirmDelete} autoFocus>Delete</button>
+        </div>
+      </div>
+    </div>
+  ) : null;
 
   const handlePin = async (e: React.MouseEvent) => {
     e.stopPropagation();
@@ -263,25 +277,6 @@ export function MemoCard({ memo, dragHandleProps, lightboxGroup }: CardProps) {
   const fallbackTint = TINT_FALLBACK[hashId(memo.id) % TINT_FALLBACK.length];
   const heroBg = `linear-gradient(135deg, ${fallbackTint} 0%, color-mix(in oklab, ${fallbackTint} 55%, #1a1a18) 100%)`;
 
-  const confirmModal = confirmDeleteOpen ? (
-    <div
-      className="om-confirm-overlay"
-      role="dialog"
-      aria-modal="true"
-      onClick={(e) => { e.stopPropagation(); setConfirmDeleteOpen(false); }}
-    >
-      <div className="om-confirm" onClick={(e) => e.stopPropagation()}>
-        <h3 className="om-confirm-title">Delete memo?</h3>
-        <p className="om-confirm-body">
-          <strong>{memo.title}</strong> will be permanently removed. This cannot be undone.
-        </p>
-        <div className="om-confirm-actions">
-          <button className="om-confirm-btn" onClick={() => setConfirmDeleteOpen(false)}>Cancel</button>
-          <button className="om-confirm-btn danger" onClick={confirmDelete} autoFocus>Delete</button>
-        </div>
-      </div>
-    </div>
-  ) : null;
 
   // ── Note ──
   if (memo.type === 'note') {
@@ -298,6 +293,7 @@ export function MemoCard({ memo, dragHandleProps, lightboxGroup }: CardProps) {
         className="om-card-note"
         style={{ background: tint.bg, color: tint.text }}
         dataTint={tintIdx}
+        confirmOverlay={confirmOverlay}
       >
         <div className="om-note-body">
           <h3 className="om-note-title">{memo.title}</h3>
@@ -313,7 +309,6 @@ export function MemoCard({ memo, dragHandleProps, lightboxGroup }: CardProps) {
           </span>
         </div>
       </Chrome>
-      {confirmModal}
       </>
     );
   }
@@ -331,6 +326,7 @@ export function MemoCard({ memo, dragHandleProps, lightboxGroup }: CardProps) {
           className="om-card-image"
           onCardClick={showInLightbox}
           onOpen={goDetail}
+          confirmOverlay={confirmOverlay}
         >
           <div className="om-image-frame" data-orient={imageOrient} style={{ background: heroBg }}>
             {src ? (
@@ -358,8 +354,7 @@ export function MemoCard({ memo, dragHandleProps, lightboxGroup }: CardProps) {
             <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{memo.title}</span>
           </div>
         </Chrome>
-        {confirmModal}
-      </>
+        </>
     );
   }
 
@@ -379,6 +374,7 @@ export function MemoCard({ memo, dragHandleProps, lightboxGroup }: CardProps) {
           className="om-card-video"
           onCardClick={canPlay ? showInLightbox : undefined}
           onOpen={goDetail}
+          confirmOverlay={confirmOverlay}
         >
           <div className="om-video-frame" style={{ background: heroBg }}>
             {src ? (
@@ -405,8 +401,7 @@ export function MemoCard({ memo, dragHandleProps, lightboxGroup }: CardProps) {
             <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{memo.title}</span>
           </div>
         </Chrome>
-        {confirmModal}
-      </>
+        </>
     );
   }
 
@@ -414,7 +409,7 @@ export function MemoCard({ memo, dragHandleProps, lightboxGroup }: CardProps) {
   if (memo.type === 'document') {
     return (
       <>
-      <Chrome memo={memo} dragHandleProps={dragHandleProps} onDelete={handleDelete} onPin={handlePin} onOpen={goDetail} className="om-card-doc">
+      <Chrome memo={memo} dragHandleProps={dragHandleProps} onDelete={handleDelete} onPin={handlePin} onOpen={goDetail} className="om-card-doc" confirmOverlay={confirmOverlay}>
         <div className="om-doc-frame">
           <div className="om-doc-stack">
             <span className="om-doc-page" />
@@ -433,7 +428,6 @@ export function MemoCard({ memo, dragHandleProps, lightboxGroup }: CardProps) {
           <Meta memo={memo} />
         </div>
       </Chrome>
-      {confirmModal}
       </>
     );
   }
@@ -443,7 +437,7 @@ export function MemoCard({ memo, dragHandleProps, lightboxGroup }: CardProps) {
     const ext = (memo.title.includes('.') ? memo.title.split('.').pop()! : '').toLowerCase();
     return (
       <>
-      <Chrome memo={memo} dragHandleProps={dragHandleProps} onDelete={handleDelete} onPin={handlePin} onOpen={goDetail} className="om-card-doc">
+      <Chrome memo={memo} dragHandleProps={dragHandleProps} onDelete={handleDelete} onPin={handlePin} onOpen={goDetail} className="om-card-doc" confirmOverlay={confirmOverlay}>
         <div className="om-doc-frame">
           <FileBadge ext={ext} />
         </div>
@@ -453,7 +447,6 @@ export function MemoCard({ memo, dragHandleProps, lightboxGroup }: CardProps) {
           <Meta memo={memo} />
         </div>
       </Chrome>
-      {confirmModal}
       </>
     );
   }
@@ -478,6 +471,7 @@ export function MemoCard({ memo, dragHandleProps, lightboxGroup }: CardProps) {
           onPin={handlePin}
           onOpen={goDetail}
           className={cn('om-card-audio', active && 'is-active')}
+          confirmOverlay={confirmOverlay}
         >
           <div className="om-audio-frame">
             <LiveWaveform memoId={memo.id} active={active} />
@@ -496,8 +490,7 @@ export function MemoCard({ memo, dragHandleProps, lightboxGroup }: CardProps) {
             <Meta memo={memo} />
           </div>
         </Chrome>
-        {confirmModal}
-      </>
+        </>
     );
   }
 
@@ -505,7 +498,7 @@ export function MemoCard({ memo, dragHandleProps, lightboxGroup }: CardProps) {
   const domain = rootDomain(memo.source_domain);
   return (
     <>
-    <Chrome memo={memo} dragHandleProps={dragHandleProps} onDelete={handleDelete} onPin={handlePin} onOpen={goDetail} bgSrc={src} className="om-card-link">
+    <Chrome memo={memo} dragHandleProps={dragHandleProps} onDelete={handleDelete} onPin={handlePin} onOpen={goDetail} bgSrc={src} className="om-card-link" confirmOverlay={confirmOverlay}>
       <div className="om-card-hero" style={{ background: heroBg }}>
         {src ? (
           <img
@@ -551,7 +544,6 @@ export function MemoCard({ memo, dragHandleProps, lightboxGroup }: CardProps) {
         )}
       </div>
     </Chrome>
-    {confirmModal}
     </>
   );
 }

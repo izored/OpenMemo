@@ -71,6 +71,24 @@ def _run_ytdlp(url: str, out_template: str, mode: str) -> Path:
     raise LocalizeError("Download finished but the output file was not found")
 
 
+def _get_thumbnail_url(url: str) -> str | None:
+    """Ask yt-dlp for the thumbnail URL without downloading anything."""
+    if not _have("yt-dlp"):
+        return None
+    try:
+        proc = subprocess.run(
+            ["yt-dlp", "--no-playlist", "--print", "thumbnail", "--simulate", url],
+            capture_output=True, text=True, timeout=30,
+        )
+        if proc.returncode == 0:
+            line = proc.stdout.strip().splitlines()[-1].strip() if proc.stdout.strip() else ""
+            if line.startswith("http"):
+                return line
+    except Exception:
+        pass
+    return None
+
+
 def _localize_sync(url: str, workspace_id: str, mode: str) -> dict:
     base = Path(settings.FILES_DIR) / workspace_id
     base.mkdir(parents=True, exist_ok=True)
@@ -80,7 +98,8 @@ def _localize_sync(url: str, workspace_id: str, mode: str) -> dict:
 
     path = _run_ytdlp(url, out_template, mode)
     memo_type = "audio" if mode in ("audio", "audio_transcript") else "video"
-    return {"path": str(path), "type": memo_type, "filename": path.name}
+    thumbnail_url = _get_thumbnail_url(url) if memo_type == "video" else None
+    return {"path": str(path), "type": memo_type, "filename": path.name, "thumbnail_url": thumbnail_url}
 
 
 async def localize_media(url: str, workspace_id: str, mode: str) -> dict:

@@ -25,6 +25,7 @@ import {
   Film,
   Music,
   Check,
+  Trash2,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { BackButton } from '@/components/BackButton';
@@ -259,6 +260,7 @@ function AudioMemoPlayer({ memo }: { memo: Memo }) {
 function AudioTranscript({ memo }: { memo: Memo }) {
   const queryClient = useQueryClient();
   const [starting, setStarting] = useState(false);
+  const [open, setOpen] = useState(false);
   const status = memo.transcript_status;
   const text = memo.content_text || '';
   const pending = status === 'pending' || status === 'processing' || starting;
@@ -277,38 +279,45 @@ function AudioTranscript({ memo }: { memo: Memo }) {
 
   return (
     <div className="om-transcript" style={{ marginBottom: '24px' }}>
-      <div className="om-notes-label" style={{ marginBottom: '10px' }}>
-        <FileText size={16} className="om-section-icon" />
-        <h3 className="om-section-h">Transcript</h3>
+      <button
+        className="om-extracted-toggle"
+        onClick={() => setOpen((v) => !v)}
+        style={{ marginBottom: open ? '10px' : 0 }}
+      >
+        {open ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
+        <FileText size={14} />
+        Transcript
         {memo.transcript_lang && (
-          <span className="om-tag" style={{ textTransform: 'uppercase' }}>{memo.transcript_lang}</span>
+          <span className="om-tag" style={{ textTransform: 'uppercase', marginLeft: 4 }}>{memo.transcript_lang}</span>
         )}
-        {pending && <Loader2 size={14} className="om-section-icon om-spin" />}
-      </div>
+        {pending && <Loader2 size={14} className="om-spin" style={{ marginLeft: 4 }} />}
+      </button>
 
-      {pending ? (
-        <p className="om-detail-desc">Transcribing audio… this runs locally and may take a moment.</p>
-      ) : text ? (
-        <div className="om-prose">
-          <ReactMarkdown remarkPlugins={[remarkGfm]}>{memo.content_raw || text}</ReactMarkdown>
-        </div>
-      ) : status === 'error' ? (
-        <div>
-          <p className="om-detail-desc" style={{ marginBottom: 10 }}>
-            Transcription failed. Check that the speech-to-text model is installed on the server.
-          </p>
-          <button className="om-btn-ghost om-btn-pill" onClick={startTranscribe} disabled={starting}>
-            <Sparkles size={14} /> Try again
-          </button>
-        </div>
-      ) : (
-        <div>
-          <p className="om-detail-desc" style={{ marginBottom: 10 }}>No transcript yet.</p>
-          <button className="om-btn-primary om-btn-pill" onClick={startTranscribe} disabled={starting}>
-            {starting ? <Loader2 size={14} className="om-spin" /> : <Sparkles size={14} />}
-            Transcribe
-          </button>
-        </div>
+      {open && (
+        pending ? (
+          <p className="om-detail-desc">Transcribing audio… this runs locally and may take a moment.</p>
+        ) : text ? (
+          <div className="om-prose">
+            <ReactMarkdown remarkPlugins={[remarkGfm]}>{memo.content_raw || text}</ReactMarkdown>
+          </div>
+        ) : status === 'error' ? (
+          <div>
+            <p className="om-detail-desc" style={{ marginBottom: 10 }}>
+              Transcription failed. Check that the speech-to-text model is installed on the server.
+            </p>
+            <button className="om-btn-ghost om-btn-pill" onClick={startTranscribe} disabled={starting}>
+              <Sparkles size={14} /> Try again
+            </button>
+          </div>
+        ) : (
+          <div>
+            <p className="om-detail-desc" style={{ marginBottom: 10 }}>No transcript yet.</p>
+            <button className="om-btn-primary om-btn-pill" onClick={startTranscribe} disabled={starting}>
+              {starting ? <Loader2 size={14} className="om-spin" /> : <Sparkles size={14} />}
+              Transcribe
+            </button>
+          </div>
+        )
       )}
     </div>
   );
@@ -418,6 +427,7 @@ export function MemoDetail() {
   const [noteContent, setNoteContent] = useState('');
   const [showExtracted, setShowExtracted] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [confirmDelete, setConfirmDelete] = useState(false);
 
   // Edit form state
   const [editTitle, setEditTitle] = useState('');
@@ -467,6 +477,13 @@ export function MemoDetail() {
   }, [memo]);
   /* eslint-enable react-hooks/set-state-in-effect */
 
+  useEffect(() => {
+    if (!confirmDelete) return;
+    const h = (e: KeyboardEvent) => { if (e.key === 'Escape') setConfirmDelete(false); };
+    window.addEventListener('keydown', h);
+    return () => window.removeEventListener('keydown', h);
+  }, [confirmDelete]);
+
   const togglePin = async () => {
     if (!id || !memo) return;
     try {
@@ -488,6 +505,17 @@ export function MemoDetail() {
       console.error(e);
     } finally {
       setGeneratingSummary(false);
+    }
+  };
+
+  const handleDelete = async () => {
+    if (!id) return;
+    try {
+      await memoApi.delete(id);
+      queryClient.invalidateQueries({ queryKey: ['memos'] });
+      navigate(-1);
+    } catch (e) {
+      console.error(e);
     }
   };
 
@@ -587,9 +615,33 @@ export function MemoDetail() {
         {/* Header */}
         <header className="om-detail-top">
           <div style={{ flex: 1, display: 'flex', alignItems: 'center', gap: '12px' }}>
-            <span className="om-section-h">{memo.type}</span>
+            <BackButton />
           </div>
           <div className="om-detail-actions">
+            {/* Delete with inline confirm popover */}
+            {!isEditing && (
+              <div style={{ position: 'relative' }}>
+                <button
+                  className="om-icon-btn"
+                  onClick={() => setConfirmDelete((v) => !v)}
+                  title="Delete memo"
+                  aria-label="Delete memo"
+                >
+                  <Trash2 size={15} />
+                </button>
+                {confirmDelete && (
+                  <div
+                    className="om-delete-confirm"
+                    role="dialog"
+                    aria-label="Confirm delete"
+                  >
+                    <span className="om-delete-confirm-label">Delete memo?</span>
+                    <button className="om-btn-ghost om-btn-pill" onClick={() => setConfirmDelete(false)}>Cancel</button>
+                    <button className="om-btn-danger om-btn-pill" onClick={handleDelete}>Delete</button>
+                  </div>
+                )}
+              </div>
+            )}
             {!isEditing ? (
               <button
                 onClick={() => setIsEditing(true)}
@@ -641,9 +693,9 @@ export function MemoDetail() {
         {/* Content */}
         <div className="om-detail-scroll">
           <div className="om-detail-content">
-            {/* Back button */}
+            {/* Memo type */}
             <div style={{ marginBottom: '12px' }}>
-              <BackButton />
+              <span className="om-section-h">{memo.type}</span>
             </div>
 
             {/* Title */}
