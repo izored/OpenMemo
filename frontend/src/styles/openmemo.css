@@ -188,6 +188,7 @@ input, textarea { font: inherit; color: inherit; }
 [data-density="roomy"]   .om-main { padding: 0 64px 120px; }
 /* MemoDetail page manages its own scroll — strip om-main padding/overflow */
 .om-main:has(.om-detail-page) { padding: 0; overflow: hidden; }
+.om-main:has(.om-detail-page) .om-main-inner { height: 100%; }
 
 /* ─ Sidebar ────────────────────────────────────────────────────────────── */
 .om-sidebar {
