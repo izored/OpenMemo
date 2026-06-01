@@ -421,7 +421,7 @@ function VideoContentPanel({ memo }: { memo: Memo }) {
 // localize_status (driven by the page's refetchInterval) and shows progress.
 function MakeItLocalPanel({ memo }: { memo: Memo }) {
   const queryClient = useQueryClient();
-  const [mode, setMode] = useState<'video' | 'audio' | 'audio_transcript'>('video');
+  const [mode, setMode] = useState<'video' | 'audio'>('video');
   const [starting, setStarting] = useState(false);
   const status = memo.localize_status;
   const busy = status === 'pending' || status === 'processing' || starting;
@@ -441,8 +441,7 @@ function MakeItLocalPanel({ memo }: { memo: Memo }) {
 
   const modes: { id: typeof mode; label: string; icon: React.ElementType; hint: string }[] = [
     { id: 'video', label: 'Video', icon: Film, hint: 'Download the video (up to 1080p)' },
-    { id: 'audio', label: 'Audio only', icon: Music, hint: 'Just the audio track' },
-    { id: 'audio_transcript', label: 'Audio + transcript', icon: FileText, hint: 'Audio, then transcribe it' },
+    { id: 'audio', label: 'Audio only', icon: Music, hint: 'Just the audio track — transcribe later if needed' },
   ];
 
   return (
