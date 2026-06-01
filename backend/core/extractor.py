@@ -366,6 +366,10 @@ async def extract_video(url: str) -> dict:
             uploader = data.get("uploader") or data.get("channel") or ""
             # Prepend uploader to description so it's searchable/contextual.
             video_desc = f"{uploader}\n\n{description}".strip() if uploader else description
+            # vcodec "none" + no dimensions = audio-only (SoundCloud, Bandcamp, etc.)
+            is_audio = data.get("vcodec") == "none" or (
+                not data.get("width") and not data.get("height")
+            )
             return {
                 "title": title or url,
                 "description": video_desc[:500],
@@ -375,7 +379,7 @@ async def extract_video(url: str) -> dict:
                 "source_domain": domain,
                 "source_favicon": f"https://www.google.com/s2/favicons?domain={domain}&sz=32",
                 "thumbnail_path": thumbnail,
-                "type": "video",
+                "type": "audio" if is_audio else "video",
             }
     except Exception:
         pass

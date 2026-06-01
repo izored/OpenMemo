@@ -50,8 +50,10 @@ def derive_memo_type(memo) -> str:
         from backend.core.extractor import detect_url_type
 
         url_type = detect_url_type(source_url)
-        if url_type in ("youtube", "social_video"):
-            return "video"
+        if url_type == "video":
+            # Preserve audio type already set by the extractor (SoundCloud etc.).
+            current = getattr(memo, "type", None)
+            return "audio" if current == "audio" else "video"
 
         ext = _ext_from_url(source_url)
         if ext:
