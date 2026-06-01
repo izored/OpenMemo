@@ -30,6 +30,12 @@ Drop a PDF. Paste a URL. Jot a quick note. Record a voice memo. The Chrome Exten
 
 ## What's Inside
 
+### 🎙️ Audio Memos
+Record a voice memo straight from your mic, or drop in any audio file (lossless WAV and FLAC included). Play it from a header mini-player that follows you across the app. Every recording and upload transcribes on your own machine with faster-whisper, in dozens of languages, on your GPU or CPU. The transcript becomes searchable text, so you can find and ask about what you said.
+
+### 💾 Make It Local
+Point it at any video or audio link (YouTube, Vimeo, podcast hosts, direct media files, anything yt-dlp can fetch) and openMemo pulls the media down and keeps it. A Memo survives the original being taken offline. Optionally transcribe it on the way in.
+
 ### 📚 Smart Collections
 Organise Memos into themed collections with emoji icons and descriptions. Drag and drop cards directly into collections. Scope your AI chat to a single project or topic.
 
@@ -140,9 +146,9 @@ Open **http://localhost:3000**. See [`docs/INSTALL.md`](docs/INSTALL.md) for the
 openmemo/
 ├── backend/              # FastAPI Python backend
 │   ├── api/              # REST routes (memos, chat, ingest, search)
-│   ├── core/             # RAG, embeddings, extractors, TTS
+│   ├── core/             # RAG, embeddings, extractors, transcription, localize
 │   └── db/               # SQLAlchemy models, SQLite, FTS5
-├── frontend/             # React 19 + TypeScript + Tailwind v4
+├── frontend/             # React 19 + TypeScript + token CSS system
 │   └── src/
 │       ├── components/   # UI components
 │       ├── pages/        # Route pages
@@ -161,9 +167,9 @@ openmemo/
 
 ## Roadmap
 
-**v1.8** *(current)*: Minimal card mode, lightbox, AI ingestion endpoint, pinning, video thumbnails, living-cell intro, drag-to-reorder
-**v1.9**: Inline audio player, audio card minimal, AI-suggested collections, similar Memos, smart summaries
-**v2.0**: Multi-user workspaces, Notion/Obsidian import, mobile responsive, PWA offline support, plugin system
+**v2.0** *(current)*: Audio Memos (record, play, local transcription), Make it local (download any video or audio link so it survives the source going offline), persistent audio player, live waveform, redesigned minimal card mode, cinematic light/dark transition, pinning, video thumbnails, drag-to-file collections
+**Next**: Transcript-synced playback, AI-suggested collections, similar Memos, smart summaries, multiple views (grid/list/board)
+**Later**: Multi-user workspaces, Notion/Obsidian import, mobile responsive, PWA offline support, plugin system
 
 See [`Specs/ROADMAP.md`](Specs/ROADMAP.md) for the full roadmap, architectural findings, and contributor guide.
 
@@ -192,7 +198,7 @@ Contributions are welcome. See [`CONTRIBUTING.md`](CONTRIBUTING.md) for setup, c
 
 ## Credits & Open Source
 
-openMemo stands on the shoulders of incredible open-source projects: MDXEditor, Ollama, ChromaDB, TanStack Query, Zustand, Lucide, dnd-kit, FastAPI, React, Vite, Tailwind CSS.
+openMemo stands on the shoulders of incredible open-source projects: MDXEditor, Ollama, ChromaDB, faster-whisper, yt-dlp, TanStack Query, Zustand, Lucide, dnd-kit, FastAPI, React, Vite, Tailwind CSS.
 
 ---
 
