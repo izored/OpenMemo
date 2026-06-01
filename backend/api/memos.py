@@ -196,6 +196,7 @@ async def get_memo(memo_id: str, db: AsyncSession = Depends(get_db)):
         "content_raw": memo.content_raw,
         "transcript_status": memo.transcript_status,
         "transcript_lang": memo.transcript_lang,
+        "localize_status": memo.localize_status,
         "notes": memo.notes,
         "source_url": memo.source_url,
         "source_domain": memo.source_domain,
@@ -332,8 +333,10 @@ async def transcribe_memo(
     memo = await db.get(Memo, memo_id)
     if not memo:
         raise HTTPException(status_code=404, detail="Memo not found")
-    if memo.type != "audio" or not memo.file_path:
-        raise HTTPException(status_code=400, detail="Memo is not an audio file")
+    # Audio OR local video — faster-whisper reads video containers (PyAV) and
+    # pulls the audio track itself, so a downloaded video can be transcribed too.
+    if memo.type not in ("audio", "video") or not memo.file_path:
+        raise HTTPException(status_code=400, detail="Memo has no local audio/video to transcribe")
 
     memo.transcript_status = "pending"
     memo.updated_at = datetime.utcnow()
@@ -343,6 +346,40 @@ async def transcribe_memo(
 
     background_tasks.add_task(transcribe_memo_task, memo_id)
     return {"id": memo_id, "status": "pending"}
+
+
+class LocalizeRequest(BaseModel):
+    mode: str = "video"  # video | audio | audio_transcript
+
+
+@router.post("/{memo_id}/localize")
+async def localize_memo(
+    memo_id: str,
+    body: LocalizeRequest,
+    background_tasks: BackgroundTasks,
+    db: AsyncSession = Depends(get_db),
+):
+    """"Make it local" — download a remote video/audio source via yt-dlp so the
+    memo survives the original being deleted. Runs in the background; the client
+    polls the memo until localize_status is done."""
+    from backend.core.localize_media import VALID_MODES
+
+    memo = await db.get(Memo, memo_id)
+    if not memo:
+        raise HTTPException(status_code=404, detail="Memo not found")
+    if not memo.source_url:
+        raise HTTPException(status_code=400, detail="Memo has no source URL to download")
+    if body.mode not in VALID_MODES:
+        raise HTTPException(status_code=400, detail=f"Invalid mode: {body.mode}")
+
+    memo.localize_status = "pending"
+    memo.updated_at = datetime.utcnow()
+    await db.commit()
+
+    from backend.api.ingest import localize_memo_task
+
+    background_tasks.add_task(localize_memo_task, memo_id, body.mode)
+    return {"id": memo_id, "status": "pending", "mode": body.mode}
 
 
 @router.post("")

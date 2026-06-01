@@ -35,7 +35,7 @@ function CollectionRow({
       />
       <span className="om-coll-name">{col.name}</span>
       <span
-        className="om-coll-count mono"
+        className="om-coll-emoji"
         onClick={onEdit}
         title="Edit collection"
         role="button"

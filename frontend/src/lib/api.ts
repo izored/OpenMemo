@@ -36,6 +36,11 @@ export const memoApi = {
   related: (id: string) => fetchJSON<any[]>(`/memos/${id}/related`),
   transcribe: (id: string) =>
     fetchJSON<{ id: string; status: string }>(`/memos/${id}/transcribe`, { method: 'POST' }),
+  localize: (id: string, mode: 'video' | 'audio' | 'audio_transcript') =>
+    fetchJSON<{ id: string; status: string; mode: string }>(`/memos/${id}/localize`, {
+      method: 'POST',
+      body: JSON.stringify({ mode }),
+    }),
 };
 
 // Ingestion
