@@ -5,9 +5,13 @@ into a self-hosted memo whose media file lives under FILES_DIR — so it keeps
 working even if the original is deleted or goes private.
 
 Modes:
-    video            — best capped-quality video+audio (mp4 preferred)
-    audio            — audio-only (m4a/opus)
-    audio_transcript — audio-only, then transcribe via faster-whisper
+    video — best capped-quality video+audio (mp4 preferred)
+    audio — audio-only (m4a/opus); an EXPLICIT video→audio "podcast" conversion
+
+Transcript extraction is a separate, non-destructive path (`core/transcript.py`,
+see ADR-004) — it never re-homes the file or changes the memo type, so "Make it
+local → audio" is now purely a deliberate audio conversion, not a transcript
+side door.
 
 Everything runs in a worker thread (yt-dlp is blocking). yt-dlp + ffmpeg are
 already required by the extractor / video-thumbnail paths.
@@ -20,7 +24,7 @@ from pathlib import Path
 
 from backend.config import settings
 
-VALID_MODES = {"video", "audio", "audio_transcript"}
+VALID_MODES = {"video", "audio"}
 
 # Cap video so a "make it local" on a 4K 2-hour upload doesn't fill the disk.
 # yt-dlp format selector: best <=1080p mp4 video + m4a audio, else best.
@@ -41,7 +45,7 @@ def _run_ytdlp(url: str, out_template: str, mode: str) -> Path:
     if not _have("yt-dlp"):
         raise LocalizeError("yt-dlp is not installed on the server")
 
-    fmt = _AUDIO_FORMAT if mode in ("audio", "audio_transcript") else _VIDEO_FORMAT
+    fmt = _AUDIO_FORMAT if mode == "audio" else _VIDEO_FORMAT
     cmd = [
         "yt-dlp",
         "-f", fmt,
@@ -97,7 +101,7 @@ def _localize_sync(url: str, workspace_id: str, mode: str) -> dict:
     out_template = str(base / f"{file_id}.%(ext)s")
 
     path = _run_ytdlp(url, out_template, mode)
-    memo_type = "audio" if mode in ("audio", "audio_transcript") else "video"
+    memo_type = "audio" if mode == "audio" else "video"
     thumbnail_url = _get_thumbnail_url(url) if memo_type == "video" else None
     return {"path": str(path), "type": memo_type, "filename": path.name, "thumbnail_url": thumbnail_url}
 

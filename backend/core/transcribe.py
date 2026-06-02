@@ -74,6 +74,18 @@ def _clean(text: str) -> str:
     return " ".join(text.split()).strip()
 
 
+def fmt_ts(seconds: float) -> str:
+    """Format a start time as an inline transcript marker: [mm:ss] or [h:mm:ss].
+
+    These markers are preserved in the stored transcript so on-demand summary
+    modes (timestamp/insights/essay) can anchor bullets to a point in time.
+    """
+    s = max(0, int(seconds))
+    h, rem = divmod(s, 3600)
+    m, sec = divmod(rem, 60)
+    return f"[{h}:{m:02d}:{sec:02d}]" if h else f"[{m:02d}:{sec:02d}]"
+
+
 def _transcribe_sync(file_path: str) -> dict:
     model = _get_model()
     with _infer_lock:
@@ -82,8 +94,14 @@ def _transcribe_sync(file_path: str) -> dict:
             beam_size=settings.WHISPER_BEAM_SIZE,
             vad_filter=True,
         )
-        # segments is a generator; iterating it performs the work.
-        text = _clean("".join(seg.text for seg in segments))
+        # segments is a generator; iterating it performs the work. Keep each
+        # segment's start time as an inline [mm:ss] marker, one segment per line.
+        lines = []
+        for seg in segments:
+            txt = _clean(seg.text)
+            if txt:
+                lines.append(f"{fmt_ts(seg.start)} {txt}")
+        text = "\n".join(lines)
     return {"text": text, "language": getattr(info, "language", None)}
 
 

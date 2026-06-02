@@ -33,8 +33,11 @@ Drop a PDF. Paste a URL. Jot a quick note. Record a voice memo. The Chrome Exten
 ### 🎙️ Audio Memos
 Record a voice memo straight from your mic, or drop in any audio file (lossless WAV and FLAC included). Play it from a header mini-player that follows you across the app. Every recording and upload transcribes on your own machine with faster-whisper, in dozens of languages, on your GPU or CPU. The transcript becomes searchable text, so you can find and ask about what you said.
 
+### 📝 Video Transcripts & Summaries
+Get the transcript of any video without losing the video. One click pulls the source's own captions (YouTube, Vimeo, and any host yt-dlp supports) — instant, no download — and falls back to local Whisper speech-to-text when a host has none. The video keeps playing inline while the timestamped transcript fills its tab, fully searchable and ask-able. Then summarise it three ways: a **Timestamp** outline of the talk, **Key Insights** bullets, or a flowing **Essay** — each generated on demand by your local Ollama model.
+
 ### 💾 Make It Local
-Point it at any video or audio link (YouTube, Vimeo, podcast hosts, direct media files, anything yt-dlp can fetch) and openMemo pulls the media down and keeps it. A Memo survives the original being taken offline. Optionally transcribe it on the way in.
+Point it at any video or audio link (YouTube, Vimeo, podcast hosts, direct media files, anything yt-dlp can fetch) and openMemo pulls the media down and keeps it. A Memo survives the original being taken offline. Or convert a long video into an audio-only copy when you just want the podcast.
 
 ### 📚 Smart Collections
 Organise Memos into themed collections with emoji icons and descriptions. Drag and drop cards directly into collections. Scope your AI chat to a single project or topic.
@@ -168,7 +171,7 @@ openmemo/
 ## Roadmap
 
 **v2.0** *(current)*: Audio Memos (record, play, local transcription), Make it local (download any video or audio link so it survives the source going offline), persistent audio player, live waveform, redesigned minimal card mode, cinematic light/dark transition, pinning, video thumbnails, drag-to-file collections
-**Next**: Transcript-synced playback, AI-suggested collections, similar Memos, smart summaries, multiple views (grid/list/board)
+**Next**: Transcript-synced playback, AI-suggested collections, similar Memos, multiple views (grid/list/board)
 **Later**: Multi-user workspaces, Notion/Obsidian import, mobile responsive, PWA offline support, plugin system
 
 See [`Specs/ROADMAP.md`](Specs/ROADMAP.md) for the full roadmap, architectural findings, and contributor guide.

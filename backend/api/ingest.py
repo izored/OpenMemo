@@ -401,9 +401,55 @@ async def transcribe_memo_task(memo_id: str):
         await process_memo(memo_id)
 
 
+async def transcript_memo_task(memo_id: str):
+    """Background: extract a transcript for a REMOTE video/audio memo without
+    downloading it as the local file or changing its type (caption-first, STT
+    fallback — see core/transcript.py / ADR-004). Stores the timestamped text in
+    content_text (so it embeds + is searchable), records language + source.
+    Status flows pending → processing → done | error on memo.transcript_status.
+    """
+    from backend.core.transcript import get_transcript
+
+    async with AsyncSessionLocal() as db:
+        memo = await db.get(Memo, memo_id)
+        if not memo or not memo.source_url:
+            return
+        url = memo.source_url
+        ws = memo.workspace_id or "default"
+        memo.transcript_status = "processing"
+        await db.commit()
+
+    try:
+        result = await get_transcript(url, ws)
+        text = (result.get("text") or "").strip()
+        lang = result.get("lang")
+        source = result.get("source")
+        status = "done" if text else "error"
+    except Exception as e:
+        print(f"Transcript failed for {memo_id}: {e}")
+        text, lang, source, status = "", None, None, "error"
+
+    async with AsyncSessionLocal() as db:
+        memo = await db.get(Memo, memo_id)
+        if not memo:
+            return
+        if text:
+            memo.content_text = text
+            if not memo.description:
+                memo.description = text[:200]
+        memo.transcript_lang = lang
+        memo.transcript_source = source
+        memo.transcript_status = status
+        memo.updated_at = datetime.utcnow()
+        await db.commit()
+
+    if status == "done" and text:
+        await process_memo(memo_id)
+
+
 async def localize_memo_task(memo_id: str, mode: str):
     """Background: download a memo's remote source via yt-dlp and re-home it as a
-    local video/audio memo. Optionally transcribes afterward (audio_transcript).
+    local video/audio memo. `mode='audio'` is an explicit video→audio conversion.
     Status flows pending → processing → done | error on memo.localize_status.
     """
     from backend.core.localize_media import localize_media, LocalizeError
@@ -438,7 +484,6 @@ async def localize_memo_task(memo_id: str, mode: str):
                 await db.commit()
         return
 
-    want_transcript = mode == "audio_transcript"
     async with AsyncSessionLocal() as db:
         memo = await db.get(Memo, memo_id)
         if not memo:
@@ -446,8 +491,6 @@ async def localize_memo_task(memo_id: str, mode: str):
         memo.file_path = result["path"]
         memo.type = result["type"]
         memo.localize_status = "done"
-        if want_transcript:
-            memo.transcript_status = "pending"
         memo.updated_at = datetime.utcnow()
         await db.commit()
 
@@ -486,9 +529,6 @@ async def localize_memo_task(memo_id: str, mode: str):
                             await db.commit()
         except Exception as e:
             print(f"Thumbnail after localize failed for {memo_id}: {e}")
-
-    if want_transcript:
-        await transcribe_memo_task(memo_id)
 
 
 # Map code/text extensions to a Markdown fence language for syntax rendering.
