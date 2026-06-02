@@ -34,6 +34,7 @@ import { MarkdownEditor } from '@/components/MarkdownEditor';
 import { memoApi, collectionApi } from '@/lib/api';
 import { AskMemoPanel } from '@/components/AskMemoPanel';
 import { audioEmbed } from '@/lib/media';
+import { videoEmbedUrl } from '@/lib/platforms';
 import { useAudioPlayer, formatTime } from '@/lib/audioPlayer';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
@@ -556,21 +557,6 @@ function MakeItLocalPanel({ memo }: { memo: Memo }) {
   );
 }
 
-function getYouTubeVideoId(url: string): string | null {
-  try {
-    const u = new URL(url);
-    if (u.hostname.includes('youtube.com')) {
-      return u.searchParams.get('v');
-    }
-    if (u.hostname.includes('youtu.be')) {
-      return u.pathname.slice(1);
-    }
-  } catch {
-    return null;
-  }
-  return null;
-}
-
 export function MemoDetail() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
@@ -759,7 +745,10 @@ export function MemoDetail() {
     );
   }
 
-  const youtubeId = memo.type === 'video' && memo.source_url ? getYouTubeVideoId(memo.source_url) : null;
+  // Inline player for a remote video memo (no local file yet). Covers every
+  // platform in the registry — YouTube, Vimeo, Instagram, TikTok, etc. Null →
+  // no embeddable player; the "Make it local" panel + Open Original still show.
+  const videoEmbed = memo.type === 'video' && !memo.file_path ? videoEmbedUrl(memo) : null;
   const isWebType = memo.type === 'article' || memo.type === 'link';
 
   return (
@@ -1027,12 +1016,14 @@ export function MemoDetail() {
               </>
             )}
 
-            {/* YouTube embed */}
-            {youtubeId && !isEditing && (
+            {/* Inline platform embed (YouTube, Vimeo, Instagram, TikTok, …) */}
+            {videoEmbed && !isEditing && (
               <div className="om-video-embed" style={{ marginBottom: '24px' }}>
                 <iframe
-                  src={`https://www.youtube.com/embed/${youtubeId}`}
+                  src={videoEmbed}
+                  allow="autoplay; encrypted-media; picture-in-picture; fullscreen"
                   allowFullScreen
+                  scrolling="no"
                   title={memo.title}
                 />
               </div>

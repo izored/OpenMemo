@@ -3,6 +3,29 @@
 All notable changes to OpenMemo are documented here.
 
 ---
+## [2.0.3] - Unreleased
+
+Video memos from every platform — not just YouTube — now play inline and wear
+their source brand on the card. A saved Instagram, TikTok, Vimeo or Facebook
+video used to show a generic icon and a dead "No preview available"; it now
+embeds the real player and shows the platform logo.
+
+### Added
+
+- 🎬 **Inline players for every video platform** — the memo detail page and the dashboard lightbox now embed the source player for YouTube, Vimeo, Instagram, TikTok, X, Facebook, Dailymotion, Streamable and Twitch. Driven by a single platform registry (`frontend/src/lib/platforms.ts`) shared by the card, lightbox and detail so they never drift apart. Hosts with no embeddable player fall back to "Open original" instead of a dead end.
+- 🏷️ **Brand glyphs on video cards** — Instagram, TikTok, X, Facebook, Threads, Reddit, Dailymotion and Twitch links show their platform logo on the minimal video card; any other remote host shows its favicon; only true local uploads fall back to the generic video icon.
+- ✅ **Platform embed test matrix** — `frontend/src/lib/platforms.test.ts` locks embed-URL + glyph behavior across 12+ hosts, including graceful nulls for unknown / embed-less hosts and local files.
+
+### Changed
+
+- 🧩 **Video platform detection centralized** — the YouTube-only `videoSource()` / `youtubeEmbed()` helpers in `lib/media.ts` were replaced by the shared `lib/platforms.ts` registry consumed by `MemoCard`, `Lightbox` and `MemoDetail`. Adding a new host now lights up all three at once.
+
+### Fixed
+
+- 📺 **Non-YouTube video embeds** — Instagram (and Vimeo, TikTok, Facebook, …) video memos showed no inline player: a dead "No preview available" in the lightbox and only a "Make it local" panel on the detail page. They now embed the source player the way YouTube always did.
+- 🏷️ **Generic glyph on social video cards** — an Instagram / TikTok / Threads video card showed a generic "video file" icon instead of its platform logo on the minimal card pill.
+
+---
 ## [2.0.2] - 2026-06-01
 
 Audio memos pulled from yt-dlp platforms now behave like first-class audio: they

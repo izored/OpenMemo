@@ -5,7 +5,8 @@ import type { DraggableAttributes } from '@dnd-kit/core';
 import { Icon } from './Icon';
 import { cn } from '@/lib/utils';
 import { memoApi } from '@/lib/api';
-import { mediaSrc, youtubeEmbed, videoSource } from '@/lib/media';
+import { mediaSrc } from '@/lib/media';
+import { platformMeta, videoEmbedUrl } from '@/lib/platforms';
 import { useAppStore } from '@/stores/appStore';
 import { useAudioPlayer } from '@/lib/audioPlayer';
 import { LiveWaveform } from './LiveWaveform';
@@ -95,12 +96,25 @@ function FileBadge({ ext }: { ext: string }) {
   );
 }
 
-// Brand glyph for the minimal video card's bottom-left pill: YouTube/Vimeo
-// logo for those platforms, generic video icon for local uploads / other hosts.
+// Brand glyph for the minimal video card's bottom-left pill. Priority:
+//   1. hand-drawn brand glyph for known platforms (YouTube, Instagram, TikTok…)
+//   2. the source's favicon — covers every other host (Threads, Dailymotion,
+//      Rumble, Bilibili…) so a remote video never shows a bare generic icon
+//   3. generic video icon (local uploads / no source)
 function VideoSourceIcon({ memo }: { memo: Memo }) {
-  const kind = videoSource(memo);
-  if (kind === 'youtube') return <Icon name="youtube" size={13} className="om-brand-youtube" />;
-  if (kind === 'vimeo') return <Icon name="vimeo" size={13} className="om-brand-vimeo" />;
+  const meta = platformMeta(memo);
+  if (meta?.glyph) return <Icon name={meta.glyph} size={13} className={meta.brandClass} />;
+  if (memo.source_url && memo.source_favicon)
+    return (
+      <img
+        src={memo.source_favicon}
+        alt=""
+        width={13}
+        height={13}
+        style={{ borderRadius: 3, flexShrink: 0 }}
+        onError={(e) => ((e.target as HTMLImageElement).style.display = 'none')}
+      />
+    );
   return <Icon name="video" size={12} />;
 }
 
@@ -361,8 +375,7 @@ export function MemoCard({ memo, dragHandleProps, lightboxGroup }: CardProps) {
   // ── Video ──
   if (memo.type === 'video') {
     const localVideo = memo.file_path ? `/api/memos/${memo.id}/file` : null;
-    const ytEmbed = youtubeEmbed(memo.source_url);
-    const canPlay = localVideo || ytEmbed;
+    const canPlay = Boolean(localVideo || videoEmbedUrl(memo));
     return (
       <>
         <Chrome

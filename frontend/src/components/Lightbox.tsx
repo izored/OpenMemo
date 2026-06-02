@@ -2,7 +2,8 @@ import { useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Icon } from './Icon';
 import { useAppStore } from '@/stores/appStore';
-import { mediaSrc, youtubeEmbed } from '@/lib/media';
+import { mediaSrc } from '@/lib/media';
+import { videoEmbedUrl } from '@/lib/platforms';
 
 // Single shared lightbox for the whole app. Reads the active media group +
 // index from the store so arrow keys / on-screen arrows page between memos.
@@ -30,24 +31,15 @@ export function Lightbox() {
 
   const memo = group[index];
   const src = mediaSrc(memo);
-  const ytEmbed = memo.type === 'video' ? youtubeEmbed(memo.source_url) : null;
+  // Prefer a local file (no network, never expires) over a remote embed.
   const localVideo = memo.type === 'video' && memo.file_path ? `/api/memos/${memo.id}/file` : null;
+  const embed = memo.type === 'video' && !localVideo ? videoEmbedUrl(memo) : null;
   const hasPrevNext = group.length > 1;
 
   return (
     <div className="om-lightbox" role="dialog" aria-modal="true" onClick={close}>
       {memo.type === 'video' ? (
-        ytEmbed ? (
-          <iframe
-            key={memo.id}
-            src={ytEmbed}
-            title={memo.title}
-            allow="autoplay; encrypted-media; picture-in-picture"
-            allowFullScreen
-            onClick={(e) => e.stopPropagation()}
-            style={{ width: 'min(90vw, 1280px)', aspectRatio: '16/9', border: 0, borderRadius: 12, boxShadow: '0 30px 80px rgba(0,0,0,0.5)' }}
-          />
-        ) : localVideo ? (
+        localVideo ? (
           <video
             key={memo.id}
             src={localVideo}
@@ -56,8 +48,33 @@ export function Lightbox() {
             onClick={(e) => e.stopPropagation()}
             style={{ maxWidth: '100%', maxHeight: '100%', borderRadius: 12 }}
           />
+        ) : embed ? (
+          <iframe
+            key={memo.id}
+            src={embed}
+            title={memo.title}
+            allow="autoplay; encrypted-media; picture-in-picture; fullscreen"
+            allowFullScreen
+            scrolling="no"
+            onClick={(e) => e.stopPropagation()}
+            style={{ width: 'min(90vw, 1280px)', aspectRatio: '16/9', border: 0, borderRadius: 12, boxShadow: '0 30px 80px rgba(0,0,0,0.5)' }}
+          />
         ) : (
-          <div className="om-lightbox-empty" onClick={(e) => e.stopPropagation()}>No preview available</div>
+          <div className="om-lightbox-empty" onClick={(e) => e.stopPropagation()}>
+            <p>No inline preview for {memo.source_domain || 'this source'}.</p>
+            {memo.source_url && (
+              <a
+                href={memo.source_url}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="om-lightbox-open"
+                style={{ marginTop: 12 }}
+              >
+                <Icon name="arrowUpRight" size={14} />
+                <span>Open original</span>
+              </a>
+            )}
+          </div>
         )
       ) : src ? (
         <img key={memo.id} src={src} alt={memo.title} onClick={(e) => e.stopPropagation()} />

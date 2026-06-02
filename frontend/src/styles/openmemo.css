@@ -471,6 +471,8 @@ input, textarea { font: inherit; color: inherit; }
   font-variant-numeric: tabular-nums;
 }
 .om-lightbox-empty {
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  text-align: center;
   color: rgba(245,242,236,0.7); font-size: 14px;
   padding: 40px; border-radius: 12px;
   background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.12);
@@ -720,8 +722,17 @@ input, textarea { font: inherit; color: inherit; }
 
 /* Brand glyphs in the minimal video pill — official-ish brand tints. The pill
    has a dark frosted bg, so both read clearly. */
-.om-brand-youtube { color: #FF0000; }
-.om-brand-vimeo   { color: #1AB7EA; }
+.om-brand-youtube     { color: #FF0000; }
+.om-brand-vimeo       { color: #1AB7EA; }
+.om-brand-instagram   { color: #E4405F; }
+.om-brand-facebook    { color: #1877F2; }
+.om-brand-dailymotion { color: #0061FF; }
+.om-brand-twitch      { color: #9146FF; }
+.om-brand-reddit      { color: #FF4500; }
+/* Monochrome marks — track the theme text color so they stay visible in both. */
+.om-brand-tiktok      { color: var(--text); }
+.om-brand-x           { color: var(--text); }
+.om-brand-threads     { color: var(--text); }
 
 /* Domain pill (always visible in minimal for links) */
 .om-min-domain {
