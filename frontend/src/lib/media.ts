@@ -3,6 +3,28 @@ import type { Memo } from '@/types';
 // Domains that use hotlink protection — proxy through backend.
 export const HOTLINK_DOMAINS = ['dribbble.com', 'behance.net', 'pinterest.com', 'cdn.dribbble.com'];
 
+/**
+ * Gating predicate for the "Make it local" panel.
+ *
+ * Returns true ONLY when ALL of the following hold:
+ *   1. memo.type is a localizable media type ("video" or "audio")
+ *   2. memo.source_url exists — the memo is remote, not locally uploaded
+ *   3. memo.file_path is absent — no local file has been saved yet
+ *   4. memo.localize_status is not "done" — the download hasn't completed
+ *
+ * All other memo types (article, link, image, note, document, code, file)
+ * return false — "Make it local" is meaningless for non-media or local memos.
+ * Use this predicate at every render site so the logic can never drift.
+ */
+export function canMakeLocal(memo: Memo): boolean {
+  return (
+    (memo.type === 'video' || memo.type === 'audio') &&
+    !!memo.source_url &&
+    !memo.file_path &&
+    memo.localize_status !== 'done'
+  );
+}
+
 // Video platform detection + embed URLs live in `lib/platforms.ts` (the single
 // registry shared by MemoCard / Lightbox / MemoDetail). Audio-stream embeds
 // stay here because they hang off the separate audio render path.

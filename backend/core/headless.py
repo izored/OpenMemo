@@ -27,6 +27,23 @@ _browser = None
 _lock = asyncio.Lock()
 _unavailable = False  # latch: once Chromium fails to start, stop retrying
 
+# Largest visible content image (by rendered area), skipping icons / spacers /
+# data URIs. On a photo page (Facebook/Instagram/X photo, …) the real subject is
+# this rendered image, while the platform serves a generic placeholder in
+# og:image to scrapers — so callers prefer this for image-type URLs.
+_LARGEST_IMAGE_JS = """() => {
+  let best = null, bestArea = 0;
+  for (const img of document.images) {
+    const r = img.getBoundingClientRect();
+    const src = img.currentSrc || img.src;
+    if (!src || src.startsWith('data:')) continue;
+    if (r.width < 150 || r.height < 150) continue;
+    const area = r.width * r.height;
+    if (area > bestArea) { bestArea = area; best = src; }
+  }
+  return best;
+}"""
+
 
 async def _ensure_browser():
     """Return a connected Chromium, launching it once. None if unavailable."""
@@ -58,10 +75,16 @@ async def _ensure_browser():
 
 
 async def render_page(
-    url: str, *, timeout_ms: int = 35000, want_screenshot: bool = False
+    url: str,
+    *,
+    timeout_ms: int = 35000,
+    want_screenshot: bool = False,
+    want_main_image: bool = False,
 ) -> Optional[dict]:
     """Render `url` in a real browser, waiting for any Cloudflare/JS challenge to
-    resolve. Returns {"html": str, "screenshot": bytes|None} or None on failure.
+    resolve. Returns {"html": str, "screenshot": bytes|None, "main_image": str|None}
+    or None on failure. `main_image` (when requested) is the largest rendered
+    image — the real subject on photo pages where og:image is a placeholder.
     """
     browser = await _ensure_browser()
     if browser is None:
@@ -89,12 +112,18 @@ async def render_page(
             pass
         await page.wait_for_timeout(1200)
         html = await page.content()
+        main_image = None
+        if want_main_image:
+            try:
+                main_image = await page.evaluate(_LARGEST_IMAGE_JS)
+            except Exception:
+                main_image = None
         shot = (
             await page.screenshot(type="jpeg", quality=70, full_page=False)
             if want_screenshot
             else None
         )
-        return {"html": html, "screenshot": shot}
+        return {"html": html, "screenshot": shot, "main_image": main_image}
     except Exception as e:
         print(f"[headless] render failed for {url}: {e}")
         return None

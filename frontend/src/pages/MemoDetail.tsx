@@ -33,7 +33,7 @@ import { BackButton } from '@/components/BackButton';
 import { MarkdownEditor } from '@/components/MarkdownEditor';
 import { memoApi, collectionApi } from '@/lib/api';
 import { AskMemoPanel } from '@/components/AskMemoPanel';
-import { audioEmbed } from '@/lib/media';
+import { audioEmbed, canMakeLocal } from '@/lib/media';
 import { videoEmbedUrl } from '@/lib/platforms';
 import { useAudioPlayer, formatTime } from '@/lib/audioPlayer';
 import ReactMarkdown from 'react-markdown';
@@ -998,9 +998,16 @@ export function MemoDetail() {
               </div>
             )}
 
-            {/* Image preview — with lightbox, theater, fullscreen */}
-            {memo.type === 'image' && memo.file_path && !isEditing && (
-              <MediaPreview src={`/api/memos/${memo.id}/file`} alt={memo.title} kind="image" />
+            {/* Image preview — with lightbox, theater, fullscreen. Uploaded
+                images serve from the file route; scraped image memos (a Facebook
+                /photo, an Instagram/X photo, etc.) have no local file — their
+                real, localized image lives in thumbnail_path. */}
+            {memo.type === 'image' && !isEditing && (memo.file_path || memo.thumbnail_path) && (
+              <MediaPreview
+                src={memo.file_path ? `/api/memos/${memo.id}/file` : memo.thumbnail_path || ''}
+                alt={memo.title}
+                kind="image"
+              />
             )}
 
             {/* Local video preview — with theater + fullscreen */}
@@ -1031,8 +1038,10 @@ export function MemoDetail() {
 
             {/* Remote audio (yt-dlp pull, no local file). Auto-download in flight
                 or errored → progress/retry panel; otherwise (auto-download off) →
-                stream it inline via the platform embed. */}
-            {!isEditing && memo.type === 'audio' && memo.source_url && !memo.file_path && (
+                stream it inline via the platform embed.
+                canMakeLocal() confirms type === "audio", has source_url, no file_path,
+                and localize_status !== "done" before rendering either panel. */}
+            {!isEditing && canMakeLocal(memo) && memo.type === 'audio' && (
               memo.localize_status ? (
                 <MakeItLocalPanel memo={memo} />
               ) : (
@@ -1040,9 +1049,11 @@ export function MemoDetail() {
               )
             )}
 
-            {/* Make it local — non-audio remote URL with no local file yet
-                (YouTube/Vimeo/social video or any yt-dlp-able link). */}
-            {!isEditing && memo.type !== 'audio' && memo.source_url && !memo.file_path && (
+            {/* Make it local — remote video with no local file yet
+                (YouTube, Vimeo, Instagram, TikTok, Vimeo, etc.).
+                canMakeLocal() ensures this NEVER shows for article, link, image,
+                note, document, code, or file memo types. */}
+            {!isEditing && canMakeLocal(memo) && memo.type === 'video' && (
               <MakeItLocalPanel memo={memo} />
             )}
 
