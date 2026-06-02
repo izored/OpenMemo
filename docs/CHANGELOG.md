@@ -15,6 +15,7 @@ embeds the real player and shows the platform logo.
 - 🎬 **Inline players for every video platform** — the memo detail page and the dashboard lightbox now embed the source player for YouTube, Vimeo, Instagram, TikTok, X, Facebook, Dailymotion, Streamable and Twitch. Driven by a single platform registry (`frontend/src/lib/platforms.ts`) shared by the card, lightbox and detail so they never drift apart. Hosts with no embeddable player fall back to "Open original" instead of a dead end.
 - 🏷️ **Brand glyphs on video cards** — Instagram, TikTok, X, Facebook, Threads, Reddit, Dailymotion and Twitch links show their platform logo on the minimal video card; any other remote host shows its favicon; only true local uploads fall back to the generic video icon.
 - ✅ **Platform embed test matrix** — `frontend/src/lib/platforms.test.ts` locks embed-URL + glyph behavior across 12+ hosts, including graceful nulls for unknown / embed-less hosts and local files.
+- 🎯 **New collection auto-selects in the new-memo panel** — creating a collection from the panel's "New collection…" flow now auto-selects it for the memo you're adding, instead of making you reopen the picker and choose it again.
 
 ### Changed
 
@@ -24,6 +25,9 @@ embeds the real player and shows the platform logo.
 
 - 📺 **Non-YouTube video embeds** — Instagram (and Vimeo, TikTok, Facebook, …) video memos showed no inline player: a dead "No preview available" in the lightbox and only a "Make it local" panel on the detail page. They now embed the source player the way YouTube always did.
 - 🏷️ **Generic glyph on social video cards** — an Instagram / TikTok / Threads video card showed a generic "video file" icon instead of its platform logo on the minimal card pill.
+- 🔗 **Blank memo on bot-walled links** — saving a link that answers with a non-200 challenge page (e.g. Cloudflare HTTP 202 + JS stub, as dribbble now does) stored an empty memo with no title, image or content. `extract_url` was refactored from a strict `status == 200` gate to `raise_for_status()`, which lets 2xx-but-not-200 challenge stubs through; it now gates on 200 again **and** falls back to Microlink/OG enrichment for any other response, or any 200 that still yields nothing usable (JS-rendered SPA wall). A walled link degrades to a real "preview unavailable — open original" card that survives the source being deleted, never a dead blank. Applies to the whole `link` type, not one host.
+- 🖼️ **Photo posts saved as video** — a Facebook / TikTok / X photo URL was filed as a video memo (domain-based type forcing) and pulled no image. Photo-vs-video is now resolved from the URL when yt-dlp finds no stream: unambiguous photo paths (FB `/photo`, TikTok `/photo/`, X `/status/…/photo/`) classify as image; real videos still win. Centralized in `extractor._url_media_hint` + `classify.derive_memo_type` per ADR-001 — no per-host hacks. (Instagram `/p/` stays video-by-default, since it is photo-or-video ambiguous and yt-dlp decides.)
+- 🗂️ **Server error adding a memo to a collection** — selecting a collection in the New-Memo panel returned a 500 for every memo type (note / link / file): the collection lookup autoflushed the pending memo, so `memo.collections.append()` fired an async-illegal lazy load (`MissingGreenlet`). The new memo's relationship is now marked loaded-empty before the append, so the join row writes cleanly.
 
 ---
 ## [2.0.2] - 2026-06-01

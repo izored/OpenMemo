@@ -83,6 +83,10 @@ interface AppState {
   setCollectionModalOpen: (open: boolean) => void;
   editingCollection: Collection | null;
   setEditingCollection: (collection: Collection | null) => void;
+  // id of a collection just created via the New-collection flow, so the open
+  // surface (e.g. AddMemoPanel) can auto-select it. Consumer clears after use.
+  lastCreatedCollectionId: string | null;
+  setLastCreatedCollectionId: (id: string | null) => void;
 
   // Add memo panel (design FAB panel)
   addPanelOpen: boolean;
@@ -163,6 +167,8 @@ export const useAppStore = create<AppState>((set) => ({
   setCollectionModalOpen: (open) => set({ collectionModalOpen: open }),
   editingCollection: null,
   setEditingCollection: (collection) => set({ editingCollection: collection }),
+  lastCreatedCollectionId: null,
+  setLastCreatedCollectionId: (id) => set({ lastCreatedCollectionId: id }),
 
   addPanelOpen: false,
   setAddPanelOpen: (open) => set({ addPanelOpen: open }),

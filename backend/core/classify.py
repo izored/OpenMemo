@@ -51,9 +51,17 @@ def derive_memo_type(memo) -> str:
 
         url_type = detect_url_type(source_url)
         if url_type == "video":
-            # Preserve audio type already set by the extractor (SoundCloud etc.).
-            current = getattr(memo, "type", None)
-            return "audio" if current == "audio" else "video"
+            # Domain says "media platform", but the specific item may be a photo
+            # (FB/TikTok/X photo post) or audio (SoundCloud), not video. Preserve
+            # a concrete media type the extractor already resolved; only default
+            # to video when we have no stronger signal. Domain ≠ proof of video.
+            current = (getattr(memo, "type", None) or "").lower()
+            if current in ("image", "audio"):
+                return current
+            from backend.core.extractor import _url_media_hint
+            if _url_media_hint(source_url) == "image":
+                return "image"
+            return "video"
 
         ext = _ext_from_url(source_url)
         if ext:

@@ -11,6 +11,7 @@ from pydantic import BaseModel
 from backend.config import settings
 from backend.db.database import get_db, AsyncSessionLocal
 from sqlalchemy import select
+from sqlalchemy.orm.attributes import set_committed_value
 
 from backend.db.models import Memo, Collection
 from backend.core.security import sanitize_workspace_id, validate_url, FileUploadHandler
@@ -29,8 +30,15 @@ async def _attach_collection(db: AsyncSession, memo: Memo, collection_id: Option
     coll = (
         await db.execute(select(Collection).where(Collection.id == collection_id))
     ).scalar_one_or_none()
-    if coll is not None:
-        memo.collections.append(coll)
+    if coll is None:
+        return
+    # The Collection query autoflushes the pending memo, making it persistent — so
+    # `memo.collections.append()` would fire a lazy SELECT to load existing links,
+    # illegal under async (MissingGreenlet → 500). A brand-new memo has no links
+    # yet, so mark the relationship loaded-and-empty first; the append then needs
+    # no IO and the m2m row is written on commit.
+    set_committed_value(memo, "collections", [])
+    memo.collections.append(coll)
 
 
 class URLIngest(BaseModel):
