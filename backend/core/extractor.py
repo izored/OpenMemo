@@ -138,8 +138,70 @@ def _clean_content_node(soup: BeautifulSoup):
     return root
 
 
+def _parse_html(html: str, base_url: str, url: str, domain: str) -> dict | None:
+    """Parse fetched/rendered HTML into a memo dict (Defuddle-style: OpenGraph +
+    JSON-LD + readable content -> Markdown). Returns None when the page yields
+    nothing usable (no title, image, or content) so the caller can escalate."""
+    soup = BeautifulSoup(html, "lxml")
+    jsonld = _extract_jsonld(soup)
+
+    title = (
+        _meta(soup, "property", "og:title")
+        or next((o["headline"] for o in jsonld if isinstance(o.get("headline"), str)), "")
+        or (soup.title.string.strip() if soup.title and soup.title.string else "")
+    )
+    description = (
+        _meta(soup, "name", "description")
+        or _meta(soup, "property", "og:description")
+        or _meta(soup, "name", "twitter:description")
+        or next((o["description"] for o in jsonld if isinstance(o.get("description"), str)), "")
+    )
+    thumbnail = _pick_image(soup, jsonld, base_url)
+    favicon = f"https://www.google.com/s2/favicons?domain={domain}&sz=32"
+
+    root = _clean_content_node(soup)
+    for img in root.find_all("img"):
+        src = img.get("src") or img.get("data-src")
+        if src and not src.startswith("data:"):
+            img["src"] = urljoin(base_url, src)
+        elif not src:
+            img.decompose()
+    for a in root.find_all("a", href=True):
+        a["href"] = urljoin(base_url, a["href"])
+
+    h = html2text.HTML2Text()
+    h.ignore_links = False
+    h.ignore_images = False
+    h.body_width = 0
+    content_text = h.handle(str(root))
+    content_text = re.sub(r"\n{3,}", "\n\n", content_text).strip()
+
+    # Nothing usable -> let the caller try the headless path or a minimal card.
+    if not title.strip() and not thumbnail and not content_text.strip():
+        return None
+
+    return {
+        "title": title.strip(),
+        "description": description.strip(),
+        "content_text": content_text,
+        # Markdown (not raw HTML) -- MemoDetail renders this via ReactMarkdown.
+        "content_raw": content_text,
+        "source_url": url,
+        "source_domain": domain,
+        "source_favicon": favicon,
+        "thumbnail_path": thumbnail,
+        # Saved web pages are filed as "link" (a webpage IS a link).
+        "type": "link",
+    }
+
+
 async def extract_url(url: str) -> dict:
-    """Extract content from a URL (article, page)."""
+    """Extract content from a URL (article, page).
+
+    Plain HTTP fetch first (fast, covers most sites). If the response is a
+    bot-challenge stub (non-200, e.g. Cloudflare 202) or a 200 that renders to
+    nothing (JS SPA / antibot wall), escalate to `_minimal_link`, which drives a
+    real headless browser past the challenge -- no Microlink, no paid API."""
     parsed_url = urlparse(url)
     domain = parsed_url.netloc.lstrip("www.")
 
@@ -159,73 +221,18 @@ async def extract_url(url: str) -> dict:
         try:
             resp = await client.get(url)
             resp.raise_for_status()
-            html = resp.text
-        except httpx.HTTPStatusError:
-            return await _minimal_link(url, domain)
+            # Only a real 200 carries real content; a 2xx-but-not-200 is a
+            # challenge interstitial (Cloudflare managed challenge -> HTTP 202 +
+            # JS stub). Route anything non-200, or a 200 that renders to nothing,
+            # to the headless path in _minimal_link.
+            if resp.status_code == 200:
+                parsed = _parse_html(resp.text, str(resp.url), url, domain)
+                if parsed is not None:
+                    return parsed
         except Exception:
-            return await _minimal_link(url, domain)
-    
-    soup = BeautifulSoup(html, "lxml")
-    base_url = str(resp.url)
-    jsonld = _extract_jsonld(soup)
+            pass
 
-    # Title: og:title → schema headline → <title>
-    title = (
-        _meta(soup, "property", "og:title")
-        or next((o["headline"] for o in jsonld if isinstance(o.get("headline"), str)), "")
-        or (soup.title.string.strip() if soup.title and soup.title.string else "")
-    )
-
-    # Description: meta description → og:description → schema
-    description = (
-        _meta(soup, "name", "description")
-        or _meta(soup, "property", "og:description")
-        or _meta(soup, "name", "twitter:description")
-        or next((o["description"] for o in jsonld if isinstance(o.get("description"), str)), "")
-    )
-
-    thumbnail = _pick_image(soup, jsonld, base_url)
-
-    parsed = urlparse(url)
-    domain = parsed.netloc
-    favicon = f"https://www.google.com/s2/favicons?domain={domain}&sz=32"
-
-    # Main content root, junk stripped, image src made absolute.
-    root = _clean_content_node(soup)
-    for img in root.find_all("img"):
-        src = img.get("src") or img.get("data-src")
-        if src and not src.startswith("data:"):
-            img["src"] = urljoin(base_url, src)
-        elif not src:
-            img.decompose()
-    for a in root.find_all("a", href=True):
-        a["href"] = urljoin(base_url, a["href"])
-
-    content_html = str(root)
-
-    h = html2text.HTML2Text()
-    h.ignore_links = False
-    h.ignore_images = False
-    h.body_width = 0
-    content_text = h.handle(content_html)
-    content_text = re.sub(r"\n{3,}", "\n\n", content_text).strip()
-
-    return {
-        "title": title.strip(),
-        "description": description.strip(),
-        "content_text": content_text,
-        # Markdown (not raw HTML) — MemoDetail renders this via ReactMarkdown.
-        "content_raw": content_text,
-        "source_url": url,
-        "source_domain": domain,
-        "source_favicon": favicon,
-        "thumbnail_path": thumbnail,
-        # Saved web pages are filed as "link" (the UI has no Article tab — a
-        # webpage IS a link). See backend/core/classify.py for the taxonomy.
-        "type": "link",
-    }
-
-
+    return await _minimal_link(url, domain)
 
 
 async def extract_pdf(file_path: str) -> dict:
@@ -338,6 +345,28 @@ def detect_url_type(url: str) -> str:
     return "article"
 
 
+# Paths that unambiguously mean "still photo" on an otherwise video-capable host.
+# Lets a photo post (FB photo, TikTok photo mode, X/Twitter photo) be filed as an
+# image instead of a video. Deliberately conservative — ambiguous paths (e.g.
+# Instagram /p/, which can be photo OR video) are left out so a real video is
+# never mislabeled a photo. yt-dlp still wins whenever it can pull an actual video.
+_PHOTO_PATH_RE = re.compile(
+    r"""
+      facebook\.com/(?:photo\b|photo\.php|[^/]+/photos/)   # FB photo permalinks
+    | tiktok\.com/@[^/]+/photo/                             # TikTok photo mode
+    | (?:twitter|x)\.com/[^/]+/status/\d+/photo/           # X/Twitter photo view
+    """,
+    re.I | re.X,
+)
+
+
+def _url_media_hint(url: str) -> str | None:
+    """Return 'image' when the URL path unambiguously points at a still photo on
+    a video-capable host, else None. Centralizes photo-vs-video disambiguation so
+    no classify/render site hardcodes per-host rules (ADR-001)."""
+    return "image" if _PHOTO_PATH_RE.search(url or "") else None
+
+
 async def extract_video(url: str) -> dict:
     """Extract metadata from any yt-dlp-supported video platform.
 
@@ -384,41 +413,14 @@ async def extract_video(url: str) -> dict:
     except Exception:
         pass
 
-    # yt-dlp failed (private, login-required, unsupported) — enrich via Microlink + OG.
+    # yt-dlp failed (private, login-required, unsupported, or a non-video item
+    # like a photo post) — enrich via Microlink + OG.
     result = await _minimal_link(url, domain)
-    result["type"] = "video"
+    # A photo post on a video host must not become a video memo. Downgrade to
+    # image only when the URL path clearly says photo; otherwise keep video (the
+    # item may be a private/region-locked video we just couldn't pull).
+    result["type"] = _url_media_hint(url) or "video"
     return result
-
-
-async def _fetch_microlink(url: str) -> dict:
-    """Call Microlink API to get OG title/description/image for bot-walled pages.
-
-    Returns a partial dict with whatever Microlink could fetch; empty dict on failure.
-    Free tier, no API key required.
-    """
-    import urllib.parse
-    api = f"https://api.microlink.io/?url={urllib.parse.quote(url, safe='')}&screenshot=true&meta=true"
-    try:
-        async with httpx.AsyncClient(timeout=15.0, follow_redirects=True) as client:
-            resp = await client.get(api)
-            if resp.status_code != 200:
-                return {}
-            body = resp.json()
-        if body.get("status") != "success":
-            return {}
-        data = body.get("data", {})
-        thumbnail = (
-            (data.get("image") or {}).get("url")
-            or (data.get("screenshot") or {}).get("url")
-            or ""
-        )
-        return {
-            "title": data.get("title") or "",
-            "description": data.get("description") or "",
-            "thumbnail_path": thumbnail,
-        }
-    except Exception:
-        return {}
 
 
 _BROWSER_UA_HTML = (
@@ -482,32 +484,55 @@ async def _fetch_og_meta(url: str) -> dict:
 
 
 async def _minimal_link(url: str, domain: str | None = None) -> dict:
-    """Minimal memo dict enriched via Microlink → direct OG scrape fallback.
+    """Resolve a memo for a URL the plain fetch could not read -- hardest path last.
 
-    The chain is deliberate: Microlink first because it handles SPA/JS-heavy
-    pages, then a direct HTML fetch + OG parse for pages where Microlink's
-    free tier flakes (FB reels regularly fall here). If both fail, return the
-    raw URL + a `preview_unavailable` flag so the card can surface that to
-    the user instead of silently rendering a gradient placeholder.
-    """
+    Chain: headless browser (renders past Cloudflare/JS challenges, returns full
+    title + image + content) -> direct OpenGraph scrape (cheap, for pages that
+    only needed a browser UA) -> a `preview_unavailable` card so a save never
+    dead-ends. No Microlink / third-party API."""
     from urllib.parse import urlparse as _up
     if not domain:
         domain = _up(url).netloc.lstrip("www.")
 
-    enrichment = await _fetch_microlink(url)
-    if not (enrichment.get("title") and enrichment.get("thumbnail_path")):
-        # Try direct OG scrape, merging any missing fields
-        og = await _fetch_og_meta(url)
-        if og:
-            enrichment = {
-                "title": enrichment.get("title") or og.get("title", ""),
-                "description": enrichment.get("description") or og.get("description", ""),
-                "thumbnail_path": enrichment.get("thumbnail_path") or og.get("thumbnail_path", ""),
-            }
+    # 1) Real browser -- beats antibot walls, returns full content when it can.
+    # On a photo page (FB/IG/X photo, …) the platform serves a generic og:image
+    # to scrapers but renders the real photo in the DOM, so ask for the largest
+    # rendered image and prefer it. General: keyed off the centralized
+    # _url_media_hint, no per-host code.
+    is_photo = _url_media_hint(url) == "image"
+    try:
+        from backend.core.headless import render_page
+
+        rendered = await render_page(url, want_main_image=is_photo)
+        if rendered and rendered.get("html"):
+            parsed = _parse_html(rendered["html"], url, url, domain)
+            main_img = rendered.get("main_image")
+            if parsed is None and is_photo and main_img:
+                # Photo page with no usable OG/text — still keep the real image.
+                parsed = {
+                    "title": url,
+                    "description": "",
+                    "content_text": "",
+                    "content_raw": "",
+                    "source_url": url,
+                    "source_domain": domain,
+                    "source_favicon": f"https://www.google.com/s2/favicons?domain={domain}&sz=32",
+                    "thumbnail_path": "",
+                    "type": "link",
+                }
+            if parsed is not None:
+                if is_photo and main_img:
+                    parsed["thumbnail_path"] = main_img
+                return parsed
+    except Exception:
+        pass
+
+    # 2) Direct OG scrape (browser UA) -- for pages that block only the API path.
+    enrichment = await _fetch_og_meta(url)
 
     has_meta = bool(enrichment.get("title") or enrichment.get("thumbnail_path"))
     description = enrichment.get("description") or (
-        "" if has_meta else f"Preview unavailable — {domain} blocked metadata extraction. Open the original to view."
+        "" if has_meta else f"Preview unavailable -- {domain} blocked metadata extraction. Open the original to view."
     )
     return {
         "title": enrichment.get("title") or url,

@@ -38,6 +38,8 @@ export function AddMemoPanel() {
   const setWriterOpen = useAppStore((s) => s.setWriterOpen);
   const setCollectionModalOpen = useAppStore((s) => s.setCollectionModalOpen);
   const setEditingCollection = useAppStore((s) => s.setEditingCollection);
+  const lastCreatedCollectionId = useAppStore((s) => s.lastCreatedCollectionId);
+  const setLastCreatedCollectionId = useAppStore((s) => s.setLastCreatedCollectionId);
   const queryClient = useQueryClient();
 
   const { data: collections = [] } = useQuery({
@@ -63,6 +65,15 @@ export function AddMemoPanel() {
       setError('');
     }
   }, [open]);
+
+  // A collection just created from the "New collection…" flow auto-selects here,
+  // so the user lands back in the panel with it already chosen (no reselect).
+  useEffect(() => {
+    if (lastCreatedCollectionId) {
+      setCollection(lastCreatedCollectionId);
+      setLastCreatedCollectionId(null);
+    }
+  }, [lastCreatedCollectionId, setLastCreatedCollectionId]);
 
   const activeColl = collections.find((c: Collection) => c.id === collection);
 

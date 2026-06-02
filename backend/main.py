@@ -114,6 +114,14 @@ async def lifespan(app: FastAPI):
     except Exception:
         pass
 
+    # Close the headless browser used by the link scraper, if it was started.
+    try:
+        from backend.core.headless import close_browser
+
+        await close_browser()
+    except Exception:
+        pass
+
 
 app = FastAPI(
     title="OpenMemo API",

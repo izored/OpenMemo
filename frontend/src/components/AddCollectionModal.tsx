@@ -49,7 +49,7 @@ const PRESET_COLORS = [
 ];
 
 export function AddCollectionModal() {
-  const { collectionModalOpen, setCollectionModalOpen, editingCollection, setEditingCollection } = useAppStore();
+  const { collectionModalOpen, setCollectionModalOpen, editingCollection, setEditingCollection, setLastCreatedCollectionId } = useAppStore();
   const queryClient = useQueryClient();
   const [name, setName] = useState('');
   const [emoji, setEmoji] = useState('📁');
@@ -132,9 +132,12 @@ export function AddCollectionModal() {
           name: name.trim(), emoji, description: description.trim() || null, color,
         });
       } else {
-        await collectionApi.create({
+        const created = await collectionApi.create({
           name: name.trim(), emoji, description: description.trim() || undefined, color,
         });
+        // Let an open surface (AddMemoPanel) auto-select the new collection so
+        // the user doesn't have to reopen the picker and select it again.
+        if (created?.id) setLastCreatedCollectionId(created.id);
       }
       queryClient.invalidateQueries({ queryKey: ['collections'] });
       close();

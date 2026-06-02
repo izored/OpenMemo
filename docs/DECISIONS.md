@@ -7,6 +7,192 @@ the decision, and its consequences, so a future reader knows *why*, not just
 
 ---
 
+## ADR-003 — "Make it local" visibility is gated to remote, localizable media (tiered capture)
+
+**Date:** 2026-06-02 · **Status:** Accepted
+
+### Context
+
+A saved URL can be captured in several different ways depending on what it is.
+The "Make it local" panel (which downloads a remote media item to a local file
+via yt-dlp) was appearing on memo types where it is meaningless — articles,
+links, images, notes, documents — cluttering the detail page and confusing
+users. "Make it local" is only meaningful for a remote, yt-dlp-pullable media
+item that is not already stored as a local file.
+
+At the same time, different memo types require different capture strategies at
+save time. Lumping all URLs under a single action model obscures these
+differences and creates implicit dead ends for non-media types.
+
+### Decision
+
+OpenMemo uses a **tiered capture strategy** keyed off memo type. "Make it
+local" is exactly **one tier** — not a universal action available everywhere:
+
+| Memo type | Capture strategy | Make it local? |
+|-----------|-----------------|----------------|
+| `link` / `article` | Server-side scrape (headless Chromium, see ADR-002) — content + hero image captured at save time | No |
+| `image` (including social photo pages such as FB/IG/X) | Scrape the real image URL; store locally at ingest | No |
+| `video` / `audio` from a yt-dlp platform (remote, not yet downloaded) | Platform iframe/embed available immediately; **"Make it local"** appears to download a playable local copy | **Yes** |
+| Auth-walled private media | Browser extension (logged-in session); no logged-out download path | No |
+
+The decision of whether to show the panel is centralized in a single predicate
+`canMakeLocal(memo)` in `frontend/src/lib/media.ts`:
+
+- `memo.type` is `'video'` or `'audio'`
+- `memo.source_url` is present (remote origin exists)
+- `memo.file_path` is absent (not already downloaded)
+- `memo.localize_status !== 'done'` (job not already completed)
+
+The panel renders in `MemoDetail`, below the platform embed.  All four
+conditions must hold; failing any one suppresses the panel.
+
+See `docs/make-it-local.md` for the full implementation, gating predicate,
+component placement, download modes, and end-to-end user flow.
+
+### Alternatives considered
+
+| Option | Why rejected |
+|--------|--------------|
+| **Show "Make it local" on every memo type** | Meaningless and misleading on non-media types — implies you can "download" an article or a note. Adds clutter without value. |
+| **Scatter per-type `if` conditionals across components** | They drift out of sync as the codebase grows; violates the single-source principle established in ADR-001 (memo-type changes must be systematic across the whole type, not scattered per-provider). |
+| **Separate "download" button per type with no shared predicate** | Same fragmentation risk; harder to test; requires updating multiple render sites when the localize eligibility rules change. |
+
+### Consequences
+
+- One predicate (`canMakeLocal`) is the single source of truth for panel
+  visibility; updating it propagates correctly to every render site with no
+  drift.
+- Non-qualifying memo types fall back to their type-appropriate action (Open
+  original, image preview, editable note, Download original) — no memo type is
+  a dead end.  Satisfies the graceful-fallback rule from ADR-001.
+- The tiered model makes the capture strategy for each memo type explicit and
+  auditable in one place (this ADR + the predicate), rather than implicit in
+  scattered component logic.
+- New yt-dlp-supported types (e.g. a future `podcast` type) are opted in by
+  updating `canMakeLocal` alone; everything else is unchanged.
+
+---
+
+## ADR-002 — Self-hosted headless Chromium replaces Microlink for link extraction
+
+**Date:** 2026-06-02 · **Status:** Accepted
+
+### Context
+
+OpenMemo saves any URL as a link memo by fetching the page and extracting its
+title, description, thumbnail (via `og:image`), and readable content. Two
+categories of page resist a plain HTTP fetch:
+
+1. **Antibot / JS-challenge pages** — sites protected by Cloudflare's *managed
+   challenge* return HTTP 202 with a tiny JavaScript stub. The stub has no
+   OpenGraph data; the real DOM only appears after the challenge JS runs in a
+   real browser. Examples: Dribbble, Behance.
+
+2. **JS-rendered SPAs** — pages whose `<head>` metadata is injected by
+   client-side JavaScript after the initial HTML loads, leaving a plain fetch
+   with nothing useful.
+
+The previous code path used the **Microlink API** (free tier) as the fallback
+for these cases. Two problems broke that:
+
+- `extract_url` was refactored to call `raise_for_status()`, which lets
+  HTTP 202 challenge stubs pass as successful; the Microlink call never
+  triggered.
+- Even when reached, Microlink's free tier began returning `EPROXYNEEDED` for
+  any site that uses antibot protection, with a prompt to upgrade to the paid
+  PRO plan. The sites Microlink now refuses are exactly the antibot-protected
+  ones we needed it for.
+
+OpenMemo is **local-first** and must not depend on a paid third-party API.
+
+### Decision
+
+Embed a self-hosted **headless Chromium** (via Playwright) directly in the
+`openmemo-api` Docker image. When a plain HTTP fetch is not enough, the app
+drives a real browser that executes challenge JS and delivers the fully rendered
+DOM — including real `og:image` and readable content — with no third-party API,
+no key, and no per-site rate limit.
+
+Microlink was **removed entirely** from the codebase (no fallback, no free
+tier).
+
+#### How it works
+
+`backend/core/extractor.py` — `extract_url()` — implements a three-stage chain:
+
+1. **Fast plain HTTP fetch** (`httpx`). If the response is a genuine HTTP 200
+   *and* `_parse_html()` produces usable content (title / image / text), return
+   immediately. A non-200 response (including a 202 challenge stub) or a 200
+   that renders to nothing falls through to the next stage.
+
+2. **Headless render** (`_minimal_link()` → `render_page()` in
+   `backend/core/headless.py`). Launches Chromium, navigates to the URL,
+   waits for `og:image` / `og:title` meta to appear (up to 12 s), then for
+   network idle (up to 6 s), then reads `page.content()`. The rendered HTML is
+   fed back to `_parse_html()`. This stage executes the Cloudflare challenge JS
+   so the real DOM is available.
+
+3. **Direct OpenGraph scrape** (`_fetch_og_meta()`). A lightweight browser-UA
+   `httpx` request that reads only meta tags — for pages that block the API
+   path but serve HTML fine to a real user-agent. This is a cheaper fallback
+   before the final safety net.
+
+4. **Preview-unavailable card** (final fallback). A memo is still created with
+   the source URL intact so the user can open the original — a save never
+   dead-ends.
+
+`backend/core/headless.py` is a **lazy singleton**: Chromium launches on first
+use, stays warm across requests (each render gets its own incognito
+`BrowserContext`, closed after the request), and is shut down cleanly via
+`close_browser()` called from the FastAPI app lifespan in `backend/main.py`.
+If Playwright or the binary is unavailable, `render_page()` returns `None` and
+the chain degrades to the plain-fetch path — the feature is purely additive.
+
+The browser binary is installed in the Docker image via:
+
+```dockerfile
+RUN python -m playwright install --with-deps chromium chromium-headless-shell
+```
+
+`playwright>=1.49.0` is declared in `backend/requirements.txt`; the OS
+libraries are pulled by `--with-deps` on the slim Debian base.
+
+#### Scope boundary
+
+This solves **antibot** (Cloudflare managed challenge) for **public** pages.
+It does **not** defeat **auth walls** — private Facebook photos, logged-in
+Instagram posts, and similar content require a valid session cookie that no
+anonymous browser can supply. Those links still need the browser extension.
+Antibot solved ≠ auth-wall solved.
+
+### Alternatives considered
+
+| Option | Why rejected |
+|--------|--------------|
+| **Microlink PRO** (paid API) | Violates local-first principle; OpenMemo must work without any cloud API or subscription. |
+| **`curl_cffi` TLS impersonation** | Tested — the managed JS challenge is not a TLS fingerprint problem; both `curl_cffi` and `cloudscraper` still receive HTTP 202. A real JavaScript engine is required. |
+| **`browserless` sidecar container** | The underlying engine Microlink uses; cleaner isolation, but adds ~1 GB extra container and more infrastructure orchestration. Embedding Chromium in the API image is simpler and sufficient for a single-user local app. |
+| **Ignore antibot sites / extension-only** | Leaves Dribbble, Behance, and similar sites permanently broken as link memos. Rejected by the product owner — these are legitimate design-inspiration sources. |
+
+### Consequences
+
+- **Image size** — `openmemo-api` grows by approximately 400 MB (Chromium
+  binary + required OS libraries installed via `--with-deps`).
+- **Ingest latency** — saving a bot-walled link now takes roughly 10 s while
+  the headless render completes. The render runs in-request synchronously; a
+  possible future improvement is to move it to the existing background ingest
+  task.
+- **Container flags** — Chromium runs with `--no-sandbox` and
+  `--disable-dev-shm-usage` inside the Docker container, as required when
+  there is no user-namespace sandbox. This is standard and expected for
+  containerized headless browsers.
+- **No third-party dependency for link scraping** — the entire extraction chain
+  (`extract_url` → `_minimal_link` → `render_page` → `_parse_html`) runs
+  locally. A save works fully offline (except for the actual page fetch).
+
+---
+
 ## ADR-001 — Memo-type changes are systematic across the whole type, not per-provider
 
 **Date:** 2026-06-02 · **Status:** Accepted
