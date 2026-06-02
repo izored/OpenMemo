@@ -159,6 +159,12 @@ async def extract_url(url: str) -> dict:
         try:
             resp = await client.get(url)
             resp.raise_for_status()
+            # Bot-challenge interstitials answer 2xx-but-not-200 (e.g. Cloudflare
+            # managed challenge → HTTP 202 + a tiny JS stub with no OpenGraph).
+            # raise_for_status() passes those, so gate strictly on 200; anything
+            # else routes to the Microlink/OG graceful fallback (_minimal_link).
+            if resp.status_code != 200:
+                return await _minimal_link(url, domain)
             html = resp.text
         except httpx.HTTPStatusError:
             return await _minimal_link(url, domain)
@@ -209,6 +215,13 @@ async def extract_url(url: str) -> dict:
     h.body_width = 0
     content_text = h.handle(content_html)
     content_text = re.sub(r"\n{3,}", "\n\n", content_text).strip()
+
+    # A 200 that still yields nothing usable (JS-rendered SPA wall, consent gate,
+    # empty shell) must not become a blank memo. Fall back to Microlink/OG so the
+    # save degrades to a real link card, never a dead end. (ADR-001: applies to
+    # the whole link type, not one host.)
+    if not title.strip() and not thumbnail and not content_text.strip():
+        return await _minimal_link(url, domain)
 
     return {
         "title": title.strip(),
@@ -338,6 +351,28 @@ def detect_url_type(url: str) -> str:
     return "article"
 
 
+# Paths that unambiguously mean "still photo" on an otherwise video-capable host.
+# Lets a photo post (FB photo, TikTok photo mode, X/Twitter photo) be filed as an
+# image instead of a video. Deliberately conservative — ambiguous paths (e.g.
+# Instagram /p/, which can be photo OR video) are left out so a real video is
+# never mislabeled a photo. yt-dlp still wins whenever it can pull an actual video.
+_PHOTO_PATH_RE = re.compile(
+    r"""
+      facebook\.com/(?:photo\b|photo\.php|[^/]+/photos/)   # FB photo permalinks
+    | tiktok\.com/@[^/]+/photo/                             # TikTok photo mode
+    | (?:twitter|x)\.com/[^/]+/status/\d+/photo/           # X/Twitter photo view
+    """,
+    re.I | re.X,
+)
+
+
+def _url_media_hint(url: str) -> str | None:
+    """Return 'image' when the URL path unambiguously points at a still photo on
+    a video-capable host, else None. Centralizes photo-vs-video disambiguation so
+    no classify/render site hardcodes per-host rules (ADR-001)."""
+    return "image" if _PHOTO_PATH_RE.search(url or "") else None
+
+
 async def extract_video(url: str) -> dict:
     """Extract metadata from any yt-dlp-supported video platform.
 
@@ -384,9 +419,13 @@ async def extract_video(url: str) -> dict:
     except Exception:
         pass
 
-    # yt-dlp failed (private, login-required, unsupported) — enrich via Microlink + OG.
+    # yt-dlp failed (private, login-required, unsupported, or a non-video item
+    # like a photo post) — enrich via Microlink + OG.
     result = await _minimal_link(url, domain)
-    result["type"] = "video"
+    # A photo post on a video host must not become a video memo. Downgrade to
+    # image only when the URL path clearly says photo; otherwise keep video (the
+    # item may be a private/region-locked video we just couldn't pull).
+    result["type"] = _url_media_hint(url) or "video"
     return result
 
 
