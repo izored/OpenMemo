@@ -1,6 +1,7 @@
 # Claude local files
 .claude/
-CLAUDE.md
+# CLAUDE.md is TRACKED — shared project instructions (incl. Change Scope Policy).
+# CLAUDE.local.md is the private, per-machine overrides; it stays ignored below.
 CLAUDE.local.md
 *.local.md
 *.local.json
