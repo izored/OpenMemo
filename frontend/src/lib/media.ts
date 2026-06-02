@@ -25,6 +25,23 @@ export function canMakeLocal(memo: Memo): boolean {
   );
 }
 
+/**
+ * Gating predicate for the "Get transcript" action.
+ *
+ * A transcript can be produced for any video/audio memo that has SOMETHING to
+ * transcribe — either a local media file (Whisper STT) or a remote source_url
+ * (caption-first, STT fallback; see ADR-004). This is non-destructive: the
+ * memo keeps its type and embed. Host-agnostic — yt-dlp handles every video
+ * provider, and unknown/auth-walled hosts simply fail gracefully to an error
+ * state with "open original" still available.
+ */
+export function canTranscript(memo: Memo): boolean {
+  return (
+    (memo.type === 'video' || memo.type === 'audio') &&
+    (!!memo.file_path || !!memo.source_url)
+  );
+}
+
 // Video platform detection + embed URLs live in `lib/platforms.ts` (the single
 // registry shared by MemoCard / Lightbox / MemoDetail). Audio-stream embeds
 // stay here because they hang off the separate audio render path.

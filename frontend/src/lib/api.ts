@@ -34,11 +34,15 @@ export const memoApi = {
   delete: (id: string) => fetchJSON<any>(`/memos/${id}`, { method: 'DELETE' }),
   restore: (id: string) => fetchJSON<any>(`/memos/${id}/restore`, { method: 'POST' }),
   listDeleted: () => fetchJSON<{ id: string; type: string; title: string; deleted_at: string | null }[]>('/memos/deleted/list'),
-  summary: (id: string) => fetchJSON<{ summary: string }>(`/memos/${id}/summary`, { method: 'POST' }),
+  summary: (id: string, mode: 'timestamp' | 'insights' | 'essay' = 'insights') =>
+    fetchJSON<{ id: string; mode: string; summary: string }>(`/memos/${id}/summary`, {
+      method: 'POST',
+      body: JSON.stringify({ mode }),
+    }),
   related: (id: string) => fetchJSON<any[]>(`/memos/${id}/related`),
   transcribe: (id: string) =>
     fetchJSON<{ id: string; status: string }>(`/memos/${id}/transcribe`, { method: 'POST' }),
-  localize: (id: string, mode: 'video' | 'audio' | 'audio_transcript') =>
+  localize: (id: string, mode: 'video' | 'audio') =>
     fetchJSON<{ id: string; status: string; mode: string }>(`/memos/${id}/localize`, {
       method: 'POST',
       body: JSON.stringify({ mode }),

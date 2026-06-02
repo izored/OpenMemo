@@ -12,12 +12,15 @@ export interface Memo {
   file_path?: string;
   thumbnail_path?: string;
   ai_summary?: string;
+  // On-demand AI summaries cached per mode (timestamp | insights | essay).
+  summaries?: Partial<Record<SummaryMode, string>> | null;
   notes?: string;
-  // Speech-to-text state for audio memos. The transcript text itself lives in
-  // content_text (so it embeds + is searchable); these track UI state + the
-  // detected language.
+  // Transcript state for video/audio memos. The transcript text itself lives in
+  // content_text (so it embeds + is searchable); these track UI state, the
+  // detected language, and how it was obtained (host captions vs Whisper STT).
   transcript_status?: 'pending' | 'processing' | 'done' | 'error' | null;
   transcript_lang?: string | null;
+  transcript_source?: 'captions' | 'stt' | null;
   // "Make it local" (yt-dlp download) state for link/video memos.
   localize_status?: 'pending' | 'processing' | 'done' | 'error' | null;
   sort_order?: number;
@@ -30,6 +33,8 @@ export interface Memo {
 }
 
 export type MemoType = 'note' | 'article' | 'video' | 'image' | 'audio' | 'document' | 'link' | 'code' | 'file';
+
+export type SummaryMode = 'timestamp' | 'insights' | 'essay';
 
 export interface CollectionRef {
   id: string;

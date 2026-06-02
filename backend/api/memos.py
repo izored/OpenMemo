@@ -5,7 +5,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Optional
 
-from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, Request
+from fastapi import APIRouter, BackgroundTasks, Body, Depends, HTTPException, Query, Request
 from fastapi.responses import FileResponse, StreamingResponse
 from sqlalchemy import select, func, desc, asc
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -198,6 +198,7 @@ async def get_memo(memo_id: str, db: AsyncSession = Depends(get_db)):
         "video_description": memo.video_description,
         "transcript_status": memo.transcript_status,
         "transcript_lang": memo.transcript_lang,
+        "transcript_source": memo.transcript_source,
         "localize_status": memo.localize_status,
         "notes": memo.notes,
         "source_url": memo.source_url,
@@ -206,6 +207,7 @@ async def get_memo(memo_id: str, db: AsyncSession = Depends(get_db)):
         "file_path": memo.file_path,
         "thumbnail_path": memo.thumbnail_path,
         "ai_summary": memo.ai_summary,
+        "summaries": memo.summaries,
         "notes": memo.notes,
         "sort_order": memo.sort_order,
         "pinned": memo.pinned,
@@ -330,28 +332,39 @@ async def transcribe_memo(
     background_tasks: BackgroundTasks,
     db: AsyncSession = Depends(get_db),
 ):
-    """Kick off (or re-run) speech-to-text for an audio memo. Runs in the
-    background; the client polls the memo until transcript_status is done."""
+    """Kick off (or re-run) transcript extraction for a video/audio memo. Runs in
+    the background; the client polls the memo until transcript_status is done.
+
+    Two non-destructive paths, neither changes the memo's type or file_path:
+      • Local file present  → faster-whisper STT on the local audio/video.
+      • Remote only (source_url, no file) → caption-first, STT fallback via
+        core/transcript.py (see ADR-004). A video memo keeps its embed."""
     memo = await db.get(Memo, memo_id)
     if not memo:
         raise HTTPException(status_code=404, detail="Memo not found")
-    # Audio OR local video — faster-whisper reads video containers (PyAV) and
-    # pulls the audio track itself, so a downloaded video can be transcribed too.
-    if memo.type not in ("audio", "video") or not memo.file_path:
-        raise HTTPException(status_code=400, detail="Memo has no local audio/video to transcribe")
+    if memo.type not in ("audio", "video"):
+        raise HTTPException(status_code=400, detail="Only video/audio memos can be transcribed")
+    if not memo.file_path and not memo.source_url:
+        raise HTTPException(status_code=400, detail="Memo has no local file or source URL to transcribe")
 
     memo.transcript_status = "pending"
     memo.updated_at = datetime.utcnow()
     await db.commit()
 
-    from backend.api.ingest import transcribe_memo_task
+    from backend.api.ingest import transcribe_memo_task, transcript_memo_task
 
-    background_tasks.add_task(transcribe_memo_task, memo_id)
+    # faster-whisper reads video containers (PyAV) and pulls the audio track, so
+    # a downloaded video can be transcribed too. Remote-only memos use the
+    # caption-first extractor so the original stays a remote embed.
+    if memo.file_path:
+        background_tasks.add_task(transcribe_memo_task, memo_id)
+    else:
+        background_tasks.add_task(transcript_memo_task, memo_id)
     return {"id": memo_id, "status": "pending"}
 
 
 class LocalizeRequest(BaseModel):
-    mode: str = "video"  # video | audio | audio_transcript
+    mode: str = "video"  # video | audio (audio = explicit video→audio conversion)
 
 
 @router.post("/{memo_id}/localize")
@@ -590,9 +603,23 @@ async def list_deleted_memos(db: AsyncSession = Depends(get_db)):
     ]
 
 
+class SummaryRequest(BaseModel):
+    mode: str = "insights"  # insights | timestamp | essay
+
+
 @router.post("/{memo_id}/summary")
-async def generate_memo_summary(memo_id: str, db: AsyncSession = Depends(get_db)):
-    """Generate AI summary for a memo."""
+async def generate_memo_summary(
+    memo_id: str,
+    body: SummaryRequest = Body(default_factory=SummaryRequest),
+    db: AsyncSession = Depends(get_db),
+):
+    """Generate an AI summary for a memo in one of three modes, fed the full
+    transcript/content. Results are cached per-mode in `summaries` so switching
+    back to a mode is instant. `insights` mirrors to `ai_summary` for back-compat."""
+    from backend.core.rag import SUMMARY_MODES
+
+    if body.mode not in SUMMARY_MODES:
+        raise HTTPException(status_code=400, detail=f"Invalid summary mode: {body.mode}")
     memo = await db.get(Memo, memo_id)
     if not memo:
         raise HTTPException(status_code=404, detail="Memo not found")
@@ -601,13 +628,19 @@ async def generate_memo_summary(memo_id: str, db: AsyncSession = Depends(get_db)
         raise HTTPException(status_code=400, detail="Memo has no content to summarize")
     
     from backend.core.rag import generate_summary
-    summary = await generate_summary(memo.content_text)
-    
-    memo.ai_summary = summary
+    summary = await generate_summary(memo.content_text, mode=body.mode)
+
+    # Cache per-mode. dict(...) forces a new object so SQLAlchemy detects the
+    # change on the JSON column (in-place mutation of a JSON dict isn't tracked).
+    cached = dict(memo.summaries or {})
+    cached[body.mode] = summary
+    memo.summaries = cached
+    if body.mode == "insights":
+        memo.ai_summary = summary
     memo.updated_at = datetime.utcnow()
     await db.commit()
-    
-    return {"id": memo.id, "summary": summary}
+
+    return {"id": memo.id, "mode": body.mode, "summary": summary}
 
 
 @router.get("/{memo_id}/related")
