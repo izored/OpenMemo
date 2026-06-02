@@ -495,13 +495,34 @@ async def _minimal_link(url: str, domain: str | None = None) -> dict:
         domain = _up(url).netloc.lstrip("www.")
 
     # 1) Real browser -- beats antibot walls, returns full content when it can.
+    # On a photo page (FB/IG/X photo, …) the platform serves a generic og:image
+    # to scrapers but renders the real photo in the DOM, so ask for the largest
+    # rendered image and prefer it. General: keyed off the centralized
+    # _url_media_hint, no per-host code.
+    is_photo = _url_media_hint(url) == "image"
     try:
         from backend.core.headless import render_page
 
-        rendered = await render_page(url)
+        rendered = await render_page(url, want_main_image=is_photo)
         if rendered and rendered.get("html"):
             parsed = _parse_html(rendered["html"], url, url, domain)
+            main_img = rendered.get("main_image")
+            if parsed is None and is_photo and main_img:
+                # Photo page with no usable OG/text — still keep the real image.
+                parsed = {
+                    "title": url,
+                    "description": "",
+                    "content_text": "",
+                    "content_raw": "",
+                    "source_url": url,
+                    "source_domain": domain,
+                    "source_favicon": f"https://www.google.com/s2/favicons?domain={domain}&sz=32",
+                    "thumbnail_path": "",
+                    "type": "link",
+                }
             if parsed is not None:
+                if is_photo and main_img:
+                    parsed["thumbnail_path"] = main_img
                 return parsed
     except Exception:
         pass
