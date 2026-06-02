@@ -12,7 +12,7 @@ player instead of a confusing "Make it local" prompt with a Video button.
 ### Added
 
 - 🎧 **Auto-download pulled audio** — paste a SoundCloud / Bandcamp / Mixcloud link and openMemo downloads the audio in the background on save, so it lands as a local, playable audio memo with no manual step. Survives the original being taken down. New `Auto-download pulled audio` toggle under Settings → Uploads.
-- 📻 **Stream embed for remote audio** — when auto-download is off, the memo detail streams the track inline via the platform's embed widget (SoundCloud/Mixcloud), with "Open original" and "Save audio offline" actions, instead of the make-it-local panel.
+- 📻 **Stream embed for remote audio** — when auto-download is off, the memo detail streams the track inline via the platform's embed widget (SoundCloud/Mixcloud), with "Open original" and "Save audio in openMemo" actions, instead of the make-it-local panel.
 - 🖼️ **Cover art on audio cards + player** — audio memos with artwork now show the cover on the dashboard card and beside the detail player, instead of always falling back to the waveform.
 
 ### Changed

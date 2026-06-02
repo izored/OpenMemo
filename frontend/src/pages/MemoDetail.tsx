@@ -466,7 +466,7 @@ function AudioStreamEmbed({ memo }: { memo: Memo }) {
           </a>
         )}
         <button className="om-btn-primary om-btn-pill" onClick={save} disabled={saving}>
-          {saving ? <Loader2 size={14} className="om-spin" /> : <HardDriveDownload size={14} />} Save audio offline
+          {saving ? <Loader2 size={14} className="om-spin" /> : <HardDriveDownload size={14} />} Save audio in openMemo
         </button>
       </div>
     </div>
@@ -548,7 +548,7 @@ function MakeItLocalPanel({ memo }: { memo: Memo }) {
             ))}
           </div>
           <button className="om-btn-primary om-btn-pill" onClick={start} style={{ marginTop: 12 }}>
-            <HardDriveDownload size={14} /> Download &amp; save
+            <HardDriveDownload size={14} /> Save {mode === 'audio' ? 'audio' : 'video'} in openMemo
           </button>
         </>
       )}

@@ -655,8 +655,8 @@ export function SettingsPage() {
                 </button>
               </div>
             </div>
-            <div className="om-setting-row" style={{ borderTop: '1px solid var(--border)', marginTop: 8, paddingTop: 8 }}>
-              <div className="om-setting-row-text">
+            <div className="om-setting-row" style={{ borderTop: '1px solid var(--border)', marginTop: 8, paddingTop: 8, justifyContent: 'flex-start', gap: 16 }}>
+              <div className="om-setting-row-text" style={{ maxWidth: 560 }}>
                 <p>Auto-download pulled audio</p>
                 <span className="mono">
                   Download audio from SoundCloud, Bandcamp, etc. on save so it plays locally and survives takedown. When off, the memo streams via the platform's embed instead.
