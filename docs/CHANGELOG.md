@@ -20,6 +20,11 @@ player instead of a confusing "Make it local" prompt with a Video button.
 - 🎵 **"Make it local" is audio-only for audio sources** — audio-only platforms no longer offer a nonsensical "Video" download option; they get a single "Save audio" action.
 - ▶️ **Remote audio is reachable from the dashboard** — the audio card play button is no longer a dead disabled control for not-yet-downloaded tracks; it opens the detail page where the track streams or finishes downloading.
 
+### Fixed
+
+- 🪟 **Lightbox toolbar spacing** — the "Open memo page" and close buttons no longer crowd the viewport edge or each other, and the button label no longer clips.
+- 🗑️ **MemoDetail delete confirm sizing** — the inline "Delete memo?" popover is more compact (smaller label and buttons), and a duplicated CSS block for it was removed.
+
 ---
 ## [2.0.1] - 2026-06-01
 

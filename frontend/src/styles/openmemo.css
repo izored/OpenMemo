@@ -438,16 +438,16 @@ input, textarea { font: inherit; color: inherit; }
 }
 .om-lightbox-close:hover { background: rgba(255,255,255,0.22); }
 .om-lightbox-toolbar {
-  position: absolute; top: 18px; right: 18px;
-  display: inline-flex; align-items: center; gap: 8px;
+  position: absolute; top: 20px; right: 20px;
+  display: inline-flex; align-items: center; gap: 10px;
 }
 .om-lightbox-toolbar .om-lightbox-close { position: static; }
 .om-lightbox-open {
   display: inline-flex; align-items: center; gap: 8px;
-  height: 40px; padding: 0 14px; border-radius: 999px;
+  height: 40px; padding: 0 16px; border-radius: 999px;
   background: rgba(255,255,255,0.12); color: #F5F2EC;
   border: 1px solid rgba(255,255,255,0.18);
-  font-size: 12.5px; font-weight: 500;
+  font-size: 12.5px; font-weight: 500; white-space: nowrap;
   transition: background .15s;
 }
 .om-lightbox-open:hover { background: rgba(255,255,255,0.22); }
@@ -1027,8 +1027,9 @@ input, textarea { font: inherit; color: inherit; }
 }
 @keyframes slide { from { transform: translateX(40px); opacity: 0; } to { transform: none; opacity: 1; } }
 .om-detail-top { display: flex; align-items: center; justify-content: space-between; padding: 16px 20px; border-bottom: 1px solid var(--border); }
-.om-delete-confirm { position: absolute; top: calc(100% + 8px); right: 0; z-index: 60; display: flex; align-items: center; gap: 8px; padding: 10px 12px; background: var(--elev); border: 1px solid var(--border); border-radius: 12px; box-shadow: var(--shadow-elev); white-space: nowrap; }
-.om-delete-confirm-label { font-size: 13px; color: var(--text-2); margin-right: 4px; }
+.om-delete-confirm { position: absolute; top: calc(100% + 8px); right: 0; z-index: 60; display: flex; align-items: center; gap: 6px; padding: 8px 10px; background: var(--elev); border: 1px solid var(--border); border-radius: 12px; box-shadow: var(--shadow-elev); white-space: nowrap; }
+.om-delete-confirm-label { font-size: 12px; color: var(--text-2); margin-right: 4px; }
+.om-delete-confirm button { height: 28px; padding: 0 12px; font-size: 12px; }
 .om-btn-danger { background: #dc2626; color: #fff; border: 1px solid transparent; }
 .om-btn-danger:hover { background: #b91c1c; }
 
@@ -1050,10 +1051,6 @@ input, textarea { font: inherit; color: inherit; }
 .om-delete-toast-undo { height: 28px; padding: 0 12px; border-radius: 8px; font-size: 13px; font-weight: 600; background: var(--accent); color: #fff; border: none; cursor: pointer; flex-shrink: 0; }
 .om-delete-toast-undo:hover { opacity: 0.88; }
 .om-delete-toast-bar { position: absolute; bottom: 0; left: 0; height: 3px; background: var(--accent); transition: width 0.1s linear; }
-.om-delete-confirm { position: absolute; top: calc(100% + 8px); right: 0; z-index: 60; display: flex; align-items: center; gap: 8px; padding: 10px 12px; background: var(--elev); border: 1px solid var(--border); border-radius: 12px; box-shadow: var(--shadow-elev); white-space: nowrap; }
-.om-delete-confirm-label { font-size: 13px; color: var(--text-2); margin-right: 4px; }
-.om-btn-danger { background: #dc2626; color: #fff; border: none; }
-.om-btn-danger:hover { background: #b91c1c; }
 .om-detail-actions { display: flex; gap: 4px; }
 .om-detail-body { padding: 24px 32px 40px; overflow-y: auto; flex: 1; display: flex; flex-direction: column; gap: 20px; }
 .om-detail-hero { aspect-ratio: 16/9; border-radius: var(--r-lg); position: relative; overflow: hidden; }
