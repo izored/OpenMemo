@@ -92,15 +92,49 @@ async def rag_chat(
         yield {"type": "token", "data": token}
 
 
-async def generate_summary(text: str, model: str | None = None) -> str:
-    """Generate AI summary for a memo."""
-    prompt = (
-        "Extract 3-5 key insights from the following content. "
-        "Return as bullet points. Be concise and informative.\n\n"
-        f"{text[:3000]}"  # Limit input
-    )
+# On-demand summary modes. Each is fed the FULL transcript/content (timestamp
+# mode relies on the inline [mm:ss] markers the transcript carries). The user
+# picks a mode in the UI; the result is cached per-mode on the memo.
+SUMMARY_MODES = {
+    "insights": {
+        "system": "You are a concise summarizer. Extract the key points only.",
+        "user": (
+            "Extract the key insights and takeaways from the content below. "
+            "Return 4-8 tight bullet points, most important first. No preamble.\n\n{text}"
+        ),
+    },
+    "timestamp": {
+        "system": (
+            "You summarize talks and videos into a chronological, timestamped outline. "
+            "Only use timestamps that appear in the transcript — never invent them."
+        ),
+        "user": (
+            "The transcript below has inline [mm:ss] (or [h:mm:ss]) timestamps. Produce a "
+            "chronological bullet outline of the key moments across the WHOLE talk. Start each "
+            "bullet with the nearest real timestamp copied verbatim from the transcript, then a "
+            "short description of what is covered. Aim for 8-15 evenly spaced bullets.\n\n{text}"
+        ),
+    },
+    "essay": {
+        "system": "You are a thoughtful writer who distills long content into clear prose.",
+        "user": (
+            "Write a flowing prose summary (2-4 short paragraphs) of the content below. Capture "
+            "the main argument and the key supporting points. No bullet lists, no timestamps.\n\n{text}"
+        ),
+    },
+}
+
+# Cap fed to the model. Generous enough for a long talk's transcript while
+# staying within a typical local model's context window.
+_SUMMARY_INPUT_CAP = 16000
+
+
+async def generate_summary(text: str, mode: str = "insights", model: str | None = None) -> str:
+    """Generate an AI summary in one of SUMMARY_MODES. Unknown modes fall back
+    to 'insights' so callers never crash on a bad mode."""
+    spec = SUMMARY_MODES.get(mode, SUMMARY_MODES["insights"])
     messages = [
-        {"role": "system", "content": "You are a concise summarizer. Extract key points only."},
-        {"role": "user", "content": prompt},
+        {"role": "system", "content": spec["system"]},
+        {"role": "user", "content": spec["user"].format(text=text[:_SUMMARY_INPUT_CAP])},
     ]
     return await ollama_client.chat_sync(messages=messages, model=model)
