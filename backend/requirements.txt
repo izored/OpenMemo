@@ -24,6 +24,10 @@ apscheduler==3.10.4
 # Local speech-to-text for audio memos. Pulls ctranslate2 + av (bundled
 # ffmpeg) + tokenizers; CPU (int8) or CUDA (float16). Multilingual.
 faster-whisper>=1.0.0
+# Headless Chromium driver for the local link scraper (backend/core/headless.py),
+# the self-hosted replacement for Microlink. The browser binary itself is pulled
+# in the Dockerfile via `playwright install`, not by pip.
+playwright>=1.49.0
 
 # Dev dependencies
 pytest==8.3.3
