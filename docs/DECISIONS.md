@@ -7,6 +7,111 @@ the decision, and its consequences, so a future reader knows *why*, not just
 
 ---
 
+## ADR-004 — Transcript extraction is decoupled from file capture (non-destructive, caption-first)
+
+**Date:** 2026-06-03 · **Status:** Accepted · **Supersedes:** the transcript portion of ADR-003
+
+### Context
+
+ADR-003 modeled "Make it local" as a single tiered action keyed off memo type,
+with three download modes: `video`, `audio`, and `audio_transcript`. In practice
+this fused **three distinct user intents** into one destructive action:
+
+1. *Get a transcript* — the user wants the **text** of a talk; audio is only a
+   means to that end.
+2. *Save the video offline* — keep a playable local copy.
+3. *Convert a long video to an audio-only "podcast"* — deliberately drop the
+   video.
+
+Because the only transcript path was `audio_transcript`, asking for a transcript
+**downloaded the audio and flipped `memo.type` from `video` to `audio`**
+(`ingest.localize_memo_task`: `memo.type = result["type"]`). The inline video
+embed is gated on `type === 'video' && !file_path`, so the flip silently
+**destroyed the video** — the user lost their video to get its text. A transcript
+is a *property* of a memo, not a memo type; coupling the two was the root error.
+
+### Decision
+
+**Transcript extraction is a separate, non-destructive capability that never
+changes a memo's `type` or `file_path`.** It is independent of "Make it local"
+(file capture). Two orthogonal axes:
+
+- **Transcript** (`POST /memos/:id/transcribe` → `core/transcript.py`) — produce
+  text only. The memo keeps its type and its remote embed.
+- **Make it local** (`POST /memos/:id/localize` → `core/localize_media.py`) —
+  capture a local file. `mode='audio'` remains an **explicit** video→audio
+  podcast conversion (the third intent above), now clearly labeled and warned in
+  the UI, never a transcript side door. The `audio_transcript` mode is removed.
+
+#### Transcript pipeline — caption-first, STT fallback
+
+`core/transcript.py` `get_transcript(url)`:
+
+1. **Captions** — `yt-dlp --skip-download --write-subs --write-auto-subs
+   --sub-format vtt` pulls the source's own subtitles **without downloading the
+   media**. Fast, free, no Whisper. The VTT is parsed (inline word-timing tags
+   stripped, rolling auto-caption duplicates de-overlapped) into text with inline
+   `[mm:ss]` markers.
+2. **STT fallback** — if the host exposes no captions, download the audio to a
+   **temp** directory, run faster-whisper (now emitting per-segment `[mm:ss]`
+   markers), then **delete the temp file**. The memo's `type`/`file_path` are
+   untouched — a video memo stays a video memo.
+
+The result is stored in `content_text` (so it embeds for RAG + is searchable),
+with `transcript_source` recording `captions` vs `stt` for a UI badge. A local
+file present routes to direct Whisper STT (`transcribe_memo_task`); remote-only
+routes to the caption-first extractor (`transcript_memo_task`).
+
+#### On-demand, multi-mode summary
+
+Summaries are generated lazily per mode, each a single Ollama call fed the
+**full** transcript/content (`core/rag.py` `SUMMARY_MODES`):
+
+- **`timestamp`** — chronological bullet outline anchored to the inline `[mm:ss]`
+  markers (only offered for video/audio, since it depends on those markers).
+- **`insights`** — key takeaways as bullets (mirrored to `ai_summary` for
+  back-compat).
+- **`essay`** — flowing prose.
+
+Results cache per-mode in the `summaries` JSON column so switching back is
+instant. Inline timestamps live **in the transcript text itself** — no separate
+segments table — which is what makes the timestamp mode possible without extra
+storage.
+
+#### Scope — the whole video type (ADR-001)
+
+Both caption pull and STT run through yt-dlp, which abstracts every video host,
+so this lights up for YouTube, Vimeo, Dailymotion, TikTok, etc. simultaneously.
+`canTranscript(memo)` in `lib/media.ts` is the single predicate. Hosts with no
+captions fall back to STT; hosts with neither (auth-walled/private) degrade to an
+error state with "open original" still available — never a dead end.
+
+### Alternatives considered
+
+| Option | Why rejected |
+|--------|--------------|
+| **Keep `audio_transcript` (download audio + flip type)** | The root bug — destroys the video to get its text and conflates three intents. |
+| **Always Whisper STT, ignore host captions** | Slower and heavier for the common case; YouTube/Vimeo already publish accurate captions for free. STT is the fallback, not the default. |
+| **Separate `transcript_segments` JSON column for timestamps** | More storage + a migration for data that rides for free as inline `[mm:ss]` in the text the model already reads. Rejected per the user's "transcript-first" call. |
+| **A second inline "audio tab" alongside the video** | Treats the symptom. The real fix is to stop the type flip so the video never disappears in the first place; the existing Description/Transcript tabs then suffice. |
+
+### Consequences
+
+- A video memo can gain a transcript **and** keep its inline player — the
+  reported bug is structurally impossible now (transcript never sets
+  `type`/`file_path`).
+- New columns: `transcript_source`, `summaries` (migration
+  `backend/migrate_transcript_summary.py`, PRAGMA-guarded ALTER TABLE).
+- "Make it local → Audio only" is now an explicit, warned podcast conversion —
+  the long-video→podcast workflow is preserved, just no longer the transcript
+  path.
+- Summary is now three modes instead of one; the single `ai_summary` is kept in
+  sync for the `insights` mode so nothing downstream breaks.
+- Memos already flipped to `audio` by the old `audio_transcript` path are not
+  auto-migrated; they can be re-saved or repaired manually.
+
+---
+
 ## ADR-003 — "Make it local" visibility is gated to remote, localizable media (tiered capture)
 
 **Date:** 2026-06-02 · **Status:** Accepted

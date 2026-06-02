@@ -190,6 +190,10 @@ error`) and `transcript_lang` (detected language code).
 - **Local videos:** the transcribe path accepts `type in (audio, video)` — faster-
   whisper reads the video container (PyAV) and pulls the audio track itself, so a
   downloaded or uploaded video can be transcribed with no manual audio extraction.
+- **Remote videos (no local file):** **Get transcript** on the Transcript tab runs
+  the caption-first extractor (`core/transcript.py`) — host subtitles via yt-dlp,
+  Whisper STT fallback — without downloading the media or changing the memo type.
+  See ADR-004.
 
 ### Config (env / `backend/config.py`)
 
@@ -209,15 +213,20 @@ error`) and `transcript_lang` (detected language code).
 `localize_memo_task` + `backend/core/localize_media.py`.
 
 Any Memo with a `source_url` yt-dlp can fetch (YouTube, Vimeo, social video, podcast
-hosts, direct media files) can be pulled local. Three modes:
+hosts, direct media files) can be pulled local. Two modes:
 
 - **`video`** — best ≤1080p mp4 (merged video+audio).
-- **`audio`** — best audio-only (m4a/opus).
-- **`audio_transcript`** — audio, then faster-whisper.
+- **`audio`** — best audio-only (m4a/opus); an **explicit** video→audio (podcast)
+  conversion that replaces the video view.
 
-On success the memo's `file_path` is set, `type` flips to local audio/video, a video
-thumbnail is generated, and (for `audio_transcript`) transcription runs. Status is
-tracked on `localize_status`; the detail page polls until done.
+On success the memo's `file_path` is set, `type` flips to local audio/video, and a
+video thumbnail is generated. Status is tracked on `localize_status`; the detail page
+polls until done.
+
+> Transcripts are **not** produced here anymore. The `audio_transcript` mode was
+> removed — transcript extraction is a separate, non-destructive path
+> (`POST /api/memos/{id}/transcribe` → `core/transcript.py`, caption-first / STT
+> fallback) that never changes `type`/`file_path`. See ADR-004.
 
 **Decision: yt-dlp self-updates on container start, not hard-pinned.** YouTube breaks
 old yt-dlp builds every few weeks, far faster than image rebuilds. `requirements.txt`
@@ -323,8 +332,9 @@ Grouped by theme. Nothing here is committed; this is the backlog to pull from.
 ### Make it local
 - **Per-download progress** parsed from yt-dlp output.
 - **Quality picker** — let the user choose resolution/format before download.
-- **Subtitle download** — pull existing captions instead of (or alongside)
-  transcribing, when the source has them.
+- ~~**Subtitle download**~~ — *done (ADR-004):* the transcript path is now
+  caption-first, pulling host subtitles via yt-dlp and only falling back to
+  Whisper STT when none exist.
 
 ---
 

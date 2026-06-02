@@ -27,18 +27,21 @@ import {
   Check,
   Trash2,
   AlignLeft,
+  Clock,
+  ListChecks,
+  Captions,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { BackButton } from '@/components/BackButton';
 import { MarkdownEditor } from '@/components/MarkdownEditor';
 import { memoApi, collectionApi } from '@/lib/api';
 import { AskMemoPanel } from '@/components/AskMemoPanel';
-import { audioEmbed, canMakeLocal } from '@/lib/media';
+import { audioEmbed, canMakeLocal, canTranscript } from '@/lib/media';
 import { videoEmbedUrl } from '@/lib/platforms';
 import { useAudioPlayer, formatTime } from '@/lib/audioPlayer';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
-import type { Memo, Collection } from '@/types';
+import type { Memo, Collection, SummaryMode } from '@/types';
 
 /**
  * Wraps an image or local video preview with three affordances:
@@ -357,7 +360,9 @@ function VideoContentPanel({ memo }: { memo: Memo }) {
     }
   };
 
-  if (!descText && !status && !memo.file_path) return null;
+  if (!descText && !status && !canTranscript(memo)) return null;
+
+  const srcLabel = memo.transcript_source === 'captions' ? 'CC' : memo.transcript_source === 'stt' ? 'STT' : null;
 
   return (
     <div style={{ marginBottom: '24px' }}>
@@ -376,6 +381,9 @@ function VideoContentPanel({ memo }: { memo: Memo }) {
           <FileText size={13} />
           Transcript
           {pending && <Loader2 size={12} className="om-spin" style={{ marginLeft: 4 }} />}
+          {status === 'done' && srcLabel && (
+            <span className="om-tag" style={{ marginLeft: 4 }} title={memo.transcript_source === 'captions' ? 'From source captions' : 'Whisper speech-to-text'}>{srcLabel}</span>
+          )}
           {status === 'done' && memo.transcript_lang && (
             <span className="om-tag" style={{ textTransform: 'uppercase', marginLeft: 4 }}>{memo.transcript_lang}</span>
           )}
@@ -392,34 +400,37 @@ function VideoContentPanel({ memo }: { memo: Memo }) {
 
       {tab === 'transcript' && (
         pending ? (
-          <p className="om-detail-desc">Transcribing audio… this runs locally and may take a moment.</p>
+          <p className="om-detail-desc">
+            <Loader2 size={14} className="om-spin" style={{ verticalAlign: -2, marginRight: 6 }} />
+            Pulling captions or transcribing… runs locally and may take a moment.
+          </p>
         ) : status === 'done' && memo.content_text ? (
-          <div className="om-prose">
+          <div className="om-prose" style={{ whiteSpace: 'pre-wrap' }}>
             <ReactMarkdown remarkPlugins={[remarkGfm]}>{memo.content_text}</ReactMarkdown>
           </div>
         ) : status === 'error' ? (
           <div>
             <p className="om-detail-desc" style={{ marginBottom: 10 }}>
-              Transcription failed. Check that the speech-to-text model is installed on the server.
+              Couldn’t get a transcript. The source may have no captions and no downloadable audio, or be private/region-locked.
             </p>
-            {memo.file_path && (
+            {canTranscript(memo) && (
               <button className="om-btn-ghost om-btn-pill" onClick={startTranscribe} disabled={starting}>
-                <Sparkles size={14} /> Try again
+                <Captions size={14} /> Try again
               </button>
             )}
           </div>
-        ) : memo.file_path ? (
+        ) : canTranscript(memo) ? (
           <div>
-            <p className="om-detail-desc" style={{ marginBottom: 10 }}>No transcript yet. Transcribe the audio with Whisper.</p>
+            <p className="om-detail-desc" style={{ marginBottom: 10 }}>
+              No transcript yet. Pull the source’s captions (or transcribe with Whisper) — the video stays put.
+            </p>
             <button className="om-btn-primary om-btn-pill" onClick={startTranscribe} disabled={starting}>
-              {starting ? <Loader2 size={14} className="om-spin" /> : <Sparkles size={14} />}
-              Transcribe
+              {starting ? <Loader2 size={14} className="om-spin" /> : <Captions size={14} />}
+              Get transcript
             </button>
           </div>
         ) : (
-          <p className="om-detail-desc">
-            Download first using <strong>Make it local &rarr; Audio + transcript</strong> to generate a real transcript.
-          </p>
+          <p className="om-detail-desc">No transcript available for this memo.</p>
         )
       )}
     </div>
@@ -504,7 +515,7 @@ function MakeItLocalPanel({ memo }: { memo: Memo }) {
     ? [{ id: 'audio', label: 'Save audio', icon: Music, hint: 'Download the audio track' }]
     : [
         { id: 'video', label: 'Video', icon: Film, hint: 'Download the video (up to 1080p)' },
-        { id: 'audio', label: 'Audio only', icon: Music, hint: 'Just the audio track — transcribe later if needed' },
+        { id: 'audio', label: 'Audio only', icon: Music, hint: 'Convert to an audio-only copy (podcast) — replaces the video view' },
       ];
 
   return (
@@ -548,10 +559,89 @@ function MakeItLocalPanel({ memo }: { memo: Memo }) {
               </button>
             ))}
           </div>
+          {!isAudio && mode === 'audio' && (
+            <p className="om-detail-desc" style={{ marginTop: 10, fontStyle: 'italic' }}>
+              Heads up: this turns the memo into an audio-only copy and replaces the video player. Want a transcript instead? Use <strong>Get transcript</strong> below — it keeps the video.
+            </p>
+          )}
           <button className="om-btn-primary om-btn-pill" onClick={start} style={{ marginTop: 12 }}>
             <HardDriveDownload size={14} /> Save {mode === 'audio' ? 'audio' : 'video'} in openMemo
           </button>
         </>
+      )}
+    </div>
+  );
+}
+
+// On-demand AI summary with three modes (Timestamp / Key Insights / Essay).
+// Each mode is a separate Ollama call fed the full content/transcript; results
+// are cached per-mode on the memo so switching back is instant. Timestamp mode
+// is offered only for video/audio (it relies on inline [mm:ss] transcript marks).
+const SUMMARY_OPTIONS: { id: SummaryMode; label: string; icon: React.ElementType }[] = [
+  { id: 'timestamp', label: 'Timestamp', icon: Clock },
+  { id: 'insights', label: 'Key Insights', icon: ListChecks },
+  { id: 'essay', label: 'Essay', icon: AlignLeft },
+];
+
+function SummaryPanel({ memo }: { memo: Memo }) {
+  const queryClient = useQueryClient();
+  const isMedia = memo.type === 'video' || memo.type === 'audio';
+  const options = isMedia ? SUMMARY_OPTIONS : SUMMARY_OPTIONS.filter((o) => o.id !== 'timestamp');
+  const [mode, setMode] = useState<SummaryMode>('insights');
+  const [busy, setBusy] = useState(false);
+  const summaries = memo.summaries || {};
+  const current = summaries[mode] ?? (mode === 'insights' ? memo.ai_summary : undefined);
+  const label = (options.find((o) => o.id === mode)?.label || 'summary').toLowerCase();
+
+  const generate = async () => {
+    setBusy(true);
+    try {
+      await memoApi.summary(memo.id, mode);
+      queryClient.invalidateQueries({ queryKey: ['memo', memo.id] });
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <div className="om-ai-summary" style={{ marginBottom: '24px' }}>
+      <div className="om-ai-summary-head">
+        <Sparkles size={16} className="om-accent-icon" />
+        <span className="om-ai-summary-label">AI Summary</span>
+      </div>
+      <div className="om-localize-modes" style={{ marginTop: 10, marginBottom: 12 }}>
+        {options.map((o) => (
+          <button
+            key={o.id}
+            className={cn('om-localize-mode', mode === o.id && 'active')}
+            onClick={() => setMode(o.id)}
+          >
+            <o.icon size={15} />
+            <span>{o.label}</span>
+            {mode === o.id && <Check size={13} className="om-localize-check" />}
+          </button>
+        ))}
+      </div>
+      {busy ? (
+        <p className="om-detail-desc">
+          <Loader2 size={14} className="om-spin" style={{ verticalAlign: -2, marginRight: 6 }} />
+          Generating {label} summary with Ollama…
+        </p>
+      ) : current ? (
+        <>
+          <div className="om-prose" style={{ whiteSpace: mode === 'timestamp' ? 'pre-wrap' : undefined }}>
+            <ReactMarkdown remarkPlugins={[remarkGfm]}>{current}</ReactMarkdown>
+          </div>
+          <button className="om-btn-ghost om-btn-pill" onClick={generate} style={{ marginTop: 12 }}>
+            <Sparkles size={14} /> Regenerate
+          </button>
+        </>
+      ) : (
+        <button className="om-btn-primary om-btn-pill" onClick={generate}>
+          <Sparkles size={14} /> Generate {label}
+        </button>
       )}
     </div>
   );
@@ -562,7 +652,6 @@ export function MemoDetail() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const [chatOpen, setChatOpen] = useState(false);
-  const [generatingSummary, setGeneratingSummary] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
   const [noteContent, setNoteContent] = useState('');
   const [showExtracted, setShowExtracted] = useState(false);
@@ -632,19 +721,6 @@ export function MemoDetail() {
       queryClient.invalidateQueries({ queryKey: ['memos', 'pinned'] });
     } catch (e) {
       console.error(e);
-    }
-  };
-
-  const handleGenerateSummary = async () => {
-    if (!id) return;
-    setGeneratingSummary(true);
-    try {
-      await memoApi.summary(id);
-      queryClient.invalidateQueries({ queryKey: ['memo', id] });
-    } catch (e) {
-      console.error(e);
-    } finally {
-      setGeneratingSummary(false);
     }
   };
 
@@ -944,18 +1020,8 @@ export function MemoDetail() {
               </div>
             )}
 
-            {/* AI Summary block (when generated) */}
-            {!isEditing && memo.ai_summary && (
-              <div className="om-ai-summary" style={{ marginBottom: '24px' }}>
-                <div className="om-ai-summary-head">
-                  <Sparkles size={16} className="om-accent-icon" />
-                  <span className="om-ai-summary-label">AI Summary</span>
-                </div>
-                <div className="om-prose">
-                  <ReactMarkdown remarkPlugins={[remarkGfm]}>{memo.ai_summary}</ReactMarkdown>
-                </div>
-              </div>
-            )}
+            {/* AI Summary — three on-demand modes, fed the full content/transcript */}
+            {!isEditing && memo.content_text && <SummaryPanel memo={memo} />}
 
             {/* Report card for file-backed memos (doc / code / generic file) */}
             {!isEditing && (memo.type === 'document' || memo.type === 'code' || memo.type === 'file') && (
@@ -974,17 +1040,6 @@ export function MemoDetail() {
                   {memo.pinned ? <PinOff size={14} /> : <Pin size={14} />}
                   <span>{memo.pinned ? 'Unpin' : 'Pin to sidebar'}</span>
                 </button>
-                {!memo.ai_summary && (
-                  <button
-                    onClick={handleGenerateSummary}
-                    disabled={generatingSummary}
-                    className="om-btn-ghost om-btn-pill"
-                    style={{ opacity: generatingSummary ? 0.4 : undefined }}
-                  >
-                    {generatingSummary ? <Loader2 size={14} className="om-spin" /> : <Sparkles size={14} />}
-                    <span>Generate AI Summary</span>
-                  </button>
-                )}
                 {memo.file_path && (
                   <a
                     className="om-btn-ghost om-btn-pill"

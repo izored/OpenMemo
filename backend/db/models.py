@@ -82,6 +82,10 @@ class Memo(Base):
     # content_text (so it embeds + is searchable); these track UI state.
     transcript_status = Column(String, nullable=True)  # pending|processing|done|error
     transcript_lang = Column(String, nullable=True)    # detected language code
+    transcript_source = Column(String, nullable=True)  # captions|stt — how it was obtained
+    # On-demand AI summaries, keyed by mode: {"timestamp": ..., "insights": ..., "essay": ...}.
+    # Generated lazily when the user picks a mode; cached so reopening is instant.
+    summaries = Column(JSON, nullable=True)
     # "Make it local" download state for link/video memos (yt-dlp).
     localize_status = Column(String, nullable=True)    # pending|processing|done|error
     sort_order = Column(Integer, default=0)

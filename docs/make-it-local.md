@@ -95,10 +95,17 @@ before saving" step.
 | Mode | Available for | What it saves |
 |---|---|---|
 | `video` | `type === 'video'` only | Up-to-1080p video file |
-| `audio` | both types | Audio-only track (smaller; can be transcribed) |
+| `audio` | both types | Audio-only copy — an **explicit** video→audio (podcast) conversion that replaces the video view |
 
 Audio-type memos (`type === 'audio'`) skip the mode selector and always use
 `audio`.
+
+> **Not the transcript path.** Getting a transcript is a separate,
+> non-destructive action (**Get transcript** on the Transcript tab) that never
+> downloads the media or changes the memo type — the video stays embedded. The
+> old `audio_transcript` mode was removed. `Make it local → Audio only` is now
+> purely a deliberate podcast conversion (the UI warns it replaces the video).
+> See [ADR-004 in docs/DECISIONS.md](DECISIONS.md#adr-004--transcript-extraction-is-decoupled-from-file-capture-non-destructive-caption-first).
 
 ---
 
