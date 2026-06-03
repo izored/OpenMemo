@@ -1,4 +1,4 @@
-import React, { createContext, useCallback, useContext, useMemo, useRef, useState } from 'react';
+import React, { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 
 // Single, app-wide audio player. One <audio> element lives in the provider
 // (mounted in Layout, which never unmounts across route changes) so playback
@@ -168,6 +168,58 @@ export function AudioPlayerProvider({ children }: { children: React.ReactNode })
   }, []);
 
   const isActive = useCallback((memoId: string) => track?.memoId === memoId, [track]);
+
+  // Media Session — lets the OS media keys (the keyboard play/pause key) and the
+  // lock-screen / notification transport drive our player (ADR-005). Handlers are
+  // bound once; they read the live <audio> via the ref.
+  useEffect(() => {
+    if (!('mediaSession' in navigator)) return;
+    const ms = navigator.mediaSession;
+    const a = () => audioRef.current;
+    try {
+      ms.setActionHandler('play', () => a()?.play().catch(() => {}));
+      ms.setActionHandler('pause', () => a()?.pause());
+      ms.setActionHandler('seekbackward', (d) => { const el = a(); if (el) el.currentTime = Math.max(0, el.currentTime - (d.seekOffset || 10)); });
+      ms.setActionHandler('seekforward', (d) => { const el = a(); if (el) el.currentTime = el.currentTime + (d.seekOffset || 10); });
+      ms.setActionHandler('seekto', (d) => { const el = a(); if (el && d.seekTime != null) el.currentTime = d.seekTime; });
+    } catch {
+      /* some actions are unsupported on some browsers — ignore */
+    }
+    return () => {
+      try {
+        for (const action of ['play', 'pause', 'seekbackward', 'seekforward', 'seekto'] as const) {
+          ms.setActionHandler(action, null);
+        }
+      } catch {
+        /* ignore */
+      }
+    };
+  }, []);
+
+  // OS media-overlay metadata (title / artist / artwork) per track.
+  useEffect(() => {
+    if (!('mediaSession' in navigator)) return;
+    if (!track) {
+      navigator.mediaSession.metadata = null;
+      return;
+    }
+    try {
+      navigator.mediaSession.metadata = new MediaMetadata({
+        title: track.title,
+        artist: track.subtitle || '',
+        artwork: track.cover ? [{ src: track.cover, sizes: '512x512', type: 'image/png' }] : [],
+      });
+    } catch {
+      /* MediaMetadata unsupported — ignore */
+    }
+  }, [track]);
+
+  // Reflect play/pause to the OS so the media key toggles the right state.
+  useEffect(() => {
+    if ('mediaSession' in navigator) {
+      navigator.mediaSession.playbackState = playing ? 'playing' : 'paused';
+    }
+  }, [playing]);
 
   const value = useMemo<AudioPlayerContextValue>(
     () => ({ track, playing, currentTime, duration, repeat, toggleRepeat, play, toggle, seek, close, isActive, getLevels }),

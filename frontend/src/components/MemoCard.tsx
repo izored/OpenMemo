@@ -9,7 +9,7 @@ import { mediaSrc, audioKind } from '@/lib/media';
 import { useCoverMood, type CoverMood } from '@/lib/coverMood';
 import { platformMeta, videoEmbedUrl } from '@/lib/platforms';
 import { useAppStore } from '@/stores/appStore';
-import { useAudioPlayer } from '@/lib/audioPlayer';
+import { useAudioPlayer, formatTime } from '@/lib/audioPlayer';
 import { LiveWaveform } from './LiveWaveform';
 import type { Memo, MemoType } from '@/types';
 
@@ -218,14 +218,16 @@ function Meta({ memo }: { memo: Memo }) {
   );
 }
 
-// Inline full-bleed player that takes over a MUSIC card while it's the active
-// track (ADR-005). Mirrors the delete-confirm overlay (om-card-confirm): absolute
-// inset, blurred cover behind a big play/pause + title + scrubber. Voice memos
-// never get this — they keep their waveform tile. Isolated so only the active
-// card re-renders on each timeupdate tick.
+// Inline player that takes over a MUSIC card while it's the active track
+// (ADR-005). Like the delete-confirm overlay, it sits absolute inset:0 over the
+// card at the SAME size — no resize, no cover zoom — so nothing jumps. The cover
+// stays crisp; a bottom→top gradient (mood tint + a blur behind the controls)
+// carries the transport + title. Voice memos never get this (waveform stays).
 function CardMusicPlayer({ memo, cover, mood }: { memo: Memo; cover?: string | null; mood?: CoverMood | null }) {
   const navigate = useNavigate();
-  const { toggle, seek, playing, currentTime, duration, isActive } = useAudioPlayer();
+  const queryClient = useQueryClient();
+  const { toggle, seek, playing, currentTime, duration, isActive, repeat, toggleRepeat } = useAudioPlayer();
+  const [pinned, setPinned] = React.useState(!!memo.pinned);
   const active = isActive(memo.id);
   const hasDur = Number.isFinite(duration) && duration > 0;
   const pct = active && hasDur ? Math.min(100, (currentTime / duration) * 100) : 0;
@@ -235,6 +237,18 @@ function CardMusicPlayer({ memo, cover, mood }: { memo: Memo; cover?: string | n
     const rect = e.currentTarget.getBoundingClientRect();
     seek(((e.clientX - rect.left) / rect.width) * duration);
   };
+  const onPin = async (e: React.MouseEvent) => {
+    e.stopPropagation();
+    const next = !pinned;
+    setPinned(next);
+    try {
+      await memoApi.pin(memo.id, next);
+      queryClient.invalidateQueries({ queryKey: ['memos'] });
+      queryClient.invalidateQueries({ queryKey: ['memos', 'pinned'] });
+    } catch {
+      setPinned(!next);
+    }
+  };
   return (
     <div
       className={cn('om-card-player', mood && 'is-tinted')}
@@ -243,27 +257,13 @@ function CardMusicPlayer({ memo, cover, mood }: { memo: Memo; cover?: string | n
       onClick={(e) => e.stopPropagation()}
       style={mood ? ({ ['--cov-base']: mood.base, ['--cov-deep']: mood.deep } as React.CSSProperties) : undefined}
     >
-      {cover && <div className="om-card-player-bg" style={{ backgroundImage: `url(${cover})` }} aria-hidden />}
-      {mood && <div className="om-card-player-tint" aria-hidden />}
-      <div className="om-card-player-inner">
-        <button
-          className="om-card-player-play"
-          onClick={(e) => { e.stopPropagation(); toggle(); }}
-          aria-label={playing && active ? 'Pause' : 'Play'}
-          title={playing && active ? 'Pause' : 'Play'}
-        >
-          <Icon name={playing && active ? 'pause' : 'play'} size={22} stroke={0} style={{ fill: 'currentColor' }} />
-        </button>
-        <div className="om-card-player-foot">
-          <button
-            className="om-card-player-title"
-            onClick={(e) => { e.stopPropagation(); navigate(`/memo/${memo.id}`); }}
-            title={memo.title}
-          >
-            {memo.title}
-          </button>
+      {cover && <div className="om-card-player-cover" style={{ backgroundImage: `url(${cover})` }} aria-hidden />}
+      <div className="om-card-player-scrim" aria-hidden />
+      <div className="om-card-player-controls">
+        <div className="om-card-player-scrub">
+          <span className="om-card-player-time mono">{formatTime(active ? currentTime : 0)}</span>
           <div
-            className="om-card-player-scrub"
+            className="om-card-player-track"
             onClick={onScrub}
             role="slider"
             aria-label="Seek"
@@ -273,7 +273,43 @@ function CardMusicPlayer({ memo, cover, mood }: { memo: Memo; cover?: string | n
           >
             <div className="om-card-player-fill" style={{ width: `${pct}%` }} />
           </div>
+          <span className="om-card-player-time mono">{hasDur ? formatTime(duration) : '--:--'}</span>
         </div>
+        <div className="om-card-player-transport">
+          <button
+            className={cn('om-card-player-btn', repeat && 'active')}
+            onClick={(e) => { e.stopPropagation(); toggleRepeat(); }}
+            title={repeat ? 'Repeat one: on' : 'Repeat one: off'}
+            aria-pressed={repeat}
+            aria-label="Repeat one"
+          >
+            <Icon name="repeat" size={15} />
+          </button>
+          <button
+            className="om-card-player-play"
+            onClick={(e) => { e.stopPropagation(); toggle(); }}
+            aria-label={playing && active ? 'Pause' : 'Play'}
+            title={playing && active ? 'Pause' : 'Play'}
+          >
+            <Icon name={playing && active ? 'pause' : 'play'} size={20} stroke={0} style={{ fill: 'currentColor' }} />
+          </button>
+          <button
+            className={cn('om-card-player-btn', pinned && 'active')}
+            onClick={onPin}
+            title={pinned ? 'Unpin memo' : 'Pin memo'}
+            aria-pressed={pinned}
+            aria-label="Pin memo"
+          >
+            <Icon name="pin" size={15} />
+          </button>
+        </div>
+        <button
+          className="om-card-player-title"
+          onClick={(e) => { e.stopPropagation(); navigate(`/memo/${memo.id}`); }}
+          title={memo.title}
+        >
+          {memo.title}
+        </button>
       </div>
     </div>
   );

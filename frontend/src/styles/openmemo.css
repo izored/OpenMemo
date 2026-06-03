@@ -197,9 +197,17 @@ input, textarea { font: inherit; color: inherit; }
   display: flex; flex-direction: column;
   padding: 16px 12px 0;
   flex-shrink: 0;
-  height: 100vh; overflow-y: auto; overflow-x: hidden;
-  scrollbar-gutter: stable;
+  /* Fixed-height column that does NOT itself scroll — only .om-sidebar-body does.
+     This keeps the player + foot pinned to the bottom with no margin hacks. */
+  height: 100dvh; overflow: hidden;
   position: relative; z-index: 2;
+}
+/* The only scrollable zone: nav + pinned + collections. Owns the flexible space
+   so the bottom zone (player + foot) sits at the bottom naturally. */
+.om-sidebar-body {
+  flex: 1 1 auto; min-height: 0;
+  overflow-y: auto; overflow-x: hidden;
+  scrollbar-gutter: stable;
 }
 .om-sidebar-head { display: flex; align-items: center; justify-content: space-between; padding: 0 4px 16px; }
 .om-brand { display: flex; align-items: center; gap: 10px; }
@@ -2143,9 +2151,9 @@ input, textarea { font: inherit; color: inherit; }
 /* ── Sidebar now-playing player (ADR-005) — replaces the old top-right pill.
    Sits in the sidebar foot; drives the one shared <audio>. ── */
 .om-sb-player {
-  /* margin-top:auto drops the player to the bottom of the sidebar, hugging the
-     foot, instead of sitting right under the collections list. */
-  margin: auto 12px 6px;
+  /* Normal flow now — the scrollable .om-sidebar-body owns the slack, so the
+     player sits at the bottom without an auto-margin gap (handoff fix). */
+  margin: 0 12px 6px;
   padding: 12px;
   border-radius: var(--r-lg, 14px);
   background: color-mix(in oklab, var(--surface-2) 70%, transparent);
@@ -2236,7 +2244,7 @@ input, textarea { font: inherit; color: inherit; }
 
 /* Collapsed sidebar: cover wrapped in a progress ring, tap to play/pause. */
 .om-sb-player-mini {
-  position: relative; width: 48px; height: 48px; margin: auto auto 6px;
+  position: relative; width: 48px; height: 48px; margin: 0 auto 6px;
   border: 0; background: none; cursor: pointer; padding: 0;
   display: grid; place-items: center;
   animation: omSbPlayerIn .3s cubic-bezier(0.16, 0.84, 0.34, 1);
@@ -2288,61 +2296,65 @@ input, textarea { font: inherit; color: inherit; }
 }
 .om-card-audio .om-play:disabled { opacity: 0.5; }
 
-/* Inline full-bleed music player overlay on the active card (ADR-005). Mirrors
-   the delete-confirm scrim (om-card-confirm) — fixed white-on-media colors are
-   correct over the album art in BOTH themes, same as that overlay. Music only;
-   voice keeps its waveform tile. */
+/* Inline music player overlay on the active card (ADR-005). Sits absolute inset:0
+   over the card at the SAME size — no resize/zoom, so nothing jumps. The cover
+   stays crisp; a bottom→top gradient (mood tint + a backdrop blur masked to the
+   lower zone — the "blur behind the controls") carries the transport + title.
+   Fixed white-on-media colors, like the delete-confirm. Music only. */
 .om-card-player {
   position: absolute; inset: 0; z-index: 18;
-  display: flex; overflow: hidden;
-  border-radius: inherit;
+  overflow: hidden; border-radius: inherit;
   animation: om-fade-in .2s ease;
 }
-.om-card-player-bg {
-  position: absolute; inset: -12%;
+.om-card-player-cover {
+  position: absolute; inset: 0;
   background-size: cover; background-position: center;
-  /* Blur cut ~70% (7px → 2px) so the cover reads clearly through the player. */
-  filter: blur(2px) brightness(0.62) saturate(1.2);
-  transform: scale(1.08);
 }
-/* Cover-mood tint over the lightly-blurred cover so the inline player reads the
-   same as the sidebar player. --cov-base/--cov-deep set inline from useCoverMood(). */
-.om-card-player-tint {
+.om-card-player-scrim {
   position: absolute; inset: 0; pointer-events: none;
-  background: linear-gradient(160deg, rgb(var(--cov-base)) 0%, rgb(var(--cov-deep)) 100%);
-  opacity: 0.5;
+  background: linear-gradient(to top,
+    rgba(var(--cov-deep, 10, 10, 14), 0.97) 0%,
+    rgba(var(--cov-base, 38, 38, 46), 0.5) 42%,
+    transparent 74%);
+  -webkit-backdrop-filter: blur(9px);
+  backdrop-filter: blur(9px);
+  -webkit-mask-image: linear-gradient(to top, #000 28%, transparent 64%);
+  mask-image: linear-gradient(to top, #000 28%, transparent 64%);
 }
-.om-card-player-inner {
-  position: relative; z-index: 1; flex: 1;
-  display: grid; place-items: center; padding: 16px;
+.om-card-player-controls {
+  position: absolute; left: 0; right: 0; bottom: 0; z-index: 2;
+  display: flex; flex-direction: column; gap: 9px;
+  padding: 12px 14px 13px;
 }
-.om-card-player-play {
-  width: 56px; height: 56px; border-radius: 50%; border: 0; cursor: pointer;
+.om-card-player-scrub { display: flex; align-items: center; gap: 7px; }
+.om-card-player-time { font-size: 9px; color: rgba(255,255,255,0.82); flex-shrink: 0; font-variant-numeric: tabular-nums; }
+.om-card-player-track { flex: 1; height: 4px; border-radius: 999px; overflow: hidden; cursor: pointer; background: rgba(255,255,255,0.28); }
+.om-card-player-fill { height: 100%; border-radius: 999px; background: #fff; transition: width .1s linear; }
+.om-card-player-transport { display: flex; align-items: center; justify-content: space-between; padding: 0 4px; }
+.om-card-player-btn {
+  width: 30px; height: 30px; border-radius: 50%; border: 0; cursor: pointer;
   display: grid; place-items: center;
-  background: rgba(255,255,255,0.92); color: #111;
-  box-shadow: 0 6px 20px rgba(0,0,0,0.35);
+  background: rgba(255,255,255,0.14); color: rgba(255,255,255,0.9);
+  transition: background .15s ease, transform .15s ease;
+}
+.om-card-player-btn:hover { background: rgba(255,255,255,0.24); }
+.om-card-player-btn:active { transform: scale(0.94); }
+.om-card-player-btn.active { background: rgba(255,255,255,0.28); color: #fff; }
+.om-card-player-play {
+  width: 46px; height: 46px; border-radius: 50%; border: 0; cursor: pointer;
+  display: grid; place-items: center; background: #fff; color: #111;
+  box-shadow: 0 4px 14px rgba(0,0,0,0.32);
   transition: transform .15s ease, filter .15s ease;
 }
-.om-card-player-play:hover { transform: scale(1.06); filter: brightness(1.04); }
+.om-card-player-play:hover { transform: scale(1.05); filter: brightness(1.04); }
 .om-card-player-play:active { transform: scale(0.96); }
-.om-card-player-foot {
-  position: absolute; left: 0; right: 0; bottom: 0; z-index: 2;
-  padding: 12px 14px;
-  display: flex; flex-direction: column; gap: 8px;
-  background: linear-gradient(to top, rgba(0,0,0,0.6), transparent);
-}
 .om-card-player-title {
   background: none; border: 0; padding: 0; cursor: pointer; text-align: left;
-  font-size: 13px; font-weight: 600; color: #fff;
-  white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%;
-  text-shadow: 0 1px 3px rgba(0,0,0,0.5);
+  font-size: 12.5px; font-weight: 600; color: #fff;
+  display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
+  text-shadow: 0 1px 4px rgba(0,0,0,0.55);
 }
 .om-card-player-title:hover { text-decoration: underline; }
-.om-card-player-scrub {
-  height: 5px; border-radius: 999px; cursor: pointer; overflow: hidden;
-  background: rgba(255,255,255,0.25);
-}
-.om-card-player-fill { height: 100%; border-radius: 999px; background: #fff; transition: width .1s linear; }
 
 /* Aurora glow behind the active MUSIC card (ADR-005). Two blobs of the cover's
    mood color (--cov-rgb) bloom past the unclipped wrapper; the opaque card (z-1)

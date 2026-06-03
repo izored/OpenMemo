@@ -14,14 +14,17 @@ aurora glow on whatever is currently playing. Whole audio type, every provider
 ### Added
 
 - 🎧 **Sidebar now-playing player** — the persistent audio player moves from the top-right pill into the sidebar foot. Cover, title, source, scrubber, and a transport of **repeat-one · play/pause · pin** (single-track focus replaces next/prev). When the sidebar is collapsed it shrinks to a cover thumbnail wrapped in a progress ring, so you can still see something is playing. Drives the one shared `<audio>`, so playback survives navigation.
-- 💿 **Inline music card player** — the music card that is currently playing flips to a full-bleed in-card player (the same overlay mechanism as the delete-confirm): blurred cover, big play/pause, scrubber. Music only — voice memos keep their waveform tile exactly as before.
-- 🌌 **Aurora glow on the playing track** — a faint, slowly drifting aurora-borealis halo, tinted from the track's own cover art, blooms behind the active music card and bleeds just past its edge so you can find what's playing in a dense grid. Music only; honors `prefers-reduced-motion`.
+- 💿 **Inline music card player** — the active music card flips to an in-card player at the **same size** (an overlay, no resize/zoom — nothing jumps). The cover stays crisp; a bottom→top gradient (cover-mood tint + a blur masked behind the controls) carries the transport (**repeat-one · play/pause · pin**) + title. Music only — voice memos keep their waveform tile.
+- 🎨 **Cover-mood tint** — the sidebar + inline players take the artwork's dominant color (extracted client-side via canvas in `lib/coverMood.ts`, no dependency), white controls over it, like a proper now-playing surface. Falls back to theme tokens when no color can be read.
+- ⌨️ **Media-key control** — the keyboard play/pause key and the OS lock-screen / notification transport now drive the player via the Media Session API, with title / artist / cover shown in the OS overlay.
+- 🌌 **Aurora glow on the playing track** — a faint aurora-borealis halo, tinted from the track's own cover, blooms behind the active music card and bleeds just past its edge. Two color blobs drift independently (9s vs 11s, opposite directions) under a heavy blur so it shimmers organically and never visibly loops. Music only; honors `prefers-reduced-motion`.
 - 🗂️ **Voice vs music taxonomy** — a new `audio_kind` column (`voice` | `music`, ADR-005) finally separates mic recordings from uploaded/linked music. The recorder flags its captures `voice`; everything else audio is `music`. One predicate `audioKind(memo)` drives every render site. PRAGMA-guarded migration backfills existing rows.
 - 🔌 **Audio platform registry** — `frontend/src/lib/audioPlatforms.ts` centralizes linked-audio hosts (SoundCloud, Bandcamp, Mixcloud, Audius, Audiomack) the way `platforms.ts` does for video. Adding a host lights up the live embed + card at once. Backend mirror: `core/extractor.is_audio_host`.
 
 ### Changed
 
 - 🔀 **Audio player relocated** — `HeaderAudioPlayer` (top-right pill) is removed in favor of the sidebar player; the shared engine gains repeat-one state (`onEnded` → restart).
+- 🧱 **Sidebar is a 3-zone layout** — the sidebar no longer scrolls as a whole; only the middle (nav / pinned / collections) scrolls in a dedicated `.om-sidebar-body`, so the now-playing player + foot stay pinned to the bottom with no auto-margin gap. `.om-sidebar` is now `height:100dvh; overflow:hidden`.
 
 ### Fixed
 

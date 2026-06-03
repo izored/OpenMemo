@@ -96,13 +96,36 @@ progress ring so "something is playing" survives the tuck-away. Two treatments a
 **music-only** (gated on `audioKind === 'music'`), leaving voice memos exactly as
 they are (waveform tile + button, which users love):
 
-- **Inline card player** — the active music card flips to a full-bleed in-card
-  player (the same overlay mechanism as the delete-confirm, `om-card-confirm`):
-  blurred cover, large play/pause, scrubber.
-- **Aurora glow** — a faint, slowly drifting aurora-borealis halo behind the
-  playing music card, tinted from its own cover art, bleeding a little past the
-  card edge, so the currently-playing memo is findable in a dense grid. Honors
-  `prefers-reduced-motion`.
+- **Inline card player** — the active music card flips to an in-card player via
+  an absolute overlay (the delete-confirm `om-card-confirm` mechanism) **at the
+  card's existing size — no resize, no cover zoom**, so the grid never jumps. The
+  cover stays crisp; a bottom→top gradient (cover-mood tint + a backdrop blur
+  masked to the lower zone — "blur behind the controls") carries the transport +
+  title. An earlier version that zoomed/blurred the whole cover was rejected as
+  jumpy.
+- **Cover-mood tint** — both players (and the aurora) are tinted to the artwork's
+  dominant color, extracted client-side with a tiny canvas in `lib/coverMood.ts`
+  (no dependency; covers are same-origin so the canvas is never tainted; failure
+  falls back to theme tokens). White controls over the mood color, like a proper
+  now-playing surface.
+- **Aurora glow** — a faint aurora-borealis halo behind the playing music card,
+  tinted from the cover mood, bleeding just past the card edge. Two color blobs on
+  `::before`/`::after` drift independently (coprime periods, opposite directions)
+  under a heavy blur, so it shimmers organically and never visibly loops. (A
+  single radial *mask* was tried first; it faded to transparent before the card
+  edge and hid the whole ring.) Honors `prefers-reduced-motion`.
+
+**5a. The OS media keys drive the player (Media Session API).** The shared engine
+registers `play`/`pause`/`seek*` handlers on `navigator.mediaSession` and publishes
+`MediaMetadata` (title / artist / cover) per track, so the keyboard play/pause key
+and the lock-screen / notification transport control playback and show the artwork.
+
+**5b. The sidebar is a fixed three-zone column.** `.om-sidebar` is
+`height:100dvh; overflow:hidden` (it does **not** scroll); only a middle
+`.om-sidebar-body` scrolls (nav / pinned / collections); the now-playing player +
+foot are the non-growing bottom zone. This pins the player to the bottom with no
+`margin-top:auto` gap (auto margins in a column flex absorb all free space —
+the previous approach left a large void above the player).
 
 **6. Lyrics are explicitly deferred** (documented in the roadmap, no code).
 Future work, free sources only (local-first): **LRCLIB** (open synced-lyrics API,
