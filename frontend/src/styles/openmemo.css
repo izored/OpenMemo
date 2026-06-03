@@ -2344,36 +2344,47 @@ input, textarea { font: inherit; color: inherit; }
 }
 .om-card-player-fill { height: 100%; border-radius: 999px; background: #fff; transition: width .1s linear; }
 
-/* Aurora glow behind the active MUSIC card (ADR-005). The wrap is unclipped so
-   the halo escapes the overflow:hidden card; the layer is the blurred cover art,
-   slowly drifting and masked to a soft borealis halo that bleeds past the edge.
-   Faint by design. prefers-reduced-motion → static. Voice cards never get it. */
+/* Aurora glow behind the active MUSIC card (ADR-005). Two blobs of the cover's
+   mood color (--cov-rgb) bloom past the unclipped wrapper; the opaque card (z-1)
+   hides the center so only the halo shows. The blobs live on ::before/::after and
+   drift INDEPENDENTLY — different speeds (9s vs 11s), opposite directions — so
+   they cross and morph like real aurora instead of rigidly scaling as one. The
+   heavy parent blur turns the small offsets into a soft shimmer, not sliding
+   shapes. prefers-reduced-motion freezes it. Voice cards never get it. */
 .om-card-aura-wrap { position: relative; }
 .om-card-aura-wrap > .om-card { position: relative; z-index: 1; }
 .om-card-aura {
   position: absolute; inset: -30px; z-index: 0; pointer-events: none;
   border-radius: 48px;
-  /* Two offset blobs of the cover's mood color → an aurora that blooms PAST the
-     card edge. The card (opaque, z-1) covers the center; the blurred color spills
-     out as a halo. The old radial *mask* faded to transparent before reaching the
-     card edge, so the visible ring was masked away — fixed by using the color as
-     the fill and letting blur do the spread. --cov-rgb = artwork color (fallback
-     a soft neutral). */
-  background:
-    radial-gradient(46% 46% at 30% 26%, rgba(var(--cov-rgb, 130, 130, 150), 0.9), transparent 70%),
-    radial-gradient(42% 42% at 74% 78%, rgba(var(--cov-rgb, 130, 130, 150), 0.62), transparent 72%);
-  filter: blur(30px) saturate(1.45);
-  opacity: 0.65;
-  animation: om-aura-drift 8s ease-in-out infinite alternate;
+  filter: blur(32px) saturate(1.45);
+  opacity: 0.6;
+  transition: opacity .4s ease;
 }
 .om-card-aura.is-playing { opacity: 0.85; }
-@keyframes om-aura-drift {
-  0%   { transform: scale(1.04) translate(-2%, -1%) rotate(-1.5deg); }
-  50%  { transform: scale(1.12) translate(2%, 1.5%) rotate(1.5deg); }
-  100% { transform: scale(1.06) translate(-1%, 2%) rotate(-0.5deg); }
+.om-card-aura::before,
+.om-card-aura::after {
+  content: ''; position: absolute; inset: 0; border-radius: inherit; will-change: transform;
+}
+.om-card-aura::before {
+  background: radial-gradient(44% 44% at 32% 30%, rgba(var(--cov-rgb, 130, 130, 150), 0.9), transparent 70%);
+  animation: om-aura-a 9s ease-in-out infinite alternate;
+}
+.om-card-aura::after {
+  background: radial-gradient(40% 40% at 70% 72%, rgba(var(--cov-rgb, 130, 130, 150), 0.6), transparent 72%);
+  animation: om-aura-b 11s ease-in-out infinite alternate;
+}
+/* Gentle drift — small offsets, eased, opposite directions, coprime periods so
+   the combined motion never visibly loops. */
+@keyframes om-aura-a {
+  from { transform: translate(-4%, -3%) scale(1); }
+  to   { transform: translate(5%, 4%) scale(1.12); }
+}
+@keyframes om-aura-b {
+  from { transform: translate(4%, 3%) scale(1.08); }
+  to   { transform: translate(-5%, -4%) scale(0.95); }
 }
 @media (prefers-reduced-motion: reduce) {
-  .om-card-aura { animation: none; }
+  .om-card-aura::before, .om-card-aura::after { animation: none; }
 }
 /* Minimal mode: keep the title + meta visible (audio cards are unlabeled
    otherwise) — waveform strip on top, title row below, like the doc card. */
