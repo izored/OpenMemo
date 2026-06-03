@@ -142,10 +142,7 @@ export function Sidebar() {
         )}
       </div>
 
-      {/* Scrollable middle zone — the ONLY part that scrolls, so the player +
-          foot stay pinned to the bottom (handoff: 3-zone layout). data-lenis-prevent
-          is defensive (Lenis is bound to .om-main, not here). */}
-      <div className="om-sidebar-body" data-lenis-prevent>
+      {/* Fixed controls — search + nav never scroll. */}
       <button className="om-sidebar-search" onClick={() => setSearchOpen(true)} title="Search">
         <Icon name="search" size={13} />
         {!sidebarCollapsed && (
@@ -173,73 +170,77 @@ export function Sidebar() {
         ))}
       </nav>
 
-      {!sidebarCollapsed && (
-        <>
-          {(pinned.length > 0 || pinnedMemos.length > 0) && (
-            <div className="om-sidebar-section">
-              <div className="om-section-head">
-                <span className="om-section-label mono">Pinned</span>
-                <Icon name="pin" size={10} className="om-section-icon" />
-              </div>
-              <div className="om-collection-list">
-                {pinned.map((c: Collection) => (
-                  <CollectionRow
-                    key={`col-${c.id}`}
-                    col={c}
-                    pinned
-                    active={activeCollection === c.id}
-                    onSelect={() => selectCollection(c.id)}
-                    onEdit={(e) => editCollection(e, c)}
-                  />
-                ))}
-                {pinnedMemos.map((m) => (
-                  <button
-                    key={`memo-${m.id}`}
-                    className="om-coll pinned"
-                    onClick={() => {
-                      setActiveCollection(null);
-                      navigate(`/memo/${m.id}`);
-                    }}
-                    title={m.title}
-                  >
-                    <span className="om-coll-dot" style={{ background: 'var(--accent)' }} />
-                    <span className="om-coll-name">{m.title}</span>
-                    <Icon name="pin" size={10} className="om-coll-count" />
-                  </button>
-                ))}
-              </div>
-            </div>
-          )}
-
-          <div className="om-sidebar-section">
-            <div className="om-section-head">
-              <span className="om-section-label mono">Collections</span>
-              <button
-                className="om-icon-btn sm"
-                title="New collection"
-                onClick={() => {
-                  setEditingCollection(null);
-                  setCollectionModalOpen(true);
-                }}
-              >
-                <Icon name="plus" size={11} />
-              </button>
-            </div>
-            <div className="om-collection-list">
-              {others.map((c: Collection) => (
-                <CollectionRow
-                  key={c.id}
-                  col={c}
-                  pinned={false}
-                  active={activeCollection === c.id}
-                  onSelect={() => selectCollection(c.id)}
-                  onEdit={(e) => editCollection(e, c)}
-                />
-              ))}
-            </div>
+      {/* Pinned stays fixed above the scroll zone. */}
+      {!sidebarCollapsed && (pinned.length > 0 || pinnedMemos.length > 0) && (
+        <div className="om-sidebar-section">
+          <div className="om-section-head">
+            <span className="om-section-label mono">Pinned</span>
+            <Icon name="pin" size={10} className="om-section-icon" />
           </div>
-        </>
+          <div className="om-collection-list">
+            {pinned.map((c: Collection) => (
+              <CollectionRow
+                key={`col-${c.id}`}
+                col={c}
+                pinned
+                active={activeCollection === c.id}
+                onSelect={() => selectCollection(c.id)}
+                onEdit={(e) => editCollection(e, c)}
+              />
+            ))}
+            {pinnedMemos.map((m) => (
+              <button
+                key={`memo-${m.id}`}
+                className="om-coll pinned"
+                onClick={() => {
+                  setActiveCollection(null);
+                  navigate(`/memo/${m.id}`);
+                }}
+                title={m.title}
+              >
+                <span className="om-coll-dot" style={{ background: 'var(--accent)' }} />
+                <span className="om-coll-name">{m.title}</span>
+                <Icon name="pin" size={10} className="om-coll-count" />
+              </button>
+            ))}
+          </div>
+        </div>
       )}
+
+      {/* Collections header — fixed; only its LIST (below) scrolls. */}
+      {!sidebarCollapsed && (
+        <div className="om-section-head om-collections-head">
+          <span className="om-section-label mono">Collections</span>
+          <button
+            className="om-icon-btn sm"
+            title="New collection"
+            onClick={() => {
+              setEditingCollection(null);
+              setCollectionModalOpen(true);
+            }}
+          >
+            <Icon name="plus" size={11} />
+          </button>
+        </div>
+      )}
+
+      {/* ONLY the collections list scrolls. Always present (even collapsed) so it
+          owns the slack and keeps the player + foot pinned to the bottom. */}
+      <div className="om-sidebar-scroll" data-lenis-prevent>
+        {!sidebarCollapsed && (
+          <div className="om-collection-list">
+            {others.map((c: Collection) => (
+              <CollectionRow
+                key={c.id}
+                col={c}
+                pinned={false}
+                active={activeCollection === c.id}
+                onSelect={() => selectCollection(c.id)}
+                onEdit={(e) => editCollection(e, c)}
+              />
+            ))}
+          </div>
+        )}
       </div>
 
       {/* Bottom zone — player + foot, pinned below the scrollable body (no margin

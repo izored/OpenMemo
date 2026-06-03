@@ -73,7 +73,7 @@ export function SidebarPlayer() {
     />
   ) : (
     <span className="om-sb-player-cover om-sb-player-cover-glyph">
-      <Icon name={track.kind === 'voice' ? 'mic' : 'music'} size={collapsed ? 14 : 18} />
+      <Icon name={track.kind === 'voice' ? 'mic' : 'music'} size={collapsed ? 14 : 16} />
     </span>
   );
 
@@ -106,7 +106,7 @@ export function SidebarPlayer() {
         aria-pressed={repeat}
         aria-label="Repeat one"
       >
-        <Icon name="repeat" size={15} />
+        <Icon name="repeat" size={14} />
       </button>
       <button
         className="om-sb-player-play"
@@ -114,7 +114,7 @@ export function SidebarPlayer() {
         title={playing ? 'Pause' : 'Play'}
         aria-label={playing ? 'Pause' : 'Play'}
       >
-        <Icon name={playing ? 'pause' : 'play'} size={16} stroke={0} style={{ fill: 'currentColor' }} />
+        <Icon name={playing ? 'pause' : 'play'} size={15} stroke={0} style={{ fill: 'currentColor' }} />
       </button>
       <button
         className={cn('om-sb-player-btn', pinned && 'active')}
@@ -123,7 +123,7 @@ export function SidebarPlayer() {
         aria-pressed={pinned}
         aria-label="Pin memo"
       >
-        <Icon name="pin" size={15} />
+        <Icon name="pin" size={14} />
       </button>
     </div>
   );

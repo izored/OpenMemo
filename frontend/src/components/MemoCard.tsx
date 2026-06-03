@@ -10,6 +10,7 @@ import { useCoverMood, type CoverMood } from '@/lib/coverMood';
 import { platformMeta, videoEmbedUrl } from '@/lib/platforms';
 import { useAppStore } from '@/stores/appStore';
 import { useAudioPlayer, formatTime } from '@/lib/audioPlayer';
+import { motion, AnimatePresence } from 'framer-motion';
 import { LiveWaveform } from './LiveWaveform';
 import type { Memo, MemoType } from '@/types';
 
@@ -173,7 +174,7 @@ function Chrome({
         </div>
       )}
       {confirmOverlay}
-      {playerOverlay}
+      <AnimatePresence initial={false}>{playerOverlay}</AnimatePresence>
       <div className="om-card-actions">
         {onOpen && (
           <button className="om-action" onClick={onOpen} title="Open memo page" aria-label="Open memo">
@@ -250,12 +251,17 @@ function CardMusicPlayer({ memo, cover, mood }: { memo: Memo; cover?: string | n
     }
   };
   return (
-    <div
+    <motion.div
+      key="player"
       className={cn('om-card-player', mood && 'is-tinted')}
       role="group"
       aria-label="Now playing"
       onClick={(e) => e.stopPropagation()}
       style={mood ? ({ ['--cov-base']: mood.base, ['--cov-deep']: mood.deep } as React.CSSProperties) : undefined}
+      initial={{ opacity: 0, scale: 0.985 }}
+      animate={{ opacity: 1, scale: 1 }}
+      exit={{ opacity: 0, scale: 0.985 }}
+      transition={{ duration: 0.24, ease: [0.22, 0.61, 0.36, 1] }}
     >
       {cover && <div className="om-card-player-cover" style={{ backgroundImage: `url(${cover})` }} aria-hidden />}
       <div className="om-card-player-scrim" aria-hidden />
@@ -311,7 +317,7 @@ function CardMusicPlayer({ memo, cover, mood }: { memo: Memo; cover?: string | n
           {memo.title}
         </button>
       </div>
-    </div>
+    </motion.div>
   );
 }
 
@@ -587,7 +593,7 @@ export function MemoCard({ memo, dragHandleProps, lightboxGroup }: CardProps) {
     // classic waveform tile + centred play button — no full-bleed takeover, no
     // double play button. (ADR-005: voice stays on the old card.)
     const richMusic = isMusic && !!src;
-    const playerOverlay = richMusic && active ? <CardMusicPlayer memo={memo} cover={src} mood={mood} /> : null;
+    const playerOverlay = richMusic && active ? <CardMusicPlayer key="player" memo={memo} cover={src} mood={mood} /> : null;
     // Local file → play in the shared engine (sidebar player + inline). Remote
     // (yt-dlp, still downloading or streaming) → open the detail page, which
     // shows progress and plays/saves.
@@ -647,7 +653,10 @@ export function MemoCard({ memo, dragHandleProps, lightboxGroup }: CardProps) {
             </button>
           </div>
           <div className="om-card-body">
-            <h3 className="om-card-title">{memo.title}</h3>
+            <h3 className="om-card-title has-kind-icon">
+              <Icon name={isMusic ? 'music' : 'mic'} size={12} className="om-kind-icon" />
+              <span className="om-kind-title-text">{memo.title}</span>
+            </h3>
             <Meta memo={memo} />
           </div>
         </Chrome>
