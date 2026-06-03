@@ -66,6 +66,7 @@ export function AddCollectionModal() {
 
   useEffect(() => {
     if (editingCollection) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- intentional form sync when the modal opens / edit target changes
       setName(editingCollection.name);
       setEmoji(editingCollection.emoji || '📁');
       setEmojiManual(true);
@@ -87,6 +88,7 @@ export function AddCollectionModal() {
   useEffect(() => {
     if (emojiManual) return;
     const derived = deriveEmoji(name);
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- intentional emoji derivation from the name field
     setEmoji(derived ?? '📁');
   }, [name, emojiManual]);
 

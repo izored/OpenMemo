@@ -13,6 +13,7 @@ interface Release {
   published_at: string;
 }
 
+// eslint-disable-next-line react-refresh/only-export-components -- pure version helper colocated with the modal; not a fast-refresh boundary
 export function cmpVersion(a: string, b: string): number {
   const pa = a.replace(/^v/, '').split('.').map(Number);
   const pb = b.replace(/^v/, '').split('.').map(Number);
@@ -54,6 +55,7 @@ export function ChangelogModal({
   };
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- load() sets loading/error then fetches the changelog on open
     load();
     const h = (e: KeyboardEvent) => e.key === 'Escape' && onClose();
     window.addEventListener('keydown', h);

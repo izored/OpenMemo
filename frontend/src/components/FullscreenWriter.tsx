@@ -18,6 +18,7 @@ export function FullscreenWriter() {
     if (!open) return;
     const h = (e: KeyboardEvent) => {
       if (e.key === 'Escape') setOpen(false);
+      // eslint-disable-next-line react-hooks/immutability -- handleSave is a stable closure defined just below; invoking it here is intentional
       if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') void handleSave();
     };
     window.addEventListener('keydown', h);

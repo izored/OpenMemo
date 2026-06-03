@@ -10,6 +10,7 @@ function useAnchorRect(selector?: string, active?: boolean) {
   const [rect, setRect] = useState<DOMRect | null>(null);
   useLayoutEffect(() => {
     if (!selector || !active) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- clear the measured rect when the anchor is inactive
       setRect(null);
       return;
     }
@@ -35,6 +36,7 @@ export function Onboarding() {
   const addPanelOpen = useAppStore((s) => s.addPanelOpen);
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- show the intro once on first mount
     if (!localStorage.getItem(ONBOARDING_KEY)) setPhase('intro');
     const retake = () => {
       setStep(0);
