@@ -7,6 +7,64 @@ the decision, and its consequences, so a future reader knows *why*, not just
 
 ---
 
+## ADR-006 — Sidebar is a fixed three-zone column; only the collections list scrolls
+
+**Date:** 2026-06-03 · **Status:** Accepted · **Relates to:** ADR-005 (the sidebar hosts the now-playing player)
+
+### Context
+
+The sidebar was a single flex column with `height: 100vh; overflow-y: auto` — the
+**whole** sidebar was the scroll container. That made bottom-anchored elements
+(the foot, and after ADR-005 the now-playing player) behave as scrolling content,
+not pinned sections. Pinning them with `margin-top: auto` "worked" but, in a column
+flex, auto margins absorb **all** remaining free space, so a large empty gap opened
+above the player whenever the content was short (the common case). A coding-agent
+handoff (`sidebar-handoff.md`) diagnosed this precisely.
+
+Separately, the desired behavior is that **only the collections list scrolls** —
+search, primary nav, the Pinned section, and the "Collections" header should stay
+fixed, not scroll away with the list.
+
+Lenis smooth-scroll is bound to `.om-main` (the routed content), **not** the
+sidebar, so the sidebar scrolls natively; Lenis does not hijack it.
+
+### Decision
+
+Model the sidebar as a **fixed-height, non-scrolling flex column** with explicit
+zones, and put scrolling on exactly one inner element:
+
+| Zone | Elements | Scroll? |
+|------|----------|---------|
+| Top (fixed) | brand head · search · nav · Pinned section · Collections header | no |
+| Middle (the only scroller) | `.om-sidebar-scroll` → the collections list | **yes** |
+| Bottom (fixed) | `SidebarPlayer` · foot (theme + avatar) | no |
+
+- `.om-sidebar` is `height: 100dvh; overflow: hidden` — it never scrolls itself.
+- `.om-sidebar-scroll` is `flex: 1 1 auto; min-height: 0; overflow-y: auto` and is
+  **always rendered** (even collapsed, where it's empty) so it owns the flexible
+  space and naturally pins the player + foot to the bottom — **no `margin-top:auto`**.
+- The "Collections" header is a standalone fixed row above the scroller; only the
+  list rows scroll under it.
+- `data-lenis-prevent` is set on the scroller defensively, though Lenis is scoped
+  to `.om-main` and does not touch the sidebar today.
+
+### Alternatives considered
+
+| Option | Why rejected |
+|--------|--------------|
+| **Keep the whole sidebar scrollable + `margin-top:auto` on the player/foot** | Auto margins eat all slack → large empty gap above the player; the reported bug. |
+| **Scroll the entire middle (nav + pinned + collections)** | Search/nav/Pinned/labels scroll away — the user wants them fixed; only the collection list should move. |
+| **`position: fixed` player pinned to the viewport** | Introduces overlap + width/offset compensation against the animated-width sidebar; brittle. |
+
+### Consequences
+
+- Player + foot stay visually pinned to the bottom with no gap, expanded or collapsed.
+- Only the collections list scrolls; everything else is fixed.
+- New classes: `.om-sidebar-scroll`, `.om-collections-head`. `.om-sidebar` loses its
+  own scroll. No JS layout math — pure flexbox.
+
+---
+
 ## ADR-005 — Audio is a first-class media experience: voice vs music split, local-first pull-first player
 
 **Date:** 2026-06-03 · **Status:** Accepted · **Builds on:** ADR-001 (whole-type scope), ADR-003 (tiered capture), ADR-004 (non-destructive transcript)
