@@ -1,4 +1,4 @@
-import type { Memo } from '@/types';
+import type { Memo, MemoType } from '@/types';
 
 // Domains that use hotlink protection — proxy through backend.
 export const HOTLINK_DOMAINS = ['dribbble.com', 'behance.net', 'pinterest.com', 'cdn.dribbble.com'];
@@ -74,6 +74,29 @@ export function isMusic(memo: Memo): boolean {
 /** True for mic recordings (keep the waveform tile — no aurora/cover player). */
 export function isVoice(memo: Memo): boolean {
   return audioKind(memo) === 'voice';
+}
+
+// Memo types eligible for the AI Summary panel (ADR-007). EDIT THIS SET to
+// change which types get summarized — single source of truth, mirrored on the
+// backend (`classify.can_summarize`). Music audio is excluded separately in
+// `canSummarize` (a song is not summarizable text), regardless of this set.
+const SUMMARIZABLE_TYPES = new Set<MemoType>([
+  'note', 'article', 'link', 'video', 'audio', 'document', 'code', 'file',
+]);
+
+/**
+ * Gating predicate for the AI Summary panel (ADR-007).
+ *
+ * True only when the memo has text to summarize AND its type is summarizable
+ * AND it is not music. Music (`audio_kind === 'music'`) is always excluded:
+ * summarizing a song's transcript/lyrics is meaningless. Voice memos (spoken
+ * word) ARE summarizable. Edit SUMMARIZABLE_TYPES above to add/remove a type;
+ * every render site reads this one predicate so eligibility can never drift.
+ */
+export function canSummarize(memo: Memo): boolean {
+  if (!memo.content_text) return false;
+  if (isMusic(memo)) return false;
+  return SUMMARIZABLE_TYPES.has(memo.type);
 }
 
 export function mediaSrc(memo: Memo): string | null {
