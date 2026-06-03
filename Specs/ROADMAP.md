@@ -50,7 +50,7 @@ Single source of truth for all planned work. Versioned milestones + unversioned 
 
 ---
 
-## 🎧 v2.1.0 — Audio Experience (Music + Voice) *(IN PROGRESS)*
+## 🎧 v2.1.0 — Audio Experience (Music + Voice) *(SHIPPED — PR #31 + follow-ups)*
 
 Full design in [`docs/DECISIONS.md` → ADR-005](../docs/DECISIONS.md). Audio promoted
 to a first-class media experience. Two axes: **kind** (`voice` vs `music`, drives
@@ -59,25 +59,27 @@ pull-first player. Applies to **all** audio providers (SoundCloud, Bandcamp,
 Mixcloud, Audius, + graceful fallback), never SoundCloud-only.
 
 **Phase 1 — taxonomy + classification fixes:**
-- [ ] `audio_kind` column (`voice` | `music`) + PRAGMA-guarded migration + backfill
-- [ ] Centralized `AUDIO_HOSTS` (backend) — audio hosts classify `audio` even when yt-dlp's probe fails *(fixes dead-`video` bug)*
-- [ ] `lib/audioPlatforms.ts` registry (host → glyph + embed + can-localize), mirror of `platforms.ts`; `audioEmbed` moves here
-- [ ] `audioKind(memo)` single predicate in `lib/media.ts`; recorder posts `audio_kind=voice`
-- [ ] MemoDetail never dead-ends remote audio — live embed + Make-it-local always offered *(fixes hidden-embed bug)*
+- [x] `audio_kind` column (`voice` | `music`) + PRAGMA-guarded migration + backfill
+- [x] Centralized `AUDIO_HOSTS` (backend) — audio hosts classify `audio` even when yt-dlp's probe fails *(fixes dead-`video` bug)*
+- [x] `lib/audioPlatforms.ts` registry (host → glyph + embed + can-localize), mirror of `platforms.ts`; `audioEmbed` moves here
+- [x] `audioKind(memo)` single predicate in `lib/media.ts`; recorder posts `audio_kind=voice`
+- [x] MemoDetail never dead-ends remote audio — live embed + Make-it-local always offered *(fixes hidden-embed bug)*
 
 **Phase 2 — sidebar player (replaces top-right pill):**
-- [ ] Remove `HeaderAudioPlayer`; add `SidebarPlayer` in sidebar foot
-- [ ] Transport: **repeat-one · play/pause · pin** (no queue yet); scrubber + times + cover
-- [ ] Collapsed-sidebar mode: cover thumbnail + progress ring so playback is visible when tucked
-- [ ] Engine gains repeat-one state (`onEnded` → seek 0 + replay)
+- [x] Remove `HeaderAudioPlayer`; add `SidebarPlayer` in sidebar foot (3-zone sidebar so it pins to the bottom)
+- [x] Transport: **repeat-one · play/pause · pin** (no queue yet); scrubber + times + cover
+- [x] Collapsed-sidebar mode: cover thumbnail + progress ring so playback is visible when tucked
+- [x] Engine gains repeat-one state (`onEnded` → seek 0 + replay)
+- [x] Cover-mood tint (`lib/coverMood.ts`) + **small / big** size as an appearance pref (big = full cover fading into the mood color)
+- [x] OS media keys / lock-screen transport via the Media Session API
 
-**Phase 3 — inline full-bleed card player *(music only)*:**
-- [ ] Active music card flips to in-card player (same overlay mechanism as delete-confirm): blurred cover, big play/pause, scrubber
-- [ ] Voice memos untouched — keep the waveform tile + button
+**Phase 3 — inline card player *(music-with-cover only)*:**
+- [x] Active music card flips to a same-size overlay (no resize/zoom): crisp cover + bottom→top mood gradient with a blur behind the controls + transport
+- [x] Voice + cover-less audio untouched — classic waveform tile (theme-accent bars) + centred play button
 
-**Phase 4 — aurora glow *(music only)*:**
-- [ ] Faint drifting aurora-borealis halo behind the playing music card, tinted from its cover, bleeding slightly past the edge
-- [ ] `prefers-reduced-motion` safe; voice excluded
+**Phase 4 — aurora glow *(music-with-cover only)*:**
+- [x] Faint two-blob aurora halo behind the playing music card, tinted from its cover, bleeding past the edge, drifting organically
+- [x] `prefers-reduced-motion` safe; voice + cover-less excluded
 
 ### Deferred (this milestone, explicitly NOT built yet)
 

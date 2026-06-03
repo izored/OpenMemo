@@ -8,15 +8,17 @@ import { useAppStore } from '@/stores/appStore';
 import { useAudioPlayer, formatTime } from '@/lib/audioPlayer';
 import { useCoverMood } from '@/lib/coverMood';
 
-// Persistent now-playing surface in the sidebar foot (ADR-005). Replaces the old
-// top-right HeaderAudioPlayer; drives the one shared <audio>. Expanded: cover +
-// title + scrubber + transport (repeat-one · play/pause · pin). Collapsed: a
-// cover thumbnail wrapped in a progress ring so playback stays visible when the
-// sidebar is tucked away. Music shows cover art; voice shows a mic glyph.
+// Persistent now-playing surface in the sidebar foot (ADR-005). Drives the one
+// shared <audio>. Two sizes (appearance pref `playerSize`):
+//   • small — cover thumbnail + title + scrubber + transport (default)
+//   • big   — full cover on top fading into the cover-mood color, transport below
+// Collapsed sidebar → a cover thumbnail in a progress ring. Music shows cover art;
+// voice shows a mic glyph. Big needs a cover, so it falls back to small without one.
 export function SidebarPlayer() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const collapsed = useAppStore((s) => s.sidebarCollapsed);
+  const playerSize = useAppStore((s) => s.tweaks.playerSize);
   const { track, playing, currentTime, duration, repeat, toggleRepeat, toggle, seek, close } = useAudioPlayer();
 
   // Pin state seeded from the playing track, toggled optimistically here. Reset
@@ -34,8 +36,12 @@ export function SidebarPlayer() {
   if (!track) return null;
 
   const isMusic = track.kind === 'music';
+  const hasCover = isMusic && !!track.cover;
   const hasDur = Number.isFinite(duration) && duration > 0;
   const pct = hasDur ? Math.min(100, (currentTime / duration) * 100) : 0;
+  const moodStyle = mood
+    ? ({ ['--cov-base']: mood.base, ['--cov-deep']: mood.deep } as React.CSSProperties)
+    : undefined;
 
   const goMemo = () => navigate(`/memo/${track.memoId}`);
 
@@ -58,19 +64,69 @@ export function SidebarPlayer() {
     }
   };
 
-  const cover =
-    isMusic && track.cover ? (
-      <img
-        className="om-sb-player-cover"
-        src={track.cover}
-        alt=""
-        onError={(e) => ((e.target as HTMLImageElement).style.display = 'none')}
-      />
-    ) : (
-      <span className="om-sb-player-cover om-sb-player-cover-glyph">
-        <Icon name={track.kind === 'voice' ? 'mic' : 'music'} size={collapsed ? 14 : 18} />
-      </span>
-    );
+  const cover = hasCover ? (
+    <img
+      className="om-sb-player-cover"
+      src={track.cover || ''}
+      alt=""
+      onError={(e) => ((e.target as HTMLImageElement).style.display = 'none')}
+    />
+  ) : (
+    <span className="om-sb-player-cover om-sb-player-cover-glyph">
+      <Icon name={track.kind === 'voice' ? 'mic' : 'music'} size={collapsed ? 14 : 18} />
+    </span>
+  );
+
+  // Scrubber + transport are shared by the small and big layouts.
+  const scrub = (
+    <div className="om-sb-player-scrub">
+      <span className="om-sb-player-time mono">{formatTime(currentTime)}</span>
+      <div
+        className="om-sb-player-track"
+        onClick={onScrub}
+        role="slider"
+        aria-label="Seek"
+        aria-valuemin={0}
+        aria-valuemax={100}
+        aria-valuenow={Math.round(pct)}
+        tabIndex={0}
+      >
+        <div className="om-sb-player-fill" style={{ width: `${pct}%` }} />
+      </div>
+      <span className="om-sb-player-time mono">{hasDur ? formatTime(duration) : '--:--'}</span>
+    </div>
+  );
+
+  const transport = (
+    <div className="om-sb-player-transport">
+      <button
+        className={cn('om-sb-player-btn', repeat && 'active')}
+        onClick={toggleRepeat}
+        title={repeat ? 'Repeat one: on' : 'Repeat one: off'}
+        aria-pressed={repeat}
+        aria-label="Repeat one"
+      >
+        <Icon name="repeat" size={15} />
+      </button>
+      <button
+        className="om-sb-player-play"
+        onClick={toggle}
+        title={playing ? 'Pause' : 'Play'}
+        aria-label={playing ? 'Pause' : 'Play'}
+      >
+        <Icon name={playing ? 'pause' : 'play'} size={16} stroke={0} style={{ fill: 'currentColor' }} />
+      </button>
+      <button
+        className={cn('om-sb-player-btn', pinned && 'active')}
+        onClick={onPin}
+        title={pinned ? 'Unpin memo' : 'Pin memo'}
+        aria-pressed={pinned}
+        aria-label="Pin memo"
+      >
+        <Icon name="pin" size={15} />
+      </button>
+    </div>
+  );
 
   // ── Collapsed sidebar: cover + progress ring, tap to play/pause ──
   if (collapsed) {
@@ -104,13 +160,38 @@ export function SidebarPlayer() {
     );
   }
 
-  // ── Expanded sidebar: full mini-player ──
+  // ── Big: full cover on top fading into the mood color, transport below ──
+  if (playerSize === 'big' && hasCover) {
+    return (
+      <div
+        className={cn('om-sb-player', 'om-sb-player-big', mood && 'is-tinted')}
+        role="region"
+        aria-label="Now playing"
+        style={moodStyle}
+      >
+        <div className="om-sb-player-big-cover" style={{ backgroundImage: `url(${track.cover})` }} aria-hidden />
+        <button className="om-sb-player-big-x" onClick={close} aria-label="Close player" title="Close">
+          <Icon name="x" size={14} />
+        </button>
+        <div className="om-sb-player-big-body">
+          <button className="om-sb-player-big-title" onClick={goMemo} title={track.title}>
+            {track.title}
+          </button>
+          {track.subtitle && <span className="om-sb-player-big-sub">{track.subtitle}</span>}
+          {scrub}
+          {transport}
+        </div>
+      </div>
+    );
+  }
+
+  // ── Small (default): cover thumbnail + title + scrubber + transport ──
   return (
     <div
       className={cn('om-sb-player', isMusic && 'is-music', mood && 'is-tinted')}
       role="region"
       aria-label="Now playing"
-      style={mood ? ({ ['--cov-base']: mood.base, ['--cov-deep']: mood.deep } as React.CSSProperties) : undefined}
+      style={moodStyle}
     >
       <div className="om-sb-player-head">
         <button className="om-sb-player-cover-btn" onClick={goMemo} title={track.title}>
@@ -124,52 +205,8 @@ export function SidebarPlayer() {
           <Icon name="x" size={13} />
         </button>
       </div>
-
-      <div className="om-sb-player-scrub">
-        <span className="om-sb-player-time mono">{formatTime(currentTime)}</span>
-        <div
-          className="om-sb-player-track"
-          onClick={onScrub}
-          role="slider"
-          aria-label="Seek"
-          aria-valuemin={0}
-          aria-valuemax={100}
-          aria-valuenow={Math.round(pct)}
-          tabIndex={0}
-        >
-          <div className="om-sb-player-fill" style={{ width: `${pct}%` }} />
-        </div>
-        <span className="om-sb-player-time mono">{hasDur ? formatTime(duration) : '--:--'}</span>
-      </div>
-
-      <div className="om-sb-player-transport">
-        <button
-          className={cn('om-sb-player-btn', repeat && 'active')}
-          onClick={toggleRepeat}
-          title={repeat ? 'Repeat one: on' : 'Repeat one: off'}
-          aria-pressed={repeat}
-          aria-label="Repeat one"
-        >
-          <Icon name="repeat" size={15} />
-        </button>
-        <button
-          className="om-sb-player-play"
-          onClick={toggle}
-          title={playing ? 'Pause' : 'Play'}
-          aria-label={playing ? 'Pause' : 'Play'}
-        >
-          <Icon name={playing ? 'pause' : 'play'} size={16} stroke={0} style={{ fill: 'currentColor' }} />
-        </button>
-        <button
-          className={cn('om-sb-player-btn', pinned && 'active')}
-          onClick={onPin}
-          title={pinned ? 'Unpin memo' : 'Pin memo'}
-          aria-pressed={pinned}
-          aria-label="Pin memo"
-        >
-          <Icon name="pin" size={15} />
-        </button>
-      </div>
+      {scrub}
+      {transport}
     </div>
   );
 }
