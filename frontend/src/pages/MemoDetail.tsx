@@ -36,7 +36,7 @@ import { BackButton } from '@/components/BackButton';
 import { MarkdownEditor } from '@/components/MarkdownEditor';
 import { memoApi, collectionApi } from '@/lib/api';
 import { AskMemoPanel } from '@/components/AskMemoPanel';
-import { audioEmbed, canMakeLocal, canTranscript } from '@/lib/media';
+import { audioEmbed, canMakeLocal, canTranscript, audioKind } from '@/lib/media';
 import { videoEmbedUrl } from '@/lib/platforms';
 import { useAudioPlayer, formatTime } from '@/lib/audioPlayer';
 import ReactMarkdown from 'react-markdown';
@@ -212,7 +212,11 @@ function AudioMemoPlayer({ memo }: { memo: Memo }) {
 
   const onPlay = () => {
     if (active) toggle();
-    else play({ memoId: memo.id, title: memo.title, src, subtitle: memo.source_domain || undefined });
+    else play({
+      memoId: memo.id, title: memo.title, src,
+      subtitle: memo.source_domain || undefined,
+      kind: audioKind(memo), cover: memo.thumbnail_path || null, pinned: memo.pinned,
+    });
   };
   const onScrub = (e: React.MouseEvent<HTMLDivElement>) => {
     if (!active || dur <= 0) return;
@@ -437,10 +441,11 @@ function VideoContentPanel({ memo }: { memo: Memo }) {
   );
 }
 
-// Remote audio (yt-dlp pull) when auto-download is OFF: stream it inline via the
-// platform's embed widget (SoundCloud/Mixcloud), with options to open the
-// original or save a local copy for offline + transcription.
-function AudioStreamEmbed({ memo }: { memo: Memo }) {
+// Remote audio: stream it inline via the platform's embed widget
+// (SoundCloud/Mixcloud), with options to open the original or save a local copy
+// for offline + transcription. `reference` = the memo already has a local file,
+// so this is just a "listen at the source" reference — hide the Save action.
+function AudioStreamEmbed({ memo, reference = false }: { memo: Memo; reference?: boolean }) {
   const queryClient = useQueryClient();
   const [saving, setSaving] = useState(false);
   const embed = audioEmbed(memo);
@@ -477,9 +482,11 @@ function AudioStreamEmbed({ memo }: { memo: Memo }) {
             Open original <ExternalLink size={14} />
           </a>
         )}
-        <button className="om-btn-primary om-btn-pill" onClick={save} disabled={saving}>
-          {saving ? <Loader2 size={14} className="om-spin" /> : <HardDriveDownload size={14} />} Save audio in openMemo
-        </button>
+        {!reference && (
+          <button className="om-btn-primary om-btn-pill" onClick={save} disabled={saving}>
+            {saving ? <Loader2 size={14} className="om-spin" /> : <HardDriveDownload size={14} />} Save audio in openMemo
+          </button>
+        )}
       </div>
     </div>
   );
@@ -1070,12 +1077,29 @@ export function MemoDetail() {
               <MediaPreview src={`/api/memos/${memo.id}/file`} alt={memo.title} kind="video" />
             )}
 
-            {/* Audio memo — inline player + transcript below it */}
-            {memo.type === 'audio' && memo.file_path && !isEditing && (
-              <>
-                <AudioMemoPlayer memo={memo} />
-                <AudioTranscript memo={memo} />
-              </>
+            {/* Audio memo (ADR-005) — never a dead end. A local/pulled file plays
+                in our player; a remote source always falls through to the live
+                platform widget or a progress/retry panel. Replaces the old split
+                that rendered nothing when localize was done-without-file or when
+                auto-download hid the live embed. */}
+            {memo.type === 'audio' && !isEditing && (
+              memo.file_path ? (
+                <>
+                  <AudioMemoPlayer memo={memo} />
+                  <AudioTranscript memo={memo} />
+                  {/* Keep the source reachable as a live reference even after pull. */}
+                  {memo.source_url && audioEmbed(memo) && <AudioStreamEmbed memo={memo} reference />}
+                </>
+              ) : (memo.localize_status === 'pending' ||
+                   memo.localize_status === 'processing' ||
+                   memo.localize_status === 'error') ? (
+                // A pull is in flight or failed → progress / retry (Open original inside).
+                <MakeItLocalPanel memo={memo} />
+              ) : (
+                // No local file, not pulling → live platform widget (or graceful
+                // Open-original fallback) + Save-to-openMemo.
+                <AudioStreamEmbed memo={memo} />
+              )
             )}
 
             {/* Inline platform embed (YouTube, Vimeo, Instagram, TikTok, …) */}
@@ -1091,18 +1115,7 @@ export function MemoDetail() {
               </div>
             )}
 
-            {/* Remote audio (yt-dlp pull, no local file). Auto-download in flight
-                or errored → progress/retry panel; otherwise (auto-download off) →
-                stream it inline via the platform embed.
-                canMakeLocal() confirms type === "audio", has source_url, no file_path,
-                and localize_status !== "done" before rendering either panel. */}
-            {!isEditing && canMakeLocal(memo) && memo.type === 'audio' && (
-              memo.localize_status ? (
-                <MakeItLocalPanel memo={memo} />
-              ) : (
-                <AudioStreamEmbed memo={memo} />
-              )
-            )}
+            {/* (Audio remote handling moved into the unified audio block above.) */}
 
             {/* Make it local — remote video with no local file yet
                 (YouTube, Vimeo, Instagram, TikTok, Vimeo, etc.).

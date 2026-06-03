@@ -3,6 +3,34 @@
 All notable changes to OpenMemo are documented here.
 
 ---
+## [2.1.0] - Unreleased
+
+Audio grows up. Voice memos and music are now distinct, the player moves out of
+the corner and into the sidebar, and a saved SoundCloud/Bandcamp/Mixcloud track
+becomes a first-class, playable memo — with an inline card player and a faint
+aurora glow on whatever is currently playing. Whole audio type, every provider
+(ADR-005), not SoundCloud-only.
+
+### Added
+
+- 🎧 **Sidebar now-playing player** — the persistent audio player moves from the top-right pill into the sidebar foot. Cover, title, source, scrubber, and a transport of **repeat-one · play/pause · pin** (single-track focus replaces next/prev). When the sidebar is collapsed it shrinks to a cover thumbnail wrapped in a progress ring, so you can still see something is playing. Drives the one shared `<audio>`, so playback survives navigation.
+- 💿 **Inline music card player** — the music card that is currently playing flips to a full-bleed in-card player (the same overlay mechanism as the delete-confirm): blurred cover, big play/pause, scrubber. Music only — voice memos keep their waveform tile exactly as before.
+- 🌌 **Aurora glow on the playing track** — a faint, slowly drifting aurora-borealis halo, tinted from the track's own cover art, blooms behind the active music card and bleeds just past its edge so you can find what's playing in a dense grid. Music only; honors `prefers-reduced-motion`.
+- 🗂️ **Voice vs music taxonomy** — a new `audio_kind` column (`voice` | `music`, ADR-005) finally separates mic recordings from uploaded/linked music. The recorder flags its captures `voice`; everything else audio is `music`. One predicate `audioKind(memo)` drives every render site. PRAGMA-guarded migration backfills existing rows.
+- 🔌 **Audio platform registry** — `frontend/src/lib/audioPlatforms.ts` centralizes linked-audio hosts (SoundCloud, Bandcamp, Mixcloud, Audius, Audiomack) the way `platforms.ts` does for video. Adding a host lights up the live embed + card at once. Backend mirror: `core/extractor.is_audio_host`.
+
+### Changed
+
+- 🔀 **Audio player relocated** — `HeaderAudioPlayer` (top-right pill) is removed in favor of the sidebar player; the shared engine gains repeat-one state (`onEnded` → restart).
+
+### Fixed
+
+- 🩹 **Linked audio dead-ended on a yt-dlp hiccup** — when yt-dlp's metadata probe failed at save time (common for SoundCloud), `extract_video` fell back to `type = "video"`, and a `video`-typed SoundCloud memo has no embed and no audio render path — the detail page showed nothing. Audio hosts now classify `audio` even when yt-dlp fails (centralized `AUDIO_HOSTS`), so this can't dead-end. Whole audio type, every host (ADR-005, ADR-001).
+- 🩹 **Remote audio could render nothing / hid the live embed** — the SoundCloud/Mixcloud widget only showed when auto-download was off, and a `localize_status: done` state with no `file_path` fell through every branch to a blank page. The detail page's audio section is restructured to always offer a listen path: the live platform widget plus Make-it-local, in every state, and the source embed stays available as a reference even after the track is pulled.
+- 🧪 **Smoke-test fixture didn't run startup** — `TestClient(app)` without the context manager never fired the app lifespan, so additive schema migrations (the new `audio_kind` column) weren't applied and the memos endpoint 500'd with `no such column`. The fixture now enters the context manager so startup + migrations run.
+- 🧹 **ESLint clean** — resolved all 27 outstanding eslint problems across the frontend (real fixes for `no-explicit-any`, unused caught error + `preserve-caught-error`, a redundant assignment; documented, behavior-preserving disables for the new react-hooks v6 rules flagging intentional patterns). `npm run lint` now exits clean.
+
+---
 ## [2.0.3] - Unreleased
 
 Video memos from every platform — not just YouTube — now play inline and wear

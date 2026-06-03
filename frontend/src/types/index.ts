@@ -23,6 +23,10 @@ export interface Memo {
   transcript_source?: 'captions' | 'stt' | null;
   // "Make it local" (yt-dlp download) state for link/video memos.
   localize_status?: 'pending' | 'processing' | 'done' | 'error' | null;
+  // Audio sub-kind (ADR-005): 'voice' = mic recording (waveform, no aurora),
+  // 'music' = uploaded file or linked SoundCloud/Bandcamp/… (cover player +
+  // inline card player + aurora). Absent/null for non-audio memos.
+  audio_kind?: 'voice' | 'music' | null;
   sort_order?: number;
   pinned?: boolean;
   is_processed: boolean;

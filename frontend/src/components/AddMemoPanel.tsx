@@ -62,6 +62,7 @@ export function AddMemoPanel() {
 
   useEffect(() => {
     if (open) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- clear stale error when the panel opens
       setError('');
     }
   }, [open]);
@@ -70,6 +71,7 @@ export function AddMemoPanel() {
   // so the user lands back in the panel with it already chosen (no reselect).
   useEffect(() => {
     if (lastCreatedCollectionId) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- auto-select a just-created collection
       setCollection(lastCreatedCollectionId);
       setLastCreatedCollectionId(null);
     }
@@ -174,6 +176,7 @@ export function AddMemoPanel() {
       await ingestApi.file(file, collection || undefined, undefined, {
         typeOverride: 'audio',
         transcribe: opts.transcribe,
+        audioKind: 'voice',
       });
       done();
     } catch (e) {

@@ -7,6 +7,143 @@ the decision, and its consequences, so a future reader knows *why*, not just
 
 ---
 
+## ADR-005 — Audio is a first-class media experience: voice vs music split, local-first pull-first player
+
+**Date:** 2026-06-03 · **Status:** Accepted · **Builds on:** ADR-001 (whole-type scope), ADR-003 (tiered capture), ADR-004 (non-destructive transcript)
+
+### Context
+
+Audio was the runt of the media types. Three different things all collapsed into a
+single undifferentiated `type: 'audio'`:
+
+1. **Voice memos** — mic recordings made in-app (spoken word, transcribe-on-save).
+2. **Uploaded music** — a local `.mp3` / `.flac` / `.wav` the user dropped in.
+3. **Linked music** — a track pulled from SoundCloud / Bandcamp / Mixcloud / Audius.
+
+Nothing in the schema told them apart, so every render site had to guess from a
+fragile filename heuristic (`title LIKE 'Voice memo%'`). That blocked any
+treatment that should apply to *music but not voice* (cover art, an album-style
+player, ambient glow) or *voice but not music* (the waveform the user explicitly
+loves). Playback itself was a top-right pill (`HeaderAudioPlayer`) bolted onto the
+app shell, with no presence in the sidebar where the rest of the app's navigation
+lives, and no way to tell what was playing once the player was dismissed.
+
+Two latent bugs made linked audio actively hostile:
+
+- **Bug 1 — audio hosts mistyped `video`.** SoundCloud/Bandcamp/Mixcloud live in
+  the extractor's `_VIDEO_DOMAINS` (yt-dlp pulls them like any other site). When
+  yt-dlp's metadata probe *failed* at save time (rate-limit, transient network, a
+  momentary host change — all common for SoundCloud), `extract_video` fell back to
+  a hardcoded `type = "video"`. A `video`-typed SoundCloud memo has no inline
+  player (it is not in the video embed registry) and every audio render path is
+  gated on `type === 'audio'`, so the detail page rendered **nothing** — a dead
+  end produced by a transient hiccup, affecting *every* audio host, not one.
+
+- **Bug 2 — the live platform embed was hidden whenever auto-download was on.**
+  The SoundCloud/Mixcloud widget ("listen at the source") only rendered when
+  `localize_status` was unset, i.e. auto-download OFF. With auto-download ON (the
+  default), the user never got the live reference, and a `localize_status: done`
+  state that somehow lacked a `file_path` fell through every branch to nothing.
+
+### Decision
+
+Promote audio to a first-class, deliberately designed experience, modeled on
+**two orthogonal axes** so we never again conflate distinct concerns:
+
+| Axis | Field | Drives |
+|------|-------|--------|
+| **Kind** | `audio_kind` ∈ {`voice`, `music`} | *Behavior* — waveform vs cover art, inline card player, ambient glow |
+| **Origin** | `file_path` (local) vs `source_url` (remote) | *Playback path* — our `<audio>` engine vs platform iframe |
+
+**1. `audio_kind` is an explicit column, set at ingest, read through one predicate.**
+The mic recorder posts `audio_kind=voice`; every other audio (uploaded file or
+linked pull) defaults `music`. A PRAGMA-guarded migration backfills existing rows
+(`title LIKE 'Voice memo%'` and no `source_url` → `voice`, else `music`). The
+frontend reads it through a single `audioKind(memo)` predicate in `lib/media.ts`
+(with the same heuristic as a fallback for un-migrated rows). No scattered `if`s.
+
+**2. The player is local-first and pull-first.** Our engine is one shared HTML5
+`<audio>` element (in `AudioPlayerProvider`, survives navigation). It can only
+play a real media resource the browser can load — a local file at
+`/api/memos/:id/file`. Platform "embeds" (`w.soundcloud.com/player/…`) are *whole
+web pages*, not streams; the real stream URLs are signed and CORS-locked, so
+`<audio src>` can never point at them. Therefore **linked audio must be pulled to
+a local file (yt-dlp) before our player can touch it.** Auto-download (default ON,
+already wired in `ingest.py`) makes this invisible: a saved SoundCloud link
+localizes in the background and *upgrades itself* into the rich player within
+seconds. Until then — and whenever a host is unpullable or auto-download is off —
+the platform **iframe is the graceful live-reference fallback**, never a dead end.
+
+**3. Classification knows audio hosts (Bug 1 fix), centrally.** A single
+`AUDIO_HOSTS` set (backend) is consulted by both `extract_video`'s failure
+fallback and `derive_memo_type`: a known audio host classifies `audio` **even when
+yt-dlp fails**. The frontend mirror is `lib/audioPlatforms.ts` — a registry of
+host → brand glyph + embed URL + can-localize, exactly parallel to the video
+`lib/platforms.ts` (ADR-001). Card, detail, and player all read the registry; a
+new audio host is added in one place.
+
+**4. Remote audio never dead-ends (Bug 2 fix).** The detail page always offers a
+listen path for a remote audio memo: the live platform embed (when the registry
+has one) plus "Make it local", independent of `localize_status`. A localized memo
+plays its local file *and* still exposes the source embed as a reference.
+
+**5. The player lives in the sidebar, and music gets the full treatment.**
+`HeaderAudioPlayer` (top-right pill) is removed. A `SidebarPlayer` sits in the
+sidebar foot — cover, title, subtitle, scrubber, and a transport of
+**repeat-one · play/pause · pin** (the single-item focus replaces next/prev; no
+queue yet). When the sidebar is collapsed it shrinks to a cover thumbnail with a
+progress ring so "something is playing" survives the tuck-away. Two treatments are
+**music-only** (gated on `audioKind === 'music'`), leaving voice memos exactly as
+they are (waveform tile + button, which users love):
+
+- **Inline card player** — the active music card flips to a full-bleed in-card
+  player (the same overlay mechanism as the delete-confirm, `om-card-confirm`):
+  blurred cover, large play/pause, scrubber.
+- **Aurora glow** — a faint, slowly drifting aurora-borealis halo behind the
+  playing music card, tinted from its own cover art, bleeding a little past the
+  card edge, so the currently-playing memo is findable in a dense grid. Honors
+  `prefers-reduced-motion`.
+
+**6. Lyrics are explicitly deferred** (documented in the roadmap, no code).
+Future work, free sources only (local-first): **LRCLIB** (open synced-lyrics API,
+no key), embedded ID3 `USLT`/`SYLT` tags read from uploaded files, `lyrics.ovh`
+as a plain-text fallback. No paid lyrics API, ever.
+
+#### Scope boundary — video
+
+The sidebar player drives the **audio engine** (music + voice). Video plays as an
+iframe embed in the lightbox/detail and has no persistent surface to relocate
+into the sidebar without reloading (and stopping) playback. A video "now playing"
+/ picture-in-picture surface is a separate, larger build, deferred to the roadmap.
+Audio ships first; video follows.
+
+### Alternatives considered
+
+| Option | Why rejected |
+|--------|--------------|
+| **Proxy the SoundCloud Widget API** (control their iframe via postMessage) | Per-provider (Bandcamp/Mixcloud have weak/no equivalent); fragments the one-engine model into "some `<audio>`, some iframe-proxied"; no unified scrubber, no cover art, **no aurora** (it is their chrome); cross-origin postMessage is flaky. Clean beats clever; local-first wins. |
+| **Split `audio` into separate `voice` and `music` memo types** | A bigger migration that breaks every `type === 'audio'` gate (`canMakeLocal`, `canTranscript`, `derive_memo_type`). A sub-kind keeps the audio type cohesive and satisfies ADR-001 (one type, provider/variant differences centralized), at far lower blast radius. |
+| **Keep deriving voice vs music from the filename** | Fragile — breaks on rename, on non-English titles, on any uploaded track literally named "Voice memo…". A real column is the single source of truth. |
+| **Leave the player in the header** | The sidebar is where navigation + pinned items live; a collapsed-sidebar now-playing cue is impossible from a top-right pill; and the inline-card / aurora story wants the player conceptually "inside" the library, not floating over it. |
+| **Stream linked audio directly in our `<audio>`** | Impossible for the platforms that matter — their stream URLs are signed + CORS-locked. Pull-first is not a preference, it is the only correct path; auto-download hides the cost. |
+
+### Consequences
+
+- New column `audio_kind` (migration `backend/migrate_audio_kind.py`,
+  PRAGMA-guarded ALTER + backfill). Exposed in the memo API + `Memo` TS type.
+- New `lib/audioPlatforms.ts` registry; `audioEmbed` moves there. Adding a host
+  (e.g. Audius) lights up card glyph + detail embed + player simultaneously.
+- A transient yt-dlp failure can no longer turn a SoundCloud memo into a dead
+  `video` page; audio hosts are structurally `audio`.
+- Remote audio always has a listen path (live embed and/or local file) — the
+  reported "play button leads to a page with nothing" is structurally impossible.
+- `HeaderAudioPlayer` is deleted; `SidebarPlayer` replaces it. The shared engine
+  gains repeat-one state.
+- Music cards gain an inline player + aurora; voice cards are untouched.
+- Repeat-one + pin replace next/prev; a real queue/playlist is future work.
+
+---
+
 ## ADR-004 — Transcript extraction is decoupled from file capture (non-destructive, caption-first)
 
 **Date:** 2026-06-03 · **Status:** Accepted · **Supersedes:** the transcript portion of ADR-003

@@ -5,7 +5,7 @@ import type { DraggableAttributes } from '@dnd-kit/core';
 import { Icon } from './Icon';
 import { cn } from '@/lib/utils';
 import { memoApi } from '@/lib/api';
-import { mediaSrc } from '@/lib/media';
+import { mediaSrc, audioKind } from '@/lib/media';
 import { platformMeta, videoEmbedUrl } from '@/lib/platforms';
 import { useAppStore } from '@/stores/appStore';
 import { useAudioPlayer } from '@/lib/audioPlayer';
@@ -136,6 +136,7 @@ function Chrome({
   onCardClick,
   onOpen,
   confirmOverlay,
+  playerOverlay,
 }: {
   memo: Memo;
   className?: string;
@@ -149,6 +150,7 @@ function Chrome({
   onCardClick?: () => void;
   onOpen?: (e: React.MouseEvent) => void;
   confirmOverlay?: React.ReactNode;
+  playerOverlay?: React.ReactNode;
 }) {
   const navigate = useNavigate();
   const handleClick = () => {
@@ -170,6 +172,7 @@ function Chrome({
         </div>
       )}
       {confirmOverlay}
+      {playerOverlay}
       <div className="om-card-actions">
         {onOpen && (
           <button className="om-action" onClick={onOpen} title="Open memo page" aria-label="Open memo">
@@ -210,6 +213,60 @@ function Meta({ memo }: { memo: Memo }) {
         <span className="om-meta-domain">{memo.source_domain || typeLabel(memo.type)}</span>
       </div>
       <span className="om-meta-date mono">{date}</span>
+    </div>
+  );
+}
+
+// Inline full-bleed player that takes over a MUSIC card while it's the active
+// track (ADR-005). Mirrors the delete-confirm overlay (om-card-confirm): absolute
+// inset, blurred cover behind a big play/pause + title + scrubber. Voice memos
+// never get this — they keep their waveform tile. Isolated so only the active
+// card re-renders on each timeupdate tick.
+function CardMusicPlayer({ memo, cover }: { memo: Memo; cover?: string | null }) {
+  const navigate = useNavigate();
+  const { toggle, seek, playing, currentTime, duration, isActive } = useAudioPlayer();
+  const active = isActive(memo.id);
+  const hasDur = Number.isFinite(duration) && duration > 0;
+  const pct = active && hasDur ? Math.min(100, (currentTime / duration) * 100) : 0;
+  const onScrub = (e: React.MouseEvent<HTMLDivElement>) => {
+    e.stopPropagation();
+    if (!hasDur) return;
+    const rect = e.currentTarget.getBoundingClientRect();
+    seek(((e.clientX - rect.left) / rect.width) * duration);
+  };
+  return (
+    <div className="om-card-player" role="group" aria-label="Now playing" onClick={(e) => e.stopPropagation()}>
+      {cover && <div className="om-card-player-bg" style={{ backgroundImage: `url(${cover})` }} aria-hidden />}
+      <div className="om-card-player-inner">
+        <button
+          className="om-card-player-play"
+          onClick={(e) => { e.stopPropagation(); toggle(); }}
+          aria-label={playing && active ? 'Pause' : 'Play'}
+          title={playing && active ? 'Pause' : 'Play'}
+        >
+          <Icon name={playing && active ? 'pause' : 'play'} size={22} stroke={0} style={{ fill: 'currentColor' }} />
+        </button>
+        <div className="om-card-player-foot">
+          <button
+            className="om-card-player-title"
+            onClick={(e) => { e.stopPropagation(); navigate(`/memo/${memo.id}`); }}
+            title={memo.title}
+          >
+            {memo.title}
+          </button>
+          <div
+            className="om-card-player-scrub"
+            onClick={onScrub}
+            role="slider"
+            aria-label="Seek"
+            aria-valuemin={0}
+            aria-valuemax={100}
+            aria-valuenow={Math.round(pct)}
+          >
+            <div className="om-card-player-fill" style={{ width: `${pct}%` }} />
+          </div>
+        </div>
+      </div>
     </div>
   );
 }
@@ -471,18 +528,37 @@ export function MemoCard({ memo, dragHandleProps, lightboxGroup }: CardProps) {
     const active = isActive(memo.id);
     const isThisPlaying = active && playing;
     const localizing = memo.localize_status === 'pending' || memo.localize_status === 'processing';
-    // Local file → play in the header player. Remote (yt-dlp, still downloading
-    // or streaming) → open the detail page, which shows progress and plays/saves.
+    // Music (uploaded/linked) gets the inline full-bleed player + aurora while
+    // active; voice memos keep the waveform tile untouched (ADR-005).
+    const isMusic = audioKind(memo) === 'music';
+    const playerOverlay = isMusic && active ? <CardMusicPlayer memo={memo} cover={src} /> : null;
+    // Local file → play in the shared engine (sidebar player + inline). Remote
+    // (yt-dlp, still downloading or streaming) → open the detail page, which
+    // shows progress and plays/saves.
     const onPlayClick = (e: React.MouseEvent) => {
       e.stopPropagation();
       if (audioSrc) {
-        play({ memoId: memo.id, title: memo.title, src: audioSrc, subtitle: memo.source_domain || undefined });
+        play({
+          memoId: memo.id, title: memo.title, src: audioSrc,
+          subtitle: memo.source_domain || undefined,
+          kind: audioKind(memo), cover: src, pinned: memo.pinned,
+        });
       } else {
         navigate(`/memo/${memo.id}`);
       }
     };
     return (
-      <>
+      <div className="om-card-aura-wrap">
+        {/* Aurora glow behind the active MUSIC card — blurred cover, slow drift,
+            bleeds past the card edge (ADR-005). Voice never gets it. The wrapper
+            is unclipped (the card itself is overflow:hidden) so the halo escapes. */}
+        {isMusic && active && (
+          <div
+            className={cn('om-card-aura', isThisPlaying && 'is-playing')}
+            style={{ backgroundImage: src ? `url(${src})` : heroBg }}
+            aria-hidden
+          />
+        )}
         <Chrome
           memo={memo}
           dragHandleProps={dragHandleProps}
@@ -490,8 +566,9 @@ export function MemoCard({ memo, dragHandleProps, lightboxGroup }: CardProps) {
           onPin={handlePin}
           onOpen={goDetail}
           bgSrc={src}
-          className={cn('om-card-audio', active && 'is-active')}
+          className={cn('om-card-audio', active && 'is-active', isMusic && 'is-music', isThisPlaying && 'is-playing')}
           confirmOverlay={confirmOverlay}
+          playerOverlay={playerOverlay}
         >
           <div className="om-audio-frame" style={src ? undefined : { background: heroBg }}>
             {src ? (
@@ -518,7 +595,7 @@ export function MemoCard({ memo, dragHandleProps, lightboxGroup }: CardProps) {
             <Meta memo={memo} />
           </div>
         </Chrome>
-        </>
+      </div>
     );
   }
 

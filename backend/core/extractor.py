@@ -336,6 +336,28 @@ _VIDEO_DOMAINS = (
     "pornhub.com",
 )
 
+# Audio-only hosts. These also live in _VIDEO_DOMAINS (yt-dlp pulls them like any
+# site), but the item is AUDIO, not video. Centralized so classification +
+# fallback never mistype them — a transient yt-dlp probe failure must not turn a
+# SoundCloud track into a dead "video" memo (ADR-005, ADR-001). One source of
+# truth, consumed by extract_video's fallback and classify.derive_memo_type.
+_AUDIO_DOMAINS = (
+    "soundcloud.com",
+    "bandcamp.com",
+    "mixcloud.com",
+    "audius.co",
+    "audiomack.com",
+)
+
+
+def is_audio_host(url: str) -> bool:
+    """True when the URL is from a known audio-only platform (SoundCloud, etc.)."""
+    try:
+        domain = urlparse(url).netloc.lower()
+    except Exception:
+        return False
+    return any(d in domain for d in _AUDIO_DOMAINS)
+
 
 def detect_url_type(url: str) -> str:
     """Return 'video' if the URL is from a known video/media platform, else 'article'."""
@@ -417,9 +439,11 @@ async def extract_video(url: str) -> dict:
     # like a photo post) — enrich via Microlink + OG.
     result = await _minimal_link(url, domain)
     # A photo post on a video host must not become a video memo. Downgrade to
-    # image only when the URL path clearly says photo; otherwise keep video (the
-    # item may be a private/region-locked video we just couldn't pull).
-    result["type"] = _url_media_hint(url) or "video"
+    # image only when the URL path clearly says photo; an audio-only host stays
+    # audio (SoundCloud/Bandcamp probe failures must not dead-end as "video" —
+    # ADR-005); otherwise keep video (the item may be a private/region-locked
+    # video we just couldn't pull).
+    result["type"] = _url_media_hint(url) or ("audio" if is_audio_host(url) else "video")
     return result
 
 

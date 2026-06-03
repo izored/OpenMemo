@@ -4,6 +4,7 @@ import { useQuery } from '@tanstack/react-query';
 import { useDroppable } from '@dnd-kit/core';
 import { motion } from 'framer-motion';
 import { Icon } from './Icon';
+import { SidebarPlayer } from './SidebarPlayer';
 import { collectionApi, memoApi, systemApi, settingsApi } from '@/lib/api';
 import { useAppStore } from '@/stores/appStore';
 import type { Collection } from '@/types';
@@ -235,6 +236,9 @@ export function Sidebar() {
           </div>
         </>
       )}
+
+      {/* Now-playing — sits above the foot, fills the empty rail; mini when collapsed */}
+      <SidebarPlayer />
 
       <div className="om-sidebar-foot">
         {/* Theme selector — 3 icon buttons */}

@@ -65,7 +65,7 @@ export const ingestApi = {
     file: File,
     collection_id?: string,
     workspace_id?: string,
-    opts?: { typeOverride?: string; transcribe?: boolean },
+    opts?: { typeOverride?: string; transcribe?: boolean; audioKind?: 'voice' | 'music' },
   ) => {
     const form = new FormData();
     form.append('file', file);
@@ -75,6 +75,9 @@ export const ingestApi = {
     // (a mic recording lands in a .webm container → would be "video").
     if (opts?.typeOverride) form.append('type_override', opts.typeOverride);
     if (opts?.transcribe) form.append('transcribe', 'true');
+    // audio_kind flags a mic recording as 'voice' (ADR-005) so it keeps the
+    // waveform UI and is excluded from the music-only player/aurora treatment.
+    if (opts?.audioKind) form.append('audio_kind', opts.audioKind);
     let resp: Response;
     try {
       resp = await fetch(`${API_BASE}/ingest/file`, { method: 'POST', body: form });
@@ -86,6 +89,7 @@ export const ingestApi = {
       throw new Error(
         `Upload aborted (${sizeMb} MB). The server or a proxy refused the request before a response arrived. ` +
         `If you are behind nginx/Docker, raise client_max_body_size; in dev mode make sure the Vite proxy points to uvicorn (default :8099).`,
+        { cause: e },
       );
     }
     if (!resp.ok) {
