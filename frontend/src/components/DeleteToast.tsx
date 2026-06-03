@@ -17,6 +17,7 @@ export function DeleteToast() {
   useEffect(() => {
     if (!toast) return;
     undoneRef.current = false;
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- reset the countdown when a new toast appears
     setTimeLeft(DURATION);
 
     intervalRef.current = setInterval(() => {
@@ -35,6 +36,7 @@ export function DeleteToast() {
       clearInterval(intervalRef.current!);
       clearTimeout(timerRef.current!);
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- intentionally keyed only on toast identity; other deps would restart the timer
   }, [toast?.memoId]);
 
   const handleUndo = async () => {

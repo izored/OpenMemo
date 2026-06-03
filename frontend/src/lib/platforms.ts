@@ -98,7 +98,7 @@ const PLATFORMS: PlatformDef[] = [
   {
     slug: 'twitter',
     label: 'X',
-    glyph: 'x',
+    glyph: 'twitterX',
     brandClass: 'om-brand-x',
     hosts: ['twitter.com', 'x.com'],
     embed: (_raw, u) => {

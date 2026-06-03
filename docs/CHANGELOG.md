@@ -3,6 +3,38 @@
 All notable changes to OpenMemo are documented here.
 
 ---
+## [2.1.0] - Unreleased
+
+Audio grows up. Voice memos and music are now distinct, the player moves out of
+the corner and into the sidebar, and a saved SoundCloud/Bandcamp/Mixcloud track
+becomes a first-class, playable memo — with an inline card player and a faint
+aurora glow on whatever is currently playing. Whole audio type, every provider
+(ADR-005), not SoundCloud-only.
+
+### Added
+
+- 🎧 **Sidebar now-playing player** — the persistent audio player moves from the top-right pill into the sidebar foot. Cover, title, source, scrubber, and a transport of **repeat-one · play/pause · pin** (single-track focus replaces next/prev). When the sidebar is collapsed it shrinks to a cover thumbnail wrapped in a progress ring, so you can still see something is playing. Drives the one shared `<audio>`, so playback survives navigation.
+- 💿 **Inline music card player** — the active music card flips to an in-card player at the **same size** (an overlay, no resize/zoom — nothing jumps). The cover stays crisp; a bottom→top gradient (cover-mood tint + a blur masked behind the controls) carries the transport (**repeat-one · play/pause · pin**) + title. Music only — voice memos keep their waveform tile.
+- 🎨 **Cover-mood tint** — the sidebar + inline players take the artwork's dominant color (extracted client-side via canvas in `lib/coverMood.ts`, no dependency), white controls over it, like a proper now-playing surface. Falls back to theme tokens when no color can be read.
+- ⌨️ **Media-key control** — the keyboard play/pause key and the OS lock-screen / notification transport now drive the player via the Media Session API, with title / artist / cover shown in the OS overlay.
+- 🌌 **Aurora glow on the playing track** — a faint aurora-borealis halo, tinted from the track's own cover, blooms behind the active music card and bleeds just past its edge. Two color blobs drift independently (9s vs 11s, opposite directions) under a heavy blur so it shimmers organically and never visibly loops. Music only; honors `prefers-reduced-motion`.
+- 🗂️ **Voice vs music taxonomy** — a new `audio_kind` column (`voice` | `music`, ADR-005) finally separates mic recordings from uploaded/linked music. The recorder flags its captures `voice`; everything else audio is `music`. One predicate `audioKind(memo)` drives every render site. PRAGMA-guarded migration backfills existing rows.
+- 🔌 **Audio platform registry** — `frontend/src/lib/audioPlatforms.ts` centralizes linked-audio hosts (SoundCloud, Bandcamp, Mixcloud, Audius, Audiomack) the way `platforms.ts` does for video. Adding a host lights up the live embed + card at once. Backend mirror: `core/extractor.is_audio_host`.
+
+### Changed
+
+- 🔀 **Audio player relocated** — `HeaderAudioPlayer` (top-right pill) is removed in favor of the sidebar player; the shared engine gains repeat-one state (`onEnded` → restart).
+- 🧱 **Sidebar is a 3-zone layout** — the sidebar no longer scrolls as a whole; only the middle (nav / pinned / collections) scrolls in a dedicated `.om-sidebar-body`, so the now-playing player + foot stay pinned to the bottom with no auto-margin gap. `.om-sidebar` is now `height:100dvh; overflow:hidden`.
+
+### Fixed
+
+- 🩹 **Linked audio dead-ended on a yt-dlp hiccup** — when yt-dlp's metadata probe failed at save time (common for SoundCloud), `extract_video` fell back to `type = "video"`, and a `video`-typed SoundCloud memo has no embed and no audio render path — the detail page showed nothing. Audio hosts now classify `audio` even when yt-dlp fails (centralized `AUDIO_HOSTS`), so this can't dead-end. Whole audio type, every host (ADR-005, ADR-001).
+- 🩹 **Remote audio could render nothing / hid the live embed** — the SoundCloud/Mixcloud widget only showed when auto-download was off, and a `localize_status: done` state with no `file_path` fell through every branch to a blank page. The detail page's audio section is restructured to always offer a listen path: the live platform widget plus Make-it-local, in every state, and the source embed stays available as a reference even after the track is pulled.
+- 🧪 **Smoke-test fixture didn't run startup** — `TestClient(app)` without the context manager never fired the app lifespan, so additive schema migrations (the new `audio_kind` column) weren't applied and the memos endpoint 500'd with `no such column`. The fixture now enters the context manager so startup + migrations run.
+- ❌ **Close buttons showed the Twitter/X logo** — `Icon` resolves `BRAND_PATHS` before `ICON_PATHS`, and the Twitter/X brand glyph was keyed `'x'` — the same name every close button uses (`name="x"`). So every close ✕ (modals, lightbox, card delete, sidebar player, FAB) rendered the Twitter logo app-wide. Renamed the brand glyph to `'twitterX'` (Icon + platforms registry + test); `name="x"` is the close cross again, Twitter cards keep their logo.
+- 🧹 **ESLint clean** — resolved all 27 outstanding eslint problems across the frontend (real fixes for `no-explicit-any`, unused caught error + `preserve-caught-error`, a redundant assignment; documented, behavior-preserving disables for the new react-hooks v6 rules flagging intentional patterns). `npm run lint` now exits clean.
+
+---
 ## [2.0.3] - Unreleased
 
 Video memos from every platform — not just YouTube — now play inline and wear

@@ -83,6 +83,10 @@ class Memo(Base):
     transcript_status = Column(String, nullable=True)  # pending|processing|done|error
     transcript_lang = Column(String, nullable=True)    # detected language code
     transcript_source = Column(String, nullable=True)  # captions|stt — how it was obtained
+    # Audio sub-kind (ADR-005): 'voice' = mic recording (waveform UI, no aurora),
+    # 'music' = uploaded file OR linked SoundCloud/Bandcamp/Mixcloud (cover-art
+    # player, inline card player, aurora). NULL for non-audio memos.
+    audio_kind = Column(String, nullable=True)  # voice|music
     # On-demand AI summaries, keyed by mode: {"timestamp": ..., "insights": ..., "essay": ...}.
     # Generated lazily when the user picks a mode; cached so reopening is instant.
     summaries = Column(JSON, nullable=True)

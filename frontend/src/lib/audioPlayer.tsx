@@ -1,4 +1,4 @@
-import React, { createContext, useCallback, useContext, useMemo, useRef, useState } from 'react';
+import React, { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 
 // Single, app-wide audio player. One <audio> element lives in the provider
 // (mounted in Layout, which never unmounts across route changes) so playback
@@ -11,6 +11,12 @@ export interface AudioTrack {
   title: string;
   src: string;
   subtitle?: string;
+  /** 'voice' | 'music' (ADR-005) — drives the player's cover-vs-glyph styling. */
+  kind?: 'voice' | 'music' | null;
+  /** Cover-art image src (music only); absent → the player shows a glyph. */
+  cover?: string | null;
+  /** Pinned state at play time — seeds the player's pin toggle. */
+  pinned?: boolean;
 }
 
 interface AudioPlayerContextValue {
@@ -18,6 +24,10 @@ interface AudioPlayerContextValue {
   playing: boolean;
   currentTime: number;
   duration: number;
+  /** Repeat-one: when true, the track restarts on end instead of stopping. */
+  repeat: boolean;
+  /** Toggle repeat-one. */
+  toggleRepeat: () => void;
   /** Load + play a track. If it is already the active track, toggle play/pause. */
   play: (track: AudioTrack) => void;
   /** Play/pause the currently loaded track. */
@@ -39,6 +49,7 @@ interface AudioPlayerContextValue {
 
 const AudioPlayerContext = createContext<AudioPlayerContextValue | null>(null);
 
+// eslint-disable-next-line react-refresh/only-export-components -- context hook colocated with its provider (standard pattern); not a fast-refresh boundary
 export function useAudioPlayer(): AudioPlayerContextValue {
   const ctx = useContext(AudioPlayerContext);
   if (!ctx) throw new Error('useAudioPlayer must be used within <AudioPlayerProvider>');
@@ -51,6 +62,16 @@ export function AudioPlayerProvider({ children }: { children: React.ReactNode })
   const [playing, setPlaying] = useState(false);
   const [currentTime, setCurrentTime] = useState(0);
   const [duration, setDuration] = useState(0);
+  // Repeat-one. Mirrored into a ref so the <audio> onEnded closure (bound once)
+  // always reads the current value without re-binding the listener.
+  const [repeat, setRepeat] = useState(false);
+  const repeatRef = useRef(false);
+  const toggleRepeat = useCallback(() => {
+    setRepeat((r) => {
+      repeatRef.current = !r;
+      return !r;
+    });
+  }, []);
 
   // WebAudio analyser graph for the live waveform. A MediaElementSource can be
   // created only ONCE per <audio> element (a second call throws), so the ctx,
@@ -148,9 +169,61 @@ export function AudioPlayerProvider({ children }: { children: React.ReactNode })
 
   const isActive = useCallback((memoId: string) => track?.memoId === memoId, [track]);
 
+  // Media Session — lets the OS media keys (the keyboard play/pause key) and the
+  // lock-screen / notification transport drive our player (ADR-005). Handlers are
+  // bound once; they read the live <audio> via the ref.
+  useEffect(() => {
+    if (!('mediaSession' in navigator)) return;
+    const ms = navigator.mediaSession;
+    const a = () => audioRef.current;
+    try {
+      ms.setActionHandler('play', () => a()?.play().catch(() => {}));
+      ms.setActionHandler('pause', () => a()?.pause());
+      ms.setActionHandler('seekbackward', (d) => { const el = a(); if (el) el.currentTime = Math.max(0, el.currentTime - (d.seekOffset || 10)); });
+      ms.setActionHandler('seekforward', (d) => { const el = a(); if (el) el.currentTime = el.currentTime + (d.seekOffset || 10); });
+      ms.setActionHandler('seekto', (d) => { const el = a(); if (el && d.seekTime != null) el.currentTime = d.seekTime; });
+    } catch {
+      /* some actions are unsupported on some browsers — ignore */
+    }
+    return () => {
+      try {
+        for (const action of ['play', 'pause', 'seekbackward', 'seekforward', 'seekto'] as const) {
+          ms.setActionHandler(action, null);
+        }
+      } catch {
+        /* ignore */
+      }
+    };
+  }, []);
+
+  // OS media-overlay metadata (title / artist / artwork) per track.
+  useEffect(() => {
+    if (!('mediaSession' in navigator)) return;
+    if (!track) {
+      navigator.mediaSession.metadata = null;
+      return;
+    }
+    try {
+      navigator.mediaSession.metadata = new MediaMetadata({
+        title: track.title,
+        artist: track.subtitle || '',
+        artwork: track.cover ? [{ src: track.cover, sizes: '512x512', type: 'image/png' }] : [],
+      });
+    } catch {
+      /* MediaMetadata unsupported — ignore */
+    }
+  }, [track]);
+
+  // Reflect play/pause to the OS so the media key toggles the right state.
+  useEffect(() => {
+    if ('mediaSession' in navigator) {
+      navigator.mediaSession.playbackState = playing ? 'playing' : 'paused';
+    }
+  }, [playing]);
+
   const value = useMemo<AudioPlayerContextValue>(
-    () => ({ track, playing, currentTime, duration, play, toggle, seek, close, isActive, getLevels }),
-    [track, playing, currentTime, duration, play, toggle, seek, close, isActive, getLevels],
+    () => ({ track, playing, currentTime, duration, repeat, toggleRepeat, play, toggle, seek, close, isActive, getLevels }),
+    [track, playing, currentTime, duration, repeat, toggleRepeat, play, toggle, seek, close, isActive, getLevels],
   );
 
   return (
@@ -160,7 +233,16 @@ export function AudioPlayerProvider({ children }: { children: React.ReactNode })
         preload="metadata"
         onPlay={() => setPlaying(true)}
         onPause={() => setPlaying(false)}
-        onEnded={() => setPlaying(false)}
+        onEnded={() => {
+          // Repeat-one: restart the same track instead of stopping (ADR-005).
+          const audio = audioRef.current;
+          if (repeatRef.current && audio) {
+            audio.currentTime = 0;
+            audio.play().catch(() => {});
+          } else {
+            setPlaying(false);
+          }
+        }}
         onTimeUpdate={(e) => setCurrentTime(e.currentTarget.currentTime)}
         onLoadedMetadata={(e) => setDuration(e.currentTarget.duration || 0)}
         onDurationChange={(e) => setDuration(e.currentTarget.duration || 0)}
@@ -171,6 +253,7 @@ export function AudioPlayerProvider({ children }: { children: React.ReactNode })
 }
 
 /** Seconds → "m:ss". Non-finite (e.g. live WebM duration) renders as "0:00". */
+// eslint-disable-next-line react-refresh/only-export-components -- pure time formatter shared with the players; not a fast-refresh boundary
 export function formatTime(seconds: number): string {
   if (!Number.isFinite(seconds) || seconds < 0) return '0:00';
   const m = Math.floor(seconds / 60);

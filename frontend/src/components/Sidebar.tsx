@@ -4,6 +4,7 @@ import { useQuery } from '@tanstack/react-query';
 import { useDroppable } from '@dnd-kit/core';
 import { motion } from 'framer-motion';
 import { Icon } from './Icon';
+import { SidebarPlayer } from './SidebarPlayer';
 import { collectionApi, memoApi, systemApi, settingsApi } from '@/lib/api';
 import { useAppStore } from '@/stores/appStore';
 import type { Collection } from '@/types';
@@ -141,6 +142,10 @@ export function Sidebar() {
         )}
       </div>
 
+      {/* Scrollable middle zone — the ONLY part that scrolls, so the player +
+          foot stay pinned to the bottom (handoff: 3-zone layout). data-lenis-prevent
+          is defensive (Lenis is bound to .om-main, not here). */}
+      <div className="om-sidebar-body" data-lenis-prevent>
       <button className="om-sidebar-search" onClick={() => setSearchOpen(true)} title="Search">
         <Icon name="search" size={13} />
         {!sidebarCollapsed && (
@@ -235,6 +240,11 @@ export function Sidebar() {
           </div>
         </>
       )}
+      </div>
+
+      {/* Bottom zone — player + foot, pinned below the scrollable body (no margin
+          hacks; the body owns the flexible space). */}
+      <SidebarPlayer />
 
       <div className="om-sidebar-foot">
         {/* Theme selector — 3 icon buttons */}

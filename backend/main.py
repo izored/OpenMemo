@@ -59,9 +59,20 @@ async def lifespan(app: FastAPI):
         async with AsyncSessionLocal() as db:
             cols = (await db.execute(_sql_text("PRAGMA table_info(memos)"))).fetchall()
             names = {c[1] for c in cols}
-            for col in ("transcript_status", "transcript_lang", "localize_status"):
+            for col in ("transcript_status", "transcript_lang", "localize_status", "audio_kind"):
                 if col not in names:
                     await db.execute(_sql_text(f"ALTER TABLE memos ADD COLUMN {col} VARCHAR"))
+            await db.commit()
+            # Backfill audio_kind for existing audio memos (idempotent — only NULLs).
+            # Mic recordings (no source_url, "Voice memo …" title) → voice; all
+            # other audio (uploads + linked SoundCloud/Bandcamp/…) → music.
+            # See ADR-005.
+            await db.execute(_sql_text(
+                "UPDATE memos SET audio_kind = "
+                "CASE WHEN (source_url IS NULL AND title LIKE 'Voice memo%') "
+                "THEN 'voice' ELSE 'music' END "
+                "WHERE type = 'audio' AND audio_kind IS NULL"
+            ))
             await db.commit()
     except Exception as e:
         print(f"Schema migration warning (non-critical): {e}")

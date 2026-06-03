@@ -112,6 +112,7 @@ export function CollectionsPage() {
   });
   const [order, setOrder] = useState<Collection[]>([]);
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- sync server collections into local drag-order state
     setOrder(serverCollections as Collection[]);
   }, [serverCollections]);
 

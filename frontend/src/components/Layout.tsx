@@ -20,7 +20,6 @@ import { Onboarding } from './Onboarding';
 import { AddCollectionModal } from './AddCollectionModal';
 import { Lightbox } from './Lightbox';
 import { DeleteToast } from './DeleteToast';
-import { HeaderAudioPlayer } from './HeaderAudioPlayer';
 import { AudioPlayerProvider } from '@/lib/audioPlayer';
 import { Icon } from './Icon';
 import { useTransitionConfig, type TransitionConfig } from '@/lib/transitionConfig';
@@ -59,6 +58,7 @@ export function Layout() {
   const mainRef = useRef<HTMLElement | null>(null);
   const colorTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const txConfigRef = useRef(txConfig);
+  // eslint-disable-next-line react-hooks/refs -- intentional render-time mirror so the theme-transition effect reads the latest config synchronously
   txConfigRef.current = txConfig;
 
   // Smooth scroll on the main content pane. Lenis hijacks wheel/touch and
@@ -159,7 +159,6 @@ export function Layout() {
       >
       <div className="om-bg-veil" style={{ opacity: tweaks.bgFade ?? 0 }} aria-hidden />
       <Sidebar />
-      <HeaderAudioPlayer />
 
       <main className="om-main" key={location.pathname} ref={mainRef}>
         <div className="om-main-inner">

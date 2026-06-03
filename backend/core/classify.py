@@ -58,7 +58,11 @@ def derive_memo_type(memo) -> str:
             current = (getattr(memo, "type", None) or "").lower()
             if current in ("image", "audio"):
                 return current
-            from backend.core.extractor import _url_media_hint
+            from backend.core.extractor import _url_media_hint, is_audio_host
+            # Audio-only host (SoundCloud/Bandcamp/Mixcloud/…) is audio, never
+            # video — even if yt-dlp couldn't probe it (ADR-005, ADR-001).
+            if is_audio_host(source_url):
+                return "audio"
             if _url_media_hint(source_url) == "image":
                 return "image"
             return "video"
@@ -74,6 +78,26 @@ def derive_memo_type(memo) -> str:
 
     # 3) No file, no URL → it's a written note.
     return "note"
+
+
+def derive_audio_kind(memo, explicit: str | None = None) -> str | None:
+    """Audio sub-kind for a memo (ADR-005): 'voice' | 'music', or None.
+
+    None for non-audio memos. An explicit caller signal wins (the mic recorder
+    posts 'voice'). Otherwise a local recording with no source and a
+    "Voice memo …" title is voice; everything else audio (uploaded files +
+    linked SoundCloud/Bandcamp/Mixcloud/…) is music. Single source of truth so
+    no render/ingest site re-derives this heuristic.
+    """
+    if (getattr(memo, "type", None) or "").lower() != "audio":
+        return None
+    if explicit in ("voice", "music"):
+        return explicit
+    source_url = getattr(memo, "source_url", None)
+    title = getattr(memo, "title", None) or ""
+    if not source_url and title.startswith("Voice memo"):
+        return "voice"
+    return "music"
 
 
 # Types the sorter is allowed to overwrite. We never touch a memo whose current
@@ -108,6 +132,10 @@ async def reclassify_all(db, *, dry_run: bool = False) -> dict:
             changed += 1
             if not dry_run:
                 memo.type = derived
+                # A row re-filed to audio (e.g. an old SoundCloud memo mistyped
+                # video before ADR-005) needs its sub-kind set too.
+                if derived == "audio" and not getattr(memo, "audio_kind", None):
+                    memo.audio_kind = derive_audio_kind(memo)
 
     if changed and not dry_run:
         await db.commit()
