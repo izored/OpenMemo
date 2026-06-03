@@ -88,7 +88,7 @@ describe('platformMeta()', () => {
     expect(platformMeta(m('https://www.instagram.com/p/X/'))?.glyph).toBe('instagram');
     expect(platformMeta(m('https://www.tiktok.com/@u/video/1'))?.glyph).toBe('tiktok');
     expect(platformMeta(m('https://www.threads.net/@u/post/X'))?.glyph).toBe('threads');
-    expect(platformMeta(m('https://x.com/u/status/1'))?.glyph).toBe('x');
+    expect(platformMeta(m('https://x.com/u/status/1'))?.glyph).toBe('twitterX');
   });
   it('returns null for unknown hosts (caller falls back to favicon)', () => {
     expect(platformMeta(m('https://example.com/clip'))).toBeNull();
