@@ -221,6 +221,28 @@ export function AppearancePanel() {
           </div>
         </div>
 
+        {/* Sidebar player size */}
+        <div className="om-ap-row">
+          <div className="om-ap-label">
+            <p>Player</p>
+            <span className="mono">Sidebar now-playing size</span>
+          </div>
+          <div className="om-add-segment two" role="tablist">
+            {[
+              { v: 'small', l: 'Small' },
+              { v: 'big', l: 'Big' },
+            ].map((o) => (
+              <button
+                key={o.v}
+                className={cn('om-add-seg', t.playerSize === o.v && 'active')}
+                onClick={() => setTweak('playerSize', o.v)}
+              >
+                <span>{o.l}</span>
+              </button>
+            ))}
+          </div>
+        </div>
+
         {/* Grid columns */}
         <div className="om-ap-row">
           <div className="om-ap-label">

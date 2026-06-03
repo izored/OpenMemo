@@ -98,6 +98,9 @@ export interface Tweaks {
   bgPositions: [number, number][];
   customAccents: [string, string];
   blobSpeed: 0 | 2 | 4;
+  // Sidebar now-playing player size: 'small' = cover-thumbnail row (default),
+  // 'big' = full cover on top fading into the mood color (ADR-005).
+  playerSize: 'small' | 'big';
 }
 
 const TYPE_PAIRS: Record<string, { ui: string; display: string }> = {
@@ -154,7 +157,7 @@ export function applyTweaks(t: Tweaks) {
   }
 }
 
-export const ACCENT_OPTIONS = ['#F4825A', '#E8D77B', '#7DB9E8', '#C3F26B', '#E8E8E8'];
+export const ACCENT_OPTIONS = ['#F4825A', '#E8D77B', '#7DB9E8', '#C3F26B', '#71717A'];
 
 export const DEFAULT_TWEAKS: Tweaks = {
   theme: 'light',
@@ -177,4 +180,5 @@ export const DEFAULT_TWEAKS: Tweaks = {
   ],
   customAccents: ['', ''],
   blobSpeed: 2,
+  playerSize: 'small',
 };
