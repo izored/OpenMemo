@@ -16,6 +16,7 @@ export function SearchOverlay() {
 
   useEffect(() => {
     if (open) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- reset the search box when the overlay opens
       setQ('');
       setResults([]);
       setTimeout(() => inputRef.current?.focus(), 30);
@@ -24,6 +25,7 @@ export function SearchOverlay() {
 
   useEffect(() => {
     if (!q.trim()) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- clear results when the query is emptied
       setResults([]);
       setLoading(false);
       return;

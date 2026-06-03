@@ -7,7 +7,12 @@ from fastapi.testclient import TestClient
 def client():
     from backend.main import app
 
-    return TestClient(app)
+    # Enter the context manager so the app's lifespan runs on startup — this
+    # applies the additive schema migrations (e.g. the audio_kind column, ADR-005)
+    # to the configured DB. Without it the lifespan never fires and a newly-added
+    # model column is missing from the table the endpoints query (OperationalError).
+    with TestClient(app) as c:
+        yield c
 
 
 def test_health_endpoint(client):

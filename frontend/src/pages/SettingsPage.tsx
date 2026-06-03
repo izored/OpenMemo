@@ -320,8 +320,8 @@ export function SettingsPage() {
     setBacking(scope);
     try {
       await backupApi.download(scope);
-    } catch (err: any) {
-      alert(`Backup failed: ${err.message}`);
+    } catch (err) {
+      alert(`Backup failed: ${(err as Error).message}`);
     } finally {
       setBacking(null);
     }
@@ -341,8 +341,8 @@ export function SettingsPage() {
       await backupApi.restore(file);
       alert('Restore complete. Reloading.');
       location.reload();
-    } catch (err: any) {
-      alert(`Restore failed: ${err.message}`);
+    } catch (err) {
+      alert(`Restore failed: ${(err as Error).message}`);
     } finally {
       setRestoring(false);
       e.target.value = '';

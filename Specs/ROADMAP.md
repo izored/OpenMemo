@@ -50,6 +50,43 @@ Single source of truth for all planned work. Versioned milestones + unversioned 
 
 ---
 
+## 🎧 v2.1.0 — Audio Experience (Music + Voice) *(IN PROGRESS)*
+
+Full design in [`docs/DECISIONS.md` → ADR-005](../docs/DECISIONS.md). Audio promoted
+to a first-class media experience. Two axes: **kind** (`voice` vs `music`, drives
+behavior) and **origin** (local vs remote, drives playback path). Local-first,
+pull-first player. Applies to **all** audio providers (SoundCloud, Bandcamp,
+Mixcloud, Audius, + graceful fallback), never SoundCloud-only.
+
+**Phase 1 — taxonomy + classification fixes:**
+- [ ] `audio_kind` column (`voice` | `music`) + PRAGMA-guarded migration + backfill
+- [ ] Centralized `AUDIO_HOSTS` (backend) — audio hosts classify `audio` even when yt-dlp's probe fails *(fixes dead-`video` bug)*
+- [ ] `lib/audioPlatforms.ts` registry (host → glyph + embed + can-localize), mirror of `platforms.ts`; `audioEmbed` moves here
+- [ ] `audioKind(memo)` single predicate in `lib/media.ts`; recorder posts `audio_kind=voice`
+- [ ] MemoDetail never dead-ends remote audio — live embed + Make-it-local always offered *(fixes hidden-embed bug)*
+
+**Phase 2 — sidebar player (replaces top-right pill):**
+- [ ] Remove `HeaderAudioPlayer`; add `SidebarPlayer` in sidebar foot
+- [ ] Transport: **repeat-one · play/pause · pin** (no queue yet); scrubber + times + cover
+- [ ] Collapsed-sidebar mode: cover thumbnail + progress ring so playback is visible when tucked
+- [ ] Engine gains repeat-one state (`onEnded` → seek 0 + replay)
+
+**Phase 3 — inline full-bleed card player *(music only)*:**
+- [ ] Active music card flips to in-card player (same overlay mechanism as delete-confirm): blurred cover, big play/pause, scrubber
+- [ ] Voice memos untouched — keep the waveform tile + button
+
+**Phase 4 — aurora glow *(music only)*:**
+- [ ] Faint drifting aurora-borealis halo behind the playing music card, tinted from its cover, bleeding slightly past the edge
+- [ ] `prefers-reduced-motion` safe; voice excluded
+
+### Deferred (this milestone, explicitly NOT built yet)
+
+- [ ] **Lyrics in the player** — synced + plain. **Free / local-first sources only, no paid API:** [LRCLIB](https://lrclib.net) (open synced-lyrics, no key), embedded ID3 `USLT`/`SYLT` tags read from uploaded files, `lyrics.ovh` plain-text fallback. Synced `.lrc` line-highlight view in the player.
+- [ ] **Queue / playlist** — multi-track up-next; promotes repeat-one into a full repeat/shuffle model.
+- [ ] **Video "now playing" / picture-in-picture** — a persistent video surface so video can join the sidebar player. Different mechanism from the audio engine (iframe can't be relocated without reloading); deferred per ADR-005 scope boundary.
+
+---
+
 ## v1.7.4 — UX Quick Wins + P1 Fixes *(NEXT — IN PROGRESS)*
 
 **P1 fixes (this session):**

@@ -74,6 +74,7 @@ class MemoResponse(BaseModel):
     source_favicon: Optional[str]
     thumbnail_path: Optional[str]
     ai_summary: Optional[str]
+    audio_kind: Optional[str] = None
     is_processed: bool
     created_at: datetime
     updated_at: datetime
@@ -160,6 +161,7 @@ async def list_memos(
                 "notes": m.notes,
                 "sort_order": m.sort_order,
                 "pinned": m.pinned,
+                "audio_kind": m.audio_kind,
                 "is_processed": m.is_processed,
                 "created_at": m.created_at.isoformat(),
                 "updated_at": m.updated_at.isoformat(),
@@ -200,6 +202,7 @@ async def get_memo(memo_id: str, db: AsyncSession = Depends(get_db)):
         "transcript_lang": memo.transcript_lang,
         "transcript_source": memo.transcript_source,
         "localize_status": memo.localize_status,
+        "audio_kind": memo.audio_kind,
         "notes": memo.notes,
         "source_url": memo.source_url,
         "source_domain": memo.source_domain,

@@ -64,10 +64,12 @@ export function MarkdownEditor({
   const dirtyRef = useRef(false);
   const justClickedRef = useRef(false);
   const valueRef = useRef(value);
+  // eslint-disable-next-line react-hooks/refs -- intentional render-time mirror so click-to-edit reads the latest value synchronously
   valueRef.current = value;
 
   // When viewFirst flips back to true (e.g. global edit mode off), return to rendered view.
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- return to rendered view when viewFirst flips back on
     if (viewFirst) setClickedToEdit(false);
   }, [viewFirst]);
 
@@ -145,17 +147,12 @@ export function MarkdownEditor({
       } catch {
         /* focus is best-effort */
       }
-      let inserted = false;
       try {
         ref.current.insertMarkdown(text);
-        inserted = true;
       } catch {
-        inserted = false;
-      }
-      // Defensive fallback: if insertMarkdown silently no-ops (cursor not
-      // set, plugin error), replace the entire document with current value +
-      // the pasted content appended so the user does not lose the paste.
-      if (!inserted) {
+        // Defensive fallback: if insertMarkdown throws (cursor not set, plugin
+        // error), append the pasted content to the document so the user does
+        // not lose the paste.
         const current = ref.current.getMarkdown();
         ref.current.setMarkdown(current + (current.endsWith('\n') ? '' : '\n\n') + text);
       }
@@ -165,6 +162,7 @@ export function MarkdownEditor({
 
     wrapper.addEventListener('paste', onPaste, true);
     return () => wrapper.removeEventListener('paste', onPaste, true);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- onChange read via closure; re-subscribing the paste listener each render is undesirable
   }, [editing, readOnly]);
 
   const handleViewClick = (e: React.MouseEvent) => {

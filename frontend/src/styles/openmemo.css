@@ -197,9 +197,17 @@ input, textarea { font: inherit; color: inherit; }
   display: flex; flex-direction: column;
   padding: 16px 12px 0;
   flex-shrink: 0;
-  height: 100vh; overflow-y: auto; overflow-x: hidden;
-  scrollbar-gutter: stable;
+  /* Fixed-height column that does NOT itself scroll — only .om-sidebar-body does.
+     This keeps the player + foot pinned to the bottom with no margin hacks. */
+  height: 100dvh; overflow: hidden;
   position: relative; z-index: 2;
+}
+/* The only scrollable zone: nav + pinned + collections. Owns the flexible space
+   so the bottom zone (player + foot) sits at the bottom naturally. */
+.om-sidebar-body {
+  flex: 1 1 auto; min-height: 0;
+  overflow-y: auto; overflow-x: hidden;
+  scrollbar-gutter: stable;
 }
 .om-sidebar-head { display: flex; align-items: center; justify-content: space-between; padding: 0 4px 16px; }
 .om-brand { display: flex; align-items: center; gap: 10px; }
@@ -297,7 +305,7 @@ input, textarea { font: inherit; color: inherit; }
 .om-tag:hover { color: var(--text); background: var(--surface-2); }
 
 /* Footer theme selector */
-.om-sidebar-foot { margin-top: auto; padding: 10px 4px 14px; border-top: 1px solid var(--border); flex-shrink: 0; display: flex; flex-direction: column; gap: 4px; }
+.om-sidebar-foot { margin-top: 5px; padding: 10px 4px 14px; border-top: 1px solid var(--border); flex-shrink: 0; display: flex; flex-direction: column; gap: 4px; }
 .om-theme-row { display: flex; gap: 4px; padding: 0 4px 4px; }
 .om-theme-btn {
   flex: 1; height: 34px; border-radius: 9px;
@@ -2140,50 +2148,118 @@ input, textarea { font: inherit; color: inherit; }
 
 /* Persistent mini-player — pinned top-right of the shell, shown while a track
    is loaded (playing or paused) until the user closes it. */
-.om-mini-player {
-  position: fixed; top: 14px; right: 16px; z-index: 50;
-  display: flex; align-items: center; gap: 10px;
-  width: min(340px, calc(100vw - 32px));
-  padding: 8px 10px; border-radius: 999px;
-  background: color-mix(in oklab, var(--surface) 90%, transparent);
-  backdrop-filter: blur(16px) saturate(1.2);
+/* ── Sidebar now-playing player (ADR-005) — replaces the old top-right pill.
+   Sits in the sidebar foot; drives the one shared <audio>. ── */
+.om-sb-player {
+  /* Normal flow now — the scrollable .om-sidebar-body owns the slack, so the
+     player sits at the bottom without an auto-margin gap (handoff fix). */
+  margin: 0 12px 6px;
+  padding: 12px;
+  border-radius: var(--r-lg, 14px);
+  background: color-mix(in oklab, var(--surface-2) 70%, transparent);
   border: 1px solid var(--border);
-  box-shadow: 0 12px 32px rgba(0,0,0,0.22);
-  animation: omMiniIn .28s cubic-bezier(0.16, 0.84, 0.34, 1);
+  display: flex; flex-direction: column; gap: 10px;
+  animation: omSbPlayerIn .3s cubic-bezier(0.16, 0.84, 0.34, 1);
 }
-@keyframes omMiniIn { from { opacity: 0; transform: translateY(-8px); } to { opacity: 1; transform: none; } }
-.om-mini-play {
-  flex-shrink: 0; width: 34px; height: 34px; border-radius: 50%;
-  display: grid; place-items: center; cursor: pointer; border: 0;
-  /* Use text/bg inversion (not --accent): the accent is user-customizable to
-     any color incl. near-white, which would vanish on a light surface. Inverted
-     fill always contrasts — dark in light mode, light in dark. */
-  background: var(--text); color: var(--bg);
-  transition: transform .15s ease, filter .15s ease;
+@keyframes omSbPlayerIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+/* Music gets a faint cover-tinted wash so it reads as the "rich" track. */
+.om-sb-player.is-music { background: color-mix(in oklab, var(--accent) 8%, var(--surface-2)); }
+
+/* Cover-mood tint (ADR-005) — the whole surface takes the artwork's color, white
+   controls over it, like the reference player. --cov-base/--cov-deep are the
+   image's mood color at two lightnesses, set inline from useCoverMood(). */
+.om-sb-player.is-tinted {
+  background: linear-gradient(155deg, rgb(var(--cov-base)) 0%, rgb(var(--cov-deep)) 100%);
+  border-color: rgba(255, 255, 255, 0.16);
+  color: #fff;
 }
-.om-mini-play:hover { filter: brightness(1.08); transform: scale(1.05); }
-.om-mini-play:active { transform: scale(0.96); }
-.om-mini-body { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 4px; }
-.om-mini-title {
+.om-sb-player.is-tinted .om-sb-player-title,
+.om-sb-player.is-tinted .om-sb-player-meta:hover .om-sb-player-title { color: #fff; }
+.om-sb-player.is-tinted .om-sb-player-sub { color: rgba(255, 255, 255, 0.78); }
+.om-sb-player.is-tinted .om-sb-player-time { color: rgba(255, 255, 255, 0.72); }
+.om-sb-player.is-tinted .om-sb-player-track { background: rgba(255, 255, 255, 0.25); }
+.om-sb-player.is-tinted .om-sb-player-fill { background: #fff; }
+.om-sb-player.is-tinted .om-sb-player-btn { color: rgba(255, 255, 255, 0.82); }
+.om-sb-player.is-tinted .om-sb-player-btn:hover { background: rgba(255, 255, 255, 0.16); color: #fff; }
+.om-sb-player.is-tinted .om-sb-player-btn.active { color: #fff; background: rgba(255, 255, 255, 0.24); }
+.om-sb-player.is-tinted .om-sb-player-play { background: #fff; color: #111; }
+.om-sb-player.is-tinted .om-sb-player-close { color: rgba(255, 255, 255, 0.72); }
+.om-sb-player.is-tinted .om-sb-player-close:hover { background: rgba(255, 255, 255, 0.16); color: #fff; }
+.om-sb-player.is-tinted .om-sb-player-cover-glyph { color: rgba(255, 255, 255, 0.85); }
+
+.om-sb-player-head { display: flex; align-items: center; gap: 10px; min-width: 0; }
+.om-sb-player-cover-btn { padding: 0; border: 0; background: none; cursor: pointer; flex-shrink: 0; line-height: 0; }
+.om-sb-player-cover {
+  width: 44px; height: 44px; border-radius: 8px; object-fit: cover; display: block;
+  background: var(--bg-rail);
+}
+.om-sb-player-cover-glyph { display: grid; place-items: center; color: var(--text-3); }
+.om-sb-player-meta {
+  flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px;
   background: none; border: 0; padding: 0; cursor: pointer; text-align: left;
+}
+.om-sb-player-title {
   font-size: 12.5px; font-weight: 600; color: var(--text);
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%;
 }
-.om-mini-title:hover { color: var(--accent); }
-.om-mini-row { display: flex; align-items: center; gap: 8px; }
-.om-mini-time { font-size: 9.5px; color: var(--text-4); flex-shrink: 0; font-variant-numeric: tabular-nums; }
-.om-mini-track {
-  flex: 1; height: 5px; border-radius: 999px; cursor: pointer; overflow: hidden;
-  background: color-mix(in oklab, var(--text) 14%, transparent);
+.om-sb-player-meta:hover .om-sb-player-title { color: var(--accent); }
+.om-sb-player-sub {
+  font-size: 10.5px; color: var(--text-4);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%;
 }
-.om-mini-fill { height: 100%; border-radius: 999px; background: var(--text); transition: width .1s linear; }
-.om-mini-close {
-  flex-shrink: 0; width: 26px; height: 26px; border-radius: 50%;
-  display: grid; place-items: center; cursor: pointer; border: 0;
+.om-sb-player-close {
+  flex-shrink: 0; width: 22px; height: 22px; border-radius: 50%;
+  display: grid; place-items: center; border: 0; cursor: pointer;
   background: transparent; color: var(--text-4);
   transition: background .15s ease, color .15s ease;
 }
-.om-mini-close:hover { background: var(--surface-2); color: var(--text); }
+.om-sb-player-close:hover { background: var(--surface); color: var(--text); }
+
+.om-sb-player-scrub { display: flex; align-items: center; gap: 8px; }
+.om-sb-player-time { font-size: 9px; color: var(--text-4); flex-shrink: 0; font-variant-numeric: tabular-nums; }
+.om-sb-player-track {
+  flex: 1; height: 5px; border-radius: 999px; cursor: pointer; overflow: hidden;
+  background: color-mix(in oklab, var(--text) 14%, transparent);
+}
+.om-sb-player-fill { height: 100%; border-radius: 999px; background: var(--accent); transition: width .1s linear; }
+
+.om-sb-player-transport { display: flex; align-items: center; justify-content: center; gap: 14px; }
+.om-sb-player-btn {
+  width: 30px; height: 30px; border-radius: 50%; border: 0; cursor: pointer;
+  display: grid; place-items: center; background: transparent; color: var(--text-3);
+  transition: background .15s ease, color .15s ease, transform .15s ease;
+}
+.om-sb-player-btn:hover { background: var(--surface); color: var(--text); }
+.om-sb-player-btn:active { transform: scale(0.94); }
+.om-sb-player-btn.active { color: var(--accent); background: color-mix(in oklab, var(--accent) 14%, transparent); }
+.om-sb-player-play {
+  width: 40px; height: 40px; border-radius: 50%; border: 0; cursor: pointer;
+  display: grid; place-items: center;
+  /* text/bg inversion (not --accent — accent can be near-white and vanish). */
+  background: var(--text); color: var(--bg);
+  transition: transform .15s ease, filter .15s ease;
+}
+.om-sb-player-play:hover { filter: brightness(1.08); transform: scale(1.05); }
+.om-sb-player-play:active { transform: scale(0.96); }
+
+/* Collapsed sidebar: cover wrapped in a progress ring, tap to play/pause. */
+.om-sb-player-mini {
+  position: relative; width: 48px; height: 48px; margin: 0 auto 6px;
+  border: 0; background: none; cursor: pointer; padding: 0;
+  display: grid; place-items: center;
+  animation: omSbPlayerIn .3s cubic-bezier(0.16, 0.84, 0.34, 1);
+}
+.om-sb-player-mini .om-sb-player-cover { width: 36px; height: 36px; border-radius: 8px; }
+.om-sb-player-ring { position: absolute; inset: 0; width: 48px; height: 48px; transform: rotate(-90deg); }
+.om-sb-player-ring-bg { fill: none; stroke: color-mix(in oklab, var(--text) 14%, transparent); stroke-width: 2.5; }
+.om-sb-player-ring-fg { fill: none; stroke: var(--accent); stroke-width: 2.5; stroke-linecap: round; transition: stroke-dashoffset .15s linear; }
+.om-sb-player-mini-badge {
+  position: absolute; right: -2px; bottom: -2px;
+  width: 18px; height: 18px; border-radius: 50%;
+  display: grid; place-items: center;
+  background: var(--text); color: var(--bg);
+  box-shadow: 0 1px 4px rgba(0,0,0,0.3);
+}
 
 /* Audio card (dashboard grid) — waveform tile + real play/pause button.
    Bars are a MASK (not a baked-in color) so they take `var(--text)` — black in
@@ -2219,6 +2295,109 @@ input, textarea { font: inherit; color: inherit; }
   background: var(--text); color: var(--bg);
 }
 .om-card-audio .om-play:disabled { opacity: 0.5; }
+
+/* Inline music player overlay on the active card (ADR-005). Sits absolute inset:0
+   over the card at the SAME size — no resize/zoom, so nothing jumps. The cover
+   stays crisp; a bottom→top gradient (mood tint + a backdrop blur masked to the
+   lower zone — the "blur behind the controls") carries the transport + title.
+   Fixed white-on-media colors, like the delete-confirm. Music only. */
+.om-card-player {
+  position: absolute; inset: 0; z-index: 18;
+  overflow: hidden; border-radius: inherit;
+  animation: om-fade-in .2s ease;
+}
+.om-card-player-cover {
+  position: absolute; inset: 0;
+  background-size: cover; background-position: center;
+}
+.om-card-player-scrim {
+  position: absolute; inset: 0; pointer-events: none;
+  background: linear-gradient(to top,
+    rgba(var(--cov-deep, 10, 10, 14), 0.97) 0%,
+    rgba(var(--cov-base, 38, 38, 46), 0.5) 42%,
+    transparent 74%);
+  -webkit-backdrop-filter: blur(9px);
+  backdrop-filter: blur(9px);
+  -webkit-mask-image: linear-gradient(to top, #000 28%, transparent 64%);
+  mask-image: linear-gradient(to top, #000 28%, transparent 64%);
+}
+.om-card-player-controls {
+  position: absolute; left: 0; right: 0; bottom: 0; z-index: 2;
+  display: flex; flex-direction: column; gap: 9px;
+  padding: 12px 14px 13px;
+}
+.om-card-player-scrub { display: flex; align-items: center; gap: 7px; }
+.om-card-player-time { font-size: 9px; color: rgba(255,255,255,0.82); flex-shrink: 0; font-variant-numeric: tabular-nums; }
+.om-card-player-track { flex: 1; height: 4px; border-radius: 999px; overflow: hidden; cursor: pointer; background: rgba(255,255,255,0.28); }
+.om-card-player-fill { height: 100%; border-radius: 999px; background: #fff; transition: width .1s linear; }
+.om-card-player-transport { display: flex; align-items: center; justify-content: space-between; padding: 0 4px; }
+.om-card-player-btn {
+  width: 30px; height: 30px; border-radius: 50%; border: 0; cursor: pointer;
+  display: grid; place-items: center;
+  background: rgba(255,255,255,0.14); color: rgba(255,255,255,0.9);
+  transition: background .15s ease, transform .15s ease;
+}
+.om-card-player-btn:hover { background: rgba(255,255,255,0.24); }
+.om-card-player-btn:active { transform: scale(0.94); }
+.om-card-player-btn.active { background: rgba(255,255,255,0.28); color: #fff; }
+.om-card-player-play {
+  width: 46px; height: 46px; border-radius: 50%; border: 0; cursor: pointer;
+  display: grid; place-items: center; background: #fff; color: #111;
+  box-shadow: 0 4px 14px rgba(0,0,0,0.32);
+  transition: transform .15s ease, filter .15s ease;
+}
+.om-card-player-play:hover { transform: scale(1.05); filter: brightness(1.04); }
+.om-card-player-play:active { transform: scale(0.96); }
+.om-card-player-title {
+  background: none; border: 0; padding: 0; cursor: pointer; text-align: left;
+  font-size: 12.5px; font-weight: 600; color: #fff;
+  display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
+  text-shadow: 0 1px 4px rgba(0,0,0,0.55);
+}
+.om-card-player-title:hover { text-decoration: underline; }
+
+/* Aurora glow behind the active MUSIC card (ADR-005). Two blobs of the cover's
+   mood color (--cov-rgb) bloom past the unclipped wrapper; the opaque card (z-1)
+   hides the center so only the halo shows. The blobs live on ::before/::after and
+   drift INDEPENDENTLY — different speeds (9s vs 11s), opposite directions — so
+   they cross and morph like real aurora instead of rigidly scaling as one. The
+   heavy parent blur turns the small offsets into a soft shimmer, not sliding
+   shapes. prefers-reduced-motion freezes it. Voice cards never get it. */
+.om-card-aura-wrap { position: relative; }
+.om-card-aura-wrap > .om-card { position: relative; z-index: 1; }
+.om-card-aura {
+  position: absolute; inset: -30px; z-index: 0; pointer-events: none;
+  border-radius: 48px;
+  filter: blur(32px) saturate(1.45);
+  opacity: 0.6;
+  transition: opacity .4s ease;
+}
+.om-card-aura.is-playing { opacity: 0.85; }
+.om-card-aura::before,
+.om-card-aura::after {
+  content: ''; position: absolute; inset: 0; border-radius: inherit; will-change: transform;
+}
+.om-card-aura::before {
+  background: radial-gradient(44% 44% at 32% 30%, rgba(var(--cov-rgb, 130, 130, 150), 0.9), transparent 70%);
+  animation: om-aura-a 9s ease-in-out infinite alternate;
+}
+.om-card-aura::after {
+  background: radial-gradient(40% 40% at 70% 72%, rgba(var(--cov-rgb, 130, 130, 150), 0.6), transparent 72%);
+  animation: om-aura-b 11s ease-in-out infinite alternate;
+}
+/* Gentle drift — small offsets, eased, opposite directions, coprime periods so
+   the combined motion never visibly loops. */
+@keyframes om-aura-a {
+  from { transform: translate(-4%, -3%) scale(1); }
+  to   { transform: translate(5%, 4%) scale(1.12); }
+}
+@keyframes om-aura-b {
+  from { transform: translate(4%, 3%) scale(1.08); }
+  to   { transform: translate(-5%, -4%) scale(0.95); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .om-card-aura::before, .om-card-aura::after { animation: none; }
+}
 /* Minimal mode: keep the title + meta visible (audio cards are unlabeled
    otherwise) — waveform strip on top, title row below, like the doc card. */
 [data-card="minimal"] .om-card-audio { background-image: none; display: flex; flex-direction: column; min-height: 200px; }

@@ -140,8 +140,10 @@ export function MemoGrid({ memos: serverMemos }: MemoGridProps) {
   // Register drag handlers with the app-level DndContext (hosted in Layout so
   // the Sidebar's collection drop targets share the same provider). Cleared on
   // unmount so leaving the dashboard doesn't leave stale handlers wired up.
+  // eslint-disable-next-line react-hooks/immutability -- effect intentionally writes the shared handler-bus ref each render to keep handlers fresh (CLAUDE.md dnd bus)
   useEffect(() => {
     if (!dndBus) return;
+    // eslint-disable-next-line react-hooks/immutability -- intentional cross-component handler bus shared via a ref (see CLAUDE.md dnd bus)
     dndBus.current = {
       onDragStart: handleDragStart,
       onDragOver: handleDragOver,

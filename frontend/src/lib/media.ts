@@ -42,28 +42,38 @@ export function canTranscript(memo: Memo): boolean {
   );
 }
 
-// Video platform detection + embed URLs live in `lib/platforms.ts` (the single
-// registry shared by MemoCard / Lightbox / MemoDetail). Audio-stream embeds
-// stay here because they hang off the separate audio render path.
+// Video platform detection + embed URLs live in `lib/platforms.ts`; linked-audio
+// hosts (SoundCloud/Bandcamp/Mixcloud/…) live in `lib/audioPlatforms.ts`. Both
+// are single registries consumed by every render site (ADR-001). Re-exported
+// here so existing `@/lib/media` import sites keep working.
+export { audioEmbed, isAudioHost, audioPlatformMeta } from './audioPlatforms';
 
-// Stream-embed URL for a remote audio memo (when auto-download is off and the
-// track hasn't been localized). Returns a platform widget iframe src, or null
-// when the host has no embeddable player (caller falls back to "open original").
-export function audioEmbed(memo: Memo): string | null {
-  const url = memo.source_url;
-  if (!url) return null;
-  try {
-    const host = new URL(url).hostname.replace(/^www\./, '');
-    if (host.includes('soundcloud.com'))
-      return `https://w.soundcloud.com/player/?url=${encodeURIComponent(url)}&color=%23ff5500&auto_play=false&hide_related=true&show_comments=false&show_user=true&visual=false`;
-    if (host.includes('mixcloud.com'))
-      return `https://www.mixcloud.com/widget/iframe/?feed=${encodeURIComponent(url)}&hide_cover=1`;
-    if (host.includes('bandcamp.com'))
-      return null; // Bandcamp embeds need a numeric track id we don't have.
-  } catch {
-    /* fall through */
-  }
-  return null;
+/**
+ * Audio sub-kind for a memo (ADR-005): 'voice' | 'music', or null for non-audio.
+ *
+ *   • voice — a mic recording (waveform UI, no aurora, no inline card player)
+ *   • music — an uploaded file OR linked SoundCloud/Bandcamp/… (cover-art
+ *     player, inline card player, aurora glow)
+ *
+ * Reads the persisted `audio_kind` column; falls back to the same heuristic the
+ * backend uses for rows saved before the column existed. Single source of truth
+ * — every render site calls this, never re-derives.
+ */
+export function audioKind(memo: Memo): 'voice' | 'music' | null {
+  if (memo.type !== 'audio') return null;
+  if (memo.audio_kind === 'voice' || memo.audio_kind === 'music') return memo.audio_kind;
+  if (!memo.source_url && memo.title?.startsWith('Voice memo')) return 'voice';
+  return 'music';
+}
+
+/** True for uploaded/linked music (gets the cover player + inline card + aurora). */
+export function isMusic(memo: Memo): boolean {
+  return audioKind(memo) === 'music';
+}
+
+/** True for mic recordings (keep the waveform tile — no aurora/cover player). */
+export function isVoice(memo: Memo): boolean {
+  return audioKind(memo) === 'voice';
 }
 
 export function mediaSrc(memo: Memo): string | null {

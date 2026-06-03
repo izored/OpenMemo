@@ -15,7 +15,7 @@ from sqlalchemy.orm.attributes import set_committed_value
 
 from backend.db.models import Memo, Collection
 from backend.core.security import sanitize_workspace_id, validate_url, FileUploadHandler
-from backend.core.classify import derive_memo_type
+from backend.core.classify import derive_memo_type, derive_audio_kind
 
 router = APIRouter(prefix="/api/ingest", tags=["ingest"])
 
@@ -237,6 +237,8 @@ async def ingest_url(
     )
     # Canonical type from URL signal (video aggregator / direct file / web page).
     memo.type = derive_memo_type(memo)
+    # Linked audio (SoundCloud/Bandcamp/…) is always music (ADR-005).
+    memo.audio_kind = derive_audio_kind(memo)
 
     # Auto-download audio pulled from yt-dlp platforms (SoundCloud, Bandcamp,
     # etc.) so it lands as a local, playable memo with no manual "Make it local"
@@ -312,6 +314,7 @@ async def ingest_file(
     collection_id: Optional[str] = Form(default=None),
     type_override: Optional[str] = Form(default=None),
     transcribe: bool = Form(default=False),
+    audio_kind: Optional[str] = Form(default=None),
     db: AsyncSession = Depends(get_db),
 ):
     """Upload and ingest a file (PDF, DOCX, image, audio).
@@ -344,6 +347,9 @@ async def ingest_file(
         created_at=datetime.utcnow(),
         updated_at=datetime.utcnow(),
     )
+    # Audio sub-kind (ADR-005): mic recorder posts audio_kind='voice'; plain
+    # uploads default to music. NULL for non-audio memos.
+    memo.audio_kind = derive_audio_kind(memo, audio_kind)
 
     db.add(memo)
     await _attach_collection(db, memo, collection_id)
@@ -490,6 +496,8 @@ async def localize_memo_task(memo_id: str, mode: str):
             return
         memo.file_path = result["path"]
         memo.type = result["type"]
+        # A localized/converted audio is music (linked source); keep voice intact.
+        memo.audio_kind = derive_audio_kind(memo, memo.audio_kind)
         memo.localize_status = "done"
         memo.updated_at = datetime.utcnow()
         await db.commit()
@@ -676,6 +684,7 @@ async def ingest_from_ai(
         updated_at=datetime.utcnow(),
     )
 
+    memo.audio_kind = derive_audio_kind(memo)
     db.add(memo)
     await _attach_collection(db, memo, data.collection_id)
 
@@ -744,6 +753,7 @@ async def ingest_from_extension(
     )
     # Canonical type — the extension's DOM scrape may mislabel (e.g. "article").
     memo.type = derive_memo_type(memo)
+    memo.audio_kind = derive_audio_kind(memo)
 
     db.add(memo)
     await _attach_collection(db, memo, data.collection_id)
