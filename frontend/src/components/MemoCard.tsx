@@ -582,7 +582,12 @@ export function MemoCard({ memo, dragHandleProps, lightboxGroup }: CardProps) {
     // Music (uploaded/linked) gets the inline full-bleed player + aurora while
     // active; voice memos keep the waveform tile untouched (ADR-005).
     const isMusic = audioKind(memo) === 'music';
-    const playerOverlay = isMusic && active ? <CardMusicPlayer memo={memo} cover={src} mood={mood} /> : null;
+    // The full-bleed inline player + aurora are cover-centric, so they apply ONLY
+    // to music WITH album art. Voice recordings (and any cover-less audio) keep the
+    // classic waveform tile + centred play button — no full-bleed takeover, no
+    // double play button. (ADR-005: voice stays on the old card.)
+    const richMusic = isMusic && !!src;
+    const playerOverlay = richMusic && active ? <CardMusicPlayer memo={memo} cover={src} mood={mood} /> : null;
     // Local file → play in the shared engine (sidebar player + inline). Remote
     // (yt-dlp, still downloading or streaming) → open the detail page, which
     // shows progress and plays/saves.
@@ -600,10 +605,10 @@ export function MemoCard({ memo, dragHandleProps, lightboxGroup }: CardProps) {
     };
     return (
       <div className="om-card-aura-wrap">
-        {/* Aurora glow behind the active MUSIC card — blurred cover, slow drift,
-            bleeds past the card edge (ADR-005). Voice never gets it. The wrapper
-            is unclipped (the card itself is overflow:hidden) so the halo escapes. */}
-        {isMusic && active && (
+        {/* Aurora glow behind the active MUSIC card — cover-tinted bloom, drifts,
+            bleeds past the card edge (ADR-005). Cover-only (voice + cover-less
+            audio never get it). The wrapper is unclipped so the halo escapes. */}
+        {richMusic && active && (
           <div
             className={cn('om-card-aura', isThisPlaying && 'is-playing')}
             style={mood ? ({ ['--cov-rgb']: mood.rgb } as React.CSSProperties) : undefined}

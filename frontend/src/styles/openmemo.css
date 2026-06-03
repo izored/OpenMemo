@@ -2151,9 +2151,9 @@ input, textarea { font: inherit; color: inherit; }
 /* ── Sidebar now-playing player (ADR-005) — replaces the old top-right pill.
    Sits in the sidebar foot; drives the one shared <audio>. ── */
 .om-sb-player {
-  /* Normal flow now — the scrollable .om-sidebar-body owns the slack, so the
-     player sits at the bottom without an auto-margin gap (handoff fix). */
-  margin: 0 12px 6px;
+  /* Normal flow (scrollable body owns the slack). Horizontal margin 0 so the
+     player spans the full padded width — same edges as the foot divider below. */
+  margin: 0 0 6px;
   padding: 12px;
   border-radius: var(--r-lg, 14px);
   background: color-mix(in oklab, var(--surface-2) 70%, transparent);
@@ -2186,6 +2186,49 @@ input, textarea { font: inherit; color: inherit; }
 .om-sb-player.is-tinted .om-sb-player-close { color: rgba(255, 255, 255, 0.72); }
 .om-sb-player.is-tinted .om-sb-player-close:hover { background: rgba(255, 255, 255, 0.16); color: #fff; }
 .om-sb-player.is-tinted .om-sb-player-cover-glyph { color: rgba(255, 255, 255, 0.85); }
+
+/* Big player (appearance pref `playerSize: 'big'`) — full cover on top fading
+   into the mood color, transport below, like a now-playing card. Music-with-cover
+   only (falls back to small otherwise). White controls; dark base so text stays
+   readable even when no mood color could be extracted. */
+.om-sb-player-big { padding: 0; overflow: hidden; background: #17171b; }
+.om-sb-player-big-cover {
+  position: relative; aspect-ratio: 1 / 1;
+  background-size: cover; background-position: center;
+}
+.om-sb-player-big-cover::after {
+  content: ''; position: absolute; inset: 0;
+  background: linear-gradient(to top, rgb(var(--cov-deep, 23, 23, 27)) 2%, transparent 58%);
+}
+.om-sb-player-big-x {
+  position: absolute; top: 8px; right: 8px; z-index: 2;
+  width: 26px; height: 26px; border-radius: 50%; border: 0; cursor: pointer;
+  display: grid; place-items: center;
+  background: rgba(0, 0, 0, 0.35); color: #fff;
+  -webkit-backdrop-filter: blur(6px); backdrop-filter: blur(6px);
+  transition: background .15s ease;
+}
+.om-sb-player-big-x:hover { background: rgba(0, 0, 0, 0.55); }
+.om-sb-player-big-body {
+  position: relative; z-index: 1; margin-top: -34px;
+  padding: 0 14px 14px;
+  display: flex; flex-direction: column; gap: 9px;
+}
+.om-sb-player-big-title {
+  background: none; border: 0; padding: 0; cursor: pointer; text-align: center;
+  font-size: 16px; font-weight: 700; color: #fff;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%;
+  text-shadow: 0 1px 6px rgba(0, 0, 0, 0.45);
+}
+.om-sb-player-big-title:hover { text-decoration: underline; }
+.om-sb-player-big-sub {
+  text-align: center; font-size: 12px; color: rgba(255, 255, 255, 0.72); margin-top: -4px;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%;
+}
+.om-sb-player-big .om-sb-player-scrub { padding: 0 2px; }
+.om-sb-player-big .om-sb-player-transport { justify-content: space-between; padding: 2px 10px 0; }
+.om-sb-player-big .om-sb-player-play { width: 52px; height: 52px; }
+.om-sb-player-big .om-sb-player-btn { width: 38px; height: 38px; }
 
 .om-sb-player-head { display: flex; align-items: center; gap: 10px; min-width: 0; }
 .om-sb-player-cover-btn { padding: 0; border: 0; background: none; cursor: pointer; flex-shrink: 0; line-height: 0; }
@@ -2261,31 +2304,28 @@ input, textarea { font: inherit; color: inherit; }
   box-shadow: 0 1px 4px rgba(0,0,0,0.3);
 }
 
-/* Audio card (dashboard grid) — waveform tile + real play/pause button.
-   Bars are a MASK (not a baked-in color) so they take `var(--text)` — black in
-   light, near-white in dark — automatically. The mask SVG uses solid-white
-   rects (mask reads alpha); the visible color comes from background-color. */
+/* Audio card (dashboard grid) — waveform tile + real play/pause button. The tile
+   is faintly accent-tinted and the bars are painted in the THEME ACCENT (the
+   user's chosen color). Only the bar HEIGHT animates when playing — the hue never
+   swaps state, so the waveform always follows the theme (no muddy oklab text-mix). */
 .om-card-audio .om-audio-frame {
   position: relative; aspect-ratio: 16 / 10; display: grid; place-items: center;
-  background-color: var(--bg-rail);
+  background-color: color-mix(in oklab, var(--accent) 7%, var(--bg-rail));
   border-radius: var(--r-xl) var(--r-xl) 0 0;
   overflow: hidden;
 }
-/* Live waveform canvas — fills the tile, painted in currentColor by the JS.
-   `color` here is what the bars take: dim text at rest, accent when playing. */
 .om-wave-canvas {
   position: absolute; inset: 0; width: 100%; height: 100%;
-  color: color-mix(in oklab, var(--text) 45%, transparent);
+  /* Accent at rest (calm), full accent when active — same hue both states. */
+  color: color-mix(in oklab, var(--accent) 60%, transparent);
   pointer-events: none;
   transition: color .25s ease;
 }
 .om-card-audio.is-active .om-audio-frame {
-  background-color: color-mix(in oklab, var(--accent) 18%, var(--bg-rail));
+  background-color: color-mix(in oklab, var(--accent) 14%, var(--bg-rail));
 }
-/* Active track: bars glow in the accent (but never the near-invisible white
-   accent on a light surface — mix toward text so it always reads). */
 .om-card-audio.is-active .om-wave-canvas {
-  color: color-mix(in oklab, var(--accent) 70%, var(--text));
+  color: var(--accent);
 }
 /* Play/pause button reuses the shared `.om-play` token (identical to video
    cards) for shape/size/shadow. But video's fixed white fill sits over a dark
