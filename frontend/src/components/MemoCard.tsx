@@ -6,6 +6,7 @@ import { Icon } from './Icon';
 import { cn } from '@/lib/utils';
 import { memoApi } from '@/lib/api';
 import { mediaSrc, audioKind } from '@/lib/media';
+import { useCoverMood, type CoverMood } from '@/lib/coverMood';
 import { platformMeta, videoEmbedUrl } from '@/lib/platforms';
 import { useAppStore } from '@/stores/appStore';
 import { useAudioPlayer } from '@/lib/audioPlayer';
@@ -222,7 +223,7 @@ function Meta({ memo }: { memo: Memo }) {
 // inset, blurred cover behind a big play/pause + title + scrubber. Voice memos
 // never get this — they keep their waveform tile. Isolated so only the active
 // card re-renders on each timeupdate tick.
-function CardMusicPlayer({ memo, cover }: { memo: Memo; cover?: string | null }) {
+function CardMusicPlayer({ memo, cover, mood }: { memo: Memo; cover?: string | null; mood?: CoverMood | null }) {
   const navigate = useNavigate();
   const { toggle, seek, playing, currentTime, duration, isActive } = useAudioPlayer();
   const active = isActive(memo.id);
@@ -235,8 +236,15 @@ function CardMusicPlayer({ memo, cover }: { memo: Memo; cover?: string | null })
     seek(((e.clientX - rect.left) / rect.width) * duration);
   };
   return (
-    <div className="om-card-player" role="group" aria-label="Now playing" onClick={(e) => e.stopPropagation()}>
+    <div
+      className={cn('om-card-player', mood && 'is-tinted')}
+      role="group"
+      aria-label="Now playing"
+      onClick={(e) => e.stopPropagation()}
+      style={mood ? ({ ['--cov-base']: mood.base, ['--cov-deep']: mood.deep } as React.CSSProperties) : undefined}
+    >
       {cover && <div className="om-card-player-bg" style={{ backgroundImage: `url(${cover})` }} aria-hidden />}
+      {mood && <div className="om-card-player-tint" aria-hidden />}
       <div className="om-card-player-inner">
         <button
           className="om-card-player-play"
@@ -347,6 +355,13 @@ export function MemoCard({ memo, dragHandleProps, lightboxGroup }: CardProps) {
   const src = mediaSrc(memo);
   const fallbackTint = TINT_FALLBACK[hashId(memo.id) % TINT_FALLBACK.length];
   const heroBg = `linear-gradient(135deg, ${fallbackTint} 0%, color-mix(in oklab, ${fallbackTint} 55%, #1a1a18) 100%)`;
+
+  // Cover-mood color for the active music card's glow + inline player tint
+  // (ADR-005). Only extracted for the card that is actually the active music
+  // track, so non-playing cards do no work.
+  const coverForMood =
+    memo.type === 'audio' && audioKind(memo) === 'music' && isActive(memo.id) ? src : null;
+  const mood = useCoverMood(coverForMood);
 
 
   // ── Note ──
@@ -531,7 +546,7 @@ export function MemoCard({ memo, dragHandleProps, lightboxGroup }: CardProps) {
     // Music (uploaded/linked) gets the inline full-bleed player + aurora while
     // active; voice memos keep the waveform tile untouched (ADR-005).
     const isMusic = audioKind(memo) === 'music';
-    const playerOverlay = isMusic && active ? <CardMusicPlayer memo={memo} cover={src} /> : null;
+    const playerOverlay = isMusic && active ? <CardMusicPlayer memo={memo} cover={src} mood={mood} /> : null;
     // Local file → play in the shared engine (sidebar player + inline). Remote
     // (yt-dlp, still downloading or streaming) → open the detail page, which
     // shows progress and plays/saves.
@@ -555,7 +570,7 @@ export function MemoCard({ memo, dragHandleProps, lightboxGroup }: CardProps) {
         {isMusic && active && (
           <div
             className={cn('om-card-aura', isThisPlaying && 'is-playing')}
-            style={{ backgroundImage: src ? `url(${src})` : heroBg }}
+            style={mood ? ({ ['--cov-rgb']: mood.rgb } as React.CSSProperties) : undefined}
             aria-hidden
           />
         )}

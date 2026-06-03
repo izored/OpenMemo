@@ -2143,7 +2143,9 @@ input, textarea { font: inherit; color: inherit; }
 /* ── Sidebar now-playing player (ADR-005) — replaces the old top-right pill.
    Sits in the sidebar foot; drives the one shared <audio>. ── */
 .om-sb-player {
-  margin: 8px 12px 6px;
+  /* margin-top:auto drops the player to the bottom of the sidebar, hugging the
+     foot, instead of sitting right under the collections list. */
+  margin: auto 12px 6px;
   padding: 12px;
   border-radius: var(--r-lg, 14px);
   background: color-mix(in oklab, var(--surface-2) 70%, transparent);
@@ -2154,6 +2156,28 @@ input, textarea { font: inherit; color: inherit; }
 @keyframes omSbPlayerIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
 /* Music gets a faint cover-tinted wash so it reads as the "rich" track. */
 .om-sb-player.is-music { background: color-mix(in oklab, var(--accent) 8%, var(--surface-2)); }
+
+/* Cover-mood tint (ADR-005) — the whole surface takes the artwork's color, white
+   controls over it, like the reference player. --cov-base/--cov-deep are the
+   image's mood color at two lightnesses, set inline from useCoverMood(). */
+.om-sb-player.is-tinted {
+  background: linear-gradient(155deg, rgb(var(--cov-base)) 0%, rgb(var(--cov-deep)) 100%);
+  border-color: rgba(255, 255, 255, 0.16);
+  color: #fff;
+}
+.om-sb-player.is-tinted .om-sb-player-title,
+.om-sb-player.is-tinted .om-sb-player-meta:hover .om-sb-player-title { color: #fff; }
+.om-sb-player.is-tinted .om-sb-player-sub { color: rgba(255, 255, 255, 0.78); }
+.om-sb-player.is-tinted .om-sb-player-time { color: rgba(255, 255, 255, 0.72); }
+.om-sb-player.is-tinted .om-sb-player-track { background: rgba(255, 255, 255, 0.25); }
+.om-sb-player.is-tinted .om-sb-player-fill { background: #fff; }
+.om-sb-player.is-tinted .om-sb-player-btn { color: rgba(255, 255, 255, 0.82); }
+.om-sb-player.is-tinted .om-sb-player-btn:hover { background: rgba(255, 255, 255, 0.16); color: #fff; }
+.om-sb-player.is-tinted .om-sb-player-btn.active { color: #fff; background: rgba(255, 255, 255, 0.24); }
+.om-sb-player.is-tinted .om-sb-player-play { background: #fff; color: #111; }
+.om-sb-player.is-tinted .om-sb-player-close { color: rgba(255, 255, 255, 0.72); }
+.om-sb-player.is-tinted .om-sb-player-close:hover { background: rgba(255, 255, 255, 0.16); color: #fff; }
+.om-sb-player.is-tinted .om-sb-player-cover-glyph { color: rgba(255, 255, 255, 0.85); }
 
 .om-sb-player-head { display: flex; align-items: center; gap: 10px; min-width: 0; }
 .om-sb-player-cover-btn { padding: 0; border: 0; background: none; cursor: pointer; flex-shrink: 0; line-height: 0; }
@@ -2212,7 +2236,7 @@ input, textarea { font: inherit; color: inherit; }
 
 /* Collapsed sidebar: cover wrapped in a progress ring, tap to play/pause. */
 .om-sb-player-mini {
-  position: relative; width: 48px; height: 48px; margin: 8px auto 6px;
+  position: relative; width: 48px; height: 48px; margin: auto auto 6px;
   border: 0; background: none; cursor: pointer; padding: 0;
   display: grid; place-items: center;
   animation: omSbPlayerIn .3s cubic-bezier(0.16, 0.84, 0.34, 1);
@@ -2277,8 +2301,16 @@ input, textarea { font: inherit; color: inherit; }
 .om-card-player-bg {
   position: absolute; inset: -12%;
   background-size: cover; background-position: center;
-  filter: blur(7px) brightness(0.5) saturate(1.15);
-  transform: scale(1.12);
+  /* Blur cut ~70% (7px → 2px) so the cover reads clearly through the player. */
+  filter: blur(2px) brightness(0.62) saturate(1.2);
+  transform: scale(1.08);
+}
+/* Cover-mood tint over the lightly-blurred cover so the inline player reads the
+   same as the sidebar player. --cov-base/--cov-deep set inline from useCoverMood(). */
+.om-card-player-tint {
+  position: absolute; inset: 0; pointer-events: none;
+  background: linear-gradient(160deg, rgb(var(--cov-base)) 0%, rgb(var(--cov-deep)) 100%);
+  opacity: 0.5;
 }
 .om-card-player-inner {
   position: relative; z-index: 1; flex: 1;
@@ -2319,16 +2351,22 @@ input, textarea { font: inherit; color: inherit; }
 .om-card-aura-wrap { position: relative; }
 .om-card-aura-wrap > .om-card { position: relative; z-index: 1; }
 .om-card-aura {
-  position: absolute; inset: -24px; z-index: 0; pointer-events: none;
-  border-radius: 34px;
-  background-size: cover; background-position: center;
-  filter: blur(30px) saturate(1.5);
-  opacity: 0.5;
-  -webkit-mask-image: radial-gradient(ellipse at center, #000 34%, transparent 72%);
-  mask-image: radial-gradient(ellipse at center, #000 34%, transparent 72%);
-  animation: om-aura-drift 9s ease-in-out infinite alternate;
+  position: absolute; inset: -30px; z-index: 0; pointer-events: none;
+  border-radius: 48px;
+  /* Two offset blobs of the cover's mood color → an aurora that blooms PAST the
+     card edge. The card (opaque, z-1) covers the center; the blurred color spills
+     out as a halo. The old radial *mask* faded to transparent before reaching the
+     card edge, so the visible ring was masked away — fixed by using the color as
+     the fill and letting blur do the spread. --cov-rgb = artwork color (fallback
+     a soft neutral). */
+  background:
+    radial-gradient(46% 46% at 30% 26%, rgba(var(--cov-rgb, 130, 130, 150), 0.9), transparent 70%),
+    radial-gradient(42% 42% at 74% 78%, rgba(var(--cov-rgb, 130, 130, 150), 0.62), transparent 72%);
+  filter: blur(30px) saturate(1.45);
+  opacity: 0.65;
+  animation: om-aura-drift 8s ease-in-out infinite alternate;
 }
-.om-card-aura.is-playing { opacity: 0.6; }
+.om-card-aura.is-playing { opacity: 0.85; }
 @keyframes om-aura-drift {
   0%   { transform: scale(1.04) translate(-2%, -1%) rotate(-1.5deg); }
   50%  { transform: scale(1.12) translate(2%, 1.5%) rotate(1.5deg); }

@@ -6,6 +6,7 @@ import { cn } from '@/lib/utils';
 import { memoApi } from '@/lib/api';
 import { useAppStore } from '@/stores/appStore';
 import { useAudioPlayer, formatTime } from '@/lib/audioPlayer';
+import { useCoverMood } from '@/lib/coverMood';
 
 // Persistent now-playing surface in the sidebar foot (ADR-005). Replaces the old
 // top-right HeaderAudioPlayer; drives the one shared <audio>. Expanded: cover +
@@ -23,6 +24,8 @@ export function SidebarPlayer() {
   // renders" pattern) — no effect, no cascading-render lint warning.
   const [pinned, setPinned] = useState<boolean>(!!track?.pinned);
   const [seenMemo, setSeenMemo] = useState<string | undefined>(track?.memoId);
+  // Tint the player to the cover's mood (music only), matching the reference UI.
+  const mood = useCoverMood(track?.kind === 'music' ? track?.cover : null);
   if (track && track.memoId !== seenMemo) {
     setSeenMemo(track.memoId);
     setPinned(!!track.pinned);
@@ -103,7 +106,12 @@ export function SidebarPlayer() {
 
   // ── Expanded sidebar: full mini-player ──
   return (
-    <div className={cn('om-sb-player', isMusic && 'is-music')} role="region" aria-label="Now playing">
+    <div
+      className={cn('om-sb-player', isMusic && 'is-music', mood && 'is-tinted')}
+      role="region"
+      aria-label="Now playing"
+      style={mood ? ({ ['--cov-base']: mood.base, ['--cov-deep']: mood.deep } as React.CSSProperties) : undefined}
+    >
       <div className="om-sb-player-head">
         <button className="om-sb-player-cover-btn" onClick={goMemo} title={track.title}>
           {cover}
