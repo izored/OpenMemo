@@ -27,6 +27,7 @@ aurora glow on whatever is currently playing. Whole audio type, every provider
 - 🔀 **Audio player relocated** — `HeaderAudioPlayer` (top-right pill) is removed in favor of the sidebar player; the shared engine gains repeat-one state (`onEnded` → restart).
 - 🧱 **Sidebar is a 3-zone layout** — the sidebar no longer scrolls as a whole; only the middle (nav / pinned / collections) scrolls in a dedicated `.om-sidebar-body`, so the now-playing player + foot stay pinned to the bottom with no auto-margin gap. `.om-sidebar` is now `height:100dvh; overflow:hidden`.
 - 📐 **Sidebar player width + accent swatch** — the player now spans the full rail width (matches the foot divider below it; was inset), and appearance's last accent swatch is a usable mid-grey (`#71717A`) instead of near-white.
+- ✨ **Player polish** — the card↔player swap now cross-fades both ways (framer `AnimatePresence`) instead of a hard flip; the sidebar is a 3-zone column where **only the collections list scrolls** (search / nav / pinned / headers stay fixed — ADR-006); the big player's cover **dissolves** into the mood color (no hard cut) with a roomier transport; sidebar-player icons sized to match the nav for cohesion; mic / music kind icon on audio card titles.
 
 ### Fixed
 

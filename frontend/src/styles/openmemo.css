@@ -202,13 +202,17 @@ input, textarea { font: inherit; color: inherit; }
   height: 100dvh; overflow: hidden;
   position: relative; z-index: 2;
 }
-/* The only scrollable zone: nav + pinned + collections. Owns the flexible space
-   so the bottom zone (player + foot) sits at the bottom naturally. */
-.om-sidebar-body {
+/* The ONLY scrollable zone: the Collections list. Search / nav / Pinned / the
+   Collections header all stay fixed above it. Owns the flexible space so the
+   bottom zone (player + foot) sits at the bottom naturally (even when collapsed,
+   where it's empty but still grows). */
+.om-sidebar-scroll {
   flex: 1 1 auto; min-height: 0;
   overflow-y: auto; overflow-x: hidden;
   scrollbar-gutter: stable;
 }
+/* Collections header is now a standalone fixed row (moved out of the section). */
+.om-collections-head { flex-shrink: 0; }
 .om-sidebar-head { display: flex; align-items: center; justify-content: space-between; padding: 0 4px 16px; }
 .om-brand { display: flex; align-items: center; gap: 10px; }
 .om-brand-name { font-weight: 600; letter-spacing: -0.015em; font-size: 19px; }
@@ -2187,18 +2191,20 @@ input, textarea { font: inherit; color: inherit; }
 .om-sb-player.is-tinted .om-sb-player-close:hover { background: rgba(255, 255, 255, 0.16); color: #fff; }
 .om-sb-player.is-tinted .om-sb-player-cover-glyph { color: rgba(255, 255, 255, 0.85); }
 
-/* Big player (appearance pref `playerSize: 'big'`) — full cover on top fading
-   into the mood color, transport below, like a now-playing card. Music-with-cover
-   only (falls back to small otherwise). White controls; dark base so text stays
-   readable even when no mood color could be extracted. */
+/* Big player (appearance pref `playerSize: 'big'`) — full cover dissolving into
+   the mood color, transport below, like a now-playing card. Music-with-cover only
+   (falls back to small). White controls; dark base when no mood color was read. */
 .om-sb-player-big { padding: 0; overflow: hidden; background: #17171b; }
+/* Vertical mood gradient as the surface; the cover masks INTO it so there's no
+   hard cut — the artwork dissolves smoothly into the color (matches the reference). */
+.om-sb-player.om-sb-player-big.is-tinted {
+  background: linear-gradient(to bottom, rgb(var(--cov-base)) 0%, rgb(var(--cov-deep)) 60%);
+}
 .om-sb-player-big-cover {
   position: relative; aspect-ratio: 1 / 1;
   background-size: cover; background-position: center;
-}
-.om-sb-player-big-cover::after {
-  content: ''; position: absolute; inset: 0;
-  background: linear-gradient(to top, rgb(var(--cov-deep, 23, 23, 27)) 2%, transparent 58%);
+  -webkit-mask-image: linear-gradient(to bottom, #000 46%, transparent 98%);
+  mask-image: linear-gradient(to bottom, #000 46%, transparent 98%);
 }
 .om-sb-player-big-x {
   position: absolute; top: 8px; right: 8px; z-index: 2;
@@ -2210,25 +2216,26 @@ input, textarea { font: inherit; color: inherit; }
 }
 .om-sb-player-big-x:hover { background: rgba(0, 0, 0, 0.55); }
 .om-sb-player-big-body {
-  position: relative; z-index: 1; margin-top: -34px;
-  padding: 0 14px 14px;
-  display: flex; flex-direction: column; gap: 9px;
+  position: relative; z-index: 1; margin-top: -46px;
+  padding: 0 16px 16px;
+  display: flex; flex-direction: column; gap: 11px;
 }
 .om-sb-player-big-title {
   background: none; border: 0; padding: 0; cursor: pointer; text-align: center;
   font-size: 16px; font-weight: 700; color: #fff;
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%;
-  text-shadow: 0 1px 6px rgba(0, 0, 0, 0.45);
+  text-shadow: 0 1px 6px rgba(0, 0, 0, 0.5);
 }
 .om-sb-player-big-title:hover { text-decoration: underline; }
 .om-sb-player-big-sub {
-  text-align: center; font-size: 12px; color: rgba(255, 255, 255, 0.72); margin-top: -4px;
+  text-align: center; font-size: 12px; color: rgba(255, 255, 255, 0.72); margin-top: -5px;
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%;
 }
-.om-sb-player-big .om-sb-player-scrub { padding: 0 2px; }
-.om-sb-player-big .om-sb-player-transport { justify-content: space-between; padding: 2px 10px 0; }
+.om-sb-player-big .om-sb-player-scrub { padding: 0 2px; margin-top: 2px; }
+/* Centered transport with breathing room (was jammed edge-to-edge). */
+.om-sb-player-big .om-sb-player-transport { justify-content: center; gap: 22px; padding: 4px 0 2px; }
 .om-sb-player-big .om-sb-player-play { width: 52px; height: 52px; }
-.om-sb-player-big .om-sb-player-btn { width: 38px; height: 38px; }
+.om-sb-player-big .om-sb-player-btn { width: 36px; height: 36px; }
 
 .om-sb-player-head { display: flex; align-items: center; gap: 10px; min-width: 0; }
 .om-sb-player-cover-btn { padding: 0; border: 0; background: none; cursor: pointer; flex-shrink: 0; line-height: 0; }
@@ -2336,6 +2343,13 @@ input, textarea { font: inherit; color: inherit; }
 }
 .om-card-audio .om-play:disabled { opacity: 0.5; }
 
+/* Kind icon (mic for voice, music note for music) left of the audio card title —
+   the audio analogue of the video card's brand glyph, but inline since audio
+   cards show a title. */
+.om-card-title.has-kind-icon { display: flex; align-items: center; gap: 6px; min-width: 0; }
+.om-card-title .om-kind-icon { flex-shrink: 0; opacity: 0.65; }
+.om-card-title .om-kind-title-text { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
 /* Inline music player overlay on the active card (ADR-005). Sits absolute inset:0
    over the card at the SAME size — no resize/zoom, so nothing jumps. The cover
    stays crisp; a bottom→top gradient (mood tint + a backdrop blur masked to the
@@ -2344,7 +2358,8 @@ input, textarea { font: inherit; color: inherit; }
 .om-card-player {
   position: absolute; inset: 0; z-index: 18;
   overflow: hidden; border-radius: inherit;
-  animation: om-fade-in .2s ease;
+  /* Enter/exit cross-fade is driven by framer-motion (AnimatePresence) in
+     MemoCard so the card↔player swap animates BOTH ways, not a hard flip. */
 }
 .om-card-player-cover {
   position: absolute; inset: 0;
