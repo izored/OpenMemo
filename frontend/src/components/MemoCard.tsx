@@ -634,7 +634,7 @@ export function MemoCard({ memo, dragHandleProps, lightboxGroup }: CardProps) {
           confirmOverlay={confirmOverlay}
           playerOverlay={playerOverlay}
         >
-          <div className="om-audio-frame" style={src ? undefined : { background: heroBg }}>
+          <div className="om-audio-frame">
             {src ? (
               <img
                 src={src}
