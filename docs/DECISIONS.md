@@ -7,6 +7,109 @@ the decision, and its consequences, so a future reader knows *why*, not just
 
 ---
 
+## ADR-008 — Performance is a request-path discipline: never block the event loop, index for scale, keep liveness dependency-free
+
+**Date:** 2026-06-04 · **Status:** Accepted · **Relates to:** ADR-002 (Ollama + headless browser ship inside the API image)
+
+### Context
+
+The home page sat on "Loading Memos…" for ~15s with only ~60 memos, and the
+library is meant to grow into the thousands. The instinct was "the database will
+not scale." Measurement said otherwise: the memo query was always ~0.5s. Two
+unrelated blocking calls on the request path were the real cause, and both are
+structural lessons worth recording.
+
+1. **A synchronous filesystem walk froze the event loop.** The sidebar loads on
+   every page and called `/api/stats`, which walked the entire `files/` directory
+   (1.1 GB, slow over a Docker-for-Windows bind mount) with `Path.rglob()`
+   **synchronously inside an `async def`**. uvicorn runs one event loop; a
+   blocking call with no `await` stalls *every* concurrent request. So the fast
+   `/api/memos` query queued behind a ~20s walk it had nothing to do with. The
+   symptom looked like a slow memo load; the cause was an unrelated stats
+   endpoint freezing the shared loop.
+
+2. **Ollama was coupled to API liveness.** The container healthcheck hit
+   `/api/health`, which probed Ollama with a 10s connect timeout, every 10s. A
+   local LLM is optional: memos, search (FTS5), and browsing all work without it.
+   But a down Ollama marked the whole API unhealthy and added a ~13s stall to the
+   Settings page, plus ~8.6k pointless probes a day.
+
+The reference checklist that prompted this (connection pools, indexes, N+1,
+pagination, `SELECT *`) is generic Postgres-at-scale advice. Most of it did not
+apply: this is a single-user local SQLite app, the list query already paginated
+(`limit 50`) and already used `selectinload` (no N+1). The actual failure modes
+were different, and naming them is the point of this record.
+
+### Decision
+
+Treat the request hot path as a shared, latency-sensitive resource. Five rules:
+
+1. **Never run blocking work directly in an async handler.** Filesystem walks,
+   synchronous DB drivers, heavy CPU, and subprocess calls go through
+   `asyncio.to_thread` (or a background task). The single event loop is shared by
+   every concurrent request; one un-awaited blocking call is a *global* stall,
+   not a local one. `/api/stats` storage sizes now run via `asyncio.to_thread`.
+
+2. **Expensive or rarely-needed data is opt-in and cached, off the default
+   path.** Storage sizes became `?include_storage=true` (only the Settings page
+   asks), computed in a thread and cached 60s. The sidebar's per-page call
+   returns cheap `COUNT`s only. A page must never pay for data it does not render.
+
+3. **Index every column the feed filters or sorts on, now, for thousands.**
+   SQLite with no indexes is a full scan per query: fine at 60 rows, painful at
+   thousands. Indexes are created idempotently on startup
+   (`CREATE INDEX IF NOT EXISTS`), consistent with the no-migration-framework
+   convention. The feed index matches the exact default query:
+   `memos(is_deleted, recency_at DESC, created_at DESC)`, plus `memos(type)`,
+   `memos(workspace_id)`, and `memo_collections(collection_id)` for the
+   collection-filter join.
+
+4. **Liveness is dependency-free; external dependencies are probed on demand,
+   briefly, and cached.** `/api/ping` returns 200 with no external call and is
+   what the container healthcheck uses, so an optional dependency can never mark
+   the core API unhealthy. Ollama reachability is a separate concern, reported
+   only by `/api/health` (Settings only), with a ~1.5s timeout and a 15s result
+   cache. No background polling: lazy plus a short cache beats a timer that
+   re-adds the probe noise we just removed.
+
+5. **SQLite is the correct datastore for a single-user local app.** "Set up a
+   connection pool" is the wrong lesson here: there is one user and one writer.
+   The real bottlenecks are blocking the event loop and missing indexes, not
+   connection exhaustion. We design for *this* app's shape, not a generic
+   multi-tenant web service.
+
+### Alternatives considered
+
+| Option | Why rejected |
+|--------|--------------|
+| **Move to Postgres + a connection pool** | Solves a problem we do not have (concurrent multi-user connection exhaustion). Adds an external service to a local-first app. SQLite is correct for single-user; the fixes were loop-blocking and indexes. |
+| **Keep storage sizes always-on in `/api/stats`, just make the walk faster** | The walk is inherently slow over a Windows bind mount and grows with the library. Any synchronous version still risks the loop. Opt-in + threaded + cached removes it from the hot path entirely. |
+| **Background-poll Ollama every N seconds and cache the status** | Re-adds the exact timer noise (and log spam when down) we were removing. Lazy on-demand + a 15s cache gives fresh-enough status only when someone is looking. |
+| **One `/api/health` for both liveness and Ollama status** | Conflates "is the API up" with "is the LLM up". A down optional dependency must never fail the container healthcheck or block the UI. Split into `/api/ping` (liveness) and `/api/health` (dependency status). |
+| **Add indexes only once we actually hit thousands** | They are idempotent and near-free at small scale. Waiting means the first slow day is a surprise; pre-indexing is cheap insurance. |
+
+### Consequences
+
+- Measured on real data (85 memos, 1.1 GB files): `/api/stats` 20s to 0.27s;
+  `/api/memos` stays ~0.38s even while the storage walk runs in a thread (the
+  loop is no longer frozen); `/api/health` with Ollama down 13s to 1.5s cold and
+  0.2s cached; `/api/ping` 0.2s. The home page goes from ~15s to sub-second.
+- New endpoint `/api/ping` (liveness). The Docker healthcheck points at it.
+- `/api/stats` gains an `include_storage` flag; Settings passes it, the sidebar
+  does not. Frontend `systemApi.stats(includeStorage?)`, and the sidebar
+  `queryFn` is wrapped so React Query's context object is not passed in as a
+  truthy flag.
+- Startup creates feed indexes idempotently. No migration framework; consistent
+  with the existing PRAGMA-guarded `ALTER`s.
+- `OllamaClient.health_check()` is now a fast, cached probe (short timeout, 15s
+  TTL, single host loop) rather than a double-probe with a 10s connect timeout.
+- A reusable rule for new endpoints: if a handler touches the filesystem, a
+  subprocess, or anything that can block, it goes through a thread; if it hits an
+  external service, it gets a short timeout + a cache and never gates liveness.
+- Shipped in PR #36 (squash-merged to `main`); changelog 2.2.0.
+
+---
+
 ## ADR-007 — AI Summary eligibility is one predicate, gated by memo type and audio kind (music excluded)
 
 **Date:** 2026-06-03 · **Status:** Accepted · **Builds on:** ADR-001 (systematic per-type, centralized), ADR-003 (eligibility-predicate pattern), ADR-004 (where summary was born), ADR-005 (voice vs music split)
