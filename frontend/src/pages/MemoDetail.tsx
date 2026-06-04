@@ -36,7 +36,7 @@ import { BackButton } from '@/components/BackButton';
 import { MarkdownEditor } from '@/components/MarkdownEditor';
 import { memoApi, collectionApi } from '@/lib/api';
 import { AskMemoPanel } from '@/components/AskMemoPanel';
-import { audioEmbed, canMakeLocal, canTranscript, audioKind } from '@/lib/media';
+import { audioEmbed, canMakeLocal, canTranscript, canSummarize, audioKind } from '@/lib/media';
 import { videoEmbedUrl } from '@/lib/platforms';
 import { useAudioPlayer, formatTime } from '@/lib/audioPlayer';
 import ReactMarkdown from 'react-markdown';
@@ -1027,8 +1027,10 @@ export function MemoDetail() {
               </div>
             )}
 
-            {/* AI Summary — three on-demand modes, fed the full content/transcript */}
-            {!isEditing && memo.content_text && <SummaryPanel memo={memo} />}
+            {/* AI Summary — three on-demand modes, fed the full content/transcript.
+                Gated by canSummarize (ADR-007): excludes music (a song isn't
+                summarizable) and any non-summarizable type. */}
+            {!isEditing && canSummarize(memo) && <SummaryPanel memo={memo} />}
 
             {/* Report card for file-backed memos (doc / code / generic file) */}
             {!isEditing && (memo.type === 'document' || memo.type === 'code' || memo.type === 'file') && (
