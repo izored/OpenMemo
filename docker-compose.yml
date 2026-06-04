@@ -32,7 +32,9 @@ services:
     extra_hosts:
       - "host.docker.internal:host-gateway"
     healthcheck:
-      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/api/health')"]
+      # Liveness only — hits /api/ping (no Ollama). Hitting /api/health here would
+      # tie container health to the LLM being up and probe Ollama every 10s.
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/api/ping', timeout=4)"]
       interval: 10s
       timeout: 5s
       retries: 5
