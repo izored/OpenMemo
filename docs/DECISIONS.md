@@ -7,6 +7,109 @@ the decision, and its consequences, so a future reader knows *why*, not just
 
 ---
 
+## ADR-009 — Make the whole UI responsive in place: one codebase that adapts every page from desktop to mobile
+
+**Date:** 2026-06-04 · **Status:** Proposed · **Relates to:** ADR-006 (sidebar is a fixed three-zone column), ADR-005 (the sidebar hosts the now-playing player), ADR-008 (keep work off the request/render hot path), ADR-001 (define shared things once, never scatter)
+
+### Context
+
+OpenMemo was built desktop-first. **No page is designed for a small screen.** The shell (`.om-app`) is a two-child flexbox — a fixed sidebar rail (`260px` / `76px` collapsed) plus a flexible `.om-main` — and nothing collapses that below any width. The few `@media` rules that exist are one-off patches inside single components (Settings at 1100px, Ask history at 1000px, one detail grid at 720px); there is no app-wide responsive system. On a phone today, every page breaks in its own way:
+
+- **Sidebar** — a static column that eats ~67% of a 390px screen (or 19% collapsed); no drawer, no way to get it out of the way. `.om-main` is crushed beside it.
+- **Dashboard feed** — `MemoGrid` never goes below **2 columns** (`useViewportColumns` floors at 2 under 900px; `react-masonry-css` has no `1`), so cards are unreadably narrow on a phone.
+- **Sidebar player** — `SidebarPlayer` is laid out in fixed pixels inside the ~236px rail with no `min-width:0` and no wrap, so the transport **clips**; the current workaround is to drop the browser to **90% zoom** to see the buttons. (Reproduces under desktop zoom too — it's a sizing bug, not only a phone bug.)
+- **Settings** — the bento grid only stacks at 1100px; the cards and rows inside it have no phone treatment.
+- **Collections** — multi-column grid with no single-column fallback.
+- **Ask** — two-column shell; history hides at 1000px but the rest isn't tuned for narrow.
+- **MemoDetail** — pins a fixed `384px` chat pane beside the content; nothing stacks.
+- **Modals / panels / FAB** — `AddMemoPanel` is a `296px` right-anchored panel; the `+` FAB sits at a fixed `16px` inset with no safe-area; `viewport` meta lacks `viewport-fit=cover`, so notch / home-indicator insets are ignored. Search overlay, Appearance panel, lightbox, onboarding — none are phone-tuned.
+- **Brand mark** — the top-left logo is wired to `toggleSidebarCollapsed`, not navigation; it does not return you to the dashboard.
+- **Touch** — Lenis smooth-scroll (`touchMultiplier:1.5`) hijacks native momentum scroll on every non-detail route.
+
+Two facts shape *how* we fix this, not just *what*:
+
+- The breakpoints already in the code are **scattered magic numbers** (720 / 900 / 1000 / 1100 / 1280 / 1500), defined independently in CSS and in JS. Bolting a mobile mode onto that scatter would make the drift worse (the thing ADR-001 warns against).
+- **The desktop designs are still changing** — `MemoDetail` in particular will be reworked, and others may follow. So the mobile work must ride on the *same* components as desktop, not a hand-copied snapshot, or it rots the next time a page is redesigned.
+
+### Decision
+
+**Make every existing page responsive in place — one codebase, no separate mobile version — using one shared set of breakpoints.** Each page keeps the same components on every screen and simply re-lays-them-out by width. That is the whole point: when a page's desktop design changes later, **its mobile version changes with it for free**, because they are literally the same code. (This is what "connected, systematic adaptation" means in practice — not a second mobile app to keep in sync.)
+
+Eight concrete decisions:
+
+**1. One set of breakpoints, defined once, used by CSS and JS.** Three modes; everything keys off them:
+
+| Token | Width | Mode |
+|-------|-------|------|
+| `sm` | ≤ 640px | **Phone** |
+| `md` | 641–1024px | **Tablet** |
+| `lg` | > 1024px | **Desktop** (today's layout) |
+
+A `useBreakpoint()` / `useIsMobile()` hook (one `matchMedia` listener) is the single JS source; a small set of CSS tokens is the single CSS source. The scattered 720/900/1000/1100 literals get migrated onto these (the 1280/1500 grid-density steps stay, but as desktop-only refinements). No component re-types a raw pixel width again.
+
+**2. Sidebar → off-canvas drawer below `lg`.** The rail leaves the flow and slides in from the left at `min(86vw, 320px)` over a dimmed, tap-to-dismiss scrim, opened by a hamburger in a slim **mobile top bar** (shown only below `lg`). It closes on route change, scrim tap, and Escape, and locks page scroll while open. The desktop rail and its collapse/expand (ADR-006) are untouched. *(A full-bleed `100vw` drawer was considered and rejected — no visible "tap to close" target; it reads as a page change, not an overlay.)*
+
+**3. Logo → home, on every page.** The brand mark navigates to `/` in every state (wordmark on desktop, logo glyph in the collapsed rail, logo in the mobile top bar / drawer header), and closes the drawer on mobile. Collapse/expand moves entirely to the chevron control, so "go home" and "toggle the rail" stop being the same ambiguous button.
+
+**4. Dashboard feed → one column on phones.** `useViewportColumns` returns `1` at ≤ `sm` and the masonry map gains `640: 1` (one column = a clean vertical stack). 2 columns at `md`, current behavior at `lg`. Cards must read well at full width.
+
+**5. Sidebar player → fluid, never clips.** Fix the crop at the root: `min-width:0` on every flex child, `clamp()` sizes for the cover and transport, the time labels degrade to elapsed-only when very narrow, and the transport may wrap rather than clip. This retires the 90%-zoom workaround on *every* screen and gives the player the wider drawer on mobile for free.
+
+**6. Every other page reflows to a single readable column on phones.**
+- **Settings** — the bento grid and each card/row stack to one column; tap targets ≥ 44px.
+- **Collections** — single column; the header row (title + edit toggle) stacks.
+- **Ask** — single column; the question/answer area takes the full width; history stays hidden (already does at narrow).
+- **MemoDetail** — content goes full-width and the secondary chat pane becomes a slide-over / sheet you open with a button, instead of a fixed side pane. *Because the rule is "main content + a secondary panel that collapses," it survives the planned desktop redesign — it is not pinned to today's `.om-detail-chat` markup.*
+
+To keep these consistent (and to keep MemoDetail and Ask in step when their desktop layouts change), pages with a "main area + side panel" share one small two-pane helper that does the beside → slide-over → sheet switch by breakpoint, rather than each page reinventing it.
+
+**7. Modals, panels, and the FAB go mobile-native.** Below `lg`, the Add-memo and Appearance panels become bottom sheets (near-full-width); the search overlay and lightbox already cover the screen and stay full-screen; the `+` FAB and all fixed chrome respect `env(safe-area-inset-*)` and clear the top bar. Add `viewport-fit=cover` to the meta tag.
+
+**8. Touch is first-class.** Disable Lenis on touch / below `lg` so native scrolling and momentum work; enforce ≥ 44×44px hit targets on mobile controls.
+
+#### Per-page plan (what changes, page by page)
+
+| Page / piece | Desktop (`lg`, today) | Tablet (`md`) | Phone (`sm`) |
+|--------------|-----------------------|---------------|--------------|
+| Shell | Static rail + main | Top bar + drawer + full-width main | Top bar + drawer + full-width main |
+| Sidebar | 260/76px rail | Drawer `min(86vw,320px)` | Same drawer |
+| Brand / logo | Wordmark → home | Logo → home (top bar) | Logo → home (top bar) |
+| Dashboard feed | 3–5 cols | 2 cols | **1 col** |
+| Sidebar player | Rail player | Fluid, in drawer | Fluid, in drawer (no clip) |
+| Settings | Bento grid | Stacked | Single column, ≥44px targets |
+| Collections | Multi-col | Reflowed | Single column |
+| Ask | Main + history | Single column | Single column |
+| MemoDetail | Content + 384px chat | Content + chat slide-over | Single pane + chat sheet |
+| Add / Appearance panel | Right panel (296px) | Bottom sheet | Bottom sheet |
+| Search / lightbox | Full-screen overlay | Full-screen | Full-screen + safe-area |
+| `+` FAB | bottom-right 16px | + safe-area | + safe-area, clears top bar |
+
+### Alternatives considered
+
+| Option | Why rejected |
+|--------|--------------|
+| **A separate mobile version (second component set or route tree)** | Doubles the work and drifts: every desktop change has to be redone for mobile. The user's explicit goal is the opposite — change a page once, both sizes follow. One responsive codebase delivers that; two do not. |
+| **Hand-tune each page's mobile CSS against its current markup** | Couples mobile to layouts that are still changing (esp. MemoDetail), so it breaks at the next redesign. Reflow by role (main + collapsible side panel) through a shared helper instead. |
+| **Keep the static rail, just make it narrower on phones** | A fixed rail at any width still steals scarce phone space and crushes the feed. Off-canvas frees the full width and is the expected mobile pattern. |
+| **Full-bleed `100vw` sidebar drawer** | No visible dismiss target; feels like navigating to a page. `min(86vw,320px)` over a scrim keeps "tap to close" and gives collections + player more room than the desktop rail. |
+| **Just add a `640:1` feed breakpoint and call it done** | Fixes one symptom; leaves the sidebar, player crop, brand, and every other page unaddressed. The ask is the whole app. |
+| **Fix the player crop with a phone-only media query** | The clip also happens under desktop zoom. The real fix is fluid sizing (`min-width:0` + `clamp` + wrap), which covers both. |
+| **New scattered `max-width` literals per component** | That is exactly the 720/900/1100 drift we already have. One token scale, read by CSS and the hook. |
+
+### Consequences
+
+- **New shared pieces:** a breakpoint token set (CSS) + `useBreakpoint()`/`useIsMobile()` hook (JS) as the one source of truth; a `MobileTopBar` + drawer scrim; a small two-pane helper for "main + side panel" pages (Ask, MemoDetail, future); `mobileDrawerOpen` state (reusing the store's already-present-but-unused `sidebarOpen`/`toggleSidebar`).
+- **Every page gets a phone layout**, per the table above — this is whole-app responsiveness, not a single fix.
+- **Desktop redesigns carry to mobile automatically** for any page built from the shared helper and the breakpoint hook — the explicit safety net for the MemoDetail rework and anything after it.
+- **Player crop fixed at the root** (`min-width:0` + `clamp` + wrap) — the 90%-zoom workaround is gone on every screen.
+- **Brand navigates home everywhere;** collapse moves to its own control (`Sidebar.tsx` + mobile top bar).
+- **Touch + safe-area:** Lenis off on touch; `viewport-fit=cover` + `env(safe-area-inset-*)` on fixed chrome; ≥44px targets.
+- **Preserves ADR-005/006** (player internals, three-zone sidebar) and **ADR-008** (one `matchMedia` subscription, drawer animates with `transform` — no resize thrash, no reflow on open).
+- **Coexists with the dashboard's infinite scroll** now landing on a parallel branch (`useInfiniteQuery` + a 1px `IntersectionObserver` sentinel, slim `load_only` payload): the sentinel rides the real `.om-main` scroll, so Lenis-off on touch leaves native scroll driving it, and the 1-column stack still positions it. When that branch merges, the "Dashboard uses `useQuery`" note above is superseded — the layout decisions are unaffected.
+- **Status is Proposed.** Nothing is built yet. Suggested order: (1) breakpoint source + shell drawer + top bar + logo-home; (2) feed 1-col; (3) player fluidity; (4) Settings / Collections / Ask single-column; (5) the two-pane helper + MemoDetail; (6) modals → sheets + safe-area. Each step is checkable against the per-page table.
+
+---
+
 ## ADR-008 — Performance is a request-path discipline: never block the event loop, index for scale, keep liveness dependency-free
 
 **Date:** 2026-06-04 · **Status:** Accepted · **Relates to:** ADR-002 (Ollama + headless browser ship inside the API image)
