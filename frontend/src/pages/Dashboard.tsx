@@ -1,5 +1,5 @@
-import { useMemo } from 'react';
-import { useQuery } from '@tanstack/react-query';
+import { useMemo, useRef, useEffect } from 'react';
+import { useQuery, useInfiniteQuery } from '@tanstack/react-query';
 import { motion } from 'framer-motion';
 import {
   DndContext,
@@ -103,19 +103,45 @@ export function Dashboard() {
     queryFn: collectionApi.list,
   });
 
-  const { data, isLoading } = useQuery({
+  const {
+    data,
+    isLoading,
+    fetchNextPage,
+    hasNextPage,
+    isFetchingNextPage,
+  } = useInfiniteQuery({
     queryKey: ['memos', activeFilter, activeCollection],
-    queryFn: () => {
-      const params: { type?: string; collection_id?: string } = {};
+    queryFn: ({ pageParam }) => {
+      const params: { type?: string; collection_id?: string; offset?: number } = {};
       if (activeFilter !== 'all') params.type = activeFilter;
       if (activeCollection) params.collection_id = activeCollection;
+      params.offset = pageParam;
       return memoApi.list(params);
+    },
+    initialPageParam: 0,
+    getNextPageParam: (lastPage) => {
+      const next = lastPage.offset + lastPage.limit;
+      return next < lastPage.total ? next : undefined;
     },
     staleTime: 5 * 60 * 1000,
     gcTime: 10 * 60 * 1000,
   });
 
-  const memos = data?.items || [];
+  const memos = data?.pages.flatMap((p) => p.items) ?? [];
+
+  const sentinelRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const el = sentinelRef.current;
+    if (!el) return;
+    const observer = new IntersectionObserver(
+      ([entry]) => {
+        if (entry.isIntersecting && hasNextPage && !isFetchingNextPage) fetchNextPage();
+      },
+      { rootMargin: '300px' },
+    );
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, [hasNextPage, isFetchingNextPage, fetchNextPage]);
 
   const collection = activeCollection
     ? collections.find((c: Collection) => c.id === activeCollection)
@@ -164,7 +190,16 @@ export function Dashboard() {
           <p>Loading Memos…</p>
         </div>
       ) : (
-        <MemoGrid memos={memos} />
+        <>
+          <MemoGrid memos={memos} />
+          <div ref={sentinelRef} style={{ height: 1 }} />
+          {isFetchingNextPage && (
+            <div className="om-empty">
+              <div className="om-empty-mark"><Icon name="refresh" size={24} /></div>
+              <p>Loading more…</p>
+            </div>
+          )}
+        </>
       )}
     </>
   );
