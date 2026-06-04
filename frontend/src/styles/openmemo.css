@@ -43,6 +43,7 @@
   --shadow-card-hover: 0 1px 0 rgba(255,255,255,0.08) inset, 0 12px 32px rgba(0,0,0,0.5), 0 0 0 1px rgba(255,255,255,0.06);
   --shadow-elev:       0 1px 0 rgba(255,255,255,0.05) inset, 0 24px 64px rgba(0,0,0,0.55);
   --grain: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='180' height='180'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2'/%3E%3CfeColorMatrix values='0 0 0 0 1 0 0 0 0 1 0 0 0 0 1 0 0 0 0.045 0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+  --audio-frame-bg: #3a3a3e;
 }
 [data-theme="light"] {
   --bg:        color-mix(in oklab, var(--accent) 5%, #EFEAE0);
@@ -63,6 +64,7 @@
   --shadow-card-hover: 0 1px 0 rgba(255,255,255,0.8) inset, 0 16px 36px rgba(20,18,14,0.08), 0 0 0 1px rgba(20,18,14,0.05);
   --shadow-elev:       0 1px 0 rgba(255,255,255,0.6) inset, 0 24px 60px rgba(20,18,14,0.16);
   --grain: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='180' height='180'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2'/%3E%3CfeColorMatrix values='0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0.04 0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+  --audio-frame-bg: var(--bg-rail);
 }
 [data-theme="hi"] {
   --bg:        color-mix(in oklab, var(--accent) 3%, #000);
@@ -81,6 +83,7 @@
   --shadow-card-hover: 0 0 0 1px rgba(255,255,255,0.32), 0 12px 32px rgba(0,0,0,0.7);
   --shadow-elev:       0 0 0 1px rgba(255,255,255,0.22), 0 24px 64px rgba(0,0,0,0.8);
   --grain: none;
+  --audio-frame-bg: #2e2e32;
 }
 
 /* Density */
@@ -2319,7 +2322,7 @@ input, textarea { font: inherit; color: inherit; }
    swaps state, so the waveform always follows the theme (no muddy oklab text-mix). */
 .om-card-audio .om-audio-frame {
   position: relative; aspect-ratio: 16 / 10; display: grid; place-items: center;
-  background-color: color-mix(in oklab, var(--accent) 7%, var(--bg-rail));
+  background-color: color-mix(in oklab, var(--accent) 18%, var(--audio-frame-bg));
   border-radius: var(--r-xl) var(--r-xl) 0 0;
   overflow: hidden;
 }
@@ -2331,7 +2334,7 @@ input, textarea { font: inherit; color: inherit; }
   transition: color .25s ease;
 }
 .om-card-audio.is-active .om-audio-frame {
-  background-color: color-mix(in oklab, var(--accent) 14%, var(--bg-rail));
+  background-color: color-mix(in oklab, var(--accent) 30%, var(--audio-frame-bg));
 }
 .om-card-audio.is-active .om-wave-canvas {
   color: var(--accent);
