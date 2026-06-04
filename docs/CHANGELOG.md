@@ -11,6 +11,8 @@ no longer drags the UI or the container's reported health down with it.
 
 ### Fixed
 
+- 🎨 **Voice memo waveform tile ignored dark/light theme.** A hardcoded warm-beige gradient (`TINT_FALLBACK`) was applied as an inline style on `.om-audio-frame`, overriding the CSS class background entirely — so the tile always rendered the same beige regardless of theme. Removed the inline style and added a `--audio-frame-bg` CSS variable per theme (mid-gray `#3a3a3e` for dark, warm `--bg-rail` for light, `#2e2e32` for hi-contrast) mixed with the user's accent color at 18% (30% when playing). The waveform tile now adapts to dark/light mode and picks up the chosen accent tint.
+
 - ⚡ **Home page hung ~15s on "Loading Memos…".** The sidebar's `/api/stats` call walked the whole `files/` directory (GBs, slow over a Docker-for-Windows bind mount) **synchronously inside an async handler**, freezing uvicorn's single event loop, so the fast memo query (~0.5s) queued behind it. Storage sizes are now opt-in (`?include_storage=true`, used only by Settings), computed via `asyncio.to_thread` (never blocks the loop), and cached 60s. The sidebar's per-page call returns counts only. Measured on 85 memos / 1.1 GB: stats 20s → 0.27s, and the memo query stays ~0.38s even while the storage walk runs.
 - 🔌 **A down Ollama stalled the UI and faked container ill-health.** The container healthcheck hit `/api/health`, which probed Ollama with a 10s connect timeout, so an offline LLM marked the API unhealthy and added a ~13s stall to the Settings page (plus ~8.6k pointless Ollama probes a day). Liveness is now a dependency-free `/api/ping` and the healthcheck points there. `/api/health` (Settings only) probes Ollama on demand with a ~1.5s timeout and a 15s cache.
 
