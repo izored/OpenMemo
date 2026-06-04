@@ -100,6 +100,30 @@ def derive_audio_kind(memo, explicit: str | None = None) -> str | None:
     return "music"
 
 
+# Memo types eligible for AI summarization (ADR-007). EDIT THIS SET to change
+# which types can be summarized — single source of truth, mirrored on the
+# frontend (`media.ts` SUMMARIZABLE_TYPES). Music audio is excluded separately
+# in can_summarize (a song is not summarizable text), regardless of this set.
+SUMMARIZABLE_TYPES = {
+    "note", "link", "article", "video", "audio", "document", "code", "file",
+}
+
+
+def can_summarize(memo) -> bool:
+    """Whether a memo is eligible for an AI summary (ADR-007).
+
+    True only when the memo has text AND a summarizable type AND is not music.
+    Music (audio_kind == 'music') is always excluded — summarizing a song's
+    transcript/lyrics is meaningless; voice memos (spoken word) are eligible.
+    Mirrors the frontend `canSummarize` so the API refuses what the UI hides.
+    """
+    if not getattr(memo, "content_text", None):
+        return False
+    if derive_audio_kind(memo) == "music":
+        return False
+    return (getattr(memo, "type", None) or "").lower() in SUMMARIZABLE_TYPES
+
+
 # Types the sorter is allowed to overwrite. We never touch a memo whose current
 # type isn't in this set (defensive — keeps unknown/custom types intact).
 _KNOWN_TYPES = {

@@ -7,6 +7,103 @@ the decision, and its consequences, so a future reader knows *why*, not just
 
 ---
 
+## ADR-007 — AI Summary eligibility is one predicate, gated by memo type and audio kind (music excluded)
+
+**Date:** 2026-06-03 · **Status:** Accepted · **Builds on:** ADR-001 (systematic per-type, centralized), ADR-003 (eligibility-predicate pattern), ADR-004 (where summary was born), ADR-005 (voice vs music split)
+
+### Context
+
+On-demand AI summary shipped inside ADR-004 as a *subsection* of the transcript
+work ("On-demand, multi-mode summary"). That was the wrong home, and it left a
+gap: unlike "Make it local" (ADR-003), summary never got an **eligibility
+decision**. Its only gate, at both render sites, was *"does the memo have
+text?"*:
+
+- Frontend (`MemoDetail.tsx`): `{!isEditing && memo.content_text && <SummaryPanel/>}`
+- Backend (`memos.py` `/summary`): `if not memo.content_text: raise 400`
+
+So **any** memo carrying `content_text` showed the panel — including **music**.
+A music memo with a pulled/transcribed track (or any text in `content_text`)
+rendered an "AI Summary" with Timestamp/Insights/Essay modes. Summarizing a
+song's transcript or lyrics is meaningless; the reported symptom ("AI Summary
+shows where it shouldn't, e.g. a music memo") is the direct result of summary
+never having an eligibility predicate the way every other capability does.
+
+This is the same disease ADR-003 cured for "Make it local" (a panel appearing on
+types where it has no meaning), left untreated for summary — and ADR-005 already
+gave us the exact tool to fix it cleanly: the `voice` vs `music` axis.
+
+### Decision
+
+**AI Summary eligibility is a single predicate, gated by memo type and (for
+audio) the `audio_kind` sub-kind. Summary is NOT a property of transcript — it
+applies to any text-bearing memo — so it gets its own ADR and its own
+predicate**, mirrored on both ends so the API refuses exactly what the UI hides.
+
+**1. One predicate, two mirrors, one editable type set.**
+
+- Frontend: `canSummarize(memo)` in `lib/media.ts`, reading an exported
+  `SUMMARIZABLE_TYPES` set.
+- Backend: `can_summarize(memo)` in `core/classify.py`, reading a
+  `SUMMARIZABLE_TYPES` set; consulted by the `/summary` endpoint.
+
+Each is `has-text AND type-is-summarizable AND not-music`. Changing *which types*
+qualify is a one-line edit to the set on each end — deliberately wired so the
+policy can be flipped quickly without touching render logic (the explicit ask).
+
+**2. Music is always excluded; voice is always eligible.** The exclusion keys off
+ADR-005's `audio_kind`: `music` (uploaded file or linked SoundCloud/Bandcamp/…)
+never summarizes; `voice` (spoken-word mic recording) does. The frontend reuses
+`isMusic(memo)`; the backend reuses `derive_audio_kind(memo)`. No new heuristic.
+
+**3. Eligibility matrix.**
+
+| Memo type | Summary? | Why |
+|-----------|----------|-----|
+| `video` | ✅ | transcript / platform description |
+| `audio` · **voice** | ✅ | spoken word — summarizes like a talk |
+| `audio` · **music** | ❌ | a song; transcript/lyrics aren't a summarizable argument |
+| `article` / `link` | ✅ | extracted page text |
+| `document` / `file` | ✅ | extracted text content |
+| `code` | ✅ | a plain-language overview of a source file is useful |
+| `note` | ✅ | low value (self-authored) but harmless; kept for now |
+| `image` | ✅ (auto-skips) | no `content_text`, so `canSummarize` is false anyway |
+
+The set currently admits **all text-bearing types except music** — the minimal
+change that fixes the bug while removing nothing the user relies on. The set is
+the lever for tightening later (e.g. dropping `note`).
+
+**4. Mode availability is unchanged and now consistent.** `timestamp` mode stays
+offered only for `video`/`audio`; since music can no longer reach the panel, the
+only audio that gets timestamp mode is voice, whose transcript carries the inline
+`[mm:ss]` markers the mode depends on (ADR-004). No mode can be requested for
+content that lacks its prerequisite.
+
+### Alternatives considered
+
+| Option | Why rejected |
+|--------|--------------|
+| **Keep the `content_text`-only gate** | The root bug — "has text" is not "is summarizable". Music has text; it still must not summarize. |
+| **Hardcode `type !== 'audio'`** | Wrong — it would kill summary for *voice* memos (spoken word, the ideal summary target) while a future music-only carve-out would still be scattered. The axis is voice/music, not the audio type. |
+| **Scatter the type checks at each render site** | Violates ADR-001/ADR-003 — gates drift. One predicate per end, read everywhere. |
+| **Frontend-only gate** | The API would still summarize music if called directly; defense-in-depth and parity with the existing `content_text` backend check argue for mirroring. |
+| **Leave it folded under ADR-004** | The omission of an eligibility decision is *why* the bug existed. Summary spans articles/links/docs, not just transcripts — it earns its own record. |
+
+### Consequences
+
+- The reported leak is structurally impossible: a music memo can never render the
+  AI Summary panel, and the `/summary` endpoint 400s if called for one.
+- New predicates `canSummarize` / `can_summarize` join `canMakeLocal` /
+  `canTranscript` as the family of single-source eligibility gates.
+- Which types qualify is one editable set per end — quick to change, as asked.
+- Voice memos keep summary; nothing else text-bearing loses it.
+- **Adjacent, not addressed here:** music is still *transcribable*
+  (`canTranscript` admits all audio). Transcribing a song is the same kind of
+  mismatch; a follow-up may gate transcription by `audio_kind` too. ADR-005
+  already defers real lyrics support to its own track.
+
+---
+
 ## ADR-006 — Sidebar is a fixed three-zone column; only the collections list scrolls
 
 **Date:** 2026-06-03 · **Status:** Accepted · **Relates to:** ADR-005 (the sidebar hosts the now-playing player)

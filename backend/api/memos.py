@@ -626,10 +626,13 @@ async def generate_memo_summary(
     memo = await db.get(Memo, memo_id)
     if not memo:
         raise HTTPException(status_code=404, detail="Memo not found")
-    
-    if not memo.content_text:
-        raise HTTPException(status_code=400, detail="Memo has no content to summarize")
-    
+
+    # Eligibility is one predicate, shared with the frontend (ADR-007): refuse
+    # music and non-summarizable types so the API can't be summoned past the UI.
+    from backend.core.classify import can_summarize
+    if not can_summarize(memo):
+        raise HTTPException(status_code=400, detail="This memo can't be summarized")
+
     from backend.core.rag import generate_summary
     summary = await generate_summary(memo.content_text, mode=body.mode)
 
