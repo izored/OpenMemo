@@ -174,7 +174,9 @@ function Chrome({
         </div>
       )}
       {confirmOverlay}
-      <AnimatePresence initial={false}>{playerOverlay}</AnimatePresence>
+      {/* No `initial={false}` — it propagates via PresenceContext and makes the
+          child skip its enter tween (pop-in). We want the enter animated too. */}
+      <AnimatePresence>{playerOverlay}</AnimatePresence>
       <div className="om-card-actions">
         {onOpen && (
           <button className="om-action" onClick={onOpen} title="Open memo page" aria-label="Open memo">
