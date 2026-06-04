@@ -82,7 +82,10 @@ export function Sidebar() {
   });
   const { data: stats } = useQuery({
     queryKey: ['stats'],
-    queryFn: systemApi.stats,
+    // No storage flag — the sidebar only needs total_memos. Passing systemApi.stats
+    // directly would hand React Query's context object in as includeStorage (truthy)
+    // and trigger the expensive filesystem walk on every page.
+    queryFn: () => systemApi.stats(),
   });
   const { data: appSettings } = useQuery({
     queryKey: ['settings'],

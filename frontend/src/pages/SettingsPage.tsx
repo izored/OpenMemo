@@ -233,7 +233,7 @@ export function SettingsPage() {
       })
       .catch(() => setOllamaConnected(false));
     systemApi.models().then((d) => setOllamaModels(d.models || [])).catch(() => setOllamaModels([]));
-    systemApi.stats().then(setStats).catch(() => setStats(null));
+    systemApi.stats(true).then(setStats).catch(() => setStats(null));
     settingsApi.get()
       .then((s) => {
         setMaxUploadMb(s.max_upload_mb);
@@ -713,7 +713,7 @@ export function SettingsPage() {
                     if (!confirm('Delete all cached thumbnail previews? They re-cache automatically.')) return;
                     try {
                       const r = await maintenanceApi.clearCache();
-                      systemApi.stats().then(setStats).catch(() => {});
+                      systemApi.stats(true).then(setStats).catch(() => {});
                       alert(`Cleared ${fmtBytes(r.freed_bytes)} of cached previews.`);
                     } catch { alert('Failed to clear cache.'); }
                   }}
