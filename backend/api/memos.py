@@ -9,7 +9,7 @@ from fastapi import APIRouter, BackgroundTasks, Body, Depends, HTTPException, Qu
 from fastapi.responses import FileResponse, StreamingResponse
 from sqlalchemy import select, func, desc, asc
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.orm import selectinload
+from sqlalchemy.orm import selectinload, load_only
 from pydantic import BaseModel
 
 from backend.db.database import get_db
@@ -111,6 +111,13 @@ async def list_memos(
         workspace_id = sanitize_workspace_id(workspace_id)
     """List memos with filtering and pagination."""
     query = select(Memo).options(
+        load_only(
+            Memo.id, Memo.type, Memo.title, Memo.description, Memo.content_text,
+            Memo.source_url, Memo.source_domain, Memo.source_favicon,
+            Memo.thumbnail_path, Memo.file_path, Memo.ai_summary, Memo.notes,
+            Memo.sort_order, Memo.pinned, Memo.audio_kind, Memo.is_processed,
+            Memo.created_at, Memo.updated_at, Memo.recency_at,
+        ),
         selectinload(Memo.collections),
         selectinload(Memo.tags),
     )
