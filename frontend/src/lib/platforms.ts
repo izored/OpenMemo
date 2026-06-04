@@ -30,6 +30,8 @@ interface PlatformDef extends PlatformMeta {
   /** Substrings matched against the (www-stripped, lowercased) hostname. */
   hosts: string[];
   embed?: EmbedFn;
+  /** Portrait platforms (Instagram, TikTok) need a 9/16 container, not 16/9. */
+  embedOrientation?: 'portrait';
 }
 
 // Parent domain Twitch's player requires. In the browser this is whatever host
@@ -76,6 +78,7 @@ const PLATFORMS: PlatformDef[] = [
     glyph: 'instagram',
     brandClass: 'om-brand-instagram',
     hosts: ['instagram.com'],
+    embedOrientation: 'portrait',
     embed: (_raw, u) => {
       // /p/{code}/, /reel/{code}/, /tv/{code}/ — embed works for all three.
       const m = u.pathname.match(/\/(p|reel|tv)\/([^/?#]+)/);
@@ -88,6 +91,7 @@ const PLATFORMS: PlatformDef[] = [
     glyph: 'tiktok',
     brandClass: 'om-brand-tiktok',
     hosts: ['tiktok.com'],
+    embedOrientation: 'portrait',
     embed: (_raw, u) => {
       // Needs the numeric video id (only present in full /video/{id} URLs;
       // vm.tiktok.com short links don't carry it → fallback).
@@ -218,6 +222,17 @@ export function videoEmbedUrl(memo: Memo): string | null {
   } catch {
     return null;
   }
+}
+
+/**
+ * CSS aspect-ratio value for a video embed container.
+ * Portrait platforms (Instagram, TikTok) return '9/16'; everything else '16/9'.
+ */
+export function embedAspectRatio(memo: Memo): '9/16' | '16/9' {
+  const url = memo.source_url;
+  if (!url) return '16/9';
+  const def = defFor(url);
+  return def?.embedOrientation === 'portrait' ? '9/16' : '16/9';
 }
 
 /** True if we can play this memo somewhere (local file or a platform embed). */

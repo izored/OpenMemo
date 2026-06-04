@@ -1,9 +1,9 @@
-import { useEffect } from 'react';
+import { useEffect, type CSSProperties } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Icon } from './Icon';
 import { useAppStore } from '@/stores/appStore';
 import { mediaSrc } from '@/lib/media';
-import { videoEmbedUrl } from '@/lib/platforms';
+import { videoEmbedUrl, embedAspectRatio } from '@/lib/platforms';
 
 // Single shared lightbox for the whole app. Reads the active media group +
 // index from the store so arrow keys / on-screen arrows page between memos.
@@ -35,6 +35,11 @@ export function Lightbox() {
   const localVideo = memo.type === 'video' && memo.file_path ? `/api/memos/${memo.id}/file` : null;
   const embed = memo.type === 'video' && !localVideo ? videoEmbedUrl(memo) : null;
   const hasPrevNext = group.length > 1;
+  const ratio = embed ? embedAspectRatio(memo) : '16/9';
+  const isPortrait = ratio === '9/16';
+  const embedStyle: CSSProperties = isPortrait
+    ? { height: 'min(85vh, 720px)', aspectRatio: '9/16', width: 'auto', border: 0, borderRadius: 12, boxShadow: '0 30px 80px rgba(0,0,0,0.5)' }
+    : { width: 'min(90vw, 1280px)', aspectRatio: '16/9', border: 0, borderRadius: 12, boxShadow: '0 30px 80px rgba(0,0,0,0.5)' };
 
   return (
     <div className="om-lightbox" role="dialog" aria-modal="true" onClick={close}>
@@ -57,7 +62,7 @@ export function Lightbox() {
             allowFullScreen
             scrolling="no"
             onClick={(e) => e.stopPropagation()}
-            style={{ width: 'min(90vw, 1280px)', aspectRatio: '16/9', border: 0, borderRadius: 12, boxShadow: '0 30px 80px rgba(0,0,0,0.5)' }}
+            style={embedStyle}
           />
         ) : (
           <div className="om-lightbox-empty" onClick={(e) => e.stopPropagation()}>

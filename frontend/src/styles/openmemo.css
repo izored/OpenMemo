@@ -1210,6 +1210,8 @@ input, textarea { font: inherit; color: inherit; }
 .om-image-memo img  { width: 100%; display: block; }
 .om-video-embed     { aspect-ratio: 16/9; border-radius: var(--r-xl); overflow: hidden; background: var(--surface-3); }
 .om-video-embed iframe { width: 100%; height: 100%; display: block; }
+/* Portrait platforms (Instagram Reels, TikTok) — constrain width, center */
+.om-video-embed--portrait { max-width: 400px; margin-left: auto; margin-right: auto; }
 
 /* Web preview card (full-width article/link detail) */
 .om-web-card        { background: var(--surface-2); border: 1px solid var(--border);

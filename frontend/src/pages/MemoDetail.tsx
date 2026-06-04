@@ -37,7 +37,7 @@ import { MarkdownEditor } from '@/components/MarkdownEditor';
 import { memoApi, collectionApi } from '@/lib/api';
 import { AskMemoPanel } from '@/components/AskMemoPanel';
 import { audioEmbed, canMakeLocal, canTranscript, canSummarize, audioKind } from '@/lib/media';
-import { videoEmbedUrl } from '@/lib/platforms';
+import { videoEmbedUrl, embedAspectRatio } from '@/lib/platforms';
 import { useAudioPlayer, formatTime } from '@/lib/audioPlayer';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
@@ -832,6 +832,7 @@ export function MemoDetail() {
   // platform in the registry — YouTube, Vimeo, Instagram, TikTok, etc. Null →
   // no embeddable player; the "Make it local" panel + Open Original still show.
   const videoEmbed = memo.type === 'video' && !memo.file_path ? videoEmbedUrl(memo) : null;
+  const videoEmbedRatio = videoEmbed ? embedAspectRatio(memo) : '16/9';
   const isWebType = memo.type === 'article' || memo.type === 'link';
 
   return (
@@ -1106,7 +1107,10 @@ export function MemoDetail() {
 
             {/* Inline platform embed (YouTube, Vimeo, Instagram, TikTok, …) */}
             {videoEmbed && !isEditing && (
-              <div className="om-video-embed" style={{ marginBottom: '24px' }}>
+              <div
+                className={`om-video-embed${videoEmbedRatio === '9/16' ? ' om-video-embed--portrait' : ''}`}
+                style={{ marginBottom: '24px', aspectRatio: videoEmbedRatio }}
+              >
                 <iframe
                   src={videoEmbed}
                   allow="autoplay; encrypted-media; picture-in-picture; fullscreen"
@@ -1115,6 +1119,14 @@ export function MemoDetail() {
                   title={memo.title}
                 />
               </div>
+            )}
+
+            {/* Portrait-platform hint: Instagram/TikTok embeds carry full platform UI.
+                Nudge user toward Make it Local for a clean native player. */}
+            {videoEmbed && !isEditing && videoEmbedRatio === '9/16' && canMakeLocal(memo) && !memo.file_path && (
+              <p className="om-detail-desc" style={{ marginBottom: 16, marginTop: -8 }}>
+                Want just the video without the platform UI? Save locally below for a clean native player.
+              </p>
             )}
 
             {/* (Audio remote handling moved into the unified audio block above.) */}
