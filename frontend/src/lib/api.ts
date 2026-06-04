@@ -22,7 +22,7 @@ export const memoApi = {
     if (params?.search) search.set('search', params.search);
     if (params?.offset) search.set('offset', String(params.offset));
     if (params?.limit) search.set('limit', String(params.limit));
-    return fetchJSON<{ items: any[]; total: number }>(`/memos?${search}`);
+    return fetchJSON<{ items: any[]; total: number; offset: number; limit: number }>(`/memos?${search}`);
   },
   get: (id: string) => fetchJSON<any>(`/memos/${id}`),
   create: (data: any) => fetchJSON<{ id: string }>('/memos', { method: 'POST', body: JSON.stringify(data) }),
