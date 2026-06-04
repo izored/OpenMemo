@@ -3,6 +3,23 @@
 All notable changes to OpenMemo are documented here.
 
 ---
+## [2.2.0] - Unreleased
+
+Performance + resilience pass. The home page used to sit on "Loading Memos…"
+for ~15s; it now paints in well under a second, and a missing or sleeping Ollama
+no longer drags the UI or the container's reported health down with it.
+
+### Fixed
+
+- ⚡ **Home page hung ~15s on "Loading Memos…".** The sidebar's `/api/stats` call walked the whole `files/` directory (GBs, slow over a Docker-for-Windows bind mount) **synchronously inside an async handler**, freezing uvicorn's single event loop, so the fast memo query (~0.5s) queued behind it. Storage sizes are now opt-in (`?include_storage=true`, used only by Settings), computed via `asyncio.to_thread` (never blocks the loop), and cached 60s. The sidebar's per-page call returns counts only. Measured on 85 memos / 1.1 GB: stats 20s → 0.27s, and the memo query stays ~0.38s even while the storage walk runs.
+- 🔌 **A down Ollama stalled the UI and faked container ill-health.** The container healthcheck hit `/api/health`, which probed Ollama with a 10s connect timeout, so an offline LLM marked the API unhealthy and added a ~13s stall to the Settings page (plus ~8.6k pointless Ollama probes a day). Liveness is now a dependency-free `/api/ping` and the healthcheck points there. `/api/health` (Settings only) probes Ollama on demand with a ~1.5s timeout and a 15s cache.
+
+### Changed
+
+- 🗂️ **Memo feed is indexed.** Added DB indexes for the list query (`memos(is_deleted, recency_at DESC, created_at DESC)`, `memos(type)`, `memos(workspace_id)`, `memo_collections(collection_id)`) so browsing stays fast into the thousands of memos. Created idempotently on startup.
+- 🩺 **Container healthcheck now uses `/api/ping`.** Pure liveness, no external dependencies; Ollama reachability is reported separately and lazily by `/api/health`.
+
+---
 ## [2.1.0] - Unreleased
 
 Audio grows up. Voice memos and music are now distinct, the player moves out of

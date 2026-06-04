@@ -1,4 +1,6 @@
 """OpenMemo - Local AI Knowledge OS powered by Ollama."""
+import asyncio
+import time
 import uuid
 from contextlib import asynccontextmanager
 from pathlib import Path
@@ -76,7 +78,26 @@ async def lifespan(app: FastAPI):
             await db.commit()
     except Exception as e:
         print(f"Schema migration warning (non-critical): {e}")
-    
+
+    # Performance indexes for the memo feed. Without these, every list/sort is a
+    # full table scan — fine at 60 memos, painful at thousands. Idempotent:
+    # CREATE INDEX IF NOT EXISTS is a no-op once built. The feed index matches the
+    # default query (WHERE is_deleted=0 ORDER BY recency_at DESC, created_at DESC).
+    try:
+        from sqlalchemy import text as _sql_text
+
+        async with AsyncSessionLocal() as db:
+            for stmt in (
+                "CREATE INDEX IF NOT EXISTS ix_memos_feed ON memos (is_deleted, recency_at DESC, created_at DESC)",
+                "CREATE INDEX IF NOT EXISTS ix_memos_type ON memos (type)",
+                "CREATE INDEX IF NOT EXISTS ix_memos_workspace ON memos (workspace_id)",
+                "CREATE INDEX IF NOT EXISTS ix_memo_collections_collection ON memo_collections (collection_id)",
+            ):
+                await db.execute(_sql_text(stmt))
+            await db.commit()
+    except Exception as e:
+        print(f"Index creation warning (non-critical): {e}")
+
     # Create default user and workspace if not exist
     async with AsyncSessionLocal() as db:
         from sqlalchemy import select
@@ -315,13 +336,55 @@ app.include_router(backup_router)
 app.include_router(settings_router)
 
 
+def _dir_size(path: Path) -> int:
+    """Recursive byte size of a file or directory. Blocking — call via a thread."""
+    if not path.exists():
+        return 0
+    if path.is_file():
+        try:
+            return path.stat().st_size
+        except OSError:
+            return 0
+    total = 0
+    for p in path.rglob("*"):
+        if p.is_file():
+            try:
+                total += p.stat().st_size
+            except OSError:
+                pass
+    return total
+
+
+def _compute_storage() -> dict:
+    db_bytes = _dir_size(settings.DATA_DIR / "openmemo.db")
+    files_bytes = _dir_size(settings.FILES_DIR)
+    cache_bytes = _dir_size(Path(settings.CHROMA_PERSIST_DIR))
+    return {
+        "db_bytes": db_bytes,
+        "files_bytes": files_bytes,
+        "cache_bytes": cache_bytes,
+        "total_bytes": db_bytes + files_bytes + cache_bytes,
+    }
+
+
+# Cache the storage walk: it rglob()s the whole files dir (can be GBs over a
+# Docker bind mount → ~20s) and the numbers barely move minute-to-minute.
+_storage_cache: dict = {"at": 0.0, "data": None}
+_STORAGE_TTL = 60.0
+
+
 @app.get("/api/stats")
-async def get_stats(db: AsyncSession = Depends(get_db)):
-    """Aggregate stats for the settings dashboard."""
-    from sqlalchemy import func, select, and_
+async def get_stats(include_storage: bool = False, db: AsyncSession = Depends(get_db)):
+    """Aggregate stats. Counts are cheap COUNT()s and always returned.
+
+    Storage sizes are an expensive filesystem walk, so they are opt-in
+    (`include_storage=true`, used by the Settings page), computed in a worker
+    thread (never blocks the event loop), and cached. The sidebar calls this on
+    every page for the memo count alone — it must stay instant.
+    """
+    from sqlalchemy import func, select
     from backend.db.models import Memo, Collection, Tag
     from datetime import datetime, timedelta
-    from pathlib import Path
 
     total_memos = (await db.execute(select(func.count()).select_from(Memo))).scalar() or 0
     total_collections = (await db.execute(select(func.count()).select_from(Collection))).scalar() or 0
@@ -337,45 +400,43 @@ async def get_stats(db: AsyncSession = Depends(get_db)):
     ).all()
     by_type = {row[0]: row[1] for row in by_type_rows}
 
-    def _size(path: Path) -> int:
-        if not path.exists():
-            return 0
-        if path.is_file():
-            try:
-                return path.stat().st_size
-            except OSError:
-                return 0
-        total = 0
-        for p in path.rglob("*"):
-            if p.is_file():
-                try:
-                    total += p.stat().st_size
-                except OSError:
-                    pass
-        return total
-
-    db_bytes = _size(settings.DATA_DIR / "openmemo.db")
-    files_bytes = _size(settings.FILES_DIR)
-    cache_bytes = _size(Path(settings.CHROMA_PERSIST_DIR))
-
-    return {
+    resp = {
         "total_memos": total_memos,
         "total_collections": total_collections,
         "total_tags": total_tags,
         "memos_this_week": memos_this_week,
         "by_type": by_type,
-        "storage": {
-            "db_bytes": db_bytes,
-            "files_bytes": files_bytes,
-            "cache_bytes": cache_bytes,
-            "total_bytes": db_bytes + files_bytes + cache_bytes,
-        },
     }
+
+    if include_storage:
+        now = time.monotonic()
+        if _storage_cache["data"] is None or (now - _storage_cache["at"]) > _STORAGE_TTL:
+            _storage_cache["data"] = await asyncio.to_thread(_compute_storage)
+            _storage_cache["at"] = now
+        resp["storage"] = _storage_cache["data"]
+
+    return resp
+
+
+@app.get("/api/ping")
+async def ping():
+    """Liveness probe — no external dependencies, never touches Ollama.
+
+    The container healthcheck (docker-compose.yml) uses THIS so a down Ollama
+    can't mark the API unhealthy: memos, search and browsing all work with the
+    LLM offline. Ollama reachability is a separate, on-demand concern reported
+    by /api/health (called only by the Settings page).
+    """
+    return {"status": "ok", "version": settings.VERSION}
 
 
 @app.get("/api/health")
 async def health_check():
-    """Health check endpoint."""
+    """Ollama reachability for the Settings UI — on-demand, fast, cached.
+
+    NOT a liveness signal (that's /api/ping). Probes Ollama with a short timeout
+    and a 15s result cache so a down LLM returns in ~1.5s instead of stalling.
+    """
     from backend.core.ollama_client import ollama_client
     
     ollama_status = await ollama_client.health_check()

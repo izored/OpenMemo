@@ -14,6 +14,12 @@ class OllamaClient:
         self._working_host: str | None = None
         self._host_cache_time: float = 0.0
         self._host_cache_ttl: float = 30.0
+        # Short-lived cache for the Settings reachability probe (see health_check).
+        # Separate from the working-host cache: this also remembers a *negative*
+        # result so a down Ollama isn't re-probed on every Settings render.
+        self._status_cache_val: bool = False
+        self._status_cache_time: float = 0.0
+        self._status_ttl: float = 15.0
 
     async def _get_working_host(self) -> str:
         """Return the first responsive Ollama host, with caching."""
@@ -45,13 +51,35 @@ class OllamaClient:
         return self.hosts[0]
 
     async def health_check(self) -> bool:
-        try:
-            host = await self._get_working_host()
-            async with httpx.AsyncClient(timeout=self.timeout) as client:
-                resp = await client.get(f"{host}/api/tags")
-                return resp.status_code == 200
-        except Exception:
-            return False
+        """Fast, cached Ollama reachability probe for the Settings UI.
+
+        Short timeout (~1.5s connect) and a 15s result cache so a down Ollama
+        never stalls the caller. This is NOT API liveness: the container
+        healthcheck hits /api/ping, which has no external dependencies. Memos,
+        search and browsing all work with Ollama offline, so it must never gate
+        the API. (The old path used a 10s connect timeout and double-probed via
+        _get_working_host, which is what made a down LLM cost ~13s.)
+        """
+        now = time.monotonic()
+        if self._status_cache_time and (now - self._status_cache_time) < self._status_ttl:
+            return self._status_cache_val
+
+        reachable = False
+        for host in self.hosts:
+            try:
+                async with httpx.AsyncClient(timeout=httpx.Timeout(2.0, connect=1.5)) as client:
+                    resp = await client.get(f"{host}/api/tags")
+                    if resp.status_code == 200:
+                        self._working_host = host
+                        self._host_cache_time = now
+                        reachable = True
+                        break
+            except Exception:
+                continue
+
+        self._status_cache_val = reachable
+        self._status_cache_time = now
+        return reachable
 
     async def list_models(self) -> list[dict]:
         host = await self._get_working_host()

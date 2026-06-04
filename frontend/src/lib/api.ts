@@ -204,12 +204,15 @@ export const searchApi = {
 export const systemApi = {
   health: () => fetchJSON<{ status: string; ollama_connected: boolean; version: string }>('/health'),
   models: () => fetchJSON<{ models: any[] }>('/models'),
-  stats: () => fetchJSON<{
+  // Storage sizes are an expensive server-side filesystem walk — only request
+  // them where they're shown (Settings). The sidebar omits the flag so its
+  // per-page memo-count fetch stays instant.
+  stats: (includeStorage = false) => fetchJSON<{
     total_memos: number;
     total_collections: number;
     total_tags: number;
     memos_this_week: number;
     by_type: Record<string, number>;
     storage?: { db_bytes: number; files_bytes: number; cache_bytes: number; total_bytes: number };
-  }>('/stats'),
+  }>(`/stats${includeStorage ? '?include_storage=true' : ''}`),
 };
