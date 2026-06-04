@@ -6,8 +6,13 @@ All notable changes to OpenMemo are documented here.
 ## [2.2.0] - Unreleased
 
 Performance + resilience pass. The home page used to sit on "Loading Memos…"
-for ~15s; it now paints in well under a second, and a missing or sleeping Ollama
-no longer drags the UI or the container's reported health down with it.
+for ~15s; it now paints in well under a second, a missing or sleeping Ollama
+no longer drags the UI or the container's reported health down with it, and the
+memo feed is now infinite-scroll so every saved memo is reachable.
+
+### Added
+
+- ♾️ **Infinite scroll for the memo feed.** The dashboard loads memos in pages of 50 via `useInfiniteQuery` with an `IntersectionObserver` sentinel 300 px below the grid — memos 51+ are now reachable by scrolling. Switching filter tabs or collections resets to page 1. The list query is trimmed with SQLAlchemy `load_only()` so heavy unused columns (`content_raw`, `summaries`, `embedding_ids`, `transcript_*`, `localize_status`) are no longer fetched per page.
 
 ### Fixed
 
