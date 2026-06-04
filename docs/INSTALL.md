@@ -389,5 +389,5 @@ The project uses forward slashes (`/`) in Python code and config, which work fin
 ## Need More Help?
 
 1. Check backend logs: `docker logs openmemo-api-1` or watch the uvicorn terminal
-2. Check health: `curl http://localhost:8000/api/health` (dev) or `curl http://localhost:8091/api/health` (Docker)
+2. Check liveness: `curl http://localhost:8000/api/ping` (dev) or `curl http://localhost:8091/api/ping` (Docker). Returns `{"status":"ok"}` with no Ollama dependency. `/api/health` additionally reports Ollama reachability (used by the Settings page).
 3. Verify Ollama: `curl http://localhost:11434/api/tags`

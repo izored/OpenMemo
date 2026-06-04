@@ -418,9 +418,25 @@ async def get_stats(include_storage: bool = False, db: AsyncSession = Depends(ge
     return resp
 
 
+@app.get("/api/ping")
+async def ping():
+    """Liveness probe — no external dependencies, never touches Ollama.
+
+    The container healthcheck (docker-compose.yml) uses THIS so a down Ollama
+    can't mark the API unhealthy: memos, search and browsing all work with the
+    LLM offline. Ollama reachability is a separate, on-demand concern reported
+    by /api/health (called only by the Settings page).
+    """
+    return {"status": "ok", "version": settings.VERSION}
+
+
 @app.get("/api/health")
 async def health_check():
-    """Health check endpoint."""
+    """Ollama reachability for the Settings UI — on-demand, fast, cached.
+
+    NOT a liveness signal (that's /api/ping). Probes Ollama with a short timeout
+    and a 15s result cache so a down LLM returns in ~1.5s instead of stalling.
+    """
     from backend.core.ollama_client import ollama_client
     
     ollama_status = await ollama_client.health_check()
