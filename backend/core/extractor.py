@@ -3,7 +3,7 @@ import re
 import json
 import base64
 from pathlib import Path
-from urllib.parse import urlparse, urljoin
+from urllib.parse import urlparse, urljoin, unquote
 
 import httpx
 from bs4 import BeautifulSoup
@@ -195,6 +195,52 @@ def _parse_html(html: str, base_url: str, url: str, domain: str) -> dict | None:
     }
 
 
+# Content-types that map to a non-media memo type (image/audio/video are handled
+# by their MIME prefix). Extends the extension-based path for extensionless URLs.
+_CTYPE_CAT = {"application/pdf": "document"}
+
+
+def _direct_media_memo(url: str, domain: str, ctype: str | None = None) -> dict | None:
+    """Build a memo dict for a URL that points straight at a file, else None.
+
+    A direct file link (https://site/photo.jpg, /track.mp3, /paper.pdf) is NOT a
+    web page; scraping it as HTML yields a blank card (no OG tags, no readable
+    body). Detect it by path extension first (no network), then by an
+    already-fetched Content-Type (covers extensionless URLs). An image renders
+    immediately via thumbnail_path (the remote URL, cached locally afterwards);
+    audio/video/document keep source_url so the card files correctly and
+    auto-download / "Make it local" can pull a playable copy (ADR-003/005)."""
+    from backend.core.security.upload import categorize_extension
+
+    path = urlparse(url).path
+    cat: str | None = None
+    ext = Path(path).suffix.lower()
+    if ext:
+        c = categorize_extension(ext)
+        if c in ("image", "video", "audio", "document"):
+            cat = c
+    if cat is None and ctype:
+        ct = ctype.split(";")[0].strip().lower()
+        if ct in _CTYPE_CAT:
+            cat = _CTYPE_CAT[ct]
+        elif ct.startswith(("image/", "audio/", "video/")):
+            cat = ct.split("/", 1)[0]
+    if cat is None:
+        return None
+
+    name = unquote(Path(path).name) or domain
+    return {
+        "title": name,
+        "description": "",
+        "content_text": "",
+        "source_url": url,
+        "source_domain": domain,
+        "source_favicon": f"https://www.google.com/s2/favicons?domain={domain}&sz=32",
+        "thumbnail_path": url if cat == "image" else "",
+        "type": cat,
+    }
+
+
 async def extract_url(url: str) -> dict:
     """Extract content from a URL (article, page).
 
@@ -204,6 +250,13 @@ async def extract_url(url: str) -> dict:
     real headless browser past the challenge -- no Microlink, no paid API."""
     parsed_url = urlparse(url)
     domain = parsed_url.netloc.lstrip("www.")
+
+    # Direct file link (…/photo.jpg, …/track.mp3, …/paper.pdf) — not a web page.
+    # File it from the extension so it renders/files correctly instead of
+    # scraping to a blank card. No network needed.
+    direct = _direct_media_memo(url, domain)
+    if direct is not None:
+        return direct
 
     async with httpx.AsyncClient(
         timeout=30.0,
@@ -221,6 +274,11 @@ async def extract_url(url: str) -> dict:
         try:
             resp = await client.get(url)
             resp.raise_for_status()
+            # Extensionless direct media (a CDN URL with no suffix) — catch it
+            # from the Content-Type now that the response is in hand.
+            direct = _direct_media_memo(url, domain, resp.headers.get("content-type"))
+            if direct is not None:
+                return direct
             # Only a real 200 carries real content; a 2xx-but-not-200 is a
             # challenge interstitial (Cloudflare managed challenge -> HTTP 202 +
             # JS stub). Route anything non-200, or a 200 that renders to nothing,
