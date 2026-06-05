@@ -148,7 +148,7 @@ input, textarea { font: inherit; color: inherit; }
 /* Slow crossfade all UI color tokens during theme switch — scoped to transition window only */
 .om-app.theme-transitioning,
 .om-app.theme-transitioning * {
-  transition: background-color 3s ease, color 3s ease, border-color 3s ease, box-shadow 3s ease !important;
+  transition: background-color 3s ease, color 3s ease, border-color 3s ease, box-shadow 3s ease, filter 3s ease !important;
 }
 /* Bug B fix (ENTRY OPNMMO-0007): the background blob (::before) is NOT matched
    by the `*` rule above, so during a theme flip it keeps its own
@@ -1084,7 +1084,8 @@ input, textarea { font: inherit; color: inherit; }
 .om-note-page p { margin: 0; white-space: pre-line; }
 .om-detail-meta { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
 .om-type-pill { font-size: 10.5px; padding: 4px 8px; border-radius: 999px; background: var(--accent); color: #0A0A0C; }
-.om-source { display: inline-flex; align-items: center; gap: 6px; font-size: 11px; color: var(--text-2); padding: 4px 10px; border-radius: 999px; background: var(--surface); border: 1px solid var(--border); }
+.om-source { display: inline-flex; align-items: center; gap: 6px; font-size: 11px; color: var(--text-2); padding: 4px 10px; border-radius: 999px; background: var(--surface); border: 1px solid var(--border); transition: background .15s ease, border-color .15s ease, color .15s ease; }
+.om-source:hover { background: var(--surface-2); border-color: color-mix(in oklab, var(--text) 30%, transparent); color: var(--text); }
 .om-detail-date { font-size: 11px; color: var(--text-4); margin-left: auto; }
 .om-detail-title { font-size: 28px; font-weight: 500; letter-spacing: -0.022em; line-height: 1.12; margin: 0; text-wrap: balance; }
 .om-detail-desc { font-size: 15px; line-height: 1.6; color: var(--text-2); margin: 0; }
@@ -2199,26 +2200,30 @@ input, textarea { font: inherit; color: inherit; }
 /* Big player (appearance pref `playerSize: 'big'`) — full cover dissolving into
    the mood color, transport below, like a now-playing card. Music-with-cover only
    (falls back to small). White controls; dark base when no mood color was read. */
-.om-sb-player-big { padding: 0; overflow: hidden; background: #17171b; }
+.om-sb-player-big { position: relative; padding: 0; overflow: hidden; background: #17171b; }
 /* Vertical mood gradient as the surface; the cover masks INTO it so there's no
    hard cut — the artwork dissolves smoothly into the color (matches the reference). */
 .om-sb-player.om-sb-player-big.is-tinted {
   background: linear-gradient(to bottom, rgb(var(--cov-base)) 0%, rgb(var(--cov-deep)) 60%);
 }
 .om-sb-player-big-cover {
-  position: relative; aspect-ratio: 1 / 1;
+  position: relative; aspect-ratio: 1 / 1; cursor: pointer;
   background-size: cover; background-position: center;
   -webkit-mask-image: linear-gradient(to bottom, #000 46%, transparent 98%);
   mask-image: linear-gradient(to bottom, #000 46%, transparent 98%);
 }
 .om-sb-player-big-x {
-  position: absolute; top: 8px; right: 8px; z-index: 2;
+  /* Top-LEFT — the play cluster owns the top-right corner now (ADR-010). */
+  position: absolute; top: 8px; left: 8px; z-index: 4;
   width: 26px; height: 26px; border-radius: 50%; border: 0; cursor: pointer;
   display: grid; place-items: center;
   background: rgba(0, 0, 0, 0.35); color: #fff;
   -webkit-backdrop-filter: blur(6px); backdrop-filter: blur(6px);
-  transition: background .15s ease;
+  /* Reveal on hover (top-right of the player itself), not always-on. */
+  opacity: 0; transition: opacity .15s ease, background .15s ease;
 }
+.om-sb-player-big:hover .om-sb-player-big-x,
+.om-sb-player-big-x:focus-visible { opacity: 1; }
 .om-sb-player-big-x:hover { background: rgba(0, 0, 0, 0.55); }
 .om-sb-player-big-body {
   position: relative; z-index: 1; margin-top: -46px;
@@ -2226,21 +2231,36 @@ input, textarea { font: inherit; color: inherit; }
   display: flex; flex-direction: column; gap: 11px;
 }
 .om-sb-player-big-title {
-  background: none; border: 0; padding: 0; cursor: pointer; text-align: center;
-  font-size: 16px; font-weight: 700; color: #fff;
-  white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%;
+  background: none; border: 0; padding: 0; cursor: pointer; text-align: left;
+  font-size: 13.5px; font-weight: 700; color: #fff; display: block; width: 100%; min-width: 0; max-width: 100%;
   text-shadow: 0 1px 6px rgba(0, 0, 0, 0.5);
 }
-.om-sb-player-big-title:hover { text-decoration: underline; }
+.om-sb-player-big-title:hover .om-marquee-inner { text-decoration: underline; }
 .om-sb-player-big-sub {
-  text-align: center; font-size: 12px; color: rgba(255, 255, 255, 0.72); margin-top: -5px;
+  text-align: left; font-size: 12px; color: rgba(255, 255, 255, 0.72); margin-top: -3px;
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%;
 }
-.om-sb-player-big .om-sb-player-scrub { padding: 0 2px; margin-top: 2px; }
-/* Centered transport with breathing room (was jammed edge-to-edge). */
-.om-sb-player-big .om-sb-player-transport { justify-content: center; gap: 22px; padding: 4px 0 2px; }
-.om-sb-player-big .om-sb-player-play { width: 52px; height: 52px; }
-.om-sb-player-big .om-sb-player-btn { width: 36px; height: 36px; }
+.om-sb-player-big .om-sb-player-scrub { padding: 0 2px; }
+
+/* Big sidebar player corner cluster (ADR-010) — mirrors the card player:
+   play in the top-right corner, pin + repeat as satellites around it. */
+.om-sb-player-big-play {
+  position: absolute; top: 8px; right: 8px; z-index: 3;
+  width: 44px; height: 44px; box-shadow: 0 4px 12px rgba(0, 0, 0, 0.34);
+}
+.om-sb-player-sat {
+  position: absolute; z-index: 3;
+  width: 30px; height: 30px; border-radius: 50%; border: 0; cursor: pointer;
+  display: grid; place-items: center;
+  background: rgba(0, 0, 0, 0.34); color: rgba(255, 255, 255, 0.92);
+  -webkit-backdrop-filter: blur(5px); backdrop-filter: blur(5px);
+  transition: background .15s ease, transform .15s ease;
+}
+.om-sb-player-sat:hover { background: rgba(0, 0, 0, 0.52); }
+.om-sb-player-sat:active { transform: scale(0.94); }
+.om-sb-player-sat.active { background: #fff; color: #111; }
+.om-sb-player-big-pin { top: 8px; right: 60px; }    /* top edge flush with play */
+.om-sb-player-big-repeat { top: 60px; right: 8px; }  /* right edge flush with play */
 
 .om-sb-player-head { display: flex; align-items: center; gap: 10px; min-width: 0; }
 .om-sb-player-cover-btn { padding: 0; border: 0; background: none; cursor: pointer; flex-shrink: 0; line-height: 0; }
@@ -2381,7 +2401,33 @@ input, textarea { font: inherit; color: inherit; }
   -webkit-mask-image: linear-gradient(to top, #000 28%, transparent 64%);
   mask-image: linear-gradient(to top, #000 28%, transparent 64%);
 }
-.om-card-player-controls {
+/* Corner transport cluster (ADR-010): play hugs the top-right corner as the
+   primary control; pin + repeat are smaller satellites near it; the scrubber +
+   volume/title row sit along the bottom. The cover's center stays unobstructed. */
+.om-card-player-play {
+  position: absolute; top: 10px; right: 10px; z-index: 3;
+  width: 50px; height: 50px; border-radius: 50%; border: 0; cursor: pointer;
+  display: grid; place-items: center; background: #fff; color: #111;
+  box-shadow: 0 4px 14px rgba(0,0,0,0.34);
+  transition: transform .15s ease, filter .15s ease;
+}
+.om-card-player-play:hover { transform: scale(1.05); filter: brightness(1.04); }
+.om-card-player-play:active { transform: scale(0.96); }
+.om-card-player-sat {
+  position: absolute; z-index: 3;
+  width: 32px; height: 32px; border-radius: 50%; border: 0; cursor: pointer;
+  display: grid; place-items: center;
+  background: rgba(0,0,0,0.34); color: rgba(255,255,255,0.92);
+  -webkit-backdrop-filter: blur(5px); backdrop-filter: blur(5px);
+  transition: background .15s ease, transform .15s ease;
+}
+.om-card-player-sat:hover { background: rgba(0,0,0,0.52); }
+.om-card-player-sat:active { transform: scale(0.94); }
+.om-card-player-sat.active { background: #fff; color: #111; }
+.om-card-player-pin { top: 10px; right: 68px; }    /* top edge flush with play */
+.om-card-player-repeat { top: 68px; right: 10px; }  /* right edge flush with play */
+
+.om-card-player-bottom {
   position: absolute; left: 0; right: 0; bottom: 0; z-index: 2;
   display: flex; flex-direction: column; gap: 9px;
   padding: 12px 14px 13px;
@@ -2390,31 +2436,232 @@ input, textarea { font: inherit; color: inherit; }
 .om-card-player-time { font-size: 9px; color: rgba(255,255,255,0.82); flex-shrink: 0; font-variant-numeric: tabular-nums; }
 .om-card-player-track { flex: 1; height: 4px; border-radius: 999px; overflow: hidden; cursor: pointer; background: rgba(255,255,255,0.28); }
 .om-card-player-fill { height: 100%; border-radius: 999px; background: #fff; transition: width .1s linear; }
-.om-card-player-transport { display: flex; align-items: center; justify-content: space-between; padding: 0 4px; }
-.om-card-player-btn {
-  width: 30px; height: 30px; border-radius: 50%; border: 0; cursor: pointer;
-  display: grid; place-items: center;
-  background: rgba(255,255,255,0.14); color: rgba(255,255,255,0.9);
-  transition: background .15s ease, transform .15s ease;
-}
-.om-card-player-btn:hover { background: rgba(255,255,255,0.24); }
-.om-card-player-btn:active { transform: scale(0.94); }
-.om-card-player-btn.active { background: rgba(255,255,255,0.28); color: #fff; }
-.om-card-player-play {
-  width: 46px; height: 46px; border-radius: 50%; border: 0; cursor: pointer;
-  display: grid; place-items: center; background: #fff; color: #111;
-  box-shadow: 0 4px 14px rgba(0,0,0,0.32);
-  transition: transform .15s ease, filter .15s ease;
-}
-.om-card-player-play:hover { transform: scale(1.05); filter: brightness(1.04); }
-.om-card-player-play:active { transform: scale(0.96); }
 .om-card-player-title {
   background: none; border: 0; padding: 0; cursor: pointer; text-align: left;
-  font-size: 12.5px; font-weight: 600; color: #fff;
-  display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
+  font-size: 12.5px; font-weight: 600; color: #fff; display: block; width: 100%; min-width: 0; max-width: 100%;
   text-shadow: 0 1px 4px rgba(0,0,0,0.55);
 }
-.om-card-player-title:hover { text-decoration: underline; }
+.om-card-player-title:hover .om-marquee-inner { text-decoration: underline; }
+
+/* The active music card's hover actions move to the top-LEFT so they don't sit
+   under the play cluster now living in the top-right corner (ADR-010). */
+.om-card-audio.is-active .om-card-actions { left: 10px; right: auto; }
+
+/* ── One-line scrolling title (Marquee.tsx, ADR-010) ──────────────────────────
+   Ellipsis at rest; on hover, if the text overflows, it slides left to reveal
+   the end then returns (single pass). Honors prefers-reduced-motion. */
+.om-marquee { display: block; overflow: hidden; max-width: 100%; }
+.om-marquee-inner {
+  display: inline-block; max-width: 100%; vertical-align: middle; line-height: 1.2;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  will-change: transform;
+}
+.om-marquee.can-scroll:hover .om-marquee-inner {
+  max-width: none; overflow: visible;
+  animation: omMarq var(--marq-dur, 5s) ease-in-out;
+}
+/* Auto mode: slide on a loop without hover (the active now-playing track). */
+.om-marquee.is-auto .om-marquee-inner {
+  max-width: none; overflow: visible;
+  animation: omMarq var(--marq-dur, 6s) ease-in-out infinite;
+}
+@keyframes omMarq {
+  0%, 8% { transform: translateX(0); }
+  46%, 60% { transform: translateX(calc(-1 * var(--marq-shift, 0px))); }
+  98%, 100% { transform: translateX(0); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .om-marquee.can-scroll:hover .om-marquee-inner,
+  .om-marquee.is-auto .om-marquee-inner { animation: none; }
+}
+
+/* ── Volume control (VolumeControl.tsx, ADR-010) ──────────────────────────────
+   Animated speaker icon + title at rest; hover slides a slider out over the
+   title (lingers 2s). White-on-cover by default; theme-toned on the small
+   sidebar player (which sits on a light surface). */
+.om-vol { display: flex; align-items: center; gap: 8px; min-width: 0; position: relative; }
+.om-vol-btn {
+  flex-shrink: 0; width: 26px; height: 26px; border-radius: 50%; border: 0; cursor: pointer;
+  display: grid; place-items: center; background: transparent; color: inherit;
+  transition: background .15s ease;
+}
+.om-vol-btn:hover { background: rgba(255, 255, 255, 0.16); }
+.om-vol-title { flex: 1; min-width: 0; display: block; transition: opacity .18s ease; }
+.om-vol.is-open .om-vol-title { opacity: 0; pointer-events: none; }
+.om-vol-slider {
+  position: absolute; left: 34px; right: 4px; top: 50%; transform: translateY(-50%);
+  height: 14px; margin: 0; padding: 0; cursor: pointer;
+  opacity: 0; pointer-events: none; transition: opacity .2s ease;
+  -webkit-appearance: none; appearance: none; background: transparent;
+}
+.om-vol.is-open .om-vol-slider { opacity: 1; pointer-events: auto; }
+/* Filled portion (≤ current volume) is solid; the remainder is the dim trough.
+   --vol-pct is set inline from the live volume. Firefox uses ::-moz-range-progress. */
+.om-vol-slider { --vol-fill: #fff; --vol-trough: rgba(255, 255, 255, 0.30); }
+.om-vol-slider::-webkit-slider-runnable-track {
+  height: 4px; border-radius: 999px;
+  background: linear-gradient(to right,
+    var(--vol-fill) 0 var(--vol-pct, 0%), var(--vol-trough) var(--vol-pct, 0%) 100%);
+}
+.om-vol-slider::-moz-range-track { height: 4px; border-radius: 999px; background: var(--vol-trough); }
+.om-vol-slider::-moz-range-progress { height: 4px; border-radius: 999px; background: var(--vol-fill); }
+.om-vol-slider::-webkit-slider-thumb {
+  -webkit-appearance: none; appearance: none; margin-top: -4px;
+  width: 12px; height: 12px; border-radius: 50%; background: #fff; cursor: pointer;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.4);
+}
+.om-vol-slider::-moz-range-thumb {
+  width: 12px; height: 12px; border: 0; border-radius: 50%; background: #fff; cursor: pointer;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.4);
+}
+
+/* Small sidebar player: no title slot — the slider floats as a pill above the
+   transport instead of stretching across the row, and colors follow the theme
+   unless the player is cover-tinted. */
+.om-sb-player-vol .om-vol-btn { width: 24px; height: 24px; }
+.om-sb-player-vol .om-vol-slider {
+  left: 50%; right: auto; top: auto; bottom: calc(100% + 8px);
+  transform: translateX(-50%); width: 96px;
+  padding: 7px 9px; border-radius: 999px;
+  background: var(--surface-2); box-shadow: 0 6px 18px rgba(0, 0, 0, 0.22);
+}
+.om-sb-player:not(.is-tinted) .om-vol-btn { color: var(--text-3); }
+.om-sb-player:not(.is-tinted) .om-vol-btn:hover { background: var(--surface); color: var(--text); }
+.om-sb-player:not(.is-tinted) .om-vol-slider { --vol-fill: var(--text); --vol-trough: color-mix(in oklab, var(--text) 18%, transparent); }
+.om-sb-player:not(.is-tinted) .om-vol-slider::-webkit-slider-thumb { background: var(--text); }
+.om-sb-player:not(.is-tinted) .om-vol-slider::-moz-range-thumb { background: var(--text); }
+
+/* Full-bleed players keep white controls (always over cover art). */
+.om-card-player-bottom, .om-sb-player-big-body { color: rgba(255, 255, 255, 0.92); }
+
+/* ── MemoDetail hero music player (ADR-010) ──────────────────────────────────
+   Cover is a near-square block on the left (full artwork visible); a left→right
+   mood-gradient VEIL fades its right edge into the solid cover color, where the
+   title/transport/scrubber sit. The veil bridges the cover→panel edge so there
+   is no hard seam. Content fills the panel top→bottom (space-between). */
+.om-music-detail {
+  position: relative; display: block; overflow: hidden;
+  margin-bottom: 20px; min-height: 300px;
+  border-radius: 18px; color: #fff; background: #17171b;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.22);
+  /* Fade the whole player in once ready (MusicDetailPlayer gates opacity). */
+  transition: opacity .35s ease;
+}
+/* Cover sits as a near-square block on the left so the full artwork shows (not a
+   zoomed full-bleed). The veil then fades its right edge into the mood panel. */
+/* Stops/sizes are CSS vars so the gradient can be fine-tuned live (DEV panel
+   writes --dev-* on :root; the values below are the shipped defaults).
+   --veil-tint dims the mood color: 100% in light, 50% in dark (set on the
+   element below). --cover-w is set per-memo from the artwork aspect (16:9
+   YouTube thumb → 80%, square music art → 40%). */
+/* Mood brightness: 100% light, 50% dark. Applied as a FILTER on the veil (below)
+   so it ANIMATES on theme switch — a gradient `background` can't transition, and
+   a CONCRETE per-theme value (not a var) is used so the change reliably triggers
+   the transition. */
+.om-music-detail-bg {
+  position: absolute; left: 0; top: 0; bottom: 0; width: var(--dev-cover-w, var(--cover-w, 54%));
+  background-size: cover; background-position: center;
+  /* Feather the cover's right edge so it dissolves (no hard rectangle edge). */
+  -webkit-mask-image: linear-gradient(to right, #000 var(--dev-mask, 43%), transparent 100%);
+  mask-image: linear-gradient(to right, #000 var(--dev-mask, 43%), transparent 100%);
+  /* Animate the 40↔80 width change when moving between square / 16:9 covers. */
+  transition: width .45s cubic-bezier(0.22, 0.61, 0.36, 1);
+}
+.om-music-detail-veil {
+  position: absolute; inset: 0;
+  background: linear-gradient(to right,
+    transparent var(--dev-s1, 0%), transparent var(--dev-s2, 0%),
+    rgba(18, 18, 22, 0.96) var(--dev-s3, 100%), rgba(10, 10, 14, 0.98) var(--dev-s4, 100%));
+  /* Default = dark (0.5). Light overrides to 1 below. --dev-tint overrides both. */
+  filter: brightness(var(--dev-tint, 0.5));
+  transition: filter .6s ease;
+}
+[data-theme="light"] .om-music-detail-veil { filter: brightness(var(--dev-tint, 1)); }
+.om-music-detail.is-tinted .om-music-detail-veil {
+  background: linear-gradient(to right,
+    transparent var(--dev-s1, 0%), transparent var(--dev-s2, 0%),
+    rgb(var(--cov-base)) var(--dev-s3, 100%), rgb(var(--cov-deep)) var(--dev-s4, 100%));
+}
+/* Content fills the right panel top→bottom: title up top, transport in the
+   middle, scrubber at the bottom (space-between), no bunched-in-the-center gap. */
+.om-music-detail-body {
+  position: relative; z-index: 1; margin-left: var(--dev-body-ml, 50%); min-height: 300px; min-width: 0;
+  display: flex; flex-direction: column; justify-content: space-between;
+  gap: 18px; padding: 30px 32px;
+}
+.om-music-detail-head { display: flex; flex-direction: column; gap: 5px; min-width: 0; }
+.om-music-detail-title { font-size: 17px; font-weight: 800; line-height: 1.2; color: #fff; }
+.om-music-detail-artist {
+  font-size: 14px; color: rgba(255, 255, 255, 0.72);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%;
+}
+.om-music-detail-controls { display: flex; align-items: center; justify-content: center; gap: 24px; }
+.om-music-detail-play {
+  width: 58px; height: 58px; border-radius: 50%; border: 0; cursor: pointer;
+  display: grid; place-items: center; background: #fff; color: #111;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.32);
+  transition: transform .15s ease, filter .15s ease;
+}
+.om-music-detail-play:hover { transform: scale(1.05); filter: brightness(1.04); }
+.om-music-detail-play:active { transform: scale(0.96); }
+.om-music-detail-btn {
+  width: 42px; height: 42px; border-radius: 50%; border: 0; cursor: pointer;
+  display: grid; place-items: center;
+  background: rgba(255, 255, 255, 0.16); color: rgba(255, 255, 255, 0.92);
+  -webkit-backdrop-filter: blur(8px); backdrop-filter: blur(8px);
+  transition: background .15s ease, transform .15s ease;
+}
+.om-music-detail-btn:hover { background: rgba(255, 255, 255, 0.26); }
+.om-music-detail-btn:active { transform: scale(0.94); }
+.om-music-detail-btn.active { background: #fff; color: #111; }
+.om-music-detail-scrub { display: flex; align-items: center; gap: 10px; }
+.om-music-detail-time { font-size: 11px; color: rgba(255, 255, 255, 0.78); flex-shrink: 0; font-variant-numeric: tabular-nums; }
+.om-music-detail-track { flex: 1; height: 5px; border-radius: 999px; overflow: hidden; cursor: pointer; background: rgba(255, 255, 255, 0.28); }
+.om-music-detail-fill { height: 100%; border-radius: 999px; background: #fff; transition: width .1s linear; }
+/* Volume: hovering the icon reveals a FULL-WIDTH slider just above the scrubber
+   (not next to the icon). Static position lets the slider anchor to the panel
+   (.om-music-detail-body is the positioned ancestor) and span its width. */
+.om-music-detail-vol { position: static; }
+/* Volume icon gets the same circular bg as the repeat button (not free-floating). */
+.om-music-detail-vol .om-vol-btn {
+  width: 42px; height: 42px; background: rgba(255, 255, 255, 0.16); color: rgba(255, 255, 255, 0.92);
+  -webkit-backdrop-filter: blur(8px); backdrop-filter: blur(8px);
+}
+.om-music-detail-vol .om-vol-btn:hover { background: rgba(255, 255, 255, 0.26); }
+.om-music-detail-vol .om-vol-slider {
+  left: 32px; right: 32px; top: auto; bottom: 58px; width: auto;
+  transform: none; padding: 0; background: transparent; box-shadow: none;
+}
+@media (max-width: 720px) {
+  /* Stack: cover fills the top, content sits over a bottom fade. */
+  .om-music-detail { min-height: 340px; }
+  .om-music-detail-bg { width: 100%; }
+  .om-music-detail-veil {
+    background: linear-gradient(to bottom, transparent 0%, transparent 38%, rgba(10, 10, 14, 0.96) 82%);
+  }
+  .om-music-detail.is-tinted .om-music-detail-veil {
+    background: linear-gradient(to bottom, transparent 0%, transparent 38%, rgb(var(--cov-deep)) 84%);
+  }
+  .om-music-detail-body { margin-left: 0; min-height: 340px; justify-content: flex-end; padding: 22px; }
+}
+
+/* Heading above the original-source embed — also the show/hide toggle. */
+.om-music-source-head {
+  display: flex; align-items: center; gap: 8px; margin-bottom: 10px;
+  font-size: 14px; font-weight: 700; color: var(--text);
+  background: none; border: 0; padding: 0; cursor: pointer;
+}
+.om-music-source-head:hover { color: var(--accent); }
+
+/* Inline action in the detail meta row (pin / download), beside date + source. */
+.om-meta-action {
+  display: inline-flex; align-items: center; gap: 5px;
+  background: none; border: 0; padding: 0; cursor: pointer;
+  font-size: 12px; color: var(--text-3); text-decoration: none;
+  transition: color .15s ease;
+}
+.om-meta-action:hover { color: var(--text); }
+.om-meta-action[aria-pressed="true"] { color: var(--accent); }
 
 /* Aurora glow behind the active MUSIC card (ADR-005). Two blobs of the cover's
    mood color (--cov-rgb) bloom past the unclipped wrapper; the opaque card (z-1)

@@ -555,6 +555,29 @@ _CODE_LANG = {
 }
 
 
+def _read_audio_artist(file_path: str) -> str | None:
+    """Best-effort artist tag from any uploaded audio file (ID3 / MP4 / Vorbis /
+    FLAC / …) via mutagen's easy interface. Returns None when there's no tag or
+    mutagen isn't installed — we never fall back to the source domain (ADR-010)."""
+    try:
+        from mutagen import File as MutagenFile
+
+        mf = MutagenFile(file_path, easy=True)
+        tags = getattr(mf, "tags", None)
+        if not tags:
+            return None
+        for key in ("artist", "albumartist", "composer"):
+            val = tags.get(key)
+            if val:
+                a = (val[0] if isinstance(val, (list, tuple)) else val)
+                a = str(a).strip()
+                if a:
+                    return a[:200]
+    except Exception:
+        pass
+    return None
+
+
 async def process_file_memo(memo_id: str, file_path: str, memo_type: str):
     """Background: extract text from file and embed.
 
@@ -580,6 +603,14 @@ async def process_file_memo(memo_id: str, file_path: str, memo_type: str):
             thumb_target = THUMBS_DIR / thumb_name
             if await extract_video_thumbnail(file_path, thumb_target):
                 memo.thumbnail_path = f"/api/files/thumb/{thumb_name}"
+                memo.updated_at = datetime.utcnow()
+                await db.commit()
+
+        # Audio → pull the artist tag (any format) for the player's artist line.
+        if memo_type == "audio":
+            artist = _read_audio_artist(file_path)
+            if artist:
+                memo.audio_artist = artist
                 memo.updated_at = datetime.utcnow()
                 await db.commit()
 

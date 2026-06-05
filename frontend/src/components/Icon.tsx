@@ -49,6 +49,8 @@ const ICON_PATHS: Record<string, string> = {
   archive: 'M20 9v9a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V9M22 4H2v5h20zM10 13h4',
   refresh: 'M21 12a9 9 0 1 1-3-6.7L21 8M21 3v5h-5',
   repeat: 'M17 2l4 4-4 4M3 11v-1a4 4 0 0 1 4-4h14M7 22l-4-4 4-4M21 13v1a4 4 0 0 1-4 4H3',
+  // Repeat-ONE: same loop with a "1" in the middle (active repeat-one state).
+  repeat1: 'M17 2l4 4-4 4M3 11v-1a4 4 0 0 1 4-4h14M7 22l-4-4 4-4M21 13v1a4 4 0 0 1-4 4H3M11 10h1v4',
   music: 'M9 18V5l12-2v13M6 21a3 3 0 1 0 0-6 3 3 0 0 0 0 6zM18 19a3 3 0 1 0 0-6 3 3 0 0 0 0 6z',
   eye: 'M2 12s4-7 10-7 10 7 10 7-4 7-10 7-10-7-10-7zM12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6z',
   database: 'M12 2c-4.97 0-9 1.34-9 3v14c0 1.66 4.03 3 9 3s9-1.34 9-3V5c0-1.66-4.03-3-9-3zM3 5c0 1.66 4.03 3 9 3s9-1.34 9-3M3 12c0 1.66 4.03 3 9 3s9-1.34 9-3',

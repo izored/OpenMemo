@@ -75,6 +75,7 @@ class MemoResponse(BaseModel):
     thumbnail_path: Optional[str]
     ai_summary: Optional[str]
     audio_kind: Optional[str] = None
+    audio_artist: Optional[str] = None
     is_processed: bool
     created_at: datetime
     updated_at: datetime
@@ -115,7 +116,7 @@ async def list_memos(
             Memo.id, Memo.type, Memo.title, Memo.description, Memo.content_text,
             Memo.source_url, Memo.source_domain, Memo.source_favicon,
             Memo.thumbnail_path, Memo.file_path, Memo.ai_summary, Memo.notes,
-            Memo.sort_order, Memo.pinned, Memo.audio_kind, Memo.is_processed,
+            Memo.sort_order, Memo.pinned, Memo.audio_kind, Memo.audio_artist, Memo.is_processed,
             Memo.created_at, Memo.updated_at, Memo.recency_at,
         ),
         selectinload(Memo.collections),
@@ -169,6 +170,7 @@ async def list_memos(
                 "sort_order": m.sort_order,
                 "pinned": m.pinned,
                 "audio_kind": m.audio_kind,
+                "audio_artist": m.audio_artist,
                 "is_processed": m.is_processed,
                 "created_at": m.created_at.isoformat(),
                 "updated_at": m.updated_at.isoformat(),
@@ -210,6 +212,7 @@ async def get_memo(memo_id: str, db: AsyncSession = Depends(get_db)):
         "transcript_source": memo.transcript_source,
         "localize_status": memo.localize_status,
         "audio_kind": memo.audio_kind,
+        "audio_artist": memo.audio_artist,
         "notes": memo.notes,
         "source_url": memo.source_url,
         "source_domain": memo.source_domain,

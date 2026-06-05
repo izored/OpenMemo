@@ -27,6 +27,8 @@ export interface Memo {
   // 'music' = uploaded file or linked SoundCloud/Bandcamp/… (cover player +
   // inline card player + aurora). Absent/null for non-audio memos.
   audio_kind?: 'voice' | 'music' | null;
+  /** Artist from an uploaded music file's tags (ID3/Vorbis/…), when present. */
+  audio_artist?: string | null;
   sort_order?: number;
   pinned?: boolean;
   is_processed: boolean;

@@ -28,6 +28,14 @@ interface AudioPlayerContextValue {
   repeat: boolean;
   /** Toggle repeat-one. */
   toggleRepeat: () => void;
+  /** Output volume, 0..1. Persisted across sessions. */
+  volume: number;
+  /** Muted flag (independent of volume — unmutes when volume is dragged up). */
+  muted: boolean;
+  /** Set the output volume (0..1). A value > 0 also clears mute. */
+  setVolume: (v: number) => void;
+  /** Toggle mute. */
+  toggleMute: () => void;
   /** Load + play a track. If it is already the active track, toggle play/pause. */
   play: (track: AudioTrack) => void;
   /** Play/pause the currently loaded track. */
@@ -71,6 +79,42 @@ export function AudioPlayerProvider({ children }: { children: React.ReactNode })
       repeatRef.current = !r;
       return !r;
     });
+  }, []);
+
+  // Volume + mute. Persisted (last volume restored next session). Mirrored into
+  // refs so play() can apply them to a freshly-loaded <audio> without re-binding.
+  const VOL_KEY = 'om-player-volume';
+  const [volume, setVolumeState] = useState<number>(() => {
+    const v = parseFloat(typeof localStorage !== 'undefined' ? localStorage.getItem(VOL_KEY) || '' : '');
+    return Number.isFinite(v) ? Math.min(1, Math.max(0, v)) : 1;
+  });
+  const [muted, setMuted] = useState(false);
+  const volumeRef = useRef(volume);
+  const mutedRef = useRef(false);
+
+  const setVolume = useCallback((v: number) => {
+    const nv = Math.min(1, Math.max(0, v));
+    volumeRef.current = nv;
+    const audio = audioRef.current;
+    if (audio) {
+      audio.volume = nv;
+      // Dragging the slider up implicitly unmutes (matches every player).
+      if (nv > 0 && audio.muted) {
+        audio.muted = false;
+        mutedRef.current = false;
+        setMuted(false);
+      }
+    }
+    try { localStorage.setItem(VOL_KEY, String(nv)); } catch { /* private mode */ }
+    setVolumeState(nv);
+  }, []);
+
+  const toggleMute = useCallback(() => {
+    const nm = !mutedRef.current;
+    mutedRef.current = nm;
+    const audio = audioRef.current;
+    if (audio) audio.muted = nm;
+    setMuted(nm);
   }, []);
 
   // WebAudio analyser graph for the live waveform. A MediaElementSource can be
@@ -133,6 +177,9 @@ export function AudioPlayerProvider({ children }: { children: React.ReactNode })
       setDuration(0);
       audio.src = next.src;
       audio.load();
+      // Apply the persisted volume / mute to the freshly-loaded element.
+      audio.volume = volumeRef.current;
+      audio.muted = mutedRef.current;
       audio.play().catch(() => {});
     },
     [track, ensureGraph],
@@ -222,8 +269,8 @@ export function AudioPlayerProvider({ children }: { children: React.ReactNode })
   }, [playing]);
 
   const value = useMemo<AudioPlayerContextValue>(
-    () => ({ track, playing, currentTime, duration, repeat, toggleRepeat, play, toggle, seek, close, isActive, getLevels }),
-    [track, playing, currentTime, duration, repeat, toggleRepeat, play, toggle, seek, close, isActive, getLevels],
+    () => ({ track, playing, currentTime, duration, repeat, toggleRepeat, volume, muted, setVolume, toggleMute, play, toggle, seek, close, isActive, getLevels }),
+    [track, playing, currentTime, duration, repeat, toggleRepeat, volume, muted, setVolume, toggleMute, play, toggle, seek, close, isActive, getLevels],
   );
 
   return (
