@@ -71,3 +71,7 @@ design_extracted/
 .backend.err.log
 .backend.out.log
 TEST VIDEO UPLOAD.mp4
+
+# Local Docker rebuild helper (personal, not shared)
+rebuild.ps1
+rebuild.cmd
