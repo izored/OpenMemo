@@ -36,9 +36,13 @@ import { BackButton } from '@/components/BackButton';
 import { MarkdownEditor } from '@/components/MarkdownEditor';
 import { memoApi, collectionApi } from '@/lib/api';
 import { AskMemoPanel } from '@/components/AskMemoPanel';
-import { audioEmbed, canMakeLocal, canTranscript, canSummarize, audioKind } from '@/lib/media';
+import { audioEmbed, audioPlatformMeta, canMakeLocal, canTranscript, canSummarize, audioKind } from '@/lib/media';
 import { videoEmbedUrl, embedAspectRatio } from '@/lib/platforms';
 import { useAudioPlayer, formatTime } from '@/lib/audioPlayer';
+import { useCoverMood } from '@/lib/coverMood';
+import { Icon } from '@/components/Icon';
+import { Marquee } from '@/components/Marquee';
+import { VolumeControl } from '@/components/VolumeControl';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import type { Memo, Collection, SummaryMode } from '@/types';
@@ -263,11 +267,128 @@ function AudioMemoPlayer({ memo }: { memo: Memo }) {
         className="om-audio-detail-dl"
         href={`/api/memos/${memo.id}/file?download=1`}
         download
-        title="Download original"
-        aria-label="Download original"
+        title="Download to device"
+        aria-label="Download to device"
       >
         <Download size={16} />
       </a>
+    </div>
+  );
+}
+
+// Hero player for MUSIC memos with cover art (ADR-005/010). A large cover-forward
+// "now playing" card — cover on the left, title + transport + scrubber on a
+// cover-mood-tinted right panel. Drives the SAME shared <audio>. Voice memos and
+// cover-less audio keep the compact AudioMemoPlayer bar.
+function MusicDetailPlayer({ memo }: { memo: Memo }) {
+  const { play, toggle, seek, isActive, playing, currentTime, duration, repeat, toggleRepeat } = useAudioPlayer();
+  const src = `/api/memos/${memo.id}/file`;
+  const active = isActive(memo.id);
+  const cover = memo.thumbnail_path || null;
+  const mood = useCoverMood(cover);
+  const [probeDur, setProbeDur] = useState(0);
+
+  useEffect(() => {
+    const a = new Audio();
+    a.preload = 'metadata';
+    a.src = src;
+    const on = () => setProbeDur(Number.isFinite(a.duration) ? a.duration : 0);
+    a.addEventListener('loadedmetadata', on);
+    return () => {
+      a.removeEventListener('loadedmetadata', on);
+      a.src = '';
+    };
+  }, [src]);
+
+  const dur = active && Number.isFinite(duration) && duration > 0 ? duration : probeDur;
+  const cur = active ? currentTime : 0;
+  const isPlaying = active && playing;
+  const pct = dur > 0 ? Math.min(100, (cur / dur) * 100) : 0;
+
+  const onPlay = () => {
+    if (active) toggle();
+    else play({
+      memoId: memo.id, title: memo.title, src,
+      subtitle: memo.audio_artist || memo.source_domain || undefined,
+      kind: audioKind(memo), cover, pinned: memo.pinned,
+    });
+  };
+  const onScrub = (e: React.MouseEvent<HTMLDivElement>) => {
+    if (!active || dur <= 0) return;
+    const rect = e.currentTarget.getBoundingClientRect();
+    seek(((e.clientX - rect.left) / rect.width) * dur);
+  };
+
+  // Cover width by artwork shape: a 16:9 YouTube/video thumbnail gets a wide
+  // panel (80%); square music art (uploaded file, SoundCloud) gets 40%. Measured
+  // from the image so it works regardless of source. Drives --cover-w (ADR-010).
+  // Hold the player hidden until the cover has loaded + its aspect is known, then
+  // fade the whole thing in at once — so the width settles (40↔80) while invisible
+  // and nothing pops in piecemeal on load (ADR-010).
+  const [coverWide, setCoverWide] = useState<boolean | null>(null);
+  const [ready, setReady] = useState(false);
+  useEffect(() => {
+    if (!cover) { setCoverWide(null); setReady(true); return; }
+    setReady(false);
+    const img = new Image();
+    img.onload = () => { setCoverWide(img.naturalWidth / img.naturalHeight > 1.3); setReady(true); };
+    img.onerror = () => { setCoverWide(null); setReady(true); };
+    img.src = cover;
+  }, [cover]);
+
+  const heroStyle = {
+    ...(mood ? { ['--cov-base']: mood.base, ['--cov-deep']: mood.deep } : {}),
+    ...(coverWide == null ? {} : { ['--cover-w']: coverWide ? '80%' : '40%' }),
+    opacity: ready ? 1 : 0,
+  } as React.CSSProperties;
+
+  return (
+    <div className={cn('om-music-detail', mood && 'is-tinted')} style={heroStyle}>
+      <div className="om-music-detail-bg" style={{ backgroundImage: `url(${cover})` }} aria-hidden />
+      <div className="om-music-detail-veil" aria-hidden />
+      <div className="om-music-detail-body">
+        <div className="om-music-detail-head">
+          <Marquee className="om-music-detail-title" text={memo.title} auto={active} />
+          {/* Real artist from file tags only — never the source domain (ADR-010). */}
+          {memo.audio_artist && <span className="om-music-detail-artist">{memo.audio_artist}</span>}
+        </div>
+        <div className="om-music-detail-controls">
+          <button
+            className={cn('om-music-detail-btn', repeat && 'active')}
+            onClick={toggleRepeat}
+            title={repeat ? 'Repeat one: on' : 'Repeat one: off'}
+            aria-pressed={repeat}
+            aria-label="Repeat one"
+          >
+            <Icon name={repeat ? 'repeat1' : 'repeat'} size={18} />
+          </button>
+          <button
+            className={cn('om-music-detail-play', isPlaying && 'playing')}
+            onClick={onPlay}
+            aria-label={isPlaying ? 'Pause' : 'Play'}
+            title={isPlaying ? 'Pause' : 'Play'}
+          >
+            <Icon name={isPlaying ? 'pause' : 'play'} size={24} stroke={0} style={{ fill: 'currentColor', marginLeft: isPlaying ? 0 : 2 }} />
+          </button>
+          <VolumeControl className="om-music-detail-vol" size={18} />
+        </div>
+        <div className="om-music-detail-scrub">
+          <span className="om-music-detail-time mono">{formatTime(cur)}</span>
+          <div
+            className="om-music-detail-track"
+            onClick={onScrub}
+            role="slider"
+            aria-label="Seek"
+            aria-valuemin={0}
+            aria-valuemax={100}
+            aria-valuenow={Math.round(pct)}
+            tabIndex={0}
+          >
+            <div className="om-music-detail-fill" style={{ width: `${pct}%` }} />
+          </div>
+          <span className="om-music-detail-time mono">{dur > 0 ? formatTime(dur) : '--:--'}</span>
+        </div>
+      </div>
     </div>
   );
 }
@@ -336,6 +457,35 @@ function AudioTranscript({ memo }: { memo: Memo }) {
             </button>
           </div>
         )
+      )}
+    </div>
+  );
+}
+
+// Collapsible original-source description for MUSIC memos (ADR-010). A song has
+// no transcript (that's lyrics, deferred), but a linked/localized track often
+// carries a rich description from its source (YouTube/SoundCloud) that defines
+// the content — tracklist, timestamps, notes. Keep it, clearly labeled
+// "Description" (NOT transcript), togglable below the hero player.
+function MusicDescription({ memo }: { memo: Memo }) {
+  const [open, setOpen] = useState(false);
+  const text = memo.video_description || memo.content_text || '';
+  if (!text.trim()) return null;
+  return (
+    <div className="om-transcript" style={{ marginBottom: '24px' }}>
+      <button
+        className="om-extracted-toggle"
+        onClick={() => setOpen((v) => !v)}
+        style={{ marginBottom: open ? '10px' : 0 }}
+      >
+        <ChevronDown size={16} style={{ transform: open ? 'none' : 'rotate(-90deg)', transition: 'transform .15s ease' }} />
+        <FileText size={14} />
+        Description
+      </button>
+      {open && (
+        <div className="om-prose">
+          <ReactMarkdown remarkPlugins={[remarkGfm]}>{text}</ReactMarkdown>
+        </div>
       )}
     </div>
   );
@@ -448,7 +598,12 @@ function VideoContentPanel({ memo }: { memo: Memo }) {
 function AudioStreamEmbed({ memo, reference = false }: { memo: Memo; reference?: boolean }) {
   const queryClient = useQueryClient();
   const [saving, setSaving] = useState(false);
+  // When the track is already local (reference embed), the source widget is just
+  // a secondary reference — collapse it by default.
+  const [collapsed, setCollapsed] = useState(reference);
   const embed = audioEmbed(memo);
+  const meta = audioPlatformMeta(memo);
+  const sourceName = meta?.label || memo.source_domain || 'the source';
 
   const save = async () => {
     setSaving(true);
@@ -464,30 +619,49 @@ function AudioStreamEmbed({ memo, reference = false }: { memo: Memo; reference?:
 
   return (
     <div style={{ marginBottom: '24px' }}>
-      {embed ? (
-        <iframe className="om-audio-embed" src={embed} title={memo.title} allow="autoplay" loading="lazy" />
-      ) : (
-        <div className="om-audio-embed-fallback">
-          {memo.thumbnail_path && (
-            <img src={memo.thumbnail_path} alt="" onError={(e) => ((e.target as HTMLImageElement).style.display = 'none')} />
+      {/* Click the heading to hide/show the live source widget. */}
+      <button
+        className="om-music-source-head"
+        onClick={() => setCollapsed((c) => !c)}
+        aria-expanded={!collapsed}
+        title={collapsed ? 'Show source player' : 'Hide source player'}
+      >
+        <ChevronDown
+          size={16}
+          style={{ transform: collapsed ? 'rotate(-90deg)' : 'none', transition: 'transform .15s ease' }}
+        />
+        {meta?.glyph ? (
+          <Icon name={meta.glyph} size={16} className={meta.brandClass} />
+        ) : (
+          <Icon name="music" size={16} />
+        )}
+        <span>{reference ? `Listen on ${sourceName}` : `Play on ${sourceName}`}</span>
+      </button>
+      {!collapsed && (
+        <>
+          {embed ? (
+            <iframe className="om-audio-embed" src={embed} title={memo.title} allow="autoplay" loading="lazy" />
+          ) : (
+            <div className="om-audio-embed-fallback">
+              {memo.thumbnail_path && (
+                <img src={memo.thumbnail_path} alt="" onError={(e) => ((e.target as HTMLImageElement).style.display = 'none')} />
+              )}
+              <p className="om-detail-desc">
+                No inline player for {memo.source_domain || 'this source'}. Open the original (link above) or save a local copy.
+              </p>
+            </div>
           )}
-          <p className="om-detail-desc">
-            No inline player for {memo.source_domain || 'this source'}. Open the original or save a local copy.
-          </p>
-        </div>
+          {/* "Open original" removed — the source link at the top of the page
+              already covers it. Only the save-local action remains. */}
+          {!reference && (
+            <div style={{ display: 'flex', gap: 8, marginTop: 10, flexWrap: 'wrap' }}>
+              <button className="om-btn-primary om-btn-pill" onClick={save} disabled={saving}>
+                {saving ? <Loader2 size={14} className="om-spin" /> : <HardDriveDownload size={14} />} Save audio in openMemo
+              </button>
+            </div>
+          )}
+        </>
       )}
-      <div style={{ display: 'flex', gap: 8, marginTop: 10, flexWrap: 'wrap' }}>
-        {memo.source_url && (
-          <a href={memo.source_url} target="_blank" rel="noopener noreferrer" className="om-btn-ghost om-btn-pill">
-            Open original <ExternalLink size={14} />
-          </a>
-        )}
-        {!reference && (
-          <button className="om-btn-primary om-btn-pill" onClick={save} disabled={saving}>
-            {saving ? <Loader2 size={14} className="om-spin" /> : <HardDriveDownload size={14} />} Save audio in openMemo
-          </button>
-        )}
-      </div>
     </div>
   );
 }
@@ -949,12 +1123,40 @@ export function MemoDetail() {
                     href={memo.source_url}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="om-source link-dotted"
+                    className="om-source"
                   >
                     {memo.source_favicon && <img src={memo.source_favicon} alt="" style={{ width: '16px', height: '16px', borderRadius: '50%' }} />}
                     {memo.source_domain}
                     <ExternalLink size={12} />
                   </a>
+                </>
+              )}
+              {!isEditing && (
+                <>
+                  <span style={{ color: 'var(--text-4)' }}>•</span>
+                  <button
+                    className="om-meta-action"
+                    onClick={togglePin}
+                    title={memo.pinned ? 'Unpin from sidebar' : 'Pin to sidebar'}
+                    aria-pressed={!!memo.pinned}
+                  >
+                    {memo.pinned ? <PinOff size={13} /> : <Pin size={13} />}
+                    <span>{memo.pinned ? 'Unpin' : 'Pin to sidebar'}</span>
+                  </button>
+                  {memo.file_path && (
+                    <>
+                      <span style={{ color: 'var(--text-4)' }}>•</span>
+                      <a
+                        className="om-meta-action"
+                        href={`/api/memos/${memo.id}/file?download=1`}
+                        download
+                        title="Download the saved file to this computer"
+                      >
+                        <Download size={13} />
+                        <span>Download to device</span>
+                      </a>
+                    </>
+                  )}
                 </>
               )}
               {isEditing && (
@@ -1038,30 +1240,8 @@ export function MemoDetail() {
               <DocReportCard memo={memo} />
             )}
 
-            {/* Header action row — same component, same metrics, real gap */}
-            {!isEditing && (
-              <div className="om-detail-actions">
-                <button
-                  onClick={togglePin}
-                  className="om-btn-ghost om-btn-pill"
-                  title={memo.pinned ? 'Unpin from sidebar' : 'Pin to sidebar'}
-                  aria-pressed={!!memo.pinned}
-                >
-                  {memo.pinned ? <PinOff size={14} /> : <Pin size={14} />}
-                  <span>{memo.pinned ? 'Unpin' : 'Pin to sidebar'}</span>
-                </button>
-                {memo.file_path && (
-                  <a
-                    className="om-btn-ghost om-btn-pill"
-                    href={`/api/memos/${memo.id}/file?download=1`}
-                    download
-                  >
-                    <Download size={14} />
-                    <span>Download original</span>
-                  </a>
-                )}
-              </div>
-            )}
+            {/* Pin / Download moved into the meta row above (inline with date +
+                source), so no separate action row here. */}
 
             {/* Image preview — with lightbox, theater, fullscreen. Uploaded
                 images serve from the file route; scraped image memos (a Facebook
@@ -1088,8 +1268,16 @@ export function MemoDetail() {
             {memo.type === 'audio' && !isEditing && (
               memo.file_path ? (
                 <>
-                  <AudioMemoPlayer memo={memo} />
-                  <AudioTranscript memo={memo} />
+                  {audioKind(memo) === 'music' && memo.thumbnail_path ? (
+                    <MusicDetailPlayer memo={memo} />
+                  ) : (
+                    <AudioMemoPlayer memo={memo} />
+                  )}
+                  {/* Music transcript = lyrics, which need a dedicated provider —
+                      hidden until that lands. Voice (spoken word) keeps it. */}
+                  {audioKind(memo) !== 'music' && <AudioTranscript memo={memo} />}
+                  {/* Music keeps the original source description (≠ transcript). */}
+                  {audioKind(memo) === 'music' && <MusicDescription memo={memo} />}
                   {/* Keep the source reachable as a live reference even after pull. */}
                   {memo.source_url && audioEmbed(memo) && <AudioStreamEmbed memo={memo} reference />}
                 </>
@@ -1265,8 +1453,8 @@ export function MemoDetail() {
               />
             </div>
 
-            {/* Related memos */}
-            {!isEditing && related.length > 0 && (
+            {/* Related memos — hidden for now (revisit the UX). */}
+            {false && !isEditing && related.length > 0 && (
               <div className="om-related">
                 <h3 className="om-section-h">Related Memos</h3>
                 <div className="om-related-strip">

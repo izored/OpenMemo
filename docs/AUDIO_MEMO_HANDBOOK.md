@@ -3,7 +3,7 @@
 _The reference for how audio works in openMemo: what ships today, why it was built
 this way, and where it goes next. Update this whenever the audio stack changes._
 
-_Introduced in 2.0.0 (the audio release). Last updated: 2026-06-01._
+_Introduced in 2.0.0 (the audio release). Last updated: 2026-06-05._
 
 ---
 
@@ -38,10 +38,11 @@ Serve
   └─ GET /api/memos/{id}/file   → audio/* MIME + HTTP Range (206) for seeking
 
 Play (one shared <audio> for the whole app)
-  └─ AudioPlayerProvider (lib/audioPlayer.tsx), mounted in Layout
-       ├─ HeaderAudioPlayer        (persistent mini-player, top-right)
-       ├─ MemoCard audio card      (play/pause + LiveWaveform canvas)
-       └─ MemoDetail AudioMemoPlayer (inline scrubber + transcript)
+  └─ AudioPlayerProvider (lib/audioPlayer.tsx, + volume/mute), mounted in Layout
+       ├─ SidebarPlayer            (now-playing in sidebar foot: small/big/collapsed — ADR-005/010)
+       ├─ MemoCard music card      (inline corner-cluster player; LiveWaveform for voice — ADR-010)
+       └─ MemoDetail               (MusicDetailPlayer hero for music+cover; AudioMemoPlayer bar otherwise)
+            shared bits: Marquee (one-line title), VolumeControl (animated icon + slider)
 
 Transcribe (background)
   └─ transcribe_memo_task → core/transcribe.py (faster-whisper)
@@ -79,6 +80,12 @@ truth for `playing`, `currentTime`, `duration`, and the active track.
 call `play()`, `toggle()`, `seek()`, `getLevels()` from the context. The detail page
 probes duration with a throwaway `new Audio()` only for metadata (never for
 playback).
+
+**Volume + mute live on the same element (ADR-010).** The context exposes
+`volume` (0..1, persisted to `localStorage`), `muted`, `setVolume`, and
+`toggleMute`; they are written to the one shared `<audio>` and re-applied on each
+track load. Every surface drives that single value — there is no per-surface
+volume — so the card player, sidebar players, and OS media keys stay in sync.
 
 ---
 
@@ -267,6 +274,10 @@ There is intentionally no separate transcript table.
 | D8 | Play controls use `var(--text)`/`var(--bg)`, not `var(--accent)`. | Accent is user-customizable to near-white; accent-filled controls vanished in light mode. |
 | D9 | Live waveform analyser built once per element. | `createMediaElementSource` throws on a second call for the same element. |
 | D10 | yt-dlp self-updates on start. | YouTube breaks old builds faster than image rebuilds. |
+| D11 | Volume/mute on the one shared `<audio>`, persisted; exposed via context. | Single source of truth across every player surface; no per-surface `<audio>` writes (ADR-010). |
+| D12 | Full-bleed player is corner-anchored (play top-right, pin/repeat satellites, scrubber bottom) with a 15s self-announcing volume icon + one-line marquee titles. | Cover-first layout; the pulse signals which card is playing; marquee reveals long titles (ADR-010). |
+| D13 | Detail page gets a cover-forward hero player (music+cover); source widget is a collapsible reference (collapsed once local); music transcript hidden pending lyrics; a togglable Description shows the source's notes (≠ transcript). | A song's "transcript" is lyrics (deferred); the YouTube/SoundCloud description still defines the content and is worth keeping (ADR-010). |
+| D14 | Artist comes from the uploaded file's tags (mutagen, any format) into `audio_artist`; shown only when present, never the source domain. | "youtube.com" is not an artist; real ID3/Vorbis artist is, and it also feeds OS media metadata (ADR-010). |
 
 ---
 

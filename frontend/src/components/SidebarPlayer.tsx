@@ -7,6 +7,8 @@ import { memoApi } from '@/lib/api';
 import { useAppStore } from '@/stores/appStore';
 import { useAudioPlayer, formatTime } from '@/lib/audioPlayer';
 import { useCoverMood } from '@/lib/coverMood';
+import { Marquee } from './Marquee';
+import { VolumeControl } from './VolumeControl';
 
 // Persistent now-playing surface in the sidebar foot (ADR-005). Drives the one
 // shared <audio>. Two sizes (appearance pref `playerSize`):
@@ -99,6 +101,7 @@ export function SidebarPlayer() {
 
   const transport = (
     <div className="om-sb-player-transport">
+      <VolumeControl className="om-sb-player-vol" size={14} />
       <button
         className={cn('om-sb-player-btn', repeat && 'active')}
         onClick={toggleRepeat}
@@ -106,7 +109,7 @@ export function SidebarPlayer() {
         aria-pressed={repeat}
         aria-label="Repeat one"
       >
-        <Icon name="repeat" size={14} />
+        <Icon name={repeat ? 'repeat1' : 'repeat'} size={14} />
       </button>
       <button
         className="om-sb-player-play"
@@ -160,7 +163,9 @@ export function SidebarPlayer() {
     );
   }
 
-  // ── Big: full cover on top fading into the mood color, transport below ──
+  // ── Big: full cover, corner transport cluster, scrubber + volume below
+  //    (ADR-010). Play hugs the top-right corner; pin + repeat are satellites;
+  //    the close X moves to the top-LEFT so it never collides with the cluster. ──
   if (playerSize === 'big' && hasCover) {
     return (
       <div
@@ -169,17 +174,52 @@ export function SidebarPlayer() {
         aria-label="Now playing"
         style={moodStyle}
       >
-        <div className="om-sb-player-big-cover" style={{ backgroundImage: `url(${track.cover})` }} aria-hidden />
+        <div
+          className="om-sb-player-big-cover"
+          style={{ backgroundImage: `url(${track.cover})` }}
+          onClick={goMemo}
+          role="button"
+          aria-label={`Open ${track.title}`}
+          title={track.title}
+        />
         <button className="om-sb-player-big-x" onClick={close} aria-label="Close player" title="Close">
           <Icon name="x" size={14} />
         </button>
+
+        <button
+          className="om-sb-player-play om-sb-player-big-play"
+          onClick={toggle}
+          title={playing ? 'Pause' : 'Play'}
+          aria-label={playing ? 'Pause' : 'Play'}
+        >
+          <Icon name={playing ? 'pause' : 'play'} size={18} stroke={0} style={{ fill: 'currentColor' }} />
+        </button>
+        <button
+          className={cn('om-sb-player-sat om-sb-player-big-pin', pinned && 'active')}
+          onClick={onPin}
+          title={pinned ? 'Unpin memo' : 'Pin memo'}
+          aria-pressed={pinned}
+          aria-label="Pin memo"
+        >
+          <Icon name="pin" size={14} />
+        </button>
+        <button
+          className={cn('om-sb-player-sat om-sb-player-big-repeat', repeat && 'active')}
+          onClick={toggleRepeat}
+          title={repeat ? 'Repeat one: on' : 'Repeat one: off'}
+          aria-pressed={repeat}
+          aria-label="Repeat one"
+        >
+          <Icon name={repeat ? 'repeat1' : 'repeat'} size={14} />
+        </button>
+
         <div className="om-sb-player-big-body">
-          <button className="om-sb-player-big-title" onClick={goMemo} title={track.title}>
-            {track.title}
-          </button>
-          {track.subtitle && <span className="om-sb-player-big-sub">{track.subtitle}</span>}
           {scrub}
-          {transport}
+          <VolumeControl size={16}>
+            <button className="om-sb-player-big-title" onClick={goMemo}>
+              <Marquee text={track.title} auto />
+            </button>
+          </VolumeControl>
         </div>
       </div>
     );
@@ -197,9 +237,8 @@ export function SidebarPlayer() {
         <button className="om-sb-player-cover-btn" onClick={goMemo} title={track.title}>
           {cover}
         </button>
-        <button className="om-sb-player-meta" onClick={goMemo} title={track.title}>
-          <span className="om-sb-player-title">{track.title}</span>
-          {track.subtitle && <span className="om-sb-player-sub">{track.subtitle}</span>}
+        <button className="om-sb-player-meta" onClick={goMemo}>
+          <Marquee text={track.title} className="om-sb-player-title" auto />
         </button>
         <button className="om-sb-player-close" onClick={close} aria-label="Close player" title="Close">
           <Icon name="x" size={13} />

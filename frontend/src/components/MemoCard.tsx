@@ -12,6 +12,8 @@ import { useAppStore } from '@/stores/appStore';
 import { useAudioPlayer, formatTime } from '@/lib/audioPlayer';
 import { motion, AnimatePresence } from 'framer-motion';
 import { LiveWaveform } from './LiveWaveform';
+import { Marquee } from './Marquee';
+import { VolumeControl } from './VolumeControl';
 import type { Memo, MemoType } from '@/types';
 
 // Warm tint palette for cards without media (notes / plain docs).
@@ -258,7 +260,9 @@ function CardMusicPlayer({ memo, cover, mood }: { memo: Memo; cover?: string | n
       className={cn('om-card-player', mood && 'is-tinted')}
       role="group"
       aria-label="Now playing"
-      onClick={(e) => e.stopPropagation()}
+      // Clicking the cover (anywhere not a control — those stop propagation)
+      // opens the memo's detail page.
+      onClick={(e) => { e.stopPropagation(); navigate(`/memo/${memo.id}`); }}
       style={mood ? ({ ['--cov-base']: mood.base, ['--cov-deep']: mood.deep } as React.CSSProperties) : undefined}
       initial={{ opacity: 0, scale: 0.985 }}
       animate={{ opacity: 1, scale: 1 }}
@@ -267,7 +271,39 @@ function CardMusicPlayer({ memo, cover, mood }: { memo: Memo; cover?: string | n
     >
       {cover && <div className="om-card-player-cover" style={{ backgroundImage: `url(${cover})` }} aria-hidden />}
       <div className="om-card-player-scrim" aria-hidden />
-      <div className="om-card-player-controls">
+
+      {/* Corner transport cluster (ADR-010): play is the primary, top-right
+          corner; pin + repeat are smaller satellites. No centered play button —
+          the cover stays unobstructed. */}
+      <button
+        className="om-card-player-play"
+        onClick={(e) => { e.stopPropagation(); toggle(); }}
+        aria-label={playing && active ? 'Pause' : 'Play'}
+        title={playing && active ? 'Pause' : 'Play'}
+      >
+        <Icon name={playing && active ? 'pause' : 'play'} size={20} stroke={0} style={{ fill: 'currentColor' }} />
+      </button>
+      <button
+        className={cn('om-card-player-sat om-card-player-pin', pinned && 'active')}
+        onClick={onPin}
+        title={pinned ? 'Unpin memo' : 'Pin memo'}
+        aria-pressed={pinned}
+        aria-label="Pin memo"
+      >
+        <Icon name="pin" size={15} />
+      </button>
+      <button
+        className={cn('om-card-player-sat om-card-player-repeat', repeat && 'active')}
+        onClick={(e) => { e.stopPropagation(); toggleRepeat(); }}
+        title={repeat ? 'Repeat one: on' : 'Repeat one: off'}
+        aria-pressed={repeat}
+        aria-label="Repeat one"
+      >
+        <Icon name={repeat ? 'repeat1' : 'repeat'} size={15} />
+      </button>
+
+      {/* Bottom: scrubber above the volume + one-line title row. */}
+      <div className="om-card-player-bottom">
         <div className="om-card-player-scrub">
           <span className="om-card-player-time mono">{formatTime(active ? currentTime : 0)}</span>
           <div
@@ -283,41 +319,14 @@ function CardMusicPlayer({ memo, cover, mood }: { memo: Memo; cover?: string | n
           </div>
           <span className="om-card-player-time mono">{hasDur ? formatTime(duration) : '--:--'}</span>
         </div>
-        <div className="om-card-player-transport">
+        <VolumeControl size={18}>
           <button
-            className={cn('om-card-player-btn', repeat && 'active')}
-            onClick={(e) => { e.stopPropagation(); toggleRepeat(); }}
-            title={repeat ? 'Repeat one: on' : 'Repeat one: off'}
-            aria-pressed={repeat}
-            aria-label="Repeat one"
+            className="om-card-player-title"
+            onClick={(e) => { e.stopPropagation(); navigate(`/memo/${memo.id}`); }}
           >
-            <Icon name="repeat" size={15} />
+            <Marquee text={memo.title} auto />
           </button>
-          <button
-            className="om-card-player-play"
-            onClick={(e) => { e.stopPropagation(); toggle(); }}
-            aria-label={playing && active ? 'Pause' : 'Play'}
-            title={playing && active ? 'Pause' : 'Play'}
-          >
-            <Icon name={playing && active ? 'pause' : 'play'} size={20} stroke={0} style={{ fill: 'currentColor' }} />
-          </button>
-          <button
-            className={cn('om-card-player-btn', pinned && 'active')}
-            onClick={onPin}
-            title={pinned ? 'Unpin memo' : 'Pin memo'}
-            aria-pressed={pinned}
-            aria-label="Pin memo"
-          >
-            <Icon name="pin" size={15} />
-          </button>
-        </div>
-        <button
-          className="om-card-player-title"
-          onClick={(e) => { e.stopPropagation(); navigate(`/memo/${memo.id}`); }}
-          title={memo.title}
-        >
-          {memo.title}
-        </button>
+        </VolumeControl>
       </div>
     </motion.div>
   );
@@ -604,7 +613,7 @@ export function MemoCard({ memo, dragHandleProps, lightboxGroup }: CardProps) {
       if (audioSrc) {
         play({
           memoId: memo.id, title: memo.title, src: audioSrc,
-          subtitle: memo.source_domain || undefined,
+          subtitle: memo.audio_artist || memo.source_domain || undefined,
           kind: audioKind(memo), cover: src, pinned: memo.pinned,
         });
       } else {

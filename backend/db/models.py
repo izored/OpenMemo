@@ -87,6 +87,9 @@ class Memo(Base):
     # 'music' = uploaded file OR linked SoundCloud/Bandcamp/Mixcloud (cover-art
     # player, inline card player, aurora). NULL for non-audio memos.
     audio_kind = Column(String, nullable=True)  # voice|music
+    # Artist from an uploaded music file's tags (ID3/Vorbis), when present. NULL
+    # otherwise — we never fall back to the source domain here (ADR-010).
+    audio_artist = Column(String, nullable=True)
     # On-demand AI summaries, keyed by mode: {"timestamp": ..., "insights": ..., "essay": ...}.
     # Generated lazily when the user picks a mode; cached so reopening is instant.
     summaries = Column(JSON, nullable=True)

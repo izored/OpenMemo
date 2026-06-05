@@ -7,6 +7,157 @@ the decision, and its consequences, so a future reader knows *why*, not just
 
 ---
 
+## ADR-010 — The full-bleed now-playing player is corner-anchored, with a shared volume engine and one-line marquee titles
+
+**Date:** 2026-06-05 · **Status:** Shipped · **Builds on:** ADR-005 (audio is a first-class media experience; the sidebar hosts the now-playing player), ADR-001 (define shared things once)
+
+### Context
+
+The full-bleed music player (the inline card overlay `CardMusicPlayer`, and the
+`big` sidebar player) followed the textbook transport layout: a **centered** white
+play button flanked by repeat (left) and pin (right), with the scrubber pinned to
+the top. Three problems:
+
+- **The center play button sat on top of the cover art**, the one thing a music
+  surface exists to show. The transport row dominated the lower third.
+- **The "big" sidebar player's close button escaped its container.** `.om-sb-player-big`
+  had no `position`, so its `position:absolute` X resolved against an ancestor and
+  rendered at the **top of the whole sidebar**, with an arrow's-length of empty
+  space between it and the player it belonged to.
+- **There was no volume control anywhere**, and titles truncated with a static
+  ellipsis — long track names ("Your Mind Will Disappear Into This…") were
+  unreadable past the cut.
+
+This is the user's app, not a stock media widget — there is no obligation to keep
+play-in-the-middle-with-two-flankers. With code, the controls can go anywhere.
+
+### Decision
+
+**Redesign the full-bleed player around the cover: corner-anchor the transport,
+drop the scrubber to the bottom, and add a shared volume engine + a one-line
+marquee title.** Applies to both full-bleed surfaces (the inline card player and
+the `big` sidebar player); the compact `small` sidebar player and the audio card
+inherit the volume + marquee pieces but keep their row layout.
+
+**1. Corner transport cluster.** Play is the primary control, a large disc in the
+**top-right corner**. Pin and repeat are smaller satellites beside/below it
+(`.om-card-player-sat` / `.om-sb-player-sat`). No centered button — the cover's
+center stays clear. The close X (sidebar `big` only) moves to the **top-left** so
+it never collides with the cluster, and is anchored by giving `.om-sb-player-big`
+`position:relative` (the bug above) and revealed on hover.
+
+**2. Scrubber to the bottom.** The same scrubber component (elapsed · track ·
+duration) moves to a bottom block, directly above the title row. Unchanged
+markup, repositioned.
+
+**3. One volume engine, every surface.** `AudioPlayerProvider` gains `volume`
+(0..1, persisted to `localStorage`) and `muted`, applied to the single shared
+`<audio>` and re-applied on each track load. `setVolume` (which clears mute when
+dragged up) and `toggleMute` are exposed on the context, so the card player, both
+sidebar players, and anything future stay in sync through one source of truth
+(ADR-001) — never per-surface `<audio>.volume` writes.
+
+**4. The volume control is a deliberate, self-announcing affordance.** A
+`VolumeControl` component renders an animated speaker icon + the title on the
+bottom row. Clicking the icon mutes (icon → ✕). Hovering slides a slider out
+**over the title in place**, lingering ~2s after the pointer leaves so it can be
+grabbed. The resting icon **pulses every 15 seconds** — waves sweep 0→3→0 then
+settle on the count that matches the current level (≤30% → 1 wave, ~50% → 2, high
+→ 3) — so the user can tell *which* card is the one playing and is reminded the
+control is there. Dragging the slider updates the wave count live.
+
+**5. One-line marquee titles.** A `Marquee` component truncates to a single line
+with an ellipsis at rest; on hover, if the text overflows, it slides left to
+reveal the end then returns (a single pass, not a loop), at a constant reading
+speed proportional to the overflow. Honors `prefers-reduced-motion`. Used in the
+player titles now; reusable on any card title.
+
+**6. Theming.** Full-bleed controls are white-on-cover (the cover/scrim is always
+dark enough). The slider and icon fall back to theme tokens only on the
+non-tinted `small` sidebar player, which sits on a light surface.
+
+**7. The aurora glow is untouched.** The cover-mood aurora behind the active music
+card (ADR-005) is explicitly out of scope and unchanged.
+
+**8. The detail page gets a hero player; the source widget is a collapsible
+reference.** A music memo with cover art renders a large cover-forward "now
+playing" card on its detail page (`MusicDetailPlayer`): the cover bleeds full-
+bleed and a left→right mood-gradient *veil* fades it into the solid cover color
+where the title / centered transport / scrubber sit (one image + a gradient, so
+there is no side-by-side seam). Voice and cover-less audio keep the compact bar.
+The live platform widget ("Listen on SoundCloud") gains a brand-glyph heading
+that doubles as a **show/hide toggle**, and is **collapsed by default once the
+track is local** (it is then only a secondary reference). Its redundant "Open
+original" button is dropped — the source link at the top of the page already
+covers it.
+
+**9. Music transcript is deferred to lyrics.** A song's "transcript" is its
+lyrics, which need a dedicated provider (LRCLIB / embedded tags / lyrics.ovh —
+the local-first set deferred in ADR-005). Until that lands, the transcript panel
+is **hidden for music** (`audio_kind === 'music'`); voice (spoken word) keeps it.
+
+### Alternatives considered
+
+| Option | Why rejected |
+|--------|--------------|
+| **Keep centered play + two flankers** | Covers the artwork and reads like a generic widget. The whole point of a cover-first player is to show the cover. |
+| **Fix the runaway close X with `margin`/flow tweaks** | The X escaped because its absolute parent was unpositioned; the correct fix is `position:relative` on the player, not fighting layout. |
+| **A separate volume `<audio>` or per-surface volume state** | Breaks the one-shared-`<audio>` invariant (ADR-005) and drifts between surfaces. One engine value, read everywhere (ADR-001). |
+| **Always-looping ticker title** | More motion, more distracting; a single hover pass reveals the full title without turning the grid into a ticker wall. |
+| **Static volume icon** | Misses the chance to signal which card is playing and that the control exists; the 15s pulse is the affordance. |
+
+### Consequences
+
+- New shared pieces: `Marquee.tsx`, `VolumeControl.tsx`; `volume`/`muted`/
+  `setVolume`/`toggleMute` on the audio context. Volume persists across sessions.
+- `CardMusicPlayer` and the `big` sidebar player are restructured to the corner
+  cluster + bottom block; the `small` player gains a volume button + marquee
+  title.
+- The active music card's hover actions shift to the **top-left** so they clear
+  the play cluster.
+- The `big` sidebar player's close button is anchored to the player and
+  hover-revealed.
+- Preserves ADR-005 (one `<audio>`, sidebar player, aurora) and ADR-001 (single
+  source for the volume value and the marquee/volume components).
+- New `MusicDetailPlayer` (detail hero). The detail source widget is collapsible
+  and collapsed-by-default once local; the music transcript panel is hidden
+  pending lyrics, replaced by a togglable `MusicDescription` (the source's own
+  description — tracklist/timestamps/notes — which is not a transcript). Related
+  Memos is temporarily hidden on the detail page (UX revisit, code retained).
+- New `audio_artist` column + `mutagen` dep: artist read from an uploaded file's
+  tags (any format) at ingest; shown in the hero (and OS media metadata) only
+  when a real tag exists — never the source domain.
+- The hero veil/sizing is driven by CSS vars with shipped fallbacks; a "Gradient"
+  tab in the existing DEV panel (`src/dev/DevPanel.tsx`) tunes them live via
+  `--dev-*` on `:root` (DEV-only, production untouched). Tuned/shipped behavior:
+  - **Mood brightness is theme-aware and animated** — applied as a
+    `filter: brightness()` on the veil (100% light, **50% dark**), not a gradient
+    color-mix, because a gradient `background` can't transition but a filter can.
+    The value is set **concretely per theme** (dark base `0.5`, `[data-theme="light"]`
+    overrides to `1`) rather than through a flipping CSS var, so the change
+    reliably triggers the `transition: filter` and cross-fades instead of jumping.
+  - **Cover width follows the artwork aspect** — a 16:9 video thumbnail (e.g. a
+    localized YouTube track) gets an 80% panel; square music art (uploaded file,
+    SoundCloud) gets 40%. Measured from the image, set per-memo via `--cover-w`,
+    and the width change is animated (`transition: width`) so it doesn't jump
+    between memo types.
+  - The hero's pill controls (repeat, volume) get a `backdrop-filter` blur behind
+    them so they read over busy artwork.
+  - The brightness crossfade required adding `filter` to the
+    `.om-app.theme-transitioning *` transition allow-list — that rule sets
+    `transition: ... !important` for the 3s theme-swap window and omitting
+    `filter` made the veil snap; with it, the dim eases across the swap.
+- **Hero loads as one unit** — `MusicDetailPlayer` holds `opacity: 0` until the
+  cover image has loaded and its aspect is known, then fades in, so the panel
+  width settles (40↔80) while hidden and nothing pops in piecemeal.
+- The detail meta-row source chip (`.om-source`) gained a hover state.
+- The marquee `auto` mode loops slowly (duration scales with overflow) on the
+  active now-playing surfaces; non-active titles still scroll on hover.
+- **Not addressed here:** the lyrics provider itself; extending the marquee to
+  *every* card type (follow-up); a volume gesture on the collapsed mini-player.
+
+---
+
 ## ADR-009 — Make the whole UI responsive in place: one codebase that adapts every page from desktop to mobile
 
 **Date:** 2026-06-04 · **Status:** Proposed · **Relates to:** ADR-006 (sidebar is a fixed three-zone column), ADR-005 (the sidebar hosts the now-playing player), ADR-008 (keep work off the request/render hot path), ADR-001 (define shared things once, never scatter)
@@ -112,7 +263,7 @@ To keep these consistent (and to keep MemoDetail and Ask in step when their desk
 
 ## ADR-008 — Performance is a request-path discipline: never block the event loop, index for scale, keep liveness dependency-free
 
-**Date:** 2026-06-04 · **Status:** Accepted · **Relates to:** ADR-002 (Ollama + headless browser ship inside the API image)
+**Date:** 2026-06-04 · **Status:** Shipped · **Relates to:** ADR-002 (Ollama + headless browser ship inside the API image)
 
 ### Context
 
@@ -215,7 +366,7 @@ Treat the request hot path as a shared, latency-sensitive resource. Five rules:
 
 ## ADR-007 — AI Summary eligibility is one predicate, gated by memo type and audio kind (music excluded)
 
-**Date:** 2026-06-03 · **Status:** Accepted · **Builds on:** ADR-001 (systematic per-type, centralized), ADR-003 (eligibility-predicate pattern), ADR-004 (where summary was born), ADR-005 (voice vs music split)
+**Date:** 2026-06-03 · **Status:** Shipped · **Builds on:** ADR-001 (systematic per-type, centralized), ADR-003 (eligibility-predicate pattern), ADR-004 (where summary was born), ADR-005 (voice vs music split)
 
 ### Context
 
@@ -312,7 +463,7 @@ content that lacks its prerequisite.
 
 ## ADR-006 — Sidebar is a fixed three-zone column; only the collections list scrolls
 
-**Date:** 2026-06-03 · **Status:** Accepted · **Relates to:** ADR-005 (the sidebar hosts the now-playing player)
+**Date:** 2026-06-03 · **Status:** Shipped · **Relates to:** ADR-005 (the sidebar hosts the now-playing player)
 
 ### Context
 
@@ -370,7 +521,7 @@ zones, and put scrolling on exactly one inner element:
 
 ## ADR-005 — Audio is a first-class media experience: voice vs music split, local-first pull-first player
 
-**Date:** 2026-06-03 · **Status:** Accepted · **Builds on:** ADR-001 (whole-type scope), ADR-003 (tiered capture), ADR-004 (non-destructive transcript)
+**Date:** 2026-06-03 · **Status:** Shipped · **Builds on:** ADR-001 (whole-type scope), ADR-003 (tiered capture), ADR-004 (non-destructive transcript)
 
 ### Context
 
@@ -530,7 +681,7 @@ Audio ships first; video follows.
 
 ## ADR-004 — Transcript extraction is decoupled from file capture (non-destructive, caption-first)
 
-**Date:** 2026-06-03 · **Status:** Accepted · **Supersedes:** the transcript portion of ADR-003
+**Date:** 2026-06-03 · **Status:** Shipped · **Supersedes:** the transcript portion of ADR-003
 
 ### Context
 
@@ -635,7 +786,7 @@ error state with "open original" still available — never a dead end.
 
 ## ADR-003 — "Make it local" visibility is gated to remote, localizable media (tiered capture)
 
-**Date:** 2026-06-02 · **Status:** Accepted
+**Date:** 2026-06-02 · **Status:** Shipped
 
 ### Context
 
@@ -702,7 +853,7 @@ component placement, download modes, and end-to-end user flow.
 
 ## ADR-002 — Self-hosted headless Chromium replaces Microlink for link extraction
 
-**Date:** 2026-06-02 · **Status:** Accepted
+**Date:** 2026-06-02 · **Status:** Shipped
 
 ### Context
 
@@ -821,7 +972,7 @@ Antibot solved ≠ auth-wall solved.
 
 ## ADR-001 — Memo-type changes are systematic across the whole type, not per-provider
 
-**Date:** 2026-06-02 · **Status:** Accepted
+**Date:** 2026-06-02 · **Status:** Shipped
 
 ### Context
 
