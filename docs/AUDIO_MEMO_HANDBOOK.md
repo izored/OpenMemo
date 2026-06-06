@@ -1,6 +1,6 @@
 # Audio Memo Handbook
 
-_The reference for how audio works in openMemo: what ships today, why it was built
+_The reference for how audio works in openMemo: what ships today, why I built it
 this way, and where it goes next. Update this whenever the audio stack changes._
 
 _Introduced in 2.0.0 (the audio release). Last updated: 2026-06-05._
@@ -39,8 +39,8 @@ Serve
 
 Play (one shared <audio> for the whole app)
   └─ AudioPlayerProvider (lib/audioPlayer.tsx, + volume/mute), mounted in Layout
-       ├─ SidebarPlayer            (now-playing in sidebar foot: small/big/collapsed — ADR-005/010)
-       ├─ MemoCard music card      (inline corner-cluster player; LiveWaveform for voice — ADR-010)
+       ├─ SidebarPlayer            (now-playing in sidebar foot: small/big/collapsed, ADR-005/010)
+       ├─ MemoCard music card      (inline corner-cluster player; LiveWaveform for voice, ADR-010)
        └─ MemoDetail               (MusicDetailPlayer hero for music+cover; AudioMemoPlayer bar otherwise)
             shared bits: Marquee (one-line title), VolumeControl (animated icon + slider)
 
@@ -53,8 +53,12 @@ Transcribe (background)
 
 | File | Role |
 |------|------|
-| `frontend/src/lib/audioPlayer.tsx` | The shared player context + the single `<audio>` element + the WebAudio analyser graph. |
-| `frontend/src/components/HeaderAudioPlayer.tsx` | Persistent top-right mini-player. |
+| `frontend/src/lib/audioPlayer.tsx` | The shared player context + the single `<audio>` element (+ volume/mute) + the WebAudio analyser graph. |
+| `frontend/src/components/SidebarPlayer.tsx` | Now-playing player in the sidebar foot (small / big / collapsed). |
+| `frontend/src/components/MusicDetailPlayer.tsx` | Cover-forward hero player on the detail page (music + cover art). |
+| `frontend/src/components/VolumeControl.tsx` | Animated speaker icon + slider; 15s self-announcing pulse, mute. |
+| `frontend/src/components/Marquee.tsx` | One-line title that auto-scrolls on the active track. |
+| `frontend/src/lib/coverMood.ts` | Client-side dominant-color extraction for the cover-mood tint. |
 | `frontend/src/components/VoiceRecorder.tsx` | Mic capture via `MediaRecorder` + live level meter. |
 | `frontend/src/components/LiveWaveform.tsx` | Canvas waveform on audio cards, driven by the analyser. |
 | `backend/core/transcribe.py` | faster-whisper wrapper (lazy, threaded, device auto-detect). |
@@ -68,11 +72,11 @@ Transcribe (background)
 
 **Decision: there is exactly one `<audio>` element in the entire app**, owned by
 `AudioPlayerProvider` and mounted in `Layout` (which never unmounts across route
-changes). Every surface — header mini-player, dashboard cards, the detail page —
-drives that same element through the `useAudioPlayer()` context.
+changes). Every surface (the sidebar now-playing player, dashboard cards, the
+detail page) drives that same element through the `useAudioPlayer()` context.
 
 **Why:** playback has to survive navigation. Open a memo, hit back, the track keeps
-playing and the mini-player stays visible. Two competing `<audio>` elements would
+playing and the sidebar player stays visible. Two competing `<audio>` elements would
 fight over playback state and double up sound. One element is the single source of
 truth for `playing`, `currentTime`, `duration`, and the active track.
 
@@ -84,8 +88,82 @@ playback).
 **Volume + mute live on the same element (ADR-010).** The context exposes
 `volume` (0..1, persisted to `localStorage`), `muted`, `setVolume`, and
 `toggleMute`; they are written to the one shared `<audio>` and re-applied on each
-track load. Every surface drives that single value — there is no per-surface
-volume — so the card player, sidebar players, and OS media keys stay in sync.
+track load. Every surface drives that single value, so there is no per-surface
+volume: the card player, sidebar players, and OS media keys stay in sync.
+
+### Three player surfaces (ADR-010)
+
+Music plays through three surfaces, all driving the one shared `<audio>`:
+
+- **`SidebarPlayer`** in the sidebar foot, in three sizes. `small` is the compact
+  row (cover thumb, marquee title, transport, volume button). `big` is the
+  full-bleed cover-first card: play is a large disc in the top-right corner, pin
+  and repeat are satellites beside it (`.om-sb-player-sat`), the scrubber drops to
+  a bottom block, and the close X sits top-left, anchored by `position:relative`
+  on `.om-sb-player-big` and revealed on hover. `collapsed` shrinks to a cover
+  thumbnail with a progress ring so "something is playing" survives the tucked-away
+  rail.
+- **The inline card player** (`CardMusicPlayer`): the active music card flips to an
+  in-card player via an absolute overlay, at the card's existing size, no resize,
+  no cover zoom. Same corner cluster as the `big` sidebar player. Voice cards keep
+  their `LiveWaveform` instead.
+- **`MusicDetailPlayer`** on the detail page: a large cover-forward hero for a
+  music memo with cover art. The cover bleeds full-bleed and a left→right
+  mood-gradient veil fades it into the solid cover color where the title, centered
+  transport, and scrubber sit (one image plus a gradient, so there is no
+  side-by-side seam). Voice and cover-less audio keep the compact `AudioMemoPlayer`
+  bar.
+
+### Volume + marquee, shared across every surface (ADR-010)
+
+Two small components ride on all the surfaces:
+
+- **`VolumeControl`** renders an animated speaker icon plus the title on the bottom
+  row. Click the icon to mute (icon turns to ✕). Hover slides a slider out over the
+  title in place, lingering ~2s after the pointer leaves so it can be grabbed. The
+  resting icon pulses every 15 seconds: waves sweep 0→3→0 then settle on the count
+  matching the current level (≤30% → 1 wave, ~50% → 2, high → 3), so you can tell
+  which card is the one playing. Dragging the slider updates the wave count live.
+- **`Marquee`** truncates a title to one line with an ellipsis at rest. On hover, if
+  the text overflows, it slides left to reveal the end then returns (a single pass,
+  not a loop) at a constant reading speed. On the active now-playing surfaces the
+  `auto` mode loops slowly. It honors `prefers-reduced-motion`.
+
+Full-bleed controls are white-on-cover (the scrim is always dark enough). The slider
+and icon fall back to theme tokens only on the non-tinted `small` sidebar player.
+
+### The detail hero veil and sizing (ADR-010)
+
+The hero veil and panel width are driven by CSS vars with shipped fallbacks. A
+"Gradient" tab in the existing DEV panel (`src/dev/DevPanel.tsx`) tunes them live via
+`--dev-*` on `:root` (DEV-only, production untouched). Two shipped behaviors are
+worth knowing:
+
+- **Mood brightness is theme-aware and animated.** It is a `filter: brightness()` on
+  the veil, 100% in light, 50% in dark, set concretely per theme (dark base `0.5`,
+  `[data-theme="light"]` overrides to `1`) so the change triggers `transition:
+  filter` and cross-fades instead of jumping. `filter` is on the
+  `.om-app.theme-transitioning *` allow-list so the dim eases across the 3s theme
+  swap. A gradient `background` can't transition; a filter can, which is why it is a
+  filter.
+- **Cover width follows the artwork aspect.** A 16:9 thumbnail (e.g. a localized
+  YouTube track) gets an 80% panel; square art (uploaded file, SoundCloud) gets 40%.
+  It is measured from the image and set per-memo via `--cover-w`, animated with
+  `transition: width` so it doesn't jump between memo types. The hero holds
+  `opacity: 0` until the cover has loaded and its aspect is known, then fades in, so
+  the width settles while hidden and nothing pops in piecemeal.
+
+### Music description, not a transcript (ADR-010)
+
+A song's "transcript" is its lyrics, which need a dedicated provider (deferred, see
+ADR-005). So for music (`audio_kind === 'music'`) the transcript panel is hidden. In
+its place a collapsible `MusicDescription` shows the source's own notes (the YouTube
+/ SoundCloud description: tracklist, timestamps, notes), which is not a transcript.
+The live platform widget ("Listen on SoundCloud") gains a brand-glyph heading that
+doubles as a show/hide toggle and collapses by default once the track is local.
+Artist comes from the uploaded file's tags (mutagen, any format) into `audio_artist`,
+shown only when a real tag exists, never the source domain, and it also feeds the OS
+media metadata.
 
 ---
 
@@ -109,14 +187,14 @@ frequency spectrum while a track plays, and shows a calm static pattern at rest.
 
 ## 5. Recording
 
-`VoiceRecorder.tsx` uses the native `MediaRecorder` API — no third-party dependency.
+`VoiceRecorder.tsx` uses the native `MediaRecorder` API. No third-party dependency.
 
 - **Container pick order:** `audio/webm;codecs=opus` → `audio/webm` →
   `audio/ogg;codecs=opus` → `audio/ogg` → `audio/mp4`. Whatever the browser
   supports first. Chrome/Edge land on WebM/Opus, Firefox on Ogg/Opus, Safari on
   MP4/AAC.
 - A live level meter is drawn from a WebAudio `AnalyserNode` on the mic stream
-  (separate from the playback analyser — this one is decorative and torn down on
+  (separate from the playback analyser; this one is decorative and torn down on
   stop).
 - The finished blob is wrapped in a `File` named `Voice memo <timestamp>.<ext>` and
   handed to the panel, which uploads it.
@@ -161,7 +239,7 @@ Local speech-to-text via **faster-whisper** (`backend/core/transcribe.py`).
 
 ### Why faster-whisper (not Parakeet / NeMo)
 
-Evaluated NVIDIA Parakeet (parakeet-tdt-0.6b). It is excellent but drags in
+I evaluated NVIDIA Parakeet (parakeet-tdt-0.6b). It is excellent but drags in
 `nemo_toolkit` + PyTorch (~4 GB) and strongly prefers a GPU. openMemo's stack is
 otherwise torch-free (embeddings go through Ollama). faster-whisper (CTranslate2) is
 a light install, multilingual out of the box (~99 languages with auto-detect), and
@@ -185,7 +263,7 @@ footprint. **Decision: faster-whisper.**
 
 **Decision: the transcript is stored in `memo.content_text`, not a separate field.**
 That means audio is embedded into ChromaDB and becomes searchable + chattable
-through the exact same RAG path as every other Memo — no special-casing downstream.
+through the exact same RAG path as every other Memo, no special-casing downstream.
 Two columns track UI state only: `transcript_status` (`pending|processing|done|
 error`) and `transcript_lang` (detected language code).
 
@@ -194,12 +272,12 @@ error`) and `transcript_lang` (detected language code).
 - **Recordings:** a toggle in the Voice tab, **on by default**, sets `transcribe=
   true` on the upload. Audio + transcript is the default experience.
 - **Uploaded audio:** an on-demand **Transcribe** button on the memo detail page.
-- **Local videos:** the transcribe path accepts `type in (audio, video)` — faster-
+- **Local videos:** the transcribe path accepts `type in (audio, video)`. faster-
   whisper reads the video container (PyAV) and pulls the audio track itself, so a
   downloaded or uploaded video can be transcribed with no manual audio extraction.
 - **Remote videos (no local file):** **Get transcript** on the Transcript tab runs
-  the caption-first extractor (`core/transcript.py`) — host subtitles via yt-dlp,
-  Whisper STT fallback — without downloading the media or changing the memo type.
+  the caption-first extractor (`core/transcript.py`): host subtitles via yt-dlp,
+  Whisper STT fallback, without downloading the media or changing the memo type.
   See ADR-004.
 
 ### Config (env / `backend/config.py`)
@@ -222,8 +300,8 @@ error`) and `transcript_lang` (detected language code).
 Any Memo with a `source_url` yt-dlp can fetch (YouTube, Vimeo, social video, podcast
 hosts, direct media files) can be pulled local. Two modes:
 
-- **`video`** — best ≤1080p mp4 (merged video+audio).
-- **`audio`** — best audio-only (m4a/opus); an **explicit** video→audio (podcast)
+- **`video`:** best ≤1080p mp4 (merged video+audio).
+- **`audio`:** best audio-only (m4a/opus); an **explicit** video→audio (podcast)
   conversion that replaces the video view.
 
 On success the memo's `file_path` is set, `type` flips to local audio/video, and a
@@ -231,7 +309,7 @@ video thumbnail is generated. Status is tracked on `localize_status`; the detail
 polls until done.
 
 > Transcripts are **not** produced here anymore. The `audio_transcript` mode was
-> removed — transcript extraction is a separate, non-destructive path
+> removed; transcript extraction is a separate, non-destructive path
 > (`POST /api/memos/{id}/transcribe` → `core/transcript.py`, caption-first / STT
 > fallback) that never changes `type`/`file_path`. See ADR-004.
 
@@ -251,6 +329,8 @@ Columns on `memos` added for audio (all nullable, auto-migrated on startup in
 
 | Column | Meaning |
 |--------|---------|
+| `audio_kind` | `voice\|music`, or null. Splits behavior (waveform vs cover art). See ADR-005. |
+| `audio_artist` | Artist from the uploaded file's tags (mutagen, any format); null when no real tag exists. See ADR-010. |
 | `transcript_status` | `pending\|processing\|done\|error`, or null. |
 | `transcript_lang` | Detected language code (e.g. `en`), or null. |
 | `localize_status` | `pending\|processing\|done\|error`, or null. |
@@ -283,67 +363,67 @@ There is intentionally no separate transcript table.
 
 ## 11. Known limitations / current state
 
-- **No word-level timestamps or transcript-synced playback** — the transcript is a
+- **No word-level timestamps or transcript-synced playback:** the transcript is a
   single cleaned block, not time-aligned to the audio.
-- **No diarization** — speakers are not separated/labeled.
-- **No progress bar during transcription** — the UI shows a "transcribing…" state
+- **No diarization:** speakers are not separated/labeled.
+- **No progress bar during transcription:** the UI shows a "transcribing…" state
   and polls, but not a percentage.
-- **Transcription is serialized** — one inference lock; concurrent requests queue.
-- **`small` model on CPU** is the default — fine for short clips, slow on long ones.
-- **No transcript editing** — the user cannot correct the generated text yet (it is
+- **Transcription is serialized:** one inference lock; concurrent requests queue.
+- **`small` model on CPU** is the default: fine for short clips, slow on long ones.
+- **No transcript editing:** the user cannot correct the generated text yet (it is
   the memo's `content_text`, so editing the note edits the transcript, but there is
   no purpose-built transcript editor).
-- **Make-it-local has no per-download progress** — only pending/processing/done.
+- **Make-it-local has no per-download progress:** only pending/processing/done.
 
 ---
 
-## 12. Roadmap — where audio goes next (V2 ideas)
+## 12. Roadmap: where audio goes next (V2 ideas)
 
 Grouped by theme. Nothing here is committed; this is the backlog to pull from.
 
 ### Playback & UI
-- **Transcript-synced playback** — word/segment timestamps from faster-whisper
+- **Transcript-synced playback:** word/segment timestamps from faster-whisper
   (`word_timestamps=True`), click a word to seek, highlight the current word as it
   plays.
 - **Playback speed control** (0.75×–2×) in the mini-player and detail player.
-- **Global keyboard shortcuts** — space to play/pause the active track, arrows to
+- **Global keyboard shortcuts:** space to play/pause the active track, arrows to
   seek, from anywhere.
-- **Queue / continuous play** — play through all audio memos in a collection.
-- **Real per-track waveform** — precomputed peaks for the whole file (offline
+- **Queue / continuous play:** play through all audio memos in a collection.
+- **Real per-track waveform:** precomputed peaks for the whole file (offline
   analysis at ingest), so the scrubber shows the actual waveform, not just a live
   spectrum while playing.
 
 ### Transcription quality
 - **Word-level timestamps + segments** stored alongside the text (new field or a
   sidecar), enabling sync + search-to-timestamp.
-- **Speaker diarization** — separate and label speakers (e.g. pyannote, kept
+- **Speaker diarization:** separate and label speakers (e.g. pyannote, kept
   optional/heavy).
-- **Transcript editor** — a dedicated editing surface that keeps timestamps intact.
-- **Language pick / forced language** — let the user override auto-detect when it
+- **Transcript editor:** a dedicated editing surface that keeps timestamps intact.
+- **Language pick / forced language:** let the user override auto-detect when it
   guesses wrong.
-- **Summarization of long audio** — reuse the AI-summary path on the transcript.
-- **Chapter detection** — split long recordings into navigable sections.
+- **Summarization of long audio:** reuse the AI-summary path on the transcript.
+- **Chapter detection:** split long recordings into navigable sections.
 
 ### Performance & ops
-- **Progress reporting** — stream segment-by-segment progress to the UI (faster-
+- **Progress reporting:** stream segment-by-segment progress to the UI (faster-
   whisper yields segments lazily; surface them as they arrive, even live-append the
   transcript).
-- **Model size in Settings** — expose `WHISPER_MODEL` as a UI setting with a
+- **Model size in Settings:** expose `WHISPER_MODEL` as a UI setting with a
   download-on-demand flow.
-- **Batch transcription** — a maintenance endpoint to transcribe every
+- **Batch transcription:** a maintenance endpoint to transcribe every
   un-transcribed audio/video memo.
-- **GPU detection surfaced in Settings** — show the user whether they're on CUDA or
+- **GPU detection surfaced in Settings:** show the user whether they're on CUDA or
   CPU and the expected speed.
 
 ### Capture
 - **Pause/resume while recording.**
-- **Longer-form recording UI** — section markers, a running transcript preview.
-- **Import from podcast RSS** — subscribe and auto-localize episodes.
+- **Longer-form recording UI:** section markers, a running transcript preview.
+- **Import from podcast RSS:** subscribe and auto-localize episodes.
 
 ### Make it local
 - **Per-download progress** parsed from yt-dlp output.
-- **Quality picker** — let the user choose resolution/format before download.
-- ~~**Subtitle download**~~ — *done (ADR-004):* the transcript path is now
+- **Quality picker:** let the user choose resolution/format before download.
+- ~~**Subtitle download**~~ *done (ADR-004):* the transcript path is now
   caption-first, pulling host subtitles via yt-dlp and only falling back to
   Whisper STT when none exist.
 

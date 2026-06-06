@@ -1,21 +1,21 @@
 # Architecture & Process Decisions
 
-Significant decisions about how OpenMemo is built and how changes are scoped.
+Significant decisions about how OpenMemo is built and how I scope changes.
 Newest first. Each entry is an ADR (Architecture Decision Record): the context,
 the decision, and its consequences, so a future reader knows *why*, not just
 *what*.
 
 ---
 
-## ADR-010 — The full-bleed now-playing player is corner-anchored, with a shared volume engine and one-line marquee titles
+## ADR-010: The full-bleed now-playing player is corner-anchored, with a shared volume engine and one-line marquee titles
 
 **Date:** 2026-06-05 · **Status:** Shipped · **Builds on:** ADR-005 (audio is a first-class media experience; the sidebar hosts the now-playing player), ADR-001 (define shared things once)
 
 ### Context
 
-The full-bleed music player (the inline card overlay `CardMusicPlayer`, and the
-`big` sidebar player) followed the textbook transport layout: a **centered** white
-play button flanked by repeat (left) and pin (right), with the scrubber pinned to
+I built the full-bleed music player (the inline card overlay `CardMusicPlayer`,
+and the `big` sidebar player) on the textbook transport layout: a **centered**
+white play button flanked by repeat (left) and pin (right), scrubber pinned to
 the top. Three problems:
 
 - **The center play button sat on top of the cover art**, the one thing a music
@@ -25,23 +25,23 @@ the top. Three problems:
   rendered at the **top of the whole sidebar**, with an arrow's-length of empty
   space between it and the player it belonged to.
 - **There was no volume control anywhere**, and titles truncated with a static
-  ellipsis — long track names ("Your Mind Will Disappear Into This…") were
+  ellipsis. Long track names ("Your Mind Will Disappear Into This…") were
   unreadable past the cut.
 
-This is the user's app, not a stock media widget — there is no obligation to keep
+This is my app, not a stock media widget. There is no obligation to keep
 play-in-the-middle-with-two-flankers. With code, the controls can go anywhere.
 
 ### Decision
 
-**Redesign the full-bleed player around the cover: corner-anchor the transport,
-drop the scrubber to the bottom, and add a shared volume engine + a one-line
-marquee title.** Applies to both full-bleed surfaces (the inline card player and
-the `big` sidebar player); the compact `small` sidebar player and the audio card
-inherit the volume + marquee pieces but keep their row layout.
+**I redesigned the full-bleed player around the cover: corner-anchor the
+transport, drop the scrubber to the bottom, add a shared volume engine and a
+one-line marquee title.** This applies to both full-bleed surfaces (the inline
+card player and the `big` sidebar player). The compact `small` sidebar player and
+the audio card inherit the volume and marquee pieces but keep their row layout.
 
 **1. Corner transport cluster.** Play is the primary control, a large disc in the
 **top-right corner**. Pin and repeat are smaller satellites beside/below it
-(`.om-card-player-sat` / `.om-sb-player-sat`). No centered button — the cover's
+(`.om-card-player-sat` / `.om-sb-player-sat`). No centered button, so the cover's
 center stays clear. The close X (sidebar `big` only) moves to the **top-left** so
 it never collides with the cluster, and is anchored by giving `.om-sb-player-big`
 `position:relative` (the bug above) and revealed on hover.
@@ -55,22 +55,22 @@ markup, repositioned.
 `<audio>` and re-applied on each track load. `setVolume` (which clears mute when
 dragged up) and `toggleMute` are exposed on the context, so the card player, both
 sidebar players, and anything future stay in sync through one source of truth
-(ADR-001) — never per-surface `<audio>.volume` writes.
+(ADR-001), never per-surface `<audio>.volume` writes.
 
 **4. The volume control is a deliberate, self-announcing affordance.** A
 `VolumeControl` component renders an animated speaker icon + the title on the
 bottom row. Clicking the icon mutes (icon → ✕). Hovering slides a slider out
 **over the title in place**, lingering ~2s after the pointer leaves so it can be
-grabbed. The resting icon **pulses every 15 seconds** — waves sweep 0→3→0 then
+grabbed. The resting icon **pulses every 15 seconds**: waves sweep 0→3→0 then
 settle on the count that matches the current level (≤30% → 1 wave, ~50% → 2, high
-→ 3) — so the user can tell *which* card is the one playing and is reminded the
+→ 3). That tells the user *which* card is the one playing and reminds them the
 control is there. Dragging the slider updates the wave count live.
 
 **5. One-line marquee titles.** A `Marquee` component truncates to a single line
 with an ellipsis at rest; on hover, if the text overflows, it slides left to
 reveal the end then returns (a single pass, not a loop), at a constant reading
-speed proportional to the overflow. Honors `prefers-reduced-motion`. Used in the
-player titles now; reusable on any card title.
+speed proportional to the overflow. Honors `prefers-reduced-motion`. I use it in
+the player titles now; it is reusable on any card title.
 
 **6. Theming.** Full-bleed controls are white-on-cover (the cover/scrim is always
 dark enough). The slider and icon fall back to theme tokens only on the
@@ -88,13 +88,13 @@ there is no side-by-side seam). Voice and cover-less audio keep the compact bar.
 The live platform widget ("Listen on SoundCloud") gains a brand-glyph heading
 that doubles as a **show/hide toggle**, and is **collapsed by default once the
 track is local** (it is then only a secondary reference). Its redundant "Open
-original" button is dropped — the source link at the top of the page already
+original" button is dropped, since the source link at the top of the page already
 covers it.
 
 **9. Music transcript is deferred to lyrics.** A song's "transcript" is its
-lyrics, which need a dedicated provider (LRCLIB / embedded tags / lyrics.ovh —
-the local-first set deferred in ADR-005). Until that lands, the transcript panel
-is **hidden for music** (`audio_kind === 'music'`); voice (spoken word) keeps it.
+lyrics, which need a dedicated provider (LRCLIB / embedded tags / lyrics.ovh, the
+local-first set deferred in ADR-005). Until that lands, the transcript panel is
+**hidden for music** (`audio_kind === 'music'`); voice (spoken word) keeps it.
 
 ### Alternatives considered
 
@@ -122,21 +122,21 @@ is **hidden for music** (`audio_kind === 'music'`); voice (spoken word) keeps it
 - New `MusicDetailPlayer` (detail hero). The detail source widget is collapsible
   and collapsed-by-default once local; the music transcript panel is hidden
   pending lyrics, replaced by a togglable `MusicDescription` (the source's own
-  description — tracklist/timestamps/notes — which is not a transcript). Related
+  description, tracklist/timestamps/notes, which is not a transcript). Related
   Memos is temporarily hidden on the detail page (UX revisit, code retained).
 - New `audio_artist` column + `mutagen` dep: artist read from an uploaded file's
   tags (any format) at ingest; shown in the hero (and OS media metadata) only
-  when a real tag exists — never the source domain.
+  when a real tag exists, never the source domain.
 - The hero veil/sizing is driven by CSS vars with shipped fallbacks; a "Gradient"
   tab in the existing DEV panel (`src/dev/DevPanel.tsx`) tunes them live via
   `--dev-*` on `:root` (DEV-only, production untouched). Tuned/shipped behavior:
-  - **Mood brightness is theme-aware and animated** — applied as a
+  - **Mood brightness is theme-aware and animated.** Applied as a
     `filter: brightness()` on the veil (100% light, **50% dark**), not a gradient
     color-mix, because a gradient `background` can't transition but a filter can.
     The value is set **concretely per theme** (dark base `0.5`, `[data-theme="light"]`
     overrides to `1`) rather than through a flipping CSS var, so the change
     reliably triggers the `transition: filter` and cross-fades instead of jumping.
-  - **Cover width follows the artwork aspect** — a 16:9 video thumbnail (e.g. a
+  - **Cover width follows the artwork aspect.** A 16:9 video thumbnail (e.g. a
     localized YouTube track) gets an 80% panel; square music art (uploaded file,
     SoundCloud) gets 40%. Measured from the image, set per-memo via `--cover-w`,
     and the width change is animated (`transition: width`) so it doesn't jump
@@ -144,10 +144,10 @@ is **hidden for music** (`audio_kind === 'music'`); voice (spoken word) keeps it
   - The hero's pill controls (repeat, volume) get a `backdrop-filter` blur behind
     them so they read over busy artwork.
   - The brightness crossfade required adding `filter` to the
-    `.om-app.theme-transitioning *` transition allow-list — that rule sets
-    `transition: ... !important` for the 3s theme-swap window and omitting
+    `.om-app.theme-transitioning *` transition allow-list. That rule sets
+    `transition: ... !important` for the 3s theme-swap window, and omitting
     `filter` made the veil snap; with it, the dim eases across the swap.
-- **Hero loads as one unit** — `MusicDetailPlayer` holds `opacity: 0` until the
+- **Hero loads as one unit.** `MusicDetailPlayer` holds `opacity: 0` until the
   cover image has loaded and its aspect is known, then fades in, so the panel
   width settles (40↔80) while hidden and nothing pops in piecemeal.
 - The detail meta-row source chip (`.om-source`) gained a hover state.
@@ -158,33 +158,33 @@ is **hidden for music** (`audio_kind === 'music'`); voice (spoken word) keeps it
 
 ---
 
-## ADR-009 — Make the whole UI responsive in place: one codebase that adapts every page from desktop to mobile
+## ADR-009: Make the whole UI responsive in place, one codebase that adapts every page from desktop to mobile
 
-**Date:** 2026-06-04 · **Status:** Proposed · **Relates to:** ADR-006 (sidebar is a fixed three-zone column), ADR-005 (the sidebar hosts the now-playing player), ADR-008 (keep work off the request/render hot path), ADR-001 (define shared things once, never scatter)
+**Date:** 2026-06-04 · **Status:** Designed, not yet built · **Relates to:** ADR-006 (sidebar is a fixed three-zone column), ADR-005 (the sidebar hosts the now-playing player), ADR-008 (keep work off the request/render hot path), ADR-001 (define shared things once, never scatter)
 
 ### Context
 
-OpenMemo was built desktop-first. **No page is designed for a small screen.** The shell (`.om-app`) is a two-child flexbox — a fixed sidebar rail (`260px` / `76px` collapsed) plus a flexible `.om-main` — and nothing collapses that below any width. The few `@media` rules that exist are one-off patches inside single components (Settings at 1100px, Ask history at 1000px, one detail grid at 720px); there is no app-wide responsive system. On a phone today, every page breaks in its own way:
+OpenMemo was built desktop-first. **No page is designed for a small screen.** The shell (`.om-app`) is a two-child flexbox: a fixed sidebar rail (`260px` / `76px` collapsed) plus a flexible `.om-main`, and nothing collapses that below any width. The few `@media` rules that exist are one-off patches inside single components (Settings at 1100px, Ask history at 1000px, one detail grid at 720px); there is no app-wide responsive system. On a phone today, every page breaks in its own way:
 
-- **Sidebar** — a static column that eats ~67% of a 390px screen (or 19% collapsed); no drawer, no way to get it out of the way. `.om-main` is crushed beside it.
-- **Dashboard feed** — `MemoGrid` never goes below **2 columns** (`useViewportColumns` floors at 2 under 900px; `react-masonry-css` has no `1`), so cards are unreadably narrow on a phone.
-- **Sidebar player** — `SidebarPlayer` is laid out in fixed pixels inside the ~236px rail with no `min-width:0` and no wrap, so the transport **clips**; the current workaround is to drop the browser to **90% zoom** to see the buttons. (Reproduces under desktop zoom too — it's a sizing bug, not only a phone bug.)
-- **Settings** — the bento grid only stacks at 1100px; the cards and rows inside it have no phone treatment.
-- **Collections** — multi-column grid with no single-column fallback.
-- **Ask** — two-column shell; history hides at 1000px but the rest isn't tuned for narrow.
-- **MemoDetail** — pins a fixed `384px` chat pane beside the content; nothing stacks.
-- **Modals / panels / FAB** — `AddMemoPanel` is a `296px` right-anchored panel; the `+` FAB sits at a fixed `16px` inset with no safe-area; `viewport` meta lacks `viewport-fit=cover`, so notch / home-indicator insets are ignored. Search overlay, Appearance panel, lightbox, onboarding — none are phone-tuned.
-- **Brand mark** — the top-left logo is wired to `toggleSidebarCollapsed`, not navigation; it does not return you to the dashboard.
-- **Touch** — Lenis smooth-scroll (`touchMultiplier:1.5`) hijacks native momentum scroll on every non-detail route.
+- **Sidebar:** a static column that eats ~67% of a 390px screen (or 19% collapsed); no drawer, no way to get it out of the way. `.om-main` is crushed beside it.
+- **Dashboard feed:** `MemoGrid` never goes below **2 columns** (`useViewportColumns` floors at 2 under 900px; `react-masonry-css` has no `1`), so cards are unreadably narrow on a phone.
+- **Sidebar player:** `SidebarPlayer` is laid out in fixed pixels inside the ~236px rail with no `min-width:0` and no wrap, so the transport **clips**; the current workaround is to drop the browser to **90% zoom** to see the buttons. (Reproduces under desktop zoom too. It's a sizing bug, not only a phone bug.)
+- **Settings:** the bento grid only stacks at 1100px; the cards and rows inside it have no phone treatment.
+- **Collections:** multi-column grid with no single-column fallback.
+- **Ask:** two-column shell; history hides at 1000px but the rest isn't tuned for narrow.
+- **MemoDetail:** pins a fixed `384px` chat pane beside the content; nothing stacks.
+- **Modals / panels / FAB:** `AddMemoPanel` is a `296px` right-anchored panel; the `+` FAB sits at a fixed `16px` inset with no safe-area; `viewport` meta lacks `viewport-fit=cover`, so notch / home-indicator insets are ignored. Search overlay, Appearance panel, lightbox, onboarding: none are phone-tuned.
+- **Brand mark:** the top-left logo is wired to `toggleSidebarCollapsed`, not navigation; it does not return you to the dashboard.
+- **Touch:** Lenis smooth-scroll (`touchMultiplier:1.5`) hijacks native momentum scroll on every non-detail route.
 
-Two facts shape *how* we fix this, not just *what*:
+Two facts shape *how* I fix this, not just *what*:
 
 - The breakpoints already in the code are **scattered magic numbers** (720 / 900 / 1000 / 1100 / 1280 / 1500), defined independently in CSS and in JS. Bolting a mobile mode onto that scatter would make the drift worse (the thing ADR-001 warns against).
-- **The desktop designs are still changing** — `MemoDetail` in particular will be reworked, and others may follow. So the mobile work must ride on the *same* components as desktop, not a hand-copied snapshot, or it rots the next time a page is redesigned.
+- **The desktop designs are still changing.** `MemoDetail` in particular will be reworked, and others may follow. So the mobile work must ride on the *same* components as desktop, not a hand-copied snapshot, or it rots the next time a page is redesigned.
 
 ### Decision
 
-**Make every existing page responsive in place — one codebase, no separate mobile version — using one shared set of breakpoints.** Each page keeps the same components on every screen and simply re-lays-them-out by width. That is the whole point: when a page's desktop design changes later, **its mobile version changes with it for free**, because they are literally the same code. (This is what "connected, systematic adaptation" means in practice — not a second mobile app to keep in sync.)
+**Make every existing page responsive in place: one codebase, no separate mobile version, using one shared set of breakpoints.** Each page keeps the same components on every screen and simply re-lays-them-out by width. That is the whole point: when a page's desktop design changes later, **its mobile version changes with it for free**, because they are literally the same code. (This is what "connected, systematic adaptation" means in practice: not a second mobile app to keep in sync.)
 
 Eight concrete decisions:
 
@@ -198,7 +198,7 @@ Eight concrete decisions:
 
 A `useBreakpoint()` / `useIsMobile()` hook (one `matchMedia` listener) is the single JS source; a small set of CSS tokens is the single CSS source. The scattered 720/900/1000/1100 literals get migrated onto these (the 1280/1500 grid-density steps stay, but as desktop-only refinements). No component re-types a raw pixel width again.
 
-**2. Sidebar → off-canvas drawer below `lg`.** The rail leaves the flow and slides in from the left at `min(86vw, 320px)` over a dimmed, tap-to-dismiss scrim, opened by a hamburger in a slim **mobile top bar** (shown only below `lg`). It closes on route change, scrim tap, and Escape, and locks page scroll while open. The desktop rail and its collapse/expand (ADR-006) are untouched. *(A full-bleed `100vw` drawer was considered and rejected — no visible "tap to close" target; it reads as a page change, not an overlay.)*
+**2. Sidebar → off-canvas drawer below `lg`.** The rail leaves the flow and slides in from the left at `min(86vw, 320px)` over a dimmed, tap-to-dismiss scrim, opened by a hamburger in a slim **mobile top bar** (shown only below `lg`). It closes on route change, scrim tap, and Escape, and locks page scroll while open. The desktop rail and its collapse/expand (ADR-006) are untouched. *(A full-bleed `100vw` drawer was considered and rejected: no visible "tap to close" target; it reads as a page change, not an overlay.)*
 
 **3. Logo → home, on every page.** The brand mark navigates to `/` in every state (wordmark on desktop, logo glyph in the collapsed rail, logo in the mobile top bar / drawer header), and closes the drawer on mobile. Collapse/expand moves entirely to the chevron control, so "go home" and "toggle the rail" stop being the same ambiguous button.
 
@@ -207,10 +207,10 @@ A `useBreakpoint()` / `useIsMobile()` hook (one `matchMedia` listener) is the si
 **5. Sidebar player → fluid, never clips.** Fix the crop at the root: `min-width:0` on every flex child, `clamp()` sizes for the cover and transport, the time labels degrade to elapsed-only when very narrow, and the transport may wrap rather than clip. This retires the 90%-zoom workaround on *every* screen and gives the player the wider drawer on mobile for free.
 
 **6. Every other page reflows to a single readable column on phones.**
-- **Settings** — the bento grid and each card/row stack to one column; tap targets ≥ 44px.
-- **Collections** — single column; the header row (title + edit toggle) stacks.
-- **Ask** — single column; the question/answer area takes the full width; history stays hidden (already does at narrow).
-- **MemoDetail** — content goes full-width and the secondary chat pane becomes a slide-over / sheet you open with a button, instead of a fixed side pane. *Because the rule is "main content + a secondary panel that collapses," it survives the planned desktop redesign — it is not pinned to today's `.om-detail-chat` markup.*
+- **Settings:** the bento grid and each card/row stack to one column; tap targets ≥ 44px.
+- **Collections:** single column; the header row (title + edit toggle) stacks.
+- **Ask:** single column; the question/answer area takes the full width; history stays hidden (already does at narrow).
+- **MemoDetail:** content goes full-width and the secondary chat pane becomes a slide-over / sheet you open with a button, instead of a fixed side pane. *Because the rule is "main content + a secondary panel that collapses," it survives the planned desktop redesign: it is not pinned to today's `.om-detail-chat` markup.*
 
 To keep these consistent (and to keep MemoDetail and Ask in step when their desktop layouts change), pages with a "main area + side panel" share one small two-pane helper that does the beside → slide-over → sheet switch by breakpoint, rather than each page reinventing it.
 
@@ -239,29 +239,29 @@ To keep these consistent (and to keep MemoDetail and Ask in step when their desk
 
 | Option | Why rejected |
 |--------|--------------|
-| **A separate mobile version (second component set or route tree)** | Doubles the work and drifts: every desktop change has to be redone for mobile. The user's explicit goal is the opposite — change a page once, both sizes follow. One responsive codebase delivers that; two do not. |
+| **A separate mobile version (second component set or route tree)** | Doubles the work and drifts: every desktop change has to be redone for mobile. My explicit goal is the opposite: change a page once, both sizes follow. One responsive codebase delivers that; two do not. |
 | **Hand-tune each page's mobile CSS against its current markup** | Couples mobile to layouts that are still changing (esp. MemoDetail), so it breaks at the next redesign. Reflow by role (main + collapsible side panel) through a shared helper instead. |
 | **Keep the static rail, just make it narrower on phones** | A fixed rail at any width still steals scarce phone space and crushes the feed. Off-canvas frees the full width and is the expected mobile pattern. |
 | **Full-bleed `100vw` sidebar drawer** | No visible dismiss target; feels like navigating to a page. `min(86vw,320px)` over a scrim keeps "tap to close" and gives collections + player more room than the desktop rail. |
 | **Just add a `640:1` feed breakpoint and call it done** | Fixes one symptom; leaves the sidebar, player crop, brand, and every other page unaddressed. The ask is the whole app. |
 | **Fix the player crop with a phone-only media query** | The clip also happens under desktop zoom. The real fix is fluid sizing (`min-width:0` + `clamp` + wrap), which covers both. |
-| **New scattered `max-width` literals per component** | That is exactly the 720/900/1100 drift we already have. One token scale, read by CSS and the hook. |
+| **New scattered `max-width` literals per component** | That is exactly the 720/900/1100 drift already in the code. One token scale, read by CSS and the hook. |
 
 ### Consequences
 
 - **New shared pieces:** a breakpoint token set (CSS) + `useBreakpoint()`/`useIsMobile()` hook (JS) as the one source of truth; a `MobileTopBar` + drawer scrim; a small two-pane helper for "main + side panel" pages (Ask, MemoDetail, future); `mobileDrawerOpen` state (reusing the store's already-present-but-unused `sidebarOpen`/`toggleSidebar`).
-- **Every page gets a phone layout**, per the table above — this is whole-app responsiveness, not a single fix.
-- **Desktop redesigns carry to mobile automatically** for any page built from the shared helper and the breakpoint hook — the explicit safety net for the MemoDetail rework and anything after it.
-- **Player crop fixed at the root** (`min-width:0` + `clamp` + wrap) — the 90%-zoom workaround is gone on every screen.
+- **Every page gets a phone layout**, per the table above. This is whole-app responsiveness, not a single fix.
+- **Desktop redesigns carry to mobile automatically** for any page built from the shared helper and the breakpoint hook: the explicit safety net for the MemoDetail rework and anything after it.
+- **Player crop fixed at the root** (`min-width:0` + `clamp` + wrap): the 90%-zoom workaround is gone on every screen.
 - **Brand navigates home everywhere;** collapse moves to its own control (`Sidebar.tsx` + mobile top bar).
 - **Touch + safe-area:** Lenis off on touch; `viewport-fit=cover` + `env(safe-area-inset-*)` on fixed chrome; ≥44px targets.
-- **Preserves ADR-005/006** (player internals, three-zone sidebar) and **ADR-008** (one `matchMedia` subscription, drawer animates with `transform` — no resize thrash, no reflow on open).
-- **Coexists with the dashboard's infinite scroll** now landing on a parallel branch (`useInfiniteQuery` + a 1px `IntersectionObserver` sentinel, slim `load_only` payload): the sentinel rides the real `.om-main` scroll, so Lenis-off on touch leaves native scroll driving it, and the 1-column stack still positions it. When that branch merges, the "Dashboard uses `useQuery`" note above is superseded — the layout decisions are unaffected.
-- **Status is Proposed.** Nothing is built yet. Suggested order: (1) breakpoint source + shell drawer + top bar + logo-home; (2) feed 1-col; (3) player fluidity; (4) Settings / Collections / Ask single-column; (5) the two-pane helper + MemoDetail; (6) modals → sheets + safe-area. Each step is checkable against the per-page table.
+- **Preserves ADR-005/006** (player internals, three-zone sidebar) and **ADR-008** (one `matchMedia` subscription, drawer animates with `transform`, no resize thrash, no reflow on open).
+- **Coexists with the dashboard's infinite scroll** now landing on a parallel branch (`useInfiniteQuery` + a 1px `IntersectionObserver` sentinel, slim `load_only` payload): the sentinel rides the real `.om-main` scroll, so Lenis-off on touch leaves native scroll driving it, and the 1-column stack still positions it. When that branch merges, the "Dashboard uses `useQuery`" note above is superseded; the layout decisions are unaffected.
+- **Status: designed, not yet built.** Nothing is built yet. Suggested order: (1) breakpoint source + shell drawer + top bar + logo-home; (2) feed 1-col; (3) player fluidity; (4) Settings / Collections / Ask single-column; (5) the two-pane helper + MemoDetail; (6) modals → sheets + safe-area. Each step is checkable against the per-page table.
 
 ---
 
-## ADR-008 — Performance is a request-path discipline: never block the event loop, index for scale, keep liveness dependency-free
+## ADR-008: Performance is a request-path discipline. Never block the event loop, index for scale, keep liveness dependency-free
 
 **Date:** 2026-06-04 · **Status:** Shipped · **Relates to:** ADR-002 (Ollama + headless browser ship inside the API image)
 
@@ -324,23 +324,23 @@ Treat the request hot path as a shared, latency-sensitive resource. Five rules:
    the core API unhealthy. Ollama reachability is a separate concern, reported
    only by `/api/health` (Settings only), with a ~1.5s timeout and a 15s result
    cache. No background polling: lazy plus a short cache beats a timer that
-   re-adds the probe noise we just removed.
+   re-adds the probe noise I just removed.
 
 5. **SQLite is the correct datastore for a single-user local app.** "Set up a
    connection pool" is the wrong lesson here: there is one user and one writer.
    The real bottlenecks are blocking the event loop and missing indexes, not
-   connection exhaustion. We design for *this* app's shape, not a generic
+   connection exhaustion. I design for *this* app's shape, not a generic
    multi-tenant web service.
 
 ### Alternatives considered
 
 | Option | Why rejected |
 |--------|--------------|
-| **Move to Postgres + a connection pool** | Solves a problem we do not have (concurrent multi-user connection exhaustion). Adds an external service to a local-first app. SQLite is correct for single-user; the fixes were loop-blocking and indexes. |
+| **Move to Postgres + a connection pool** | Solves a problem this app does not have (concurrent multi-user connection exhaustion). Adds an external service to a local-first app. SQLite is correct for single-user; the fixes were loop-blocking and indexes. |
 | **Keep storage sizes always-on in `/api/stats`, just make the walk faster** | The walk is inherently slow over a Windows bind mount and grows with the library. Any synchronous version still risks the loop. Opt-in + threaded + cached removes it from the hot path entirely. |
-| **Background-poll Ollama every N seconds and cache the status** | Re-adds the exact timer noise (and log spam when down) we were removing. Lazy on-demand + a 15s cache gives fresh-enough status only when someone is looking. |
+| **Background-poll Ollama every N seconds and cache the status** | Re-adds the exact timer noise (and log spam when down) I was removing. Lazy on-demand + a 15s cache gives fresh-enough status only when someone is looking. |
 | **One `/api/health` for both liveness and Ollama status** | Conflates "is the API up" with "is the LLM up". A down optional dependency must never fail the container healthcheck or block the UI. Split into `/api/ping` (liveness) and `/api/health` (dependency status). |
-| **Add indexes only once we actually hit thousands** | They are idempotent and near-free at small scale. Waiting means the first slow day is a surprise; pre-indexing is cheap insurance. |
+| **Add indexes only once the library actually hits thousands** | They are idempotent and near-free at small scale. Waiting means the first slow day is a surprise; pre-indexing is cheap insurance. |
 
 ### Consequences
 
@@ -364,7 +364,7 @@ Treat the request hot path as a shared, latency-sensitive resource. Five rules:
 
 ---
 
-## ADR-007 — AI Summary eligibility is one predicate, gated by memo type and audio kind (music excluded)
+## ADR-007: AI Summary eligibility is one predicate, gated by memo type and audio kind (music excluded)
 
 **Date:** 2026-06-03 · **Status:** Shipped · **Builds on:** ADR-001 (systematic per-type, centralized), ADR-003 (eligibility-predicate pattern), ADR-004 (where summary was born), ADR-005 (voice vs music split)
 
@@ -379,7 +379,7 @@ text?"*:
 - Frontend (`MemoDetail.tsx`): `{!isEditing && memo.content_text && <SummaryPanel/>}`
 - Backend (`memos.py` `/summary`): `if not memo.content_text: raise 400`
 
-So **any** memo carrying `content_text` showed the panel — including **music**.
+So **any** memo carrying `content_text` showed the panel, including **music**.
 A music memo with a pulled/transcribed track (or any text in `content_text`)
 rendered an "AI Summary" with Timestamp/Insights/Essay modes. Summarizing a
 song's transcript or lyrics is meaningless; the reported symptom ("AI Summary
@@ -387,14 +387,14 @@ shows where it shouldn't, e.g. a music memo") is the direct result of summary
 never having an eligibility predicate the way every other capability does.
 
 This is the same disease ADR-003 cured for "Make it local" (a panel appearing on
-types where it has no meaning), left untreated for summary — and ADR-005 already
-gave us the exact tool to fix it cleanly: the `voice` vs `music` axis.
+types where it has no meaning), left untreated for summary. ADR-005 already gave
+me the exact tool to fix it cleanly: the `voice` vs `music` axis.
 
 ### Decision
 
 **AI Summary eligibility is a single predicate, gated by memo type and (for
-audio) the `audio_kind` sub-kind. Summary is NOT a property of transcript — it
-applies to any text-bearing memo — so it gets its own ADR and its own
+audio) the `audio_kind` sub-kind. Summary is NOT a property of transcript: it
+applies to any text-bearing memo, so it gets its own ADR and its own
 predicate**, mirrored on both ends so the API refuses exactly what the UI hides.
 
 **1. One predicate, two mirrors, one editable type set.**
@@ -405,8 +405,8 @@ predicate**, mirrored on both ends so the API refuses exactly what the UI hides.
   `SUMMARIZABLE_TYPES` set; consulted by the `/summary` endpoint.
 
 Each is `has-text AND type-is-summarizable AND not-music`. Changing *which types*
-qualify is a one-line edit to the set on each end — deliberately wired so the
-policy can be flipped quickly without touching render logic (the explicit ask).
+qualify is a one-line edit to the set on each end. I wired it that way
+deliberately so I can flip the policy fast without touching render logic.
 
 **2. Music is always excluded; voice is always eligible.** The exclusion keys off
 ADR-005's `audio_kind`: `music` (uploaded file or linked SoundCloud/Bandcamp/…)
@@ -418,7 +418,7 @@ never summarizes; `voice` (spoken-word mic recording) does. The frontend reuses
 | Memo type | Summary? | Why |
 |-----------|----------|-----|
 | `video` | ✅ | transcript / platform description |
-| `audio` · **voice** | ✅ | spoken word — summarizes like a talk |
+| `audio` · **voice** | ✅ | spoken word, summarizes like a talk |
 | `audio` · **music** | ❌ | a song; transcript/lyrics aren't a summarizable argument |
 | `article` / `link` | ✅ | extracted page text |
 | `document` / `file` | ✅ | extracted text content |
@@ -426,7 +426,7 @@ never summarizes; `voice` (spoken-word mic recording) does. The frontend reuses
 | `note` | ✅ | low value (self-authored) but harmless; kept for now |
 | `image` | ✅ (auto-skips) | no `content_text`, so `canSummarize` is false anyway |
 
-The set currently admits **all text-bearing types except music** — the minimal
+The set currently admits **all text-bearing types except music**: the minimal
 change that fixes the bug while removing nothing the user relies on. The set is
 the lever for tightening later (e.g. dropping `note`).
 
@@ -440,11 +440,11 @@ content that lacks its prerequisite.
 
 | Option | Why rejected |
 |--------|--------------|
-| **Keep the `content_text`-only gate** | The root bug — "has text" is not "is summarizable". Music has text; it still must not summarize. |
-| **Hardcode `type !== 'audio'`** | Wrong — it would kill summary for *voice* memos (spoken word, the ideal summary target) while a future music-only carve-out would still be scattered. The axis is voice/music, not the audio type. |
-| **Scatter the type checks at each render site** | Violates ADR-001/ADR-003 — gates drift. One predicate per end, read everywhere. |
+| **Keep the `content_text`-only gate** | The root bug: "has text" is not "is summarizable". Music has text; it still must not summarize. |
+| **Hardcode `type !== 'audio'`** | Wrong: it would kill summary for *voice* memos (spoken word, the ideal summary target) while a future music-only carve-out would still be scattered. The axis is voice/music, not the audio type. |
+| **Scatter the type checks at each render site** | Violates ADR-001/ADR-003: gates drift. One predicate per end, read everywhere. |
 | **Frontend-only gate** | The API would still summarize music if called directly; defense-in-depth and parity with the existing `content_text` backend check argue for mirroring. |
-| **Leave it folded under ADR-004** | The omission of an eligibility decision is *why* the bug existed. Summary spans articles/links/docs, not just transcripts — it earns its own record. |
+| **Leave it folded under ADR-004** | The omission of an eligibility decision is *why* the bug existed. Summary spans articles/links/docs, not just transcripts, so it earns its own record. |
 
 ### Consequences
 
@@ -452,7 +452,7 @@ content that lacks its prerequisite.
   AI Summary panel, and the `/summary` endpoint 400s if called for one.
 - New predicates `canSummarize` / `can_summarize` join `canMakeLocal` /
   `canTranscript` as the family of single-source eligibility gates.
-- Which types qualify is one editable set per end — quick to change, as asked.
+- Which types qualify is one editable set per end: quick to change, by design.
 - Voice memos keep summary; nothing else text-bearing loses it.
 - **Adjacent, not addressed here:** music is still *transcribable*
   (`canTranscript` admits all audio). Transcribing a song is the same kind of
@@ -461,13 +461,13 @@ content that lacks its prerequisite.
 
 ---
 
-## ADR-006 — Sidebar is a fixed three-zone column; only the collections list scrolls
+## ADR-006: Sidebar is a fixed three-zone column; only the collections list scrolls
 
 **Date:** 2026-06-03 · **Status:** Shipped · **Relates to:** ADR-005 (the sidebar hosts the now-playing player)
 
 ### Context
 
-The sidebar was a single flex column with `height: 100vh; overflow-y: auto` — the
+The sidebar was a single flex column with `height: 100vh; overflow-y: auto`: the
 **whole** sidebar was the scroll container. That made bottom-anchored elements
 (the foot, and after ADR-005 the now-playing player) behave as scrolling content,
 not pinned sections. Pinning them with `margin-top: auto` "worked" but, in a column
@@ -475,7 +475,7 @@ flex, auto margins absorb **all** remaining free space, so a large empty gap ope
 above the player whenever the content was short (the common case). A coding-agent
 handoff (`sidebar-handoff.md`) diagnosed this precisely.
 
-Separately, the desired behavior is that **only the collections list scrolls** —
+Separately, the desired behavior is that **only the collections list scrolls**:
 search, primary nav, the Pinned section, and the "Collections" header should stay
 fixed, not scroll away with the list.
 
@@ -493,10 +493,10 @@ zones, and put scrolling on exactly one inner element:
 | Middle (the only scroller) | `.om-sidebar-scroll` → the collections list | **yes** |
 | Bottom (fixed) | `SidebarPlayer` · foot (theme + avatar) | no |
 
-- `.om-sidebar` is `height: 100dvh; overflow: hidden` — it never scrolls itself.
+- `.om-sidebar` is `height: 100dvh; overflow: hidden`; it never scrolls itself.
 - `.om-sidebar-scroll` is `flex: 1 1 auto; min-height: 0; overflow-y: auto` and is
   **always rendered** (even collapsed, where it's empty) so it owns the flexible
-  space and naturally pins the player + foot to the bottom — **no `margin-top:auto`**.
+  space and naturally pins the player + foot to the bottom, with **no `margin-top:auto`**.
 - The "Collections" header is a standalone fixed row above the scroller; only the
   list rows scroll under it.
 - `data-lenis-prevent` is set on the scroller defensively, though Lenis is scoped
@@ -507,7 +507,7 @@ zones, and put scrolling on exactly one inner element:
 | Option | Why rejected |
 |--------|--------------|
 | **Keep the whole sidebar scrollable + `margin-top:auto` on the player/foot** | Auto margins eat all slack → large empty gap above the player; the reported bug. |
-| **Scroll the entire middle (nav + pinned + collections)** | Search/nav/Pinned/labels scroll away — the user wants them fixed; only the collection list should move. |
+| **Scroll the entire middle (nav + pinned + collections)** | Search/nav/Pinned/labels scroll away. I want them fixed; only the collection list should move. |
 | **`position: fixed` player pinned to the viewport** | Introduces overlap + width/offset compensation against the animated-width sidebar; brittle. |
 
 ### Consequences
@@ -515,11 +515,11 @@ zones, and put scrolling on exactly one inner element:
 - Player + foot stay visually pinned to the bottom with no gap, expanded or collapsed.
 - Only the collections list scrolls; everything else is fixed.
 - New classes: `.om-sidebar-scroll`, `.om-collections-head`. `.om-sidebar` loses its
-  own scroll. No JS layout math — pure flexbox.
+  own scroll. No JS layout math, pure flexbox.
 
 ---
 
-## ADR-005 — Audio is a first-class media experience: voice vs music split, local-first pull-first player
+## ADR-005: Audio is a first-class media experience. Voice vs music split, local-first pull-first player
 
 **Date:** 2026-06-03 · **Status:** Shipped · **Builds on:** ADR-001 (whole-type scope), ADR-003 (tiered capture), ADR-004 (non-destructive transcript)
 
@@ -528,9 +528,9 @@ zones, and put scrolling on exactly one inner element:
 Audio was the runt of the media types. Three different things all collapsed into a
 single undifferentiated `type: 'audio'`:
 
-1. **Voice memos** — mic recordings made in-app (spoken word, transcribe-on-save).
-2. **Uploaded music** — a local `.mp3` / `.flac` / `.wav` the user dropped in.
-3. **Linked music** — a track pulled from SoundCloud / Bandcamp / Mixcloud / Audius.
+1. **Voice memos:** mic recordings made in-app (spoken word, transcribe-on-save).
+2. **Uploaded music:** a local `.mp3` / `.flac` / `.wav` the user dropped in.
+3. **Linked music:** a track pulled from SoundCloud / Bandcamp / Mixcloud / Audius.
 
 Nothing in the schema told them apart, so every render site had to guess from a
 fragile filename heuristic (`title LIKE 'Voice memo%'`). That blocked any
@@ -542,16 +542,16 @@ lives, and no way to tell what was playing once the player was dismissed.
 
 Two latent bugs made linked audio actively hostile:
 
-- **Bug 1 — audio hosts mistyped `video`.** SoundCloud/Bandcamp/Mixcloud live in
+- **Bug 1: audio hosts mistyped `video`.** SoundCloud/Bandcamp/Mixcloud live in
   the extractor's `_VIDEO_DOMAINS` (yt-dlp pulls them like any other site). When
   yt-dlp's metadata probe *failed* at save time (rate-limit, transient network, a
-  momentary host change — all common for SoundCloud), `extract_video` fell back to
+  momentary host change, all common for SoundCloud), `extract_video` fell back to
   a hardcoded `type = "video"`. A `video`-typed SoundCloud memo has no inline
   player (it is not in the video embed registry) and every audio render path is
-  gated on `type === 'audio'`, so the detail page rendered **nothing** — a dead
+  gated on `type === 'audio'`, so the detail page rendered **nothing**: a dead
   end produced by a transient hiccup, affecting *every* audio host, not one.
 
-- **Bug 2 — the live platform embed was hidden whenever auto-download was on.**
+- **Bug 2: the live platform embed was hidden whenever auto-download was on.**
   The SoundCloud/Mixcloud widget ("listen at the source") only rendered when
   `localize_status` was unset, i.e. auto-download OFF. With auto-download ON (the
   default), the user never got the live reference, and a `localize_status: done`
@@ -560,12 +560,12 @@ Two latent bugs made linked audio actively hostile:
 ### Decision
 
 Promote audio to a first-class, deliberately designed experience, modeled on
-**two orthogonal axes** so we never again conflate distinct concerns:
+**two orthogonal axes** so I never again conflate distinct concerns:
 
 | Axis | Field | Drives |
 |------|-------|--------|
-| **Kind** | `audio_kind` ∈ {`voice`, `music`} | *Behavior* — waveform vs cover art, inline card player, ambient glow |
-| **Origin** | `file_path` (local) vs `source_url` (remote) | *Playback path* — our `<audio>` engine vs platform iframe |
+| **Kind** | `audio_kind` ∈ {`voice`, `music`} | *Behavior*: waveform vs cover art, inline card player, ambient glow |
+| **Origin** | `file_path` (local) vs `source_url` (remote) | *Playback path*: the `<audio>` engine vs platform iframe |
 
 **1. `audio_kind` is an explicit column, set at ingest, read through one predicate.**
 The mic recorder posts `audio_kind=voice`; every other audio (uploaded file or
@@ -574,22 +574,22 @@ linked pull) defaults `music`. A PRAGMA-guarded migration backfills existing row
 frontend reads it through a single `audioKind(memo)` predicate in `lib/media.ts`
 (with the same heuristic as a fallback for un-migrated rows). No scattered `if`s.
 
-**2. The player is local-first and pull-first.** Our engine is one shared HTML5
+**2. The player is local-first and pull-first.** The engine is one shared HTML5
 `<audio>` element (in `AudioPlayerProvider`, survives navigation). It can only
-play a real media resource the browser can load — a local file at
+play a real media resource the browser can load: a local file at
 `/api/memos/:id/file`. Platform "embeds" (`w.soundcloud.com/player/…`) are *whole
 web pages*, not streams; the real stream URLs are signed and CORS-locked, so
 `<audio src>` can never point at them. Therefore **linked audio must be pulled to
-a local file (yt-dlp) before our player can touch it.** Auto-download (default ON,
+a local file (yt-dlp) before the player can touch it.** Auto-download (default ON,
 already wired in `ingest.py`) makes this invisible: a saved SoundCloud link
 localizes in the background and *upgrades itself* into the rich player within
-seconds. Until then — and whenever a host is unpullable or auto-download is off —
+seconds. Until then, and whenever a host is unpullable or auto-download is off,
 the platform **iframe is the graceful live-reference fallback**, never a dead end.
 
 **3. Classification knows audio hosts (Bug 1 fix), centrally.** A single
 `AUDIO_HOSTS` set (backend) is consulted by both `extract_video`'s failure
 fallback and `derive_memo_type`: a known audio host classifies `audio` **even when
-yt-dlp fails**. The frontend mirror is `lib/audioPlatforms.ts` — a registry of
+yt-dlp fails**. The frontend mirror is `lib/audioPlatforms.ts`: a registry of
 host → brand glyph + embed URL + can-localize, exactly parallel to the video
 `lib/platforms.ts` (ADR-001). Card, detail, and player all read the registry; a
 new audio host is added in one place.
@@ -601,26 +601,26 @@ plays its local file *and* still exposes the source embed as a reference.
 
 **5. The player lives in the sidebar, and music gets the full treatment.**
 `HeaderAudioPlayer` (top-right pill) is removed. A `SidebarPlayer` sits in the
-sidebar foot — cover, title, subtitle, scrubber, and a transport of
+sidebar foot: cover, title, subtitle, scrubber, and a transport of
 **repeat-one · play/pause · pin** (the single-item focus replaces next/prev; no
 queue yet). When the sidebar is collapsed it shrinks to a cover thumbnail with a
 progress ring so "something is playing" survives the tuck-away. Two treatments are
 **music-only** (gated on `audioKind === 'music'`), leaving voice memos exactly as
 they are (waveform tile + button, which users love):
 
-- **Inline card player** — the active music card flips to an in-card player via
+- **Inline card player:** the active music card flips to an in-card player via
   an absolute overlay (the delete-confirm `om-card-confirm` mechanism) **at the
-  card's existing size — no resize, no cover zoom**, so the grid never jumps. The
+  card's existing size, no resize, no cover zoom**, so the grid never jumps. The
   cover stays crisp; a bottom→top gradient (cover-mood tint + a backdrop blur
-  masked to the lower zone — "blur behind the controls") carries the transport +
+  masked to the lower zone, "blur behind the controls") carries the transport +
   title. An earlier version that zoomed/blurred the whole cover was rejected as
   jumpy.
-- **Cover-mood tint** — both players (and the aurora) are tinted to the artwork's
+- **Cover-mood tint:** both players (and the aurora) are tinted to the artwork's
   dominant color, extracted client-side with a tiny canvas in `lib/coverMood.ts`
   (no dependency; covers are same-origin so the canvas is never tainted; failure
   falls back to theme tokens). White controls over the mood color, like a proper
   now-playing surface.
-- **Aurora glow** — a faint aurora-borealis halo behind the playing music card,
+- **Aurora glow:** a faint aurora-borealis halo behind the playing music card,
   tinted from the cover mood, bleeding just past the card edge. Two color blobs on
   `::before`/`::after` drift independently (coprime periods, opposite directions)
   under a heavy blur, so it shimmers organically and never visibly loops. (A
@@ -636,7 +636,7 @@ and the lock-screen / notification transport control playback and show the artwo
 `height:100dvh; overflow:hidden` (it does **not** scroll); only a middle
 `.om-sidebar-body` scrolls (nav / pinned / collections); the now-playing player +
 foot are the non-growing bottom zone. This pins the player to the bottom with no
-`margin-top:auto` gap (auto margins in a column flex absorb all free space —
+`margin-top:auto` gap (auto margins in a column flex absorb all free space, and
 the previous approach left a large void above the player).
 
 **6. Lyrics are explicitly deferred** (documented in the roadmap, no code).
@@ -644,7 +644,7 @@ Future work, free sources only (local-first): **LRCLIB** (open synced-lyrics API
 no key), embedded ID3 `USLT`/`SYLT` tags read from uploaded files, `lyrics.ovh`
 as a plain-text fallback. No paid lyrics API, ever.
 
-#### Scope boundary — video
+#### Scope boundary: video
 
 The sidebar player drives the **audio engine** (music + voice). Video plays as an
 iframe embed in the lightbox/detail and has no persistent surface to relocate
@@ -658,9 +658,9 @@ Audio ships first; video follows.
 |--------|--------------|
 | **Proxy the SoundCloud Widget API** (control their iframe via postMessage) | Per-provider (Bandcamp/Mixcloud have weak/no equivalent); fragments the one-engine model into "some `<audio>`, some iframe-proxied"; no unified scrubber, no cover art, **no aurora** (it is their chrome); cross-origin postMessage is flaky. Clean beats clever; local-first wins. |
 | **Split `audio` into separate `voice` and `music` memo types** | A bigger migration that breaks every `type === 'audio'` gate (`canMakeLocal`, `canTranscript`, `derive_memo_type`). A sub-kind keeps the audio type cohesive and satisfies ADR-001 (one type, provider/variant differences centralized), at far lower blast radius. |
-| **Keep deriving voice vs music from the filename** | Fragile — breaks on rename, on non-English titles, on any uploaded track literally named "Voice memo…". A real column is the single source of truth. |
+| **Keep deriving voice vs music from the filename** | Fragile: breaks on rename, on non-English titles, on any uploaded track literally named "Voice memo…". A real column is the single source of truth. |
 | **Leave the player in the header** | The sidebar is where navigation + pinned items live; a collapsed-sidebar now-playing cue is impossible from a top-right pill; and the inline-card / aurora story wants the player conceptually "inside" the library, not floating over it. |
-| **Stream linked audio directly in our `<audio>`** | Impossible for the platforms that matter — their stream URLs are signed + CORS-locked. Pull-first is not a preference, it is the only correct path; auto-download hides the cost. |
+| **Stream linked audio directly in the `<audio>`** | Impossible for the platforms that matter: their stream URLs are signed + CORS-locked. Pull-first is not a preference, it is the only correct path; auto-download hides the cost. |
 
 ### Consequences
 
@@ -670,7 +670,7 @@ Audio ships first; video follows.
   (e.g. Audius) lights up card glyph + detail embed + player simultaneously.
 - A transient yt-dlp failure can no longer turn a SoundCloud memo into a dead
   `video` page; audio hosts are structurally `audio`.
-- Remote audio always has a listen path (live embed and/or local file) — the
+- Remote audio always has a listen path (live embed and/or local file): the
   reported "play button leads to a page with nothing" is structurally impossible.
 - `HeaderAudioPlayer` is deleted; `SidebarPlayer` replaces it. The shared engine
   gains repeat-one state.
@@ -679,7 +679,7 @@ Audio ships first; video follows.
 
 ---
 
-## ADR-004 — Transcript extraction is decoupled from file capture (non-destructive, caption-first)
+## ADR-004: Transcript extraction is decoupled from file capture (non-destructive, caption-first)
 
 **Date:** 2026-06-03 · **Status:** Shipped · **Supersedes:** the transcript portion of ADR-003
 
@@ -689,17 +689,17 @@ ADR-003 modeled "Make it local" as a single tiered action keyed off memo type,
 with three download modes: `video`, `audio`, and `audio_transcript`. In practice
 this fused **three distinct user intents** into one destructive action:
 
-1. *Get a transcript* — the user wants the **text** of a talk; audio is only a
+1. *Get a transcript*: the user wants the **text** of a talk; audio is only a
    means to that end.
-2. *Save the video offline* — keep a playable local copy.
-3. *Convert a long video to an audio-only "podcast"* — deliberately drop the
+2. *Save the video offline*: keep a playable local copy.
+3. *Convert a long video to an audio-only "podcast"*: deliberately drop the
    video.
 
 Because the only transcript path was `audio_transcript`, asking for a transcript
 **downloaded the audio and flipped `memo.type` from `video` to `audio`**
 (`ingest.localize_memo_task`: `memo.type = result["type"]`). The inline video
 embed is gated on `type === 'video' && !file_path`, so the flip silently
-**destroyed the video** — the user lost their video to get its text. A transcript
+**destroyed the video**: the user lost their video to get its text. A transcript
 is a *property* of a memo, not a memo type; coupling the two was the root error.
 
 ### Decision
@@ -708,26 +708,26 @@ is a *property* of a memo, not a memo type; coupling the two was the root error.
 changes a memo's `type` or `file_path`.** It is independent of "Make it local"
 (file capture). Two orthogonal axes:
 
-- **Transcript** (`POST /memos/:id/transcribe` → `core/transcript.py`) — produce
+- **Transcript** (`POST /memos/:id/transcribe` → `core/transcript.py`): produce
   text only. The memo keeps its type and its remote embed.
-- **Make it local** (`POST /memos/:id/localize` → `core/localize_media.py`) —
+- **Make it local** (`POST /memos/:id/localize` → `core/localize_media.py`):
   capture a local file. `mode='audio'` remains an **explicit** video→audio
   podcast conversion (the third intent above), now clearly labeled and warned in
   the UI, never a transcript side door. The `audio_transcript` mode is removed.
 
-#### Transcript pipeline — caption-first, STT fallback
+#### Transcript pipeline: caption-first, STT fallback
 
 `core/transcript.py` `get_transcript(url)`:
 
-1. **Captions** — `yt-dlp --skip-download --write-subs --write-auto-subs
+1. **Captions:** `yt-dlp --skip-download --write-subs --write-auto-subs
    --sub-format vtt` pulls the source's own subtitles **without downloading the
    media**. Fast, free, no Whisper. The VTT is parsed (inline word-timing tags
    stripped, rolling auto-caption duplicates de-overlapped) into text with inline
    `[mm:ss]` markers.
-2. **STT fallback** — if the host exposes no captions, download the audio to a
+2. **STT fallback:** if the host exposes no captions, download the audio to a
    **temp** directory, run faster-whisper (now emitting per-segment `[mm:ss]`
    markers), then **delete the temp file**. The memo's `type`/`file_path` are
-   untouched — a video memo stays a video memo.
+   untouched: a video memo stays a video memo.
 
 The result is stored in `content_text` (so it embeds for RAG + is searchable),
 with `transcript_source` recording `captions` vs `stt` for a UI badge. A local
@@ -739,42 +739,42 @@ routes to the caption-first extractor (`transcript_memo_task`).
 Summaries are generated lazily per mode, each a single Ollama call fed the
 **full** transcript/content (`core/rag.py` `SUMMARY_MODES`):
 
-- **`timestamp`** — chronological bullet outline anchored to the inline `[mm:ss]`
+- **`timestamp`:** chronological bullet outline anchored to the inline `[mm:ss]`
   markers (only offered for video/audio, since it depends on those markers).
-- **`insights`** — key takeaways as bullets (mirrored to `ai_summary` for
+- **`insights`:** key takeaways as bullets (mirrored to `ai_summary` for
   back-compat).
-- **`essay`** — flowing prose.
+- **`essay`:** flowing prose.
 
 Results cache per-mode in the `summaries` JSON column so switching back is
-instant. Inline timestamps live **in the transcript text itself** — no separate
-segments table — which is what makes the timestamp mode possible without extra
+instant. Inline timestamps live **in the transcript text itself** (no separate
+segments table), which is what makes the timestamp mode possible without extra
 storage.
 
-#### Scope — the whole video type (ADR-001)
+#### Scope: the whole video type (ADR-001)
 
 Both caption pull and STT run through yt-dlp, which abstracts every video host,
 so this lights up for YouTube, Vimeo, Dailymotion, TikTok, etc. simultaneously.
 `canTranscript(memo)` in `lib/media.ts` is the single predicate. Hosts with no
 captions fall back to STT; hosts with neither (auth-walled/private) degrade to an
-error state with "open original" still available — never a dead end.
+error state with "open original" still available, never a dead end.
 
 ### Alternatives considered
 
 | Option | Why rejected |
 |--------|--------------|
-| **Keep `audio_transcript` (download audio + flip type)** | The root bug — destroys the video to get its text and conflates three intents. |
+| **Keep `audio_transcript` (download audio + flip type)** | The root bug: destroys the video to get its text and conflates three intents. |
 | **Always Whisper STT, ignore host captions** | Slower and heavier for the common case; YouTube/Vimeo already publish accurate captions for free. STT is the fallback, not the default. |
-| **Separate `transcript_segments` JSON column for timestamps** | More storage + a migration for data that rides for free as inline `[mm:ss]` in the text the model already reads. Rejected per the user's "transcript-first" call. |
+| **Separate `transcript_segments` JSON column for timestamps** | More storage + a migration for data that rides for free as inline `[mm:ss]` in the text the model already reads. I made the transcript-first call instead. |
 | **A second inline "audio tab" alongside the video** | Treats the symptom. The real fix is to stop the type flip so the video never disappears in the first place; the existing Description/Transcript tabs then suffice. |
 
 ### Consequences
 
-- A video memo can gain a transcript **and** keep its inline player — the
+- A video memo can gain a transcript **and** keep its inline player: the
   reported bug is structurally impossible now (transcript never sets
   `type`/`file_path`).
 - New columns: `transcript_source`, `summaries` (migration
   `backend/migrate_transcript_summary.py`, PRAGMA-guarded ALTER TABLE).
-- "Make it local → Audio only" is now an explicit, warned podcast conversion —
+- "Make it local → Audio only" is now an explicit, warned podcast conversion:
   the long-video→podcast workflow is preserved, just no longer the transcript
   path.
 - Summary is now three modes instead of one; the single `ai_summary` is kept in
@@ -784,7 +784,7 @@ error state with "open original" still available — never a dead end.
 
 ---
 
-## ADR-003 — "Make it local" visibility is gated to remote, localizable media (tiered capture)
+## ADR-003: "Make it local" visibility is gated to remote, localizable media (tiered capture)
 
 **Date:** 2026-06-02 · **Status:** Shipped
 
@@ -792,8 +792,8 @@ error state with "open original" still available — never a dead end.
 
 A saved URL can be captured in several different ways depending on what it is.
 The "Make it local" panel (which downloads a remote media item to a local file
-via yt-dlp) was appearing on memo types where it is meaningless — articles,
-links, images, notes, documents — cluttering the detail page and confusing
+via yt-dlp) was appearing on memo types where it is meaningless (articles,
+links, images, notes, documents), cluttering the detail page and confusing
 users. "Make it local" is only meaningful for a remote, yt-dlp-pullable media
 item that is not already stored as a local file.
 
@@ -804,11 +804,11 @@ differences and creates implicit dead ends for non-media types.
 ### Decision
 
 OpenMemo uses a **tiered capture strategy** keyed off memo type. "Make it
-local" is exactly **one tier** — not a universal action available everywhere:
+local" is exactly **one tier**, not a universal action available everywhere:
 
 | Memo type | Capture strategy | Make it local? |
 |-----------|-----------------|----------------|
-| `link` / `article` | Server-side scrape (headless Chromium, see ADR-002) — content + hero image captured at save time | No |
+| `link` / `article` | Server-side scrape (headless Chromium, see ADR-002): content + hero image captured at save time | No |
 | `image` (including social photo pages such as FB/IG/X) | Scrape the real image URL; store locally at ingest | No |
 | `video` / `audio` from a yt-dlp platform (remote, not yet downloaded) | Platform iframe/embed available immediately; **"Make it local"** appears to download a playable local copy | **Yes** |
 | Auth-walled private media | Browser extension (logged-in session); no logged-out download path | No |
@@ -831,7 +831,7 @@ component placement, download modes, and end-to-end user flow.
 
 | Option | Why rejected |
 |--------|--------------|
-| **Show "Make it local" on every memo type** | Meaningless and misleading on non-media types — implies you can "download" an article or a note. Adds clutter without value. |
+| **Show "Make it local" on every memo type** | Meaningless and misleading on non-media types: implies you can "download" an article or a note. Adds clutter without value. |
 | **Scatter per-type `if` conditionals across components** | They drift out of sync as the codebase grows; violates the single-source principle established in ADR-001 (memo-type changes must be systematic across the whole type, not scattered per-provider). |
 | **Separate "download" button per type with no shared predicate** | Same fragmentation risk; harder to test; requires updating multiple render sites when the localize eligibility rules change. |
 
@@ -841,7 +841,7 @@ component placement, download modes, and end-to-end user flow.
   visibility; updating it propagates correctly to every render site with no
   drift.
 - Non-qualifying memo types fall back to their type-appropriate action (Open
-  original, image preview, editable note, Download original) — no memo type is
+  original, image preview, editable note, Download original). No memo type is
   a dead end.  Satisfies the graceful-fallback rule from ADR-001.
 - The tiered model makes the capture strategy for each memo type explicit and
   auditable in one place (this ADR + the predicate), rather than implicit in
@@ -851,7 +851,7 @@ component placement, download modes, and end-to-end user flow.
 
 ---
 
-## ADR-002 — Self-hosted headless Chromium replaces Microlink for link extraction
+## ADR-002: Self-hosted headless Chromium replaces Microlink for link extraction
 
 **Date:** 2026-06-02 · **Status:** Shipped
 
@@ -861,12 +861,12 @@ OpenMemo saves any URL as a link memo by fetching the page and extracting its
 title, description, thumbnail (via `og:image`), and readable content. Two
 categories of page resist a plain HTTP fetch:
 
-1. **Antibot / JS-challenge pages** — sites protected by Cloudflare's *managed
+1. **Antibot / JS-challenge pages:** sites protected by Cloudflare's *managed
    challenge* return HTTP 202 with a tiny JavaScript stub. The stub has no
    OpenGraph data; the real DOM only appears after the challenge JS runs in a
    real browser. Examples: Dribbble, Behance.
 
-2. **JS-rendered SPAs** — pages whose `<head>` metadata is injected by
+2. **JS-rendered SPAs:** pages whose `<head>` metadata is injected by
    client-side JavaScript after the initial HTML loads, leaving a plain fetch
    with nothing useful.
 
@@ -879,7 +879,7 @@ for these cases. Two problems broke that:
 - Even when reached, Microlink's free tier began returning `EPROXYNEEDED` for
   any site that uses antibot protection, with a prompt to upgrade to the paid
   PRO plan. The sites Microlink now refuses are exactly the antibot-protected
-  ones we needed it for.
+  ones I needed it for.
 
 OpenMemo is **local-first** and must not depend on a paid third-party API.
 
@@ -888,7 +888,7 @@ OpenMemo is **local-first** and must not depend on a paid third-party API.
 Embed a self-hosted **headless Chromium** (via Playwright) directly in the
 `openmemo-api` Docker image. When a plain HTTP fetch is not enough, the app
 drives a real browser that executes challenge JS and delivers the fully rendered
-DOM — including real `og:image` and readable content — with no third-party API,
+DOM (including real `og:image` and readable content) with no third-party API,
 no key, and no per-site rate limit.
 
 Microlink was **removed entirely** from the codebase (no fallback, no free
@@ -896,7 +896,7 @@ tier).
 
 #### How it works
 
-`backend/core/extractor.py` — `extract_url()` — implements a three-stage chain:
+`backend/core/extractor.py` `extract_url()` implements a three-stage chain:
 
 1. **Fast plain HTTP fetch** (`httpx`). If the response is a genuine HTTP 200
    *and* `_parse_html()` produces usable content (title / image / text), return
@@ -911,12 +911,12 @@ tier).
    so the real DOM is available.
 
 3. **Direct OpenGraph scrape** (`_fetch_og_meta()`). A lightweight browser-UA
-   `httpx` request that reads only meta tags — for pages that block the API
+   `httpx` request that reads only meta tags, for pages that block the API
    path but serve HTML fine to a real user-agent. This is a cheaper fallback
    before the final safety net.
 
 4. **Preview-unavailable card** (final fallback). A memo is still created with
-   the source URL intact so the user can open the original — a save never
+   the source URL intact so the user can open the original: a save never
    dead-ends.
 
 `backend/core/headless.py` is a **lazy singleton**: Chromium launches on first
@@ -924,7 +924,7 @@ use, stays warm across requests (each render gets its own incognito
 `BrowserContext`, closed after the request), and is shut down cleanly via
 `close_browser()` called from the FastAPI app lifespan in `backend/main.py`.
 If Playwright or the binary is unavailable, `render_page()` returns `None` and
-the chain degrades to the plain-fetch path — the feature is purely additive.
+the chain degrades to the plain-fetch path: the feature is purely additive.
 
 The browser binary is installed in the Docker image via:
 
@@ -938,7 +938,7 @@ libraries are pulled by `--with-deps` on the slim Debian base.
 #### Scope boundary
 
 This solves **antibot** (Cloudflare managed challenge) for **public** pages.
-It does **not** defeat **auth walls** — private Facebook photos, logged-in
+It does **not** defeat **auth walls**: private Facebook photos, logged-in
 Instagram posts, and similar content require a valid session cookie that no
 anonymous browser can supply. Those links still need the browser extension.
 Antibot solved ≠ auth-wall solved.
@@ -948,29 +948,29 @@ Antibot solved ≠ auth-wall solved.
 | Option | Why rejected |
 |--------|--------------|
 | **Microlink PRO** (paid API) | Violates local-first principle; OpenMemo must work without any cloud API or subscription. |
-| **`curl_cffi` TLS impersonation** | Tested — the managed JS challenge is not a TLS fingerprint problem; both `curl_cffi` and `cloudscraper` still receive HTTP 202. A real JavaScript engine is required. |
+| **`curl_cffi` TLS impersonation** | Tested: the managed JS challenge is not a TLS fingerprint problem; both `curl_cffi` and `cloudscraper` still receive HTTP 202. A real JavaScript engine is required. |
 | **`browserless` sidecar container** | The underlying engine Microlink uses; cleaner isolation, but adds ~1 GB extra container and more infrastructure orchestration. Embedding Chromium in the API image is simpler and sufficient for a single-user local app. |
-| **Ignore antibot sites / extension-only** | Leaves Dribbble, Behance, and similar sites permanently broken as link memos. Rejected by the product owner — these are legitimate design-inspiration sources. |
+| **Ignore antibot sites / extension-only** | Leaves Dribbble, Behance, and similar sites permanently broken as link memos. I rejected it; these are legitimate design-inspiration sources. |
 
 ### Consequences
 
-- **Image size** — `openmemo-api` grows by approximately 400 MB (Chromium
+- **Image size:** `openmemo-api` grows by approximately 400 MB (Chromium
   binary + required OS libraries installed via `--with-deps`).
-- **Ingest latency** — saving a bot-walled link now takes roughly 10 s while
+- **Ingest latency:** saving a bot-walled link now takes roughly 10 s while
   the headless render completes. The render runs in-request synchronously; a
   possible future improvement is to move it to the existing background ingest
   task.
-- **Container flags** — Chromium runs with `--no-sandbox` and
+- **Container flags:** Chromium runs with `--no-sandbox` and
   `--disable-dev-shm-usage` inside the Docker container, as required when
   there is no user-namespace sandbox. This is standard and expected for
   containerized headless browsers.
-- **No third-party dependency for link scraping** — the entire extraction chain
+- **No third-party dependency for link scraping:** the entire extraction chain
   (`extract_url` → `_minimal_link` → `render_page` → `_parse_html`) runs
   locally. A save works fully offline (except for the actual page fetch).
 
 ---
 
-## ADR-001 — Memo-type changes are systematic across the whole type, not per-provider
+## ADR-001: Memo-type changes are systematic across the whole type, not per-provider
 
 **Date:** 2026-06-02 · **Status:** Shipped
 
@@ -979,9 +979,9 @@ Antibot solved ≠ auth-wall solved.
 Every memo has a *type* (`video`, `audio`, `link`, `image`, `document`, …), and
 each type spans many *providers* / hosts:
 
-- **video** — YouTube, Vimeo, Instagram, TikTok, Facebook, X, VK, Dailymotion,
+- **video:** YouTube, Vimeo, Instagram, TikTok, Facebook, X, VK, Dailymotion,
   Twitch, Streamable, …
-- **audio** — SoundCloud, Bandcamp, Mixcloud, …
+- **audio:** SoundCloud, Bandcamp, Mixcloud, …
 
 Repeatedly, a feature was built for one provider and hardcoded to it, silently
 breaking every other provider of the same type:
@@ -992,15 +992,15 @@ breaking every other provider of the same type:
 - The minimal video card showed a brand glyph only for YouTube/Vimeo; every
   other host fell back to a generic "video file" icon.
 
-A user who never touches YouTube — say someone who only saves VK or Vimeo video
-— experiences the feature as broken, even though "it works" for the provider it
+A user who never touches YouTube (say someone who only saves VK or Vimeo video)
+experiences the feature as broken, even though "it works" for the provider it
 was built against. A "YouTube embed" task is really a **video-type** task; an
 "audio player" task is really an **audio-type** task.
 
 ### Decision
 
 When a feature or change touches one provider/variant of a memo type, the
-**default scope is the entire memo type** — every provider of that type — not
+**default scope is the entire memo type** (every provider of that type), not
 the single provider that prompted the work. Provider differences are routed
 through a **shared abstraction**, never inlined as per-host conditionals
 scattered across render components.
@@ -1008,20 +1008,20 @@ scattered across render components.
 Operating rules:
 
 1. **Default scope = the memo type.** "Add a video embed" means *all* video
-   hosts. "Restyle the audio player" means *all* audio sources — change it for
+   hosts. "Restyle the audio player" means *all* audio sources: change it for
    SoundCloud, change it for Bandcamp and Mixcloud too.
 2. **Centralize provider differences.** One registry/abstraction
    (e.g. `frontend/src/lib/platforms.ts` for video hosts) consumed by every
-   render site — card, lightbox, detail. No `if (host === 'youtube')` sprinkled
+   render site: card, lightbox, detail. No `if (host === 'youtube')` sprinkled
    through components.
 3. **Confirm scope before starting.** If a request names a single provider,
    **stop and confirm with the user before coding**: surface a short plan and
-   ask — *"this touches the `<type>` memo type; apply to all `<type>` providers,
+   ask: *"this touches the `<type>` memo type; apply to all `<type>` providers,
    or just `<provider>`?"* Do not begin until the user confirms. Keep the user
    in the loop on scope.
-4. **Graceful fallback is mandatory.** A provider we did not explicitly wire
-   must still degrade safely (Open original / Make it local) — never a dead end.
-   This guarantees robustness for hosts we haven't special-cased (e.g. VK).
+4. **Graceful fallback is mandatory.** A provider I did not explicitly wire
+   must still degrade safely (Open original / Make it local), never a dead end.
+   This guarantees robustness for hosts I haven't special-cased (e.g. VK).
 
 ### Consequences
 
