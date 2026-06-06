@@ -31,10 +31,10 @@ Drop a PDF. Paste a URL. Jot a quick note. Record a voice memo. The Chrome Exten
 ## What's Inside
 
 ### 🎙️ Audio Memos
-Record a voice memo straight from your mic, or drop in any audio file (lossless WAV and FLAC included). Play it from a header mini-player that follows you across the app. Every recording and upload transcribes on your own machine with faster-whisper, in dozens of languages, on your GPU or CPU. The transcript becomes searchable text, so you can find and ask about what you said.
+Record a voice memo straight from your mic, or drop in any audio file (lossless WAV and FLAC included). Play it from a now-playing player in the sidebar that follows you across the app. Every recording and upload transcribes on your own machine with faster-whisper, in dozens of languages, on your GPU or CPU. The transcript becomes searchable text, so you can find and ask about what you said.
 
 ### 📝 Video Transcripts & Summaries
-Get the transcript of any video without losing the video. One click pulls the source's own captions (YouTube, Vimeo, and any host yt-dlp supports) — instant, no download — and falls back to local Whisper speech-to-text when a host has none. The video keeps playing inline while the timestamped transcript fills its tab, fully searchable and ask-able. Then summarise it three ways: a **Timestamp** outline of the talk, **Key Insights** bullets, or a flowing **Essay** — each generated on demand by your local Ollama model.
+Get the transcript of any video without losing the video. One click pulls the source's own captions (YouTube, Vimeo, and any host yt-dlp supports), instant and no download, and falls back to local Whisper speech-to-text when a host has none. The video keeps playing inline while the timestamped transcript fills its tab, fully searchable and ask-able. Then summarise it three ways: a **Timestamp** outline of the talk, **Key Insights** bullets, or a flowing **Essay**, each generated on demand by your local Ollama model.
 
 ### 💾 Make It Local
 Point it at any video or audio link (YouTube, Vimeo, podcast hosts, direct media files, anything yt-dlp can fetch) and openMemo pulls the media down and keeps it. A Memo survives the original being taken offline. Or convert a long video into an audio-only copy when you just want the podcast.
