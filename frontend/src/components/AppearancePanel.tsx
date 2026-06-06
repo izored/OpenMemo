@@ -62,7 +62,7 @@ export function AppearancePanel() {
       <div className="om-add-head">
         <div className="om-add-head-l">
           <b>Appearance</b>
-          <span className="om-add-kbd mono">live</span>
+          <span className="om-add-kbd mono om-ap-live">live</span>
         </div>
         <button className="om-add-x" onClick={() => setOpen(false)} aria-label="Close">
           <Icon name="x" size={13} />
@@ -184,8 +184,8 @@ export function AppearancePanel() {
           </div>
           <div className="om-add-segment two" role="tablist">
             {[
-              { v: 'normal', l: 'Normal' },
-              { v: 'minimal', l: 'Minimal' },
+              { v: 'normal', l: 'Normal', star: false },
+              { v: 'minimal', l: 'Minimal', star: true },
             ].map((o) => (
               <button
                 key={o.v}
@@ -193,7 +193,7 @@ export function AppearancePanel() {
                 onClick={() => setTweak('cardStyle', o.v)}
               >
                 <span className={`om-seg-swatch s-${o.v}`} />
-                <span>{o.l}</span>
+                <span>{o.l}{o.star && <span className="om-ap-star" aria-hidden>*</span>}</span>
               </button>
             ))}
           </div>
@@ -207,15 +207,15 @@ export function AppearancePanel() {
           </div>
           <div className="om-add-segment two" role="tablist">
             {[
-              { v: 'boxed', l: 'Boxed' },
-              { v: 'full', l: 'Full width' },
+              { v: 'boxed', l: 'Boxed', star: true },
+              { v: 'full', l: 'Full width', star: false },
             ].map((o) => (
               <button
                 key={o.v}
                 className={cn('om-add-seg', t.layout === o.v && 'active')}
                 onClick={() => setTweak('layout', o.v)}
               >
-                <span>{o.l}</span>
+                <span>{o.l}{o.star && <span className="om-ap-star" aria-hidden>*</span>}</span>
               </button>
             ))}
           </div>
@@ -224,20 +224,20 @@ export function AppearancePanel() {
         {/* Sidebar player size */}
         <div className="om-ap-row">
           <div className="om-ap-label">
-            <p>Player</p>
+            <p className="om-ap-label-ico"><Icon name="music" size={12} /> Player</p>
             <span className="mono">Sidebar now-playing size</span>
           </div>
           <div className="om-add-segment two" role="tablist">
             {[
-              { v: 'small', l: 'Small' },
-              { v: 'big', l: 'Big' },
+              { v: 'small', l: 'Small', star: false },
+              { v: 'big', l: 'Big', star: true },
             ].map((o) => (
               <button
                 key={o.v}
                 className={cn('om-add-seg', t.playerSize === o.v && 'active')}
                 onClick={() => setTweak('playerSize', o.v)}
               >
-                <span>{o.l}</span>
+                <span>{o.l}{o.star && <span className="om-ap-star" aria-hidden>*</span>}</span>
               </button>
             ))}
           </div>
@@ -386,7 +386,11 @@ export function AppearancePanel() {
       </div>
 
       <div className="om-add-foot">
-        <span className="mono om-ap-hint">Changes preview live.</span>
+        <div className="om-ap-foot-note">
+          <span className="mono om-ap-star-note">
+            <span className="om-ap-star">*</span> My picks. This is how I run openMemo, and how it looks best to me.
+          </span>
+        </div>
         <button className="om-add-foot-btn primary" onClick={() => setOpen(false)}>
           <span>Done</span>
           <span className="mono om-add-kbd-inv">⏎</span>

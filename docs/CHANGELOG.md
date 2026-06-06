@@ -3,6 +3,31 @@
 All notable changes to OpenMemo are documented here.
 
 ---
+## [Unreleased]
+
+The Settings page, rebuilt. It went from a flat two-column form into a bento: the
+live appearance preview leads as a full-width hero, the library stats sit in a row
+of number tiles, and the rest of the cards pack as a real masonry so nothing
+leaves dead space. Plus an app-wide default-model picker and a few honest hints
+about how I run it.
+
+### Added
+
+- 🎛️ **Appearance live-preview is the hero.** The feature I am most proud of now leads the page: a full-width panel, its own theme-aware surface with your accent as the only color, one clear "Open live preview" CTA, and a mini window mock. No more burying it in a tiny CTA row (ADR-011).
+- 🔢 **Stats load with skeletons.** The five library tiles (Memos, Collections, Tags, This week, On disk) always render, showing a shimmer loader until the numbers arrive. The row holds its height from first paint, so the page no longer jumps when stats land.
+- 🤖 **Pick a default model.** The Local AI card has an in-brand dropdown to set the model used across chat and Ask. It writes the same persisted `chatModel` those surfaces already read, so it is the app-wide default with nothing to keep in sync.
+- ⭐ **My picks are marked.** In the live-preview panel, the options I run openMemo with (Card Minimal, Layout Boxed, Player Big) carry a small asterisk, with a one-line note in my voice. A hint, not a forced default.
+- 🎠 **Built-with is a marquee.** The open-source credits auto-scroll in a band that pauses on hover. Hover any name and its description replaces the subline, so you read what each tool does in place instead of a floating tooltip.
+
+### Changed
+
+- 🍱 **Settings is a bento.** Full-width feature blocks (hero, stats, built-with) stack over a CSS masonry of the smaller cards. Short cards get hugged by the next one instead of stretching to fill a row, so there is no empty space below their content (ADR-011).
+- 🗂️ **Trash moved into Files & limits.** Recently-deleted was a near-empty card on its own, so it is a row in the Files card now. The card was renamed to match.
+- 🛟 **Data safety sits beside the Danger zone.** Backup & Restore and the destructive actions are a half-width duo at the bottom of the page, grouped where they belong.
+- 🎨 **Appearance hero follows the theme.** Switching light and dark cross-fades the hero background instead of snapping, the accent glow inside the card is gone, the "Open live preview" CTA inverts its colors on hover (and flips back when you hover "Replay product tour"), and the panel's "live" badge has a pulsing accent dot.
+- 🎵 **Music note on the player setting.** The Player size row in the appearance panel carries a small music icon.
+
+---
 ## [2.2.0] - 2026-06-05
 
 The big one. Everything saved since 2.0.2, shipped together. Audio grows into a
