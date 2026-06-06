@@ -7,6 +7,78 @@ the decision, and its consequences, so a future reader knows *why*, not just
 
 ---
 
+## ADR-011: Settings is a bento, and the live appearance preview is its hero
+
+**Date:** 2026-06-06 · **Status:** Shipped · **Builds on:** ADR-001 (define shared things once)
+
+### Context
+
+The Settings page was a uniform two-column stack. Every card carried the same
+width and weight, so nothing led the eye. Three problems:
+
+- **The appearance live-preview was buried.** It is the feature I am most proud
+  of (theme, accent, card style, layout, columns, background, all previewing
+  live), but it sat as one busy little CTA row with three chips, the same size as
+  "Max upload size". Low priority for a headline feature.
+- **The stats row shifted the page.** Library counts rendered only after the
+  fetch resolved, and the space was not reserved beforehand, so when the numbers
+  arrived the whole page jumped down.
+- **Cards left dead space.** A short card (Trash) next to a tall one (Uploads)
+  stretched to match its grid row, leaving empty space below its content.
+
+### Decision
+
+**I rebuilt Settings as a bento: full-width feature blocks stacked over a true
+masonry of the smaller cards.** Source order maps to reading order, and the
+layout stays robust to variable content height.
+
+**1. Appearance is the hero.** A full-width panel at the top with its own surface
+(theme-aware), the user's accent as the only color, a large title, one clear
+"Open live preview" CTA, and a mini window mock. It is the first thing on the
+page now, not a footnote.
+
+**2. Stats strip with reserved height.** Five number tiles always render. While
+the fetch is in flight each shows a shimmer skeleton, so the row holds its height
+from first paint and never jumps. Numbers fade in when they land.
+
+**3. Masonry for the rest.** The functional cards (Profile, Local AI, Browser
+extension, Files, Made by) flow in a CSS multi-column masonry. Short cards get
+hugged by the next instead of stretching, so there is no dead space.
+`break-inside: avoid` keeps each card whole. The class is `om-settings-masonry`
+because `om-masonry` already belongs to the memo grid.
+
+**4. Grouping.** Trash folded into the Files card as a row (it was a near-empty
+card on its own). Data safety and the Danger zone sit side by side as a
+half-width duo at the bottom, where destructive actions belong.
+
+**5. Default model lives in Settings.** The Local AI card gained an in-brand
+dropdown that sets the app-wide default chat model. It writes the persisted
+`chatModel` in the app store, which every Ask and chat surface already reads
+(ADR-001, one source of truth). No backend change, no new setting to keep in
+sync.
+
+**6. Creator preferences are marked, not forced.** In the live-preview panel, the
+options I run openMemo with (Card Minimal, Layout Boxed, Player Big) carry a
+small accent asterisk with a one-line key in my voice. A hint, never a default
+override.
+
+### Consequences
+
+- The page leads with its best feature, and the appearance preview reads as the
+  headline it is.
+- No layout shift on load; the stats area is stable.
+- Adding or removing a settings card is drop-in: it joins the masonry and packs
+  automatically, with no column bookkeeping.
+- The theme cross-fade works because the hero uses a solid `background-color`.
+  The app's global theme transition animates `background-color`, not
+  `background-image`, so a gradient hero jumped while the text faded. A solid
+  color fades with everything else; a fixed `::before` sheen keeps the depth
+  without changing between themes.
+- One naming gotcha logged: `om-masonry` was already the memo grid's flex
+  masonry, hence `om-settings-masonry` for the new multicol one.
+
+---
+
 ## ADR-010: The full-bleed now-playing player is corner-anchored, with a shared volume engine and one-line marquee titles
 
 **Date:** 2026-06-05 · **Status:** Shipped · **Builds on:** ADR-005 (audio is a first-class media experience; the sidebar hosts the now-playing player), ADR-001 (define shared things once)
