@@ -162,6 +162,7 @@ openmemo/
 │   ├── INSTALL.md                  # Full installation & troubleshooting
 │   ├── DESIGN.md                   # Design system tokens
 │   ├── memo-card-visual-system.md  # Card UI design reference
+│   ├── settings-and-appearance.md  # Settings bento + live appearance panel
 │   └── CHANGELOG.md                # Release history
 └── docker-compose.yml
 ```

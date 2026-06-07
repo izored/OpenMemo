@@ -12,37 +12,45 @@ import type { OllamaModel } from '@/types';
 
 type BuiltWithEntry = { name: string; url: string; desc: string };
 
-function BuiltWithGrid({ entries }: { entries: BuiltWithEntry[] }) {
-  // Detail block keeps showing the LAST hovered tile after the mouse leaves —
-  // height stays stable instead of collapsing and shifting page layout.
-  const [focus, setFocus] = useState<BuiltWithEntry>(entries[0]);
+const BUILT_WITH_LEAD =
+  'openMemo stands on a stack of free, open-source software. Hover any name to see what it does.';
+
+function BuiltWith({ entries }: { entries: BuiltWithEntry[] }) {
+  // Auto-scrolling band. The track is rendered twice back-to-back and animated
+  // -50% so the loop is seamless; hovering the band pauses it. Hovering a pill
+  // swaps the lead line for that project's description (no floating tooltip),
+  // and the line reverts when the pointer leaves the band.
+  const [hover, setHover] = useState<BuiltWithEntry | null>(null);
+  const loop = [...entries, ...entries];
   return (
     <>
-      <div className="om-built-with-grid">
-        {entries.map((d) => (
-          <a
-            key={d.name}
-            className={`om-built-with-tile${focus.name === d.name ? ' focus' : ''}`}
-            href={d.url}
-            target="_blank"
-            rel="noopener noreferrer"
-            onMouseEnter={() => setFocus(d)}
-            onFocus={() => setFocus(d)}
-          >
-            {d.name}
-          </a>
-        ))}
-      </div>
-      <div className="om-built-with-detail" aria-live="polite">
-        <p>{focus.desc}</p>
-        <a
-          className="om-creator-link"
-          href={focus.url}
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          Learn more about {focus.name} →
-        </a>
+      <p className="om-built-with-lead" aria-live="polite">
+        {hover ? (
+          <>
+            <span className="om-bw-lead-name">{hover.name}</span> {hover.desc}
+          </>
+        ) : (
+          BUILT_WITH_LEAD
+        )}
+      </p>
+      <div className="om-bw-band" onMouseLeave={() => setHover(null)}>
+        <div className="om-bw-track">
+          {loop.map((d, i) => (
+            <a
+              key={`${d.name}-${i}`}
+              className="om-bw-pill"
+              href={d.url}
+              target="_blank"
+              rel="noopener noreferrer"
+              aria-hidden={i >= entries.length}
+              tabIndex={i >= entries.length ? -1 : 0}
+              onMouseEnter={() => setHover(d)}
+              onFocus={() => setHover(d)}
+            >
+              {d.name}
+            </a>
+          ))}
+        </div>
       </div>
     </>
   );
@@ -82,16 +90,18 @@ function fmtBytes(n: number): string {
 function SettingCard({
   title,
   eyebrow,
-  wide,
+  span,
+  className = '',
   children,
 }: {
   title: string;
   eyebrow: string;
-  wide?: boolean;
+  span?: 2 | 3 | 4 | 6;
+  className?: string;
   children: React.ReactNode;
 }) {
   return (
-    <div className={`om-setting-card ${wide ? 'wide' : ''}`}>
+    <div className={`om-setting-card${span ? ` s${span}` : ''}${className ? ` ${className}` : ''}`}>
       <div className="om-setting-head">
         <span className="mono om-setting-eyebrow">{eyebrow}</span>
         <h3 className="om-setting-title">{title}</h3>
@@ -165,7 +175,8 @@ function RecentlyDeletedModal({ onClose }: { onClose: () => void }) {
   );
 }
 
-function RecentlyDeletedCard() {
+function TrashRow() {
+  // Recently-deleted lives as a row inside the Files card now, not its own card.
   const [open, setOpen] = useState(false);
   const { data: deleted = [] } = useQuery({
     queryKey: ['memos', 'deleted'],
@@ -174,17 +185,71 @@ function RecentlyDeletedCard() {
 
   return (
     <>
-      <SettingCard title="Recently Deleted" eyebrow="Trash">
-        <div className="om-setting-row">
-          <div className="om-setting-row-text">
-            <p>Trash</p>
-            <span className="mono">{deleted.length} deleted memo{deleted.length === 1 ? '' : 's'} can be restored</span>
-          </div>
-          <button className="om-btn-secondary" onClick={() => setOpen(true)}>Open</button>
+      <div className="om-setting-row">
+        <div className="om-setting-row-text">
+          <p>Recently deleted</p>
+          <span className="mono">{deleted.length} deleted memo{deleted.length === 1 ? '' : 's'} can be restored</span>
         </div>
-      </SettingCard>
+        <button className="om-btn-secondary" onClick={() => setOpen(true)}>Open trash</button>
+      </div>
       {open && <RecentlyDeletedModal onClose={() => setOpen(false)} />}
     </>
+  );
+}
+
+/** In-brand dropdown for the app-wide default chat model. Writes to the
+ *  persisted `chatModel` in the app store, which every Ask/chat surface reads. */
+function ModelSelect({ models }: { models: OllamaModel[] }) {
+  const chatModel = useAppStore((s) => s.chatModel);
+  const setChatModel = useAppStore((s) => s.setChatModel);
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    const onDown = (e: MouseEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+    };
+    window.addEventListener('mousedown', onDown);
+    return () => window.removeEventListener('mousedown', onDown);
+  }, [open]);
+
+  const current = chatModel || (models[0]?.name ?? '');
+
+  return (
+    <div className="om-model-select" ref={ref}>
+      <button
+        type="button"
+        className="om-model-select-btn"
+        onClick={() => setOpen((v) => !v)}
+        disabled={models.length === 0}
+        aria-haspopup="listbox"
+        aria-expanded={open}
+      >
+        <span className="mono om-model-select-val">{current || 'No models'}</span>
+        <Icon name="chevronDown" size={13} />
+      </button>
+      {open && (
+        <div className="om-model-select-menu" role="listbox">
+          {models.map((m) => (
+            <button
+              key={m.name}
+              type="button"
+              role="option"
+              aria-selected={current === m.name}
+              className={`om-model-select-opt mono${current === m.name ? ' active' : ''}`}
+              onClick={() => {
+                setChatModel(m.name);
+                setOpen(false);
+              }}
+            >
+              <span>{m.name}</span>
+              {current === m.name && <Icon name="check" size={12} />}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
   );
 }
 
@@ -362,11 +427,109 @@ export function SettingsPage() {
         <p className="om-greet-sub">Everything here is stored on your machine. No cloud, no account.</p>
       </div>
 
-      <div className="om-settings-grid">
+      <div className="om-bento-stack">
 
-        {/* ── Left column ─────────────────────────────────────── */}
-        <div className="om-settings-col">
-          {profile && (
+        {/* ── Appearance hero — the headline feature ──────────── */}
+        <div
+          className="om-ap-hero"
+          role="button"
+          tabIndex={0}
+          onClick={openAppearance}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter' || e.key === ' ') {
+              e.preventDefault();
+              openAppearance();
+            }
+          }}
+        >
+          <div className="om-ap-hero-text">
+            <span className="mono om-ap-hero-eyebrow">Look &amp; feel · Live preview</span>
+            <h2 className="om-ap-hero-title">Make openMemo yours.</h2>
+            <p className="om-ap-hero-sub">
+              Theme, accent, card style, layout, columns, background. Tweak it and watch every Memo update live.
+            </p>
+            <div className="om-ap-hero-actions">
+              <span className="om-ap-hero-cta">
+                Open live preview <Icon name="arrowUpRight" size={15} />
+              </span>
+              <button
+                type="button"
+                className="om-ap-hero-tour"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  localStorage.removeItem(ONBOARDING_KEY);
+                  window.dispatchEvent(new Event('openmemo:retake-tour'));
+                }}
+              >
+                Replay product tour
+              </button>
+            </div>
+          </div>
+          <div className="om-ap-hero-vis" aria-hidden>
+            <div className="om-ap-hero-window">
+              <div className="om-ap-hero-window-bar">
+                <span /><span /><span />
+              </div>
+              <div className="om-ap-hero-window-body">
+                <span className="om-ap-hero-accent" style={{ background: t.accent }} />
+                <span className="om-ap-hero-mini" />
+                <span className="om-ap-hero-mini" />
+                <span className="om-ap-hero-mini" />
+                <span className="om-ap-hero-mini" />
+              </div>
+            </div>
+            <span className="om-ap-hero-state mono">
+              {t.theme} · {t.cardStyle} · {t.layout} · {t.gridColumns} cols
+            </span>
+          </div>
+        </div>
+
+        {/* ── Stats strip — big numbers. Tiles always render (with skeleton
+              loaders) so the row reserves its height and never jumps in. ── */}
+        <div className="om-stat-strip">
+          <div className="om-stat-tile">
+            {stats ? <span className="om-stat-num">{stats.total_memos.toLocaleString()}</span> : <span className="om-stat-skel" />}
+            <span className="om-stat-lbl">Memos</span>
+          </div>
+          <div className="om-stat-tile">
+            {stats ? <span className="om-stat-num">{stats.total_collections}</span> : <span className="om-stat-skel" />}
+            <span className="om-stat-lbl">Collections</span>
+          </div>
+          <div className="om-stat-tile">
+            {stats ? <span className="om-stat-num">{stats.total_tags}</span> : <span className="om-stat-skel" />}
+            <span className="om-stat-lbl">Tags</span>
+          </div>
+          <div className="om-stat-tile">
+            {stats ? <span className="om-stat-num">{stats.memos_this_week}</span> : <span className="om-stat-skel" />}
+            <span className="om-stat-lbl">This week</span>
+          </div>
+          <div className="om-stat-tile om-stat-storage">
+            <div className="om-stat-storage-top">
+              {stats?.storage ? <span className="om-stat-num">{fmtBytes(stats.storage.total_bytes)}</span> : <span className="om-stat-skel" />}
+              <span className="om-stat-lbl">On disk</span>
+            </div>
+            {stats?.storage ? (
+              <>
+                <div className="om-storage-bar" aria-hidden>
+                  <span className="a" style={{ width: `${(stats.storage.files_bytes / Math.max(1, stats.storage.total_bytes)) * 100}%` }} />
+                  <span className="b" style={{ width: `${(stats.storage.cache_bytes / Math.max(1, stats.storage.total_bytes)) * 100}%` }} />
+                </div>
+                <div className="om-storage-legend mono">
+                  <span><i className="a" /> Files {fmtBytes(stats.storage.files_bytes)}</span>
+                  <span><i className="b" /> Cache {fmtBytes(stats.storage.cache_bytes)}</span>
+                  <span>DB {fmtBytes(stats.storage.db_bytes)}</span>
+                </div>
+              </>
+            ) : (
+              <span className="om-stat-skel wide" />
+            )}
+          </div>
+        </div>
+
+        {/* ── Cards — masonry so short cards get hugged, no gaps ─ */}
+        <div className="om-settings-masonry">
+
+        {profile && (
             <SettingCard title="Profile" eyebrow="You">
               <div className="om-profile-grid">
                 <button
@@ -429,153 +592,32 @@ export function SettingsPage() {
             </SettingCard>
           )}
 
-          <SettingCard title="Appearance" eyebrow="Look & feel">
-            <button className="om-appearance-cta" onClick={openAppearance}>
-              <div className="om-appearance-cta-preview" aria-hidden>
-                <span className="om-appearance-chip" style={{ background: t.accent }} />
-                <span className="om-appearance-chip om-appearance-chip-2" />
-                <span className="om-appearance-chip om-appearance-chip-3" />
+          <SettingCard title="Local AI" eyebrow="Ollama">
+            <div className="om-setting-row">
+              <div className="om-setting-row-text">
+                <p>Connection</p>
+                <span className="mono">Powers chat, RAG, embeddings</span>
               </div>
-              <div className="om-appearance-cta-body">
-                <div className="om-appearance-cta-head">
-                  <p>Open live preview</p>
-                  <span className="mono om-appearance-cta-meta">
-                    {t.theme} · {t.cardStyle} · {t.layout} · {t.gridColumns} cols
-                  </span>
-                </div>
-                <span className="om-appearance-cta-sub">
-                  Tweak theme, accent, card style, layout, columns and background. Changes apply instantly.
-                </span>
-              </div>
-              <span className="om-appearance-cta-arrow">
-                <Icon name="arrowUpRight" size={14} />
+              <span className="mono om-setting-val" style={{ color: ollamaConnected ? 'var(--accent)' : '#EF5048' }}>
+                {ollamaConnected === null ? '…' : ollamaConnected ? 'Connected' : 'Offline'}
               </span>
-            </button>
-            <div className="om-setting-row" style={{ borderTop: '1px solid var(--border)', marginTop: 8 }}>
-              <div className="om-setting-row-text">
-                <p>Product tour</p>
-                <span className="mono">Replay the welcome walkthrough</span>
-              </div>
-              <button
-                className="om-btn-secondary"
-                onClick={() => {
-                  localStorage.removeItem(ONBOARDING_KEY);
-                  window.dispatchEvent(new Event('openmemo:retake-tour'));
-                }}
-              >
-                Retake
-              </button>
-            </div>
-          </SettingCard>
-
-          <SettingCard title="Library & Storage" eyebrow="Stats">
-            <div className="om-library-storage-grid">
-              <div className="om-library-col">
-                {stats ? (
-                  <div className="om-stats-2x2">
-                    {[
-                      { label: 'Memos', sub: 'total saved', val: stats.total_memos.toLocaleString() },
-                      { label: 'Collections', sub: '', val: stats.total_collections },
-                      { label: 'Tags', sub: '', val: stats.total_tags },
-                      { label: 'This week', sub: '', val: stats.memos_this_week },
-                    ].map((s) => (
-                      <div key={s.label} className="om-stat-cell">
-                        <span className="mono om-setting-val">{s.val}</span>
-                        <p>{s.label}</p>
-                        {s.sub && <span className="mono">{s.sub}</span>}
-                      </div>
-                    ))}
-                  </div>
-                ) : (
-                  <p className="om-add-hint mono">Loading stats…</p>
-                )}
-              </div>
-              <div className="om-storage-col">
-                {stats?.storage ? (
-                  <>
-                    <div className="om-setting-row">
-                      <div className="om-setting-row-text">
-                        <p>Total on disk</p>
-                        <span className="mono">database · files · cache</span>
-                      </div>
-                      <span className="mono om-setting-val">{fmtBytes(stats.storage.total_bytes)}</span>
-                    </div>
-                    <div className="om-storage-bar" aria-hidden>
-                      <span className="a" style={{ width: `${(stats.storage.files_bytes / Math.max(1, stats.storage.total_bytes)) * 100}%` }} />
-                      <span className="b" style={{ width: `${(stats.storage.cache_bytes / Math.max(1, stats.storage.total_bytes)) * 100}%` }} />
-                    </div>
-                    <div className="om-storage-legend mono">
-                      <span><i className="a" /> Files · {fmtBytes(stats.storage.files_bytes)}</span>
-                      <span><i className="b" /> Cache · {fmtBytes(stats.storage.cache_bytes)}</span>
-                      <span>DB · {fmtBytes(stats.storage.db_bytes)}</span>
-                    </div>
-                  </>
-                ) : (
-                  <p className="om-add-hint mono">Loading storage…</p>
-                )}
-              </div>
-            </div>
-          </SettingCard>
-
-          <div className="om-setting-card om-creator-card">
-            <div className="om-setting-head">
-              <span className="mono om-setting-eyebrow">Made by</span>
-            </div>
-            <div className="om-setting-body">
-              <p className="om-creator-name">Reda Izo</p>
-              <span className="om-creator-role">Creative Director · openMemo</span>
-              <p className="om-creator-bio">
-                I build tools I want to use. openMemo keeps the links, files,
-                notes and videos worth saving. On your machine.
-              </p>
-              <div className="om-creator-links">
-                <a className="om-creator-link" href="https://dev.izo.red" target="_blank" rel="noopener noreferrer">
-                  <Icon name="globe" size={12} /> dev.izo.red
-                </a>
-                <a className="om-creator-link" href="https://github.com/izored/OpenMemo" target="_blank" rel="noopener noreferrer">
-                  <Icon name="github" size={12} /> GitHub
-                </a>
-              </div>
-            </div>
-          </div>
-
-          <SettingCard title="Backup & Restore" eyebrow="Data safety">
-            <div className="om-setting-row">
-              <div className="om-setting-row-text">
-                <p>Structure backup</p>
-                <span className="mono">DB, collections, tags, chats — no uploaded files</span>
-              </div>
-              <button className="om-btn-secondary" onClick={() => handleBackup('structure')} disabled={!!backing || restoring}>
-                {backing === 'structure' ? 'Preparing…' : 'Download'}
-              </button>
             </div>
             <div className="om-setting-row">
               <div className="om-setting-row-text">
-                <p>Full backup</p>
-                <span className="mono">DB + all uploaded files</span>
+                <p>Default model</p>
+                <span className="mono">Used across chat and Ask</span>
               </div>
-              <button className="om-btn-secondary" onClick={() => handleBackup('full')} disabled={!!backing || restoring}>
-                {backing === 'full' ? 'Preparing…' : 'Download'}
-              </button>
+              <ModelSelect models={ollamaModels} />
             </div>
-            <div className="om-setting-row" style={{ borderTop: '1px solid var(--border)', marginTop: 8, paddingTop: 8 }}>
+            <div className="om-setting-row">
               <div className="om-setting-row-text">
-                <p>Restore from backup</p>
-                <span className="mono">Upload a .zip — overwrites current data</span>
+                <p>Installed</p>
+                <span className="mono">{ollamaModels.length} model{ollamaModels.length === 1 ? '' : 's'} pulled locally</span>
               </div>
-              <button className="om-btn-secondary danger" onClick={handleRestoreClick} disabled={!!backing || restoring}>
-                {restoring ? 'Restoring…' : 'Restore'}
-              </button>
-              <input type="file" ref={fileInputRef} accept=".zip" style={{ display: 'none' }} onChange={handleFileSelected} />
+              <span className="mono om-setting-val">{ollamaModels.length}</span>
             </div>
           </SettingCard>
 
-          <RecentlyDeletedCard />
-
-        </div>
-
-        {/* ── Right column ────────────────────────────────────── */}
-        <div className="om-settings-col">
           <SettingCard title="Browser extension" eyebrow="Capture">
             <div className="om-ext-card-body">
               <div className="om-ext-cta">
@@ -616,32 +658,13 @@ export function SettingsPage() {
             </div>
           </SettingCard>
 
-          <SettingCard title="Local AI" eyebrow="Ollama">
-            <div className="om-setting-row">
-              <div className="om-setting-row-text">
-                <p>Connection</p>
-                <span className="mono">Powers chat, RAG, embeddings</span>
-              </div>
-              <span className="mono om-setting-val" style={{ color: ollamaConnected ? 'var(--accent)' : '#EF5048' }}>
-                {ollamaConnected === null ? '…' : ollamaConnected ? 'Connected' : 'Offline'}
-              </span>
-            </div>
-            <div className="om-setting-row">
-              <div className="om-setting-row-text">
-                <p>Models</p>
-                <span className="mono">{ollamaModels.map((m) => m.name).join(', ') || 'none'}</span>
-              </div>
-              <span className="mono om-setting-val">{ollamaModels.length}</span>
-            </div>
-          </SettingCard>
-
-          <SettingCard title="Uploads" eyebrow="Limits">
+          <SettingCard title="Files & limits" eyebrow="Files">
             <div className="om-setting-row">
               <div className="om-setting-row-text">
                 <p>Max upload size</p>
                 <span className="mono">Per file. Any file type is accepted. Default 5120 MB (5 GB).</span>
               </div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <div className="om-inline-control">
                 <input
                   type="number"
                   min={1}
@@ -649,7 +672,7 @@ export function SettingsPage() {
                   value={maxUploadMb ?? ''}
                   onChange={(e) => setMaxUploadMb(e.target.value === '' ? null : Number(e.target.value))}
                   className="om-input"
-                  style={{ width: 110, textAlign: 'right' }}
+                  style={{ width: 92, textAlign: 'right' }}
                 />
                 <span className="mono om-setting-val">MB</span>
                 <button className="om-btn-secondary" onClick={saveMaxUpload} disabled={maxUploadMb == null}>
@@ -657,8 +680,8 @@ export function SettingsPage() {
                 </button>
               </div>
             </div>
-            <div className="om-setting-row" style={{ borderTop: '1px solid var(--border)', marginTop: 8, paddingTop: 8, justifyContent: 'flex-start', gap: 16 }}>
-              <div className="om-setting-row-text" style={{ maxWidth: 560 }}>
+            <div className="om-setting-row" style={{ borderTop: '1px solid var(--border)', marginTop: 8, paddingTop: 8 }}>
+              <div className="om-setting-row-text">
                 <p>Auto-download pulled audio</p>
                 <span className="mono">
                   Download audio from SoundCloud, Bandcamp, etc. on save so it plays locally and survives takedown. When off, the memo streams via the platform's embed instead.
@@ -690,19 +713,77 @@ export function SettingsPage() {
               <div className="om-setting-row-text" style={{ maxWidth: 560 }}>
                 <p>Cookies for restricted downloads</p>
                 <span className="mono">
-                  Lets "Make it local" fetch age-restricted or private videos. Stored only on this machine at <code>data/yt_cookies.txt</code> and passed to yt-dlp to fetch the video; never sent to any OpenMemo service (there isn't one). Use a throwaway account.{' '}
+                  Lets "Make it local" fetch age-restricted or private videos. The cookie file stays on this machine, in openMemo's own data store (a Docker volume), as <code>yt_cookies.txt</code>. It is only handed to yt-dlp to fetch the video, never sent to any openMemo service (there isn't one). Use a throwaway account.{' '}
                   <button type="button" onClick={() => openGuide('yt-cookies')} style={{ color: 'var(--accent)', fontWeight: 500 }}>Show me how</button>
                 </span>
               </div>
               <CookiesUpload />
             </div>
+            <div className="om-setting-row" style={{ borderTop: '1px solid var(--border)', marginTop: 8, paddingTop: 8 }}>
+              <TrashRow />
+            </div>
           </SettingCard>
 
-          <SettingCard title="Built with ❤️" eyebrow="Open source">
-            <p className="om-built-with-lead">
-              openMemo would not be possible without the amazing free and open-source software it stands on. Hover any tool to see what it does — every one of them is worth a thank-you.
-            </p>
-            <BuiltWithGrid entries={BUILT_WITH} />
+          <div className="om-setting-card om-creator-card">
+            <div className="om-setting-head">
+              <span className="mono om-setting-eyebrow">Made by</span>
+            </div>
+            <div className="om-setting-body">
+              <p className="om-creator-name">Reda Izo</p>
+              <span className="om-creator-role">Creative Director · openMemo</span>
+              <p className="om-creator-bio">
+                I build tools I want to use. openMemo keeps the links, files,
+                notes and videos worth saving. On your machine.
+              </p>
+              <div className="om-creator-links">
+                <a className="om-creator-link" href="https://dev.izo.red" target="_blank" rel="noopener noreferrer">
+                  <Icon name="globe" size={12} /> dev.izo.red
+                </a>
+                <a className="om-creator-link" href="https://github.com/izored/OpenMemo" target="_blank" rel="noopener noreferrer">
+                  <Icon name="github" size={12} /> GitHub
+                </a>
+              </div>
+            </div>
+          </div>
+
+        </div>
+
+        {/* ── Built with — full-width auto-scroll marquee ─────── */}
+        <SettingCard title="Built with ❤️" eyebrow="Open source">
+          <BuiltWith entries={BUILT_WITH} />
+        </SettingCard>
+
+        {/* ── Data safety + Danger — half/half at the bottom ──── */}
+        <div className="om-duo">
+          <SettingCard title="Backup & Restore" eyebrow="Data safety">
+            <div className="om-setting-row">
+              <div className="om-setting-row-text">
+                <p>Structure backup</p>
+                <span className="mono">DB, collections, tags, chats — no uploaded files</span>
+              </div>
+              <button className="om-btn-secondary" onClick={() => handleBackup('structure')} disabled={!!backing || restoring}>
+                {backing === 'structure' ? 'Preparing…' : 'Download'}
+              </button>
+            </div>
+            <div className="om-setting-row">
+              <div className="om-setting-row-text">
+                <p>Full backup</p>
+                <span className="mono">DB + all uploaded files</span>
+              </div>
+              <button className="om-btn-secondary" onClick={() => handleBackup('full')} disabled={!!backing || restoring}>
+                {backing === 'full' ? 'Preparing…' : 'Download'}
+              </button>
+            </div>
+            <div className="om-setting-row" style={{ borderTop: '1px solid var(--border)', marginTop: 8, paddingTop: 8 }}>
+              <div className="om-setting-row-text">
+                <p>Restore from backup</p>
+                <span className="mono">Upload a .zip — overwrites current data</span>
+              </div>
+              <button className="om-btn-secondary danger" onClick={handleRestoreClick} disabled={!!backing || restoring}>
+                {restoring ? 'Restoring…' : 'Restore'}
+              </button>
+              <input type="file" ref={fileInputRef} accept=".zip" style={{ display: 'none' }} onChange={handleFileSelected} />
+            </div>
           </SettingCard>
 
           <SettingCard title="Danger zone" eyebrow="Careful">
