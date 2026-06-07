@@ -5,13 +5,14 @@ from datetime import datetime
 from pathlib import Path
 from typing import Optional
 
-from fastapi import APIRouter, BackgroundTasks, Body, Depends, HTTPException, Query, Request
+from fastapi import APIRouter, BackgroundTasks, Body, Depends, File, HTTPException, Query, Request, UploadFile
 from fastapi.responses import FileResponse, StreamingResponse
 from sqlalchemy import select, func, desc, asc
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload, load_only
 from pydantic import BaseModel
 
+from backend.config import settings
 from backend.db.database import get_db
 from backend.db.models import Memo, Collection, Tag, memo_collections, memo_tags
 from backend.core.security import sanitize_workspace_id
@@ -410,6 +411,58 @@ async def localize_memo(
 
     background_tasks.add_task(localize_memo_task, memo_id, body.mode)
     return {"id": memo_id, "status": "pending", "mode": body.mode}
+
+
+def _sniff_thumb_ext(raw: bytes) -> Optional[str]:
+    """Magic-byte image sniff -> canonical extension (trust content, not name)."""
+    if raw.startswith(b"\xff\xd8\xff"):
+        return "jpg"
+    if raw.startswith(b"\x89PNG\r\n\x1a\n"):
+        return "png"
+    if raw[:6] in (b"GIF87a", b"GIF89a"):
+        return "gif"
+    if raw[:4] == b"RIFF" and raw[8:12] == b"WEBP":
+        return "webp"
+    return None
+
+
+@router.post("/{memo_id}/thumbnail")
+async def upload_thumbnail(
+    memo_id: str,
+    file: UploadFile = File(...),
+    db: AsyncSession = Depends(get_db),
+):
+    """Set a custom thumbnail for any memo. The (already cropped) image is stored
+    in the public thumbs cache and referenced by thumbnail_path, overriding
+    whatever the ingest produced. Applies to every memo type (ADR-001)."""
+    memo = await db.get(Memo, memo_id)
+    if not memo:
+        raise HTTPException(status_code=404, detail="Memo not found")
+    raw = await file.read()
+    if not raw:
+        raise HTTPException(status_code=400, detail="Empty file.")
+    if len(raw) > 10 * 1024 * 1024:
+        raise HTTPException(status_code=413, detail="Thumbnail too large (max 10 MB).")
+    ext = _sniff_thumb_ext(raw)
+    if not ext:
+        raise HTTPException(status_code=400, detail="Unsupported image type. Use JPG, PNG, WEBP or GIF.")
+
+    thumbs = Path(settings.FILES_DIR) / "thumbs"
+    thumbs.mkdir(parents=True, exist_ok=True)
+    name = f"{memo_id}_custom_{int(datetime.utcnow().timestamp())}.{ext}"
+    (thumbs / name).write_bytes(raw)
+
+    # Drop the memo's previous custom thumbnail file so they don't pile up.
+    prev = memo.thumbnail_path or ""
+    if prev.startswith("/api/files/thumb/"):
+        old = thumbs / prev.rsplit("/", 1)[-1]
+        if old.name != name:
+            old.unlink(missing_ok=True)
+
+    memo.thumbnail_path = f"/api/files/thumb/{name}"
+    memo.updated_at = datetime.utcnow()
+    await db.commit()
+    return {"thumbnail_path": memo.thumbnail_path}
 
 
 @router.post("")

@@ -47,6 +47,18 @@ export const memoApi = {
       method: 'POST',
       body: JSON.stringify({ mode }),
     }),
+  // Set a custom thumbnail (already cropped client-side) for any memo. Multipart;
+  // the browser sets the boundary, so don't add a Content-Type header.
+  uploadThumbnail: async (id: string, file: Blob): Promise<{ thumbnail_path: string }> => {
+    const form = new FormData();
+    form.append('file', file, 'thumbnail');
+    const resp = await fetch(`${API_BASE}/memos/${id}/thumbnail`, { method: 'POST', body: form });
+    if (!resp.ok) {
+      const err = await resp.json().catch(() => ({ detail: resp.statusText }));
+      throw new Error(err.detail || 'Thumbnail upload failed');
+    }
+    return resp.json();
+  },
 };
 
 // Ingestion

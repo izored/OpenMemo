@@ -117,6 +117,11 @@ interface AppState {
   openGuide: (id: GuideId) => void;
   closeGuide: () => void;
 
+  // Thumbnail editor: the memo whose thumbnail/title is being edited (null = closed).
+  editThumbMemo: Memo | null;
+  openThumbEdit: (memo: Memo) => void;
+  closeThumbEdit: () => void;
+
   // Media lightbox (shared across grid — supports prev/next navigation)
   lightboxGroup: Memo[];
   lightboxIndex: number;
@@ -197,6 +202,10 @@ export const useAppStore = create<AppState>((set) => ({
   activeGuide: null,
   openGuide: (id) => set({ activeGuide: id }),
   closeGuide: () => set({ activeGuide: null }),
+
+  editThumbMemo: null,
+  openThumbEdit: (memo) => set({ editThumbMemo: memo }),
+  closeThumbEdit: () => set({ editThumbMemo: null }),
 
   lightboxGroup: [],
   lightboxIndex: -1,

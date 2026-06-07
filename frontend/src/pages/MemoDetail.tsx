@@ -31,6 +31,7 @@ import {
   ListChecks,
   Captions,
   KeyRound,
+  Image as ImageIcon,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { BackButton } from '@/components/BackButton';
@@ -851,6 +852,7 @@ export function MemoDetail() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
+  const openThumbEdit = useAppStore((s) => s.openThumbEdit);
   const [chatOpen, setChatOpen] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
   const [noteContent, setNoteContent] = useState('');
@@ -1128,6 +1130,16 @@ export function MemoDetail() {
               />
             ) : (
               <h1 className="om-detail-title" style={{ marginBottom: '8px' }}>{memo.title}</h1>
+            )}
+
+            {isEditing && (
+              <button
+                className="om-btn-secondary"
+                onClick={() => openThumbEdit(memo)}
+                style={{ marginBottom: 12 }}
+              >
+                <ImageIcon size={13} /> Change thumbnail &amp; title
+              </button>
             )}
 
             {/* Meta */}

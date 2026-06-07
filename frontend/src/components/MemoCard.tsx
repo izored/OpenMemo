@@ -11,6 +11,7 @@ import { platformMeta, videoEmbedUrl } from '@/lib/platforms';
 import { useAppStore } from '@/stores/appStore';
 import { useAudioPlayer, formatTime } from '@/lib/audioPlayer';
 import { motion, AnimatePresence } from 'framer-motion';
+import { Pencil } from 'lucide-react';
 import { LiveWaveform } from './LiveWaveform';
 import { Marquee } from './Marquee';
 import { VolumeControl } from './VolumeControl';
@@ -157,6 +158,7 @@ function Chrome({
   playerOverlay?: React.ReactNode;
 }) {
   const navigate = useNavigate();
+  const openThumbEdit = useAppStore((s) => s.openThumbEdit);
   const handleClick = () => {
     if (onCardClick) onCardClick();
     else navigate(`/memo/${memo.id}`);
@@ -176,6 +178,17 @@ function Chrome({
         </div>
       )}
       {confirmOverlay}
+      {/* Top-left pen: edit this card's thumbnail + title (any memo type).
+          stopPropagation so it never triggers the card click / drag. */}
+      <button
+        className="om-action om-card-edit"
+        onClick={(e) => { e.stopPropagation(); openThumbEdit(memo); }}
+        onPointerDown={(e) => e.stopPropagation()}
+        title="Edit thumbnail & title"
+        aria-label="Edit thumbnail and title"
+      >
+        <Pencil size={12} />
+      </button>
       {/* No `initial={false}` — it propagates via PresenceContext and makes the
           child skip its enter tween (pop-in). We want the enter animated too. */}
       <AnimatePresence>{playerOverlay}</AnimatePresence>
