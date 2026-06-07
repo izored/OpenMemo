@@ -2,6 +2,9 @@ import { create } from 'zustand';
 import type { Collection, Memo } from '@/types';
 import { DEFAULT_TWEAKS, applyTweaks, type Tweaks } from '@/lib/appearance';
 
+// Ids of the step-by-step guides the GuideModal can render. Add new guides here.
+export type GuideId = 'yt-cookies';
+
 const loadTweaks = (): Tweaks => {
   try {
     const raw = localStorage.getItem('openmemo_tweaks');
@@ -108,6 +111,12 @@ interface AppState {
   searchOpen: boolean;
   setSearchOpen: (open: boolean) => void;
 
+  // Step-by-step guide popup (reusable framework — see GuideModal).
+  // null = closed; otherwise the id of the guide to show.
+  activeGuide: GuideId | null;
+  openGuide: (id: GuideId) => void;
+  closeGuide: () => void;
+
   // Media lightbox (shared across grid — supports prev/next navigation)
   lightboxGroup: Memo[];
   lightboxIndex: number;
@@ -184,6 +193,10 @@ export const useAppStore = create<AppState>((set) => ({
 
   searchOpen: false,
   setSearchOpen: (open) => set({ searchOpen: open }),
+
+  activeGuide: null,
+  openGuide: (id) => set({ activeGuide: id }),
+  closeGuide: () => set({ activeGuide: null }),
 
   lightboxGroup: [],
   lightboxIndex: -1,

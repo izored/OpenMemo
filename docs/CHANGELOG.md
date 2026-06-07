@@ -3,6 +3,22 @@
 All notable changes to OpenMemo are documented here.
 
 ---
+## [2.3.0] - Unreleased
+
+Restricted videos stop being a dead end. When "Make it local" fails because the source is behind a sign-in (age-restricted or private), the panel now walks you through the fix instead of showing a bare "Try again", and yt-dlp can authenticate with your own browser cookies.
+
+### Added
+
+- 🔑 **Guided fix for locked downloads** — a failed "Make it local" on a sign-in-gated source (age-restricted / private) now detects the gate from yt-dlp's error and offers a **Follow these steps** button next to Try again, with a softer "do you really want this one saved?" nudge. Opens a centered, fixed-height six-step guide popup (why it failed → **how safe is this?** → install exporter → sign in → export → upload) that walks through getting browser cookies and uploading them. The safety step spells out where the file lives (`data/yt_cookies.txt`), that only yt-dlp reads it, and that nothing is sent to any OpenMemo service. Generic providers still show the plain failure message.
+- 🍪 **yt-dlp cookie authentication** — a Netscape `cookies.txt` uploaded to OpenMemo is passed to yt-dlp (`--cookies`) for every "Make it local" download and thumbnail fetch. Centralized in one `_cookie_args()` helper so it works for every provider, not just YouTube (ADR-001). The jar lives under `DATA_DIR`, is never returned over the API or logged, and is git-ignored. New `POST` / `DELETE /api/settings/cookies` with format + size validation; `GET /api/settings` exposes a read-only `yt_cookies_present` flag.
+- 🧩 **Reusable GuideModal framework** — a new centered step-by-step popup (`GuideModal` + `GuideHost`, driven by an `activeGuide` store id) that any future guide can reuse: steps are data, any step can render a live control (the cookie upload is the first). Reuses the existing `.om-modal` design system, so it themes automatically.
+- 🧰 **Cookie management in Settings** — the storage card gains a "Cookies for restricted downloads" row: a self-contained drag-and-drop `CookiesUpload` (install / replace / remove) plus a "Show me how" link that opens the same guide.
+
+### Changed
+
+- 🚧 **"Make it local" failures explain themselves** — the error branch in `MakeItLocalPanel` now tailors its copy to the failure reason. A new `localize_error` column (PRAGMA-guarded migration) stores yt-dlp's last message so the UI can tell an age/login gate apart from a region-lock or unsupported source; it is cleared on retry and on success.
+
+---
 ## [2.2.0] - 2026-06-05
 
 The big one. Everything saved since 2.0.2, shipped together. Audio grows into a

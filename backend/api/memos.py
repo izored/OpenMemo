@@ -211,6 +211,7 @@ async def get_memo(memo_id: str, db: AsyncSession = Depends(get_db)):
         "transcript_lang": memo.transcript_lang,
         "transcript_source": memo.transcript_source,
         "localize_status": memo.localize_status,
+        "localize_error": memo.localize_error,
         "audio_kind": memo.audio_kind,
         "audio_artist": memo.audio_artist,
         "notes": memo.notes,
@@ -401,6 +402,7 @@ async def localize_memo(
         raise HTTPException(status_code=400, detail=f"Invalid mode: {body.mode}")
 
     memo.localize_status = "pending"
+    memo.localize_error = None  # fresh attempt — drop the previous failure
     memo.updated_at = datetime.utcnow()
     await db.commit()
 

@@ -6,6 +6,7 @@ import { Icon } from '@/components/Icon';
 import { ChangelogModal, cmpVersion } from '@/components/ChangelogModal';
 import { ONBOARDING_KEY } from '@/lib/onboarding';
 import { useAppStore } from '@/stores/appStore';
+import { CookiesUpload } from '@/components/CookiesUpload';
 import { systemApi, maintenanceApi, backupApi, settingsApi, memoApi, type AppSettings } from '@/lib/api';
 import type { OllamaModel } from '@/types';
 
@@ -190,6 +191,7 @@ function RecentlyDeletedCard() {
 export function SettingsPage() {
   const t = useAppStore((s) => s.tweaks);
   const setAppearancePanelOpen = useAppStore((s) => s.setAppearancePanelOpen);
+  const openGuide = useAppStore((s) => s.openGuide);
   const navigate = useNavigate();
   const queryClient = useQueryClient();
 
@@ -241,7 +243,7 @@ export function SettingsPage() {
       })
       .catch(() => {
         setMaxUploadMb(5120);
-        setProfile({ max_upload_mb: 5120, display_name: '', email: '', avatar_data_url: '', mailing_list_consent: false, auto_download_audio: true });
+        setProfile({ max_upload_mb: 5120, display_name: '', email: '', avatar_data_url: '', mailing_list_consent: false, auto_download_audio: true, yt_cookies_present: false });
       });
   }, []);
 
@@ -683,6 +685,16 @@ export function SettingsPage() {
               <button className="om-btn-secondary" onClick={runLocalize} disabled={localizing}>
                 {localizing ? 'Localizing…' : 'Localize'}
               </button>
+            </div>
+            <div className="om-setting-row" style={{ borderTop: '1px solid var(--border)', marginTop: 8, paddingTop: 8, flexDirection: 'column', alignItems: 'stretch', gap: 12 }}>
+              <div className="om-setting-row-text" style={{ maxWidth: 560 }}>
+                <p>Cookies for restricted downloads</p>
+                <span className="mono">
+                  Lets "Make it local" fetch age-restricted or private videos. Stored only on this machine at <code>data/yt_cookies.txt</code> and passed to yt-dlp to fetch the video; never sent to any OpenMemo service (there isn't one). Use a throwaway account.{' '}
+                  <button type="button" onClick={() => openGuide('yt-cookies')} style={{ color: 'var(--accent)', fontWeight: 500 }}>Show me how</button>
+                </span>
+              </div>
+              <CookiesUpload />
             </div>
           </SettingCard>
 

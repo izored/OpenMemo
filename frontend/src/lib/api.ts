@@ -181,12 +181,30 @@ export interface AppSettings {
   avatar_data_url: string;
   mailing_list_consent: boolean;
   auto_download_audio: boolean;
+  // Read-only flag: whether a yt-dlp cookie jar is on the server. The jar
+  // itself is never sent over the API (it's account credentials).
+  yt_cookies_present: boolean;
 }
 
 export const settingsApi = {
   get: () => fetchJSON<AppSettings>('/settings'),
   update: (patch: Partial<AppSettings>) =>
     fetchJSON<AppSettings>('/settings', { method: 'PUT', body: JSON.stringify(patch) }),
+  // Upload a Netscape cookies.txt so yt-dlp can fetch age-restricted / private
+  // sources. Multipart — never set Content-Type by hand (the browser adds the
+  // multipart boundary). Returns the new presence flag.
+  uploadCookies: async (file: File): Promise<{ yt_cookies_present: boolean }> => {
+    const form = new FormData();
+    form.append('file', file);
+    const resp = await fetch(`${API_BASE}/settings/cookies`, { method: 'POST', body: form });
+    if (!resp.ok) {
+      const err = await resp.json().catch(() => ({ detail: resp.statusText }));
+      throw new Error(err.detail || 'Cookie upload failed');
+    }
+    return resp.json();
+  },
+  deleteCookies: () =>
+    fetchJSON<{ yt_cookies_present: boolean }>('/settings/cookies', { method: 'DELETE' }),
 };
 
 export const maintenanceApi = {

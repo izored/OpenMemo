@@ -13,6 +13,11 @@ from typing import Any
 from backend.config import settings
 
 _PATH = Path(settings.DATA_DIR) / "app_settings.json"
+# yt-dlp cookie jar (Netscape cookies.txt). Used to download age-restricted /
+# private / login-gated sources via "Make it local". This is account
+# credentials — kept under DATA_DIR (gitignored), never logged, never returned
+# over the API; only its PRESENCE is exposed (see `cookies_present`).
+_COOKIES_PATH = Path(settings.DATA_DIR) / "yt_cookies.txt"
 _LOCK = threading.Lock()
 
 # Defaults. max_upload_mb default = 5 GB. 0 means uncapped (local-first app —
@@ -53,7 +58,33 @@ def _read() -> dict[str, Any]:
 
 
 def get_settings() -> dict[str, Any]:
-    return _read()
+    # `yt_cookies_present` is computed from disk, never persisted in the JSON —
+    # so the UI can show cookie status without ever exposing the jar itself.
+    return {**_read(), "yt_cookies_present": cookies_present()}
+
+
+def get_cookies_path() -> Path:
+    """Path to the yt-dlp cookie jar (may not exist)."""
+    return _COOKIES_PATH
+
+
+def cookies_present() -> bool:
+    return _COOKIES_PATH.is_file() and _COOKIES_PATH.stat().st_size > 0
+
+
+def save_cookies(text: str) -> None:
+    """Atomically write the cookie jar to disk (tmp + replace)."""
+    with _LOCK:
+        _COOKIES_PATH.parent.mkdir(parents=True, exist_ok=True)
+        tmp = _COOKIES_PATH.with_suffix(".txt.tmp")
+        with open(tmp, "w", encoding="utf-8", newline="\n") as f:
+            f.write(text)
+        tmp.replace(_COOKIES_PATH)
+
+
+def delete_cookies() -> None:
+    with _LOCK:
+        _COOKIES_PATH.unlink(missing_ok=True)
 
 
 def update_settings(patch: dict[str, Any]) -> dict[str, Any]:
