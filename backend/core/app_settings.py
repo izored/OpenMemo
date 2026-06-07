@@ -18,6 +18,11 @@ _PATH = Path(settings.DATA_DIR) / "app_settings.json"
 # credentials — kept under DATA_DIR (gitignored), never logged, never returned
 # over the API; only its PRESENCE is exposed (see `cookies_present`).
 _COOKIES_PATH = Path(settings.DATA_DIR) / "yt_cookies.txt"
+# Custom appearance background. Stored full-quality server-side (not a
+# localStorage data URL, which can't hold a real photo) and served back by the
+# settings API. The filename keeps the uploaded extension; the active one is
+# tracked in app_settings under `bg_image_ext`.
+_BG_DIR = Path(settings.DATA_DIR)
 _LOCK = threading.Lock()
 
 # Defaults. max_upload_mb default = 5 GB. 0 means uncapped (local-first app —
@@ -40,6 +45,9 @@ _DEFAULTS: dict[str, Any] = {
     # "Make it local" step. When False, the memo stays remote and the detail
     # page streams it via the platform's embed widget instead.
     "auto_download_audio": True,
+    # Extension (without dot) of the active custom background image, e.g. "jpg".
+    # Empty = no custom background. The file lives at DATA_DIR/background.<ext>.
+    "bg_image_ext": "",
 }
 
 _UNCAPPED_SENTINEL = 0
@@ -85,6 +93,45 @@ def save_cookies(text: str) -> None:
 def delete_cookies() -> None:
     with _LOCK:
         _COOKIES_PATH.unlink(missing_ok=True)
+
+
+def get_background_path() -> Path | None:
+    """Path to the active custom background image, or None if unset/missing."""
+    ext = (_read().get("bg_image_ext") or "").lstrip(".")
+    if not ext:
+        return None
+    p = _BG_DIR / f"background.{ext}"
+    return p if p.is_file() else None
+
+
+def background_present() -> bool:
+    return get_background_path() is not None
+
+
+def save_background(raw: bytes, ext: str) -> None:
+    """Store the background image full-quality (tmp + replace), drop any prior
+    file with a different extension, and record the active extension."""
+    ext = ext.lstrip(".").lower()
+    with _LOCK:
+        _BG_DIR.mkdir(parents=True, exist_ok=True)
+        # Remove a previous background of a different extension so only one exists.
+        prev = (_read().get("bg_image_ext") or "").lstrip(".")
+        if prev and prev != ext:
+            (_BG_DIR / f"background.{prev}").unlink(missing_ok=True)
+        dest = _BG_DIR / f"background.{ext}"
+        tmp = dest.with_suffix(dest.suffix + ".tmp")
+        with open(tmp, "wb") as f:
+            f.write(raw)
+        tmp.replace(dest)
+    update_settings({"bg_image_ext": ext})
+
+
+def delete_background() -> None:
+    with _LOCK:
+        ext = (_read().get("bg_image_ext") or "").lstrip(".")
+        if ext:
+            (_BG_DIR / f"background.{ext}").unlink(missing_ok=True)
+    update_settings({"bg_image_ext": ""})
 
 
 def update_settings(patch: dict[str, Any]) -> dict[str, Any]:

@@ -184,6 +184,9 @@ export interface AppSettings {
   // Read-only flag: whether a yt-dlp cookie jar is on the server. The jar
   // itself is never sent over the API (it's account credentials).
   yt_cookies_present: boolean;
+  // Extension of the active custom background image (server-stored, full
+  // quality), or '' if none. The image is served at /api/settings/background.
+  bg_image_ext: string;
 }
 
 export const settingsApi = {
@@ -205,6 +208,20 @@ export const settingsApi = {
   },
   deleteCookies: () =>
     fetchJSON<{ yt_cookies_present: boolean }>('/settings/cookies', { method: 'DELETE' }),
+  // Upload a custom appearance background, stored full-quality server-side.
+  // Returns the active extension; the image is served at /api/settings/background.
+  uploadBackground: async (file: File): Promise<{ bg_image_ext: string }> => {
+    const form = new FormData();
+    form.append('file', file);
+    const resp = await fetch(`${API_BASE}/settings/background`, { method: 'POST', body: form });
+    if (!resp.ok) {
+      const err = await resp.json().catch(() => ({ detail: resp.statusText }));
+      throw new Error(err.detail || 'Background upload failed');
+    }
+    return resp.json();
+  },
+  deleteBackground: () =>
+    fetchJSON<{ bg_image_present: boolean }>('/settings/background', { method: 'DELETE' }),
 };
 
 export const maintenanceApi = {

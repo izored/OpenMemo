@@ -7,6 +7,33 @@ the decision, and its consequences, so a future reader knows *why*, not just
 
 ---
 
+## ADR-013: Custom appearance backgrounds are ingested server-side at full quality
+
+**Date:** 2026-06-07 · **Status:** Shipped · **Builds on:** ADR-011 (the live appearance preview is the Settings hero), ADR-001 (define shared things once)
+
+### Context
+
+A custom background was captured client-side: the upload was downscaled to 1280px and re-encoded as a JPEG at 0.72 quality, then stored as a base64 **data URL in `localStorage`** (`tweaks.bgImage`). That was fine while the background was always blurred 64px, but it broke down once you could drop the blur to 0: the image showed soft and washed out. The deeper problem is the storage medium. `localStorage` caps around 5 MB for the whole origin, and a base64 photo inflates ~33%, so a real full-quality image cannot live there without risking a `QuotaExceededError` that corrupts the entire tweaks store. The downscale existed to dodge that limit, at the cost of quality.
+
+### Decision
+
+**Ingest the background server-side at full quality, and keep only its URL on the client.**
+
+- The original bytes are stored under `DATA_DIR/background.<ext>` (one file; a replace with a different extension removes the old one). The active extension is recorded in `app_settings` as `bg_image_ext`.
+- New routes: `POST /api/settings/background` (multipart, magic-byte image sniff so we trust content not filename, 10 MB cap), `GET /api/settings/background` (serves the file), `DELETE /api/settings/background`.
+- The client stores only `tweaks.bgImage = "/api/settings/background?t=<ts>"` (a tiny string, cache-busted on replace). **Rendering is unchanged**: `applyTweaks` still sets `--bg-image: url(...)`, so the CSS path is identical whether the URL is a data URL or this endpoint.
+- **Large-image seam.** Images over 10 MB route through `_lossless_compress_seam()`, an architecture placeholder that currently declines them with a clear message. No compressor library is added yet (per OPNMMO-0018); when compression lands, it slots into that one function. The prior 5 MB hard cap is raised to 10 MB so mid-size images go through now.
+- **0% blur stays subtly treated.** At blur 0 the filter is genuinely `blur(0px)`, but the `saturate(120%)` and the dark-theme brightness dim remain, so cards stay legible over a bright photo. "0%" means no blur, not raw pixels.
+
+### Consequences
+
+- Backgrounds render at full quality, and `localStorage` holds a short URL instead of a megabyte data URL, so the tweaks store can never overflow on a background.
+- The background now depends on the backend (it was purely client-side before); the dev and Docker proxies already route `/api` so this is transparent.
+- There is exactly one background file on disk; no orphan accumulation.
+- Images over 10 MB are declined until the compression seam is implemented.
+
+---
+
 ## ADR-012: Restricted "Make it local" downloads use a user-supplied cookie jar, guided by an in-app walkthrough
 
 **Date:** 2026-06-07 · **Status:** Shipped · **Builds on:** ADR-003 ("Make it local" is gated to remote, localizable media), ADR-001 (define shared things once, scope across the whole memo type), ADR-004 (yt-dlp is the shared engine for remote media)

@@ -18,6 +18,7 @@ Two big pushes. The Settings page is rebuilt as a bento with the live appearance
 - 🤖 **Pick a default model.** The Local AI card has an in-brand dropdown to set the model used across chat and Ask. It writes the same persisted `chatModel` those surfaces already read, so it is the app-wide default with nothing to keep in sync.
 - ⭐ **My picks are marked.** In the live-preview panel, the options I run openMemo with (Card Minimal, Layout Boxed, Player Big) carry a small asterisk, with a one-line note in my voice. A hint, not a forced default.
 - 🎠 **Built-with is a marquee.** The open-source credits auto-scroll in a band that pauses on hover. Hover any name and its description replaces the subline, so you read what each tool does in place instead of a floating tooltip.
+- 🖼️ **Full-quality custom backgrounds.** Uploading an appearance background now ingests the original image server-side (`data/background.<ext>`, served by `GET /api/settings/background`) instead of cramming a downscaled JPEG into localStorage, so it stays crisp even at 0% blur. Magic-byte validation, a 10 MB cap, and a placeholder seam for future lossless compression of larger images (ADR-013).
 
 ### Changed
 
