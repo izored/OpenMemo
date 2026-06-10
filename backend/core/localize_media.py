@@ -23,6 +23,7 @@ import uuid
 from pathlib import Path
 
 from backend.config import settings
+from backend.core.app_settings import cookies_present, get_cookies_path
 
 VALID_MODES = {"video", "audio"}
 
@@ -40,6 +41,17 @@ def _have(binary: str) -> bool:
     return shutil.which(binary) is not None
 
 
+def _cookie_args() -> list[str]:
+    """`--cookies <jar>` when a cookie jar is configured, else nothing.
+
+    Single source of yt-dlp auth — provider-agnostic, so age-restricted /
+    private / login-gated sources work the same for every host (ADR-001).
+    """
+    if cookies_present():
+        return ["--cookies", str(get_cookies_path())]
+    return []
+
+
 def _run_ytdlp(url: str, out_template: str, mode: str) -> Path:
     """Invoke yt-dlp, return the path to the downloaded file. Blocking."""
     if not _have("yt-dlp"):
@@ -51,6 +63,7 @@ def _run_ytdlp(url: str, out_template: str, mode: str) -> Path:
         "-f", fmt,
         "--no-playlist",
         "--no-part",
+        *_cookie_args(),
         # Print the FINAL filename (after any merge/convert) so we can locate it.
         "--print", "after_move:filepath",
         "--no-simulate",
@@ -81,7 +94,7 @@ def _get_thumbnail_url(url: str) -> str | None:
         return None
     try:
         proc = subprocess.run(
-            ["yt-dlp", "--no-playlist", "--print", "thumbnail", "--simulate", url],
+            ["yt-dlp", "--no-playlist", *_cookie_args(), "--print", "thumbnail", "--simulate", url],
             capture_output=True, text=True, timeout=30,
         )
         if proc.returncode == 0:

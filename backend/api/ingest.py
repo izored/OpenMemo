@@ -467,6 +467,7 @@ async def localize_memo_task(memo_id: str, mode: str):
         url = memo.source_url
         ws = memo.workspace_id or "default"
         memo.localize_status = "processing"
+        memo.localize_error = None  # clear any stale failure from a prior attempt
         await db.commit()
 
     try:
@@ -477,6 +478,7 @@ async def localize_memo_task(memo_id: str, mode: str):
             memo = await db.get(Memo, memo_id)
             if memo:
                 memo.localize_status = "error"
+                memo.localize_error = str(e)[:300]
                 memo.updated_at = datetime.utcnow()
                 await db.commit()
         return
@@ -486,6 +488,7 @@ async def localize_memo_task(memo_id: str, mode: str):
             memo = await db.get(Memo, memo_id)
             if memo:
                 memo.localize_status = "error"
+                memo.localize_error = str(e)[:300]
                 memo.updated_at = datetime.utcnow()
                 await db.commit()
         return
@@ -499,6 +502,7 @@ async def localize_memo_task(memo_id: str, mode: str):
         # A localized/converted audio is music (linked source); keep voice intact.
         memo.audio_kind = derive_audio_kind(memo, memo.audio_kind)
         memo.localize_status = "done"
+        memo.localize_error = None
         memo.updated_at = datetime.utcnow()
         await db.commit()
 

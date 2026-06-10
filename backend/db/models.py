@@ -95,6 +95,9 @@ class Memo(Base):
     summaries = Column(JSON, nullable=True)
     # "Make it local" download state for link/video memos (yt-dlp).
     localize_status = Column(String, nullable=True)    # pending|processing|done|error
+    # Last yt-dlp failure reason (truncated). Lets the UI tell an age/login gate
+    # ("needs your cookies") apart from a region-lock or unsupported source.
+    localize_error = Column(Text, nullable=True)
     sort_order = Column(Integer, default=0)
     pinned = Column(Boolean, default=False)
     is_processed = Column(Boolean, default=False)

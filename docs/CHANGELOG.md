@@ -3,24 +3,26 @@
 All notable changes to OpenMemo are documented here.
 
 ---
-## [Unreleased]
+## [2.3.0] - Unreleased
 
-The Settings page, rebuilt. It went from a flat two-column form into a bento: the
-live appearance preview leads as a full-width hero, the library stats sit in a row
-of number tiles, and the rest of the cards pack as a real masonry so nothing
-leaves dead space. Plus an app-wide default-model picker and a few honest hints
-about how I run it.
+Two big pushes. The Settings page is rebuilt as a bento with the live appearance preview as its hero. And restricted videos stop being a dead end: when "Make it local" fails behind a sign-in (age-restricted or private), the panel walks you through the fix instead of a bare "Try again", and yt-dlp can authenticate with your own browser cookies.
 
 ### Added
 
+- 🔑 **Guided fix for locked downloads** — a failed "Make it local" on a sign-in-gated source (age-restricted / private) now detects the gate from yt-dlp's error and offers a **Follow these steps** button next to Try again, with a softer "do you really want this one saved?" nudge. Opens a centered, fixed-height six-step guide popup (why it failed → **how safe is this?** → install exporter → sign in → export → upload) that walks through getting browser cookies and uploading them. The safety step spells out where the file lives (`data/yt_cookies.txt`), that only yt-dlp reads it, and that nothing is sent to any openMemo service. Generic providers still show the plain failure message.
+- 🍪 **yt-dlp cookie authentication** — a Netscape `cookies.txt` uploaded to openMemo is passed to yt-dlp (`--cookies`) for every "Make it local" download and thumbnail fetch. Centralized in one `_cookie_args()` helper so it works for every provider, not just YouTube (ADR-001). The jar lives under `DATA_DIR`, is never returned over the API or logged, and is git-ignored. New `POST` / `DELETE /api/settings/cookies` with format + size validation; `GET /api/settings` exposes a read-only `yt_cookies_present` flag.
+- 🧩 **Reusable GuideModal framework** — a new centered step-by-step popup (`GuideModal` + `GuideHost`, driven by an `activeGuide` store id) that any future guide can reuse: steps are data, any step can render a live control (the cookie upload is the first). Reuses the existing `.om-modal` design system, so it themes automatically.
+- 🧰 **Cookie management in Settings** — a "Cookies for restricted downloads" row: a self-contained drag-and-drop `CookiesUpload` (install / replace / remove) plus a "Show me how" link that opens the same guide.
 - 🎛️ **Appearance live-preview is the hero.** The feature I am most proud of now leads the page: a full-width panel, its own theme-aware surface with your accent as the only color, one clear "Open live preview" CTA, and a mini window mock. No more burying it in a tiny CTA row (ADR-011).
 - 🔢 **Stats load with skeletons.** The five library tiles (Memos, Collections, Tags, This week, On disk) always render, showing a shimmer loader until the numbers arrive. The row holds its height from first paint, so the page no longer jumps when stats land.
 - 🤖 **Pick a default model.** The Local AI card has an in-brand dropdown to set the model used across chat and Ask. It writes the same persisted `chatModel` those surfaces already read, so it is the app-wide default with nothing to keep in sync.
 - ⭐ **My picks are marked.** In the live-preview panel, the options I run openMemo with (Card Minimal, Layout Boxed, Player Big) carry a small asterisk, with a one-line note in my voice. A hint, not a forced default.
 - 🎠 **Built-with is a marquee.** The open-source credits auto-scroll in a band that pauses on hover. Hover any name and its description replaces the subline, so you read what each tool does in place instead of a floating tooltip.
+- 🖼️ **Full-quality custom backgrounds.** Uploading an appearance background now ingests the original image server-side (`data/background.<ext>`, served by `GET /api/settings/background`) instead of cramming a downscaled JPEG into localStorage, so it stays crisp even at 0% blur. Magic-byte validation, a 10 MB cap, and a placeholder seam for future lossless compression of larger images (ADR-013).
 
 ### Changed
 
+- 🚧 **"Make it local" failures explain themselves** — the error branch in `MakeItLocalPanel` now tailors its copy to the failure reason. A new `localize_error` column (PRAGMA-guarded migration) stores yt-dlp's last message so the UI can tell an age/login gate apart from a region-lock or unsupported source; it is cleared on retry and on success.
 - 🍱 **Settings is a bento.** Full-width feature blocks (hero, stats, built-with) stack over a CSS masonry of the smaller cards. Short cards get hugged by the next one instead of stretching to fill a row, so there is no empty space below their content (ADR-011).
 - 🗂️ **Trash moved into Files & limits.** Recently-deleted was a near-empty card on its own, so it is a row in the Files card now. The card was renamed to match.
 - 🛟 **Data safety sits beside the Danger zone.** Backup & Restore and the destructive actions are a half-width duo at the bottom of the page, grouped where they belong.

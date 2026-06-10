@@ -42,6 +42,10 @@ files/
 *.db
 chroma_data/
 
+# yt-dlp cookie jar — account credentials, never commit (also lives under data/)
+yt_cookies.txt
+**/yt_cookies.txt
+
 # Build output
 build/
 

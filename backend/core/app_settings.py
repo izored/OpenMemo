@@ -13,6 +13,16 @@ from typing import Any
 from backend.config import settings
 
 _PATH = Path(settings.DATA_DIR) / "app_settings.json"
+# yt-dlp cookie jar (Netscape cookies.txt). Used to download age-restricted /
+# private / login-gated sources via "Make it local". This is account
+# credentials — kept under DATA_DIR (gitignored), never logged, never returned
+# over the API; only its PRESENCE is exposed (see `cookies_present`).
+_COOKIES_PATH = Path(settings.DATA_DIR) / "yt_cookies.txt"
+# Custom appearance background. Stored full-quality server-side (not a
+# localStorage data URL, which can't hold a real photo) and served back by the
+# settings API. The filename keeps the uploaded extension; the active one is
+# tracked in app_settings under `bg_image_ext`.
+_BG_DIR = Path(settings.DATA_DIR)
 _LOCK = threading.Lock()
 
 # Defaults. max_upload_mb default = 5 GB. 0 means uncapped (local-first app —
@@ -35,6 +45,9 @@ _DEFAULTS: dict[str, Any] = {
     # "Make it local" step. When False, the memo stays remote and the detail
     # page streams it via the platform's embed widget instead.
     "auto_download_audio": True,
+    # Extension (without dot) of the active custom background image, e.g. "jpg".
+    # Empty = no custom background. The file lives at DATA_DIR/background.<ext>.
+    "bg_image_ext": "",
 }
 
 _UNCAPPED_SENTINEL = 0
@@ -53,7 +66,72 @@ def _read() -> dict[str, Any]:
 
 
 def get_settings() -> dict[str, Any]:
-    return _read()
+    # `yt_cookies_present` is computed from disk, never persisted in the JSON —
+    # so the UI can show cookie status without ever exposing the jar itself.
+    return {**_read(), "yt_cookies_present": cookies_present()}
+
+
+def get_cookies_path() -> Path:
+    """Path to the yt-dlp cookie jar (may not exist)."""
+    return _COOKIES_PATH
+
+
+def cookies_present() -> bool:
+    return _COOKIES_PATH.is_file() and _COOKIES_PATH.stat().st_size > 0
+
+
+def save_cookies(text: str) -> None:
+    """Atomically write the cookie jar to disk (tmp + replace)."""
+    with _LOCK:
+        _COOKIES_PATH.parent.mkdir(parents=True, exist_ok=True)
+        tmp = _COOKIES_PATH.with_suffix(".txt.tmp")
+        with open(tmp, "w", encoding="utf-8", newline="\n") as f:
+            f.write(text)
+        tmp.replace(_COOKIES_PATH)
+
+
+def delete_cookies() -> None:
+    with _LOCK:
+        _COOKIES_PATH.unlink(missing_ok=True)
+
+
+def get_background_path() -> Path | None:
+    """Path to the active custom background image, or None if unset/missing."""
+    ext = (_read().get("bg_image_ext") or "").lstrip(".")
+    if not ext:
+        return None
+    p = _BG_DIR / f"background.{ext}"
+    return p if p.is_file() else None
+
+
+def background_present() -> bool:
+    return get_background_path() is not None
+
+
+def save_background(raw: bytes, ext: str) -> None:
+    """Store the background image full-quality (tmp + replace), drop any prior
+    file with a different extension, and record the active extension."""
+    ext = ext.lstrip(".").lower()
+    with _LOCK:
+        _BG_DIR.mkdir(parents=True, exist_ok=True)
+        # Remove a previous background of a different extension so only one exists.
+        prev = (_read().get("bg_image_ext") or "").lstrip(".")
+        if prev and prev != ext:
+            (_BG_DIR / f"background.{prev}").unlink(missing_ok=True)
+        dest = _BG_DIR / f"background.{ext}"
+        tmp = dest.with_suffix(dest.suffix + ".tmp")
+        with open(tmp, "wb") as f:
+            f.write(raw)
+        tmp.replace(dest)
+    update_settings({"bg_image_ext": ext})
+
+
+def delete_background() -> None:
+    with _LOCK:
+        ext = (_read().get("bg_image_ext") or "").lstrip(".")
+        if ext:
+            (_BG_DIR / f"background.{ext}").unlink(missing_ok=True)
+    update_settings({"bg_image_ext": ""})
 
 
 def update_settings(patch: dict[str, Any]) -> dict[str, Any]:
