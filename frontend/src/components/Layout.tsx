@@ -22,6 +22,7 @@ import { Lightbox } from './Lightbox';
 import { GuideHost } from './GuideHost';
 import { ThumbnailEditHost } from './ThumbnailEditHost';
 import { DeleteToast } from './DeleteToast';
+import { NoticeToast } from './NoticeToast';
 import { AudioPlayerProvider } from '@/lib/audioPlayer';
 import { Icon } from './Icon';
 import { useTransitionConfig, type TransitionConfig } from '@/lib/transitionConfig';
@@ -233,6 +234,7 @@ export function Layout() {
       <GuideHost />
       <ThumbnailEditHost />
       <DeleteToast />
+      <NoticeToast />
 
       {import.meta.env.DEV && DevPanel && (
         <DevPanel
