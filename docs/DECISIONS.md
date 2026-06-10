@@ -7,6 +7,72 @@ the decision, and its consequences, so a future reader knows *why*, not just
 
 ---
 
+## ADR-013: Custom appearance backgrounds are ingested server-side at full quality
+
+**Date:** 2026-06-07 · **Status:** Shipped · **Builds on:** ADR-011 (the live appearance preview is the Settings hero), ADR-001 (define shared things once)
+
+### Context
+
+A custom background was captured client-side: the upload was downscaled to 1280px and re-encoded as a JPEG at 0.72 quality, then stored as a base64 **data URL in `localStorage`** (`tweaks.bgImage`). That was fine while the background was always blurred 64px, but it broke down once you could drop the blur to 0: the image showed soft and washed out. The deeper problem is the storage medium. `localStorage` caps around 5 MB for the whole origin, and a base64 photo inflates ~33%, so a real full-quality image cannot live there without risking a `QuotaExceededError` that corrupts the entire tweaks store. The downscale existed to dodge that limit, at the cost of quality.
+
+### Decision
+
+**Ingest the background server-side at full quality, and keep only its URL on the client.**
+
+- The original bytes are stored under `DATA_DIR/background.<ext>` (one file; a replace with a different extension removes the old one). The active extension is recorded in `app_settings` as `bg_image_ext`.
+- New routes: `POST /api/settings/background` (multipart, magic-byte image sniff so we trust content not filename, 10 MB cap), `GET /api/settings/background` (serves the file), `DELETE /api/settings/background`.
+- The client stores only `tweaks.bgImage = "/api/settings/background?t=<ts>"` (a tiny string, cache-busted on replace). **Rendering is unchanged**: `applyTweaks` still sets `--bg-image: url(...)`, so the CSS path is identical whether the URL is a data URL or this endpoint.
+- **Large-image seam.** Images over 10 MB route through `_lossless_compress_seam()`, an architecture placeholder that currently declines them with a clear message. No compressor library is added yet (per OPNMMO-0018); when compression lands, it slots into that one function. The prior 5 MB hard cap is raised to 10 MB so mid-size images go through now.
+- **0% blur stays subtly treated.** At blur 0 the filter is genuinely `blur(0px)`, but the `saturate(120%)` and the dark-theme brightness dim remain, so cards stay legible over a bright photo. "0%" means no blur, not raw pixels.
+
+### Consequences
+
+- Backgrounds render at full quality, and `localStorage` holds a short URL instead of a megabyte data URL, so the tweaks store can never overflow on a background.
+- The background now depends on the backend (it was purely client-side before); the dev and Docker proxies already route `/api` so this is transparent.
+- There is exactly one background file on disk; no orphan accumulation.
+- Images over 10 MB are declined until the compression seam is implemented.
+
+---
+
+## ADR-012: Restricted "Make it local" downloads use a user-supplied cookie jar, guided by an in-app walkthrough
+
+**Date:** 2026-06-07 · **Status:** Shipped · **Builds on:** ADR-003 ("Make it local" is gated to remote, localizable media), ADR-001 (define shared things once, scope across the whole memo type), ADR-004 (yt-dlp is the shared engine for remote media)
+
+### Context
+
+"Make it local" downloads a remote video or audio source with yt-dlp so the memo survives the original being taken down. It runs on the server, anonymously. Age-restricted, private, and other login-gated sources refuse an anonymous request, so the download fails. Two things were broken for the user:
+
+- **The detail-page embed also fails** for age-restricted YouTube, because the platform refuses to play those videos in an iframe. Nothing client-side can fix that.
+- **The failure was a dead end.** The panel showed a generic "Download failed. The source may be private, region-locked, or unsupported by yt-dlp." with a bare **Try again** that would just fail the same way. A non-technical, local-first user had no path forward.
+
+The real fix is the same one a browser uses: present the site with the cookies of a logged-in account. yt-dlp accepts a `--cookies` jar for exactly this. The open questions were where the jar lives, how the user supplies it without touching Docker or the filesystem, and how to be honest about the privacy trade-off.
+
+### Decision
+
+**Let the user hand openMemo a `cookies.txt`, pass it to yt-dlp for every remote fetch, and turn the dead-end failure into a guided, reusable walkthrough.**
+
+**1. One provider-agnostic auth point.** A single `_cookie_args()` helper in `core/localize_media.py` returns `["--cookies", <path>]` when a jar exists, spliced into both the download and thumbnail yt-dlp calls. It is never per-host. Per ADR-001 this means it works for every video and audio provider at once (private Vimeo, member SoundCloud, and so on), not just YouTube.
+
+**2. The jar is credentials, treated as such.** Stored at `DATA_DIR/yt_cookies.txt` (a Docker volume in the container deployment). It is **never returned over the API and never logged**; only a computed boolean `yt_cookies_present` is exposed on `GET /api/settings`. Upload (`POST`) and delete (`DELETE`) live under `/api/settings/cookies`, with Netscape-format validation, atomic writes, and a 5 MB cap (a full multi-site export is still tiny). It is git-ignored explicitly on top of living under `data/`.
+
+**3. Failures explain themselves.** A new nullable `Memo.localize_error` column (PRAGMA-guarded additive migration) stores yt-dlp's last message. The UI keyword-matches it to tell a sign-in / age gate (cookies fix it) apart from a region-lock or an unsupported source, and clears it on retry and on success.
+
+**4. The recovery is a reusable guide, not a one-off.** `MakeItLocalPanel`'s error branch now offers **Follow these steps** beside Try again, plus a softer "do you really want this one saved?" nudge. It opens `GuideModal`, a centered, fixed-height step popup driven by a `GuideId` in the store and mounted once via `GuideHost`, where steps are data and any step can render a live control. The first guide (`yt-cookies`) is six steps: why it failed, **how safe is this?**, install an exporter, sign in, export, and a final step that embeds a self-contained `CookiesUpload` (drag-drop, replace, remove). The same upload + guide are reachable from a Settings row.
+
+**5. Privacy stance, stated plainly in the UI.** Everything is local. yt-dlp is a program on the machine, not a service. The only time a cookie crosses the network is yt-dlp's request to the video host, exactly as the browser does on play. There is no openMemo server to send anything to. The guide's "How safe is this?" step says this and steers the user to a throwaway account.
+
+**6. Encryption at rest is deliberately deferred.** With no server and no user password, any decryption key must live on the same machine, so app-key encryption is obfuscation, not real secrecy, and DPAPI (the one genuinely OS-backed option) does not exist inside the Linux container we actually deploy. We chose honesty over theatre: plaintext under a git-ignored volume now, with file-permission hardening and optional encryption tracked as future work, rather than a false "unbreakable" claim.
+
+### Consequences
+
+- **Restricted and private downloads become recoverable** by a non-technical user, entirely in-app, no CLI or volume editing.
+- **A reusable guide framework** now exists; future walkthroughs are a data array, not a new component.
+- **Cookies are credentials sitting on disk.** Mitigated by: never logging or returning them, git-ignoring them, expiry being self-correcting (re-export), and explicit throwaway-account guidance. Not yet mitigated by encryption (see point 6) or tightened file permissions (tracked).
+- **The embed wall remains** for age-restricted video; only the download path is unlocked, after which the local copy plays freely.
+- **New schema column** `localize_error`; handled by the existing additive-migration list in `main.py`.
+
+---
+
 ## ADR-011: Settings is a bento, and the live appearance preview is its hero
 
 **Date:** 2026-06-06 · **Status:** Shipped · **Builds on:** ADR-001 (define shared things once)

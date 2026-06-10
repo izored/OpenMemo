@@ -23,6 +23,9 @@ export interface Memo {
   transcript_source?: 'captions' | 'stt' | null;
   // "Make it local" (yt-dlp download) state for link/video memos.
   localize_status?: 'pending' | 'processing' | 'done' | 'error' | null;
+  // Last yt-dlp failure reason (truncated) — lets the UI tell an age/login gate
+  // ("needs cookies") apart from a region-lock / unsupported source.
+  localize_error?: string | null;
   // Audio sub-kind (ADR-005): 'voice' = mic recording (waveform, no aurora),
   // 'music' = uploaded file or linked SoundCloud/Bandcamp/… (cover player +
   // inline card player + aurora). Absent/null for non-audio memos.

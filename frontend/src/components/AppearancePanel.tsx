@@ -3,6 +3,7 @@ import { Icon } from './Icon';
 import { useAppStore } from '@/stores/appStore';
 import { cn } from '@/lib/utils';
 import { ACCENT_OPTIONS, accentHarmony, randomBlobPositions } from '@/lib/appearance';
+import { settingsApi } from '@/lib/api';
 
 export function AppearancePanel() {
   const open = useAppStore((s) => s.appearancePanelOpen);
@@ -19,36 +20,28 @@ export function AppearancePanel() {
     });
   }, [t.accent, setTweak]);
 
-  const onPickImage = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const onPickImage = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const f = e.target.files?.[0];
+    e.target.value = '';
     if (!f) return;
-    if (f.size > 5 * 1024 * 1024) {
-      alert('Image too large. Max 5 MB. It gets blurred anyway, so a small file is fine.');
-      e.target.value = '';
+    if (f.size > 10 * 1024 * 1024) {
+      alert('Image over 10 MB. Lossless compression for large backgrounds is coming soon — please use a smaller image for now.');
       return;
     }
-    const r = new FileReader();
-    r.onload = () => {
-      const img = new Image();
-      img.onload = () => {
-        // Downscale + recompress: the bg is blurred 64px, so a 1280px JPEG is
-        // plenty and keeps localStorage small.
-        const max = 1280;
-        const scale = Math.min(1, max / Math.max(img.width, img.height));
-        const c = document.createElement('canvas');
-        c.width = Math.round(img.width * scale);
-        c.height = Math.round(img.height * scale);
-        const ctx = c.getContext('2d');
-        if (!ctx) {
-          setTweak({ bgImage: r.result as string, bgMode: 'image' });
-          return;
-        }
-        ctx.drawImage(img, 0, 0, c.width, c.height);
-        setTweak({ bgImage: c.toDataURL('image/jpeg', 0.72), bgMode: 'image' });
-      };
-      img.src = r.result as string;
-    };
-    r.readAsDataURL(f);
+    try {
+      // Store the original full-quality image server-side (a localStorage data
+      // URL can't hold a real photo). We keep only its URL in tweaks, cache-busted
+      // so a replace shows at once. Rendering is unchanged: --bg-image: url(...).
+      await settingsApi.uploadBackground(f);
+      setTweak({ bgImage: `/api/settings/background?t=${Date.now()}`, bgMode: 'image' });
+    } catch (err) {
+      alert((err as Error).message || 'Could not set background.');
+    }
+  };
+
+  const removeBg = () => {
+    settingsApi.deleteBackground().catch(() => {});
+    setTweak({ bgImage: '', bgMode: 'none' });
   };
 
   const customAccents = t.customAccents?.length === 2 ? t.customAccents : (['', ''] as [string, string]);
@@ -302,7 +295,7 @@ export function AppearancePanel() {
                     <>
                       <Icon name="image" size={16} />
                       <span>Upload image</span>
-                      <span className="mono">JPG · PNG · blurred behind grid</span>
+                      <span className="mono">JPG · PNG · WEBP · full quality</span>
                     </>
                   )}
                   {t.bgImage && <span className="om-ap-bg-replace mono">Replace</span>}
@@ -310,7 +303,7 @@ export function AppearancePanel() {
                 {t.bgImage && (
                   <button
                     className="om-ap-bg-clear"
-                    onClick={() => setTweak({ bgImage: '', bgMode: 'none' })}
+                    onClick={removeBg}
                   >
                     <Icon name="x" size={11} />
                     <span>Remove</span>

@@ -30,6 +30,8 @@ import {
   Clock,
   ListChecks,
   Captions,
+  KeyRound,
+  Image as ImageIcon,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { BackButton } from '@/components/BackButton';
@@ -37,7 +39,8 @@ import { MarkdownEditor } from '@/components/MarkdownEditor';
 import { memoApi, collectionApi } from '@/lib/api';
 import { AskMemoPanel } from '@/components/AskMemoPanel';
 import { audioEmbed, audioPlatformMeta, canMakeLocal, canTranscript, canSummarize, audioKind } from '@/lib/media';
-import { videoEmbedUrl, embedAspectRatio } from '@/lib/platforms';
+import { videoEmbedUrl, embedAspectRatio, platformMeta } from '@/lib/platforms';
+import { useAppStore } from '@/stores/appStore';
 import { useAudioPlayer, formatTime } from '@/lib/audioPlayer';
 import { useCoverMood } from '@/lib/coverMood';
 import { Icon } from '@/components/Icon';
@@ -678,6 +681,13 @@ function MakeItLocalPanel({ memo }: { memo: Memo }) {
   const [starting, setStarting] = useState(false);
   const status = memo.localize_status;
   const busy = status === 'pending' || status === 'processing' || starting;
+  const openGuide = useAppStore((s) => s.openGuide);
+
+  // Tell a sign-in / age gate (cookies fix it) apart from a region-lock or an
+  // unsupported source. yt-dlp's message is the signal.
+  const providerLabel = platformMeta(memo)?.label || memo.source_domain || 'this source';
+  const err = (memo.localize_error || '').toLowerCase();
+  const looksGated = /age|sign[ -]?in|log[ -]?in|confirm your age|private|members?|account|cookie|\b18\b|inappropriate|consent|restricted/.test(err);
 
   const start = async () => {
     setStarting(true);
@@ -714,12 +724,22 @@ function MakeItLocalPanel({ memo }: { memo: Memo }) {
         </p>
       ) : status === 'error' ? (
         <div>
-          <p className="om-detail-desc" style={{ marginBottom: 10 }}>
-            Download failed. The source may be private, region-locked, or unsupported by yt-dlp.
+          <p className="om-detail-desc" style={{ marginBottom: 6 }}>
+            {looksGated
+              ? `This ${providerLabel} video is locked behind a sign-in, often because it is age-restricted. openMemo needs your cookies to fetch it.`
+              : 'Download failed. The source may be private, region-locked, or unsupported by yt-dlp.'}
           </p>
-          <button className="om-btn-ghost om-btn-pill" onClick={start}>
-            <HardDriveDownload size={14} /> Try again
-          </button>
+          <p className="om-detail-desc" style={{ marginBottom: 12, color: 'var(--text-3)' }}>
+            Do you really want this one saved? A couple of one-time steps will unlock it.
+          </p>
+          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+            <button className="om-btn-primary om-btn-pill" onClick={() => openGuide('yt-cookies')}>
+              <KeyRound size={14} /> Follow these steps
+            </button>
+            <button className="om-btn-ghost om-btn-pill" onClick={start}>
+              <HardDriveDownload size={14} /> Try again
+            </button>
+          </div>
         </div>
       ) : (
         <>
@@ -832,6 +852,7 @@ export function MemoDetail() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
+  const openThumbEdit = useAppStore((s) => s.openThumbEdit);
   const [chatOpen, setChatOpen] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
   const [noteContent, setNoteContent] = useState('');
@@ -1109,6 +1130,16 @@ export function MemoDetail() {
               />
             ) : (
               <h1 className="om-detail-title" style={{ marginBottom: '8px' }}>{memo.title}</h1>
+            )}
+
+            {isEditing && (
+              <button
+                className="om-btn-secondary"
+                onClick={() => openThumbEdit(memo)}
+                style={{ marginBottom: 12 }}
+              >
+                <ImageIcon size={13} /> Change thumbnail &amp; title
+              </button>
             )}
 
             {/* Meta */}
