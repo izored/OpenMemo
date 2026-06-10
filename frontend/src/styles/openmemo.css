@@ -911,17 +911,14 @@ input, textarea { font: inherit; color: inherit; }
 .om-card-actions .om-action.pinned { opacity: 1; }
 .om-card .om-card-actions:has(.om-action.pinned) { opacity: 1; }
 
-/* Top-left pen — edit a card's thumbnail + title (any memo type). Mirrors
-   .om-action, anchored top-left, revealed on card hover. */
+/* Top-left pen — edit a card's thumbnail + title (any memo type). Inherits the
+   .om-action chip (size, colour, hover); this only anchors it top-left and
+   reveals it on card hover, mirroring the .om-card-actions cluster on the right. */
 .om-card-edit {
   position: absolute; top: 10px; left: 10px; z-index: 10;
-  width: 24px; height: 24px; border-radius: 6px;
-  display: inline-flex; align-items: center; justify-content: center;
-  background: rgba(20,20,22,0.72); color: #fff;
   opacity: 0; transition: opacity .2s, background .15s;
 }
 .om-card:hover .om-card-edit { opacity: 1; }
-.om-card-edit:hover { background: rgba(20,20,22,0.92); }
 
 /* Hero / image / video frames */
 .om-card-hero, .om-image-frame, .om-video-frame, .om-doc-frame {
