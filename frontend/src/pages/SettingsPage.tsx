@@ -178,7 +178,7 @@ function RecentlyDeletedModal({ onClose }: { onClose: () => void }) {
 function TrashRow() {
   // Recently-deleted lives as a row inside the Files card now, not its own card.
   const [open, setOpen] = useState(false);
-  const { data: deleted = [] } = useQuery({
+  const { data: deleted = [], isLoading } = useQuery({
     queryKey: ['memos', 'deleted'],
     queryFn: memoApi.listDeleted,
   });
@@ -188,7 +188,11 @@ function TrashRow() {
       <div className="om-setting-row">
         <div className="om-setting-row-text">
           <p>Recently deleted</p>
-          <span className="mono">{deleted.length} deleted memo{deleted.length === 1 ? '' : 's'} can be restored</span>
+          {isLoading ? (
+            <span className="om-skel" />
+          ) : (
+            <span className="mono">{deleted.length} deleted memo{deleted.length === 1 ? '' : 's'} can be restored</span>
+          )}
         </div>
         <button className="om-btn-secondary" onClick={() => setOpen(true)}>Open trash</button>
       </div>
@@ -266,7 +270,8 @@ export function SettingsPage() {
   };
   const [version, setVersion] = useState('');
   const [ollamaConnected, setOllamaConnected] = useState<boolean | null>(null);
-  const [ollamaModels, setOllamaModels] = useState<OllamaModel[]>([]);
+  // null = still loading (skeleton); [] = loaded, none installed.
+  const [ollamaModels, setOllamaModels] = useState<OllamaModel[] | null>(null);
   const [stats, setStats] = useState<Stats | null>(null);
   const [changelogOpen, setChangelogOpen] = useState(false);
   const [updateAvailable, setUpdateAvailable] = useState(false);
@@ -529,6 +534,31 @@ export function SettingsPage() {
         {/* ── Cards — masonry so short cards get hugged, no gaps ─ */}
         <div className="om-settings-masonry">
 
+        {/* Card always renders — skeleton body while settings load, so the
+              masonry never shifts when the profile lands (OPNMMO-0019). */}
+        {!profile && (
+            <SettingCard title="Profile" eyebrow="You">
+              <div className="om-profile-grid">
+                <span className="om-skel avatar" />
+                <div className="om-profile-fields">
+                  <label className="om-profile-field">
+                    <span className="mono">Display name</span>
+                    <span className="om-skel ctrl" style={{ width: '100%' }} />
+                  </label>
+                  <label className="om-profile-field">
+                    <span className="mono">Email</span>
+                    <span className="om-skel ctrl" style={{ width: '100%' }} />
+                  </label>
+                </div>
+              </div>
+              <div className="om-profile-consent" aria-hidden>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 6, width: '100%' }}>
+                  <span className="om-skel line" />
+                  <span className="om-skel line short" />
+                </div>
+              </div>
+            </SettingCard>
+          )}
         {profile && (
             <SettingCard title="Profile" eyebrow="You">
               <div className="om-profile-grid">
@@ -598,23 +628,31 @@ export function SettingsPage() {
                 <p>Connection</p>
                 <span className="mono">Powers chat, RAG, embeddings</span>
               </div>
-              <span className="mono om-setting-val" style={{ color: ollamaConnected ? 'var(--accent)' : '#EF5048' }}>
-                {ollamaConnected === null ? '…' : ollamaConnected ? 'Connected' : 'Offline'}
-              </span>
+              {ollamaConnected === null ? (
+                <span className="om-skel sm" />
+              ) : (
+                <span className="mono om-setting-val" style={{ color: ollamaConnected ? 'var(--accent)' : '#EF5048' }}>
+                  {ollamaConnected ? 'Connected' : 'Offline'}
+                </span>
+              )}
             </div>
             <div className="om-setting-row">
               <div className="om-setting-row-text">
                 <p>Default model</p>
                 <span className="mono">Used across chat and Ask</span>
               </div>
-              <ModelSelect models={ollamaModels} />
+              {ollamaModels === null ? <span className="om-skel ctrl" /> : <ModelSelect models={ollamaModels} />}
             </div>
             <div className="om-setting-row">
               <div className="om-setting-row-text">
                 <p>Installed</p>
-                <span className="mono">{ollamaModels.length} model{ollamaModels.length === 1 ? '' : 's'} pulled locally</span>
+                {ollamaModels === null ? (
+                  <span className="om-skel" />
+                ) : (
+                  <span className="mono">{ollamaModels.length} model{ollamaModels.length === 1 ? '' : 's'} pulled locally</span>
+                )}
               </div>
-              <span className="mono om-setting-val">{ollamaModels.length}</span>
+              {ollamaModels === null ? <span className="om-skel sm" /> : <span className="mono om-setting-val">{ollamaModels.length}</span>}
             </div>
           </SettingCard>
 
@@ -664,21 +702,25 @@ export function SettingsPage() {
                 <p>Max upload size</p>
                 <span className="mono">Per file. Any file type is accepted. Default 5120 MB (5 GB).</span>
               </div>
-              <div className="om-inline-control">
-                <input
-                  type="number"
-                  min={1}
-                  max={51200}
-                  value={maxUploadMb ?? ''}
-                  onChange={(e) => setMaxUploadMb(e.target.value === '' ? null : Number(e.target.value))}
-                  className="om-input"
-                  style={{ width: 92, textAlign: 'right' }}
-                />
-                <span className="mono om-setting-val">MB</span>
-                <button className="om-btn-secondary" onClick={saveMaxUpload} disabled={maxUploadMb == null}>
-                  {maxUploadSaved ? 'Saved ✓' : 'Save'}
-                </button>
-              </div>
+              {profile === null ? (
+                <span className="om-skel ctrl" style={{ width: 200 }} />
+              ) : (
+                <div className="om-inline-control">
+                  <input
+                    type="number"
+                    min={1}
+                    max={51200}
+                    value={maxUploadMb ?? ''}
+                    onChange={(e) => setMaxUploadMb(e.target.value === '' ? null : Number(e.target.value))}
+                    className="om-input"
+                    style={{ width: 92, textAlign: 'right' }}
+                  />
+                  <span className="mono om-setting-val">MB</span>
+                  <button className="om-btn-secondary" onClick={saveMaxUpload} disabled={maxUploadMb == null}>
+                    {maxUploadSaved ? 'Saved ✓' : 'Save'}
+                  </button>
+                </div>
+              )}
             </div>
             <div className="om-setting-row" style={{ borderTop: '1px solid var(--border)', marginTop: 8, paddingTop: 8 }}>
               <div className="om-setting-row-text">

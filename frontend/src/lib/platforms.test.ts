@@ -8,23 +8,33 @@ function m(source_url: string | null, file_path: string | null = null): Memo {
 }
 
 describe('videoEmbedUrl()', () => {
-  it('YouTube watch URL → embed', () => {
+  // Autoplay is opt-in (detail page must NOT autoplay on load; the lightbox
+  // passes { autoplay: true } because the user just clicked play).
+  it('YouTube watch URL → embed (no autoplay by default)', () => {
     expect(videoEmbedUrl(m('https://www.youtube.com/watch?v=dQw4w9WgXcQ'))).toBe(
-      'https://www.youtube.com/embed/dQw4w9WgXcQ?autoplay=1&rel=0',
+      'https://www.youtube.com/embed/dQw4w9WgXcQ?rel=0',
+    );
+  });
+  it('YouTube watch URL → embed with autoplay when asked', () => {
+    expect(videoEmbedUrl(m('https://www.youtube.com/watch?v=dQw4w9WgXcQ'), { autoplay: true })).toBe(
+      'https://www.youtube.com/embed/dQw4w9WgXcQ?rel=0&autoplay=1',
     );
   });
   it('youtu.be short URL → embed', () => {
     expect(videoEmbedUrl(m('https://youtu.be/dQw4w9WgXcQ'))).toBe(
-      'https://www.youtube.com/embed/dQw4w9WgXcQ?autoplay=1&rel=0',
+      'https://www.youtube.com/embed/dQw4w9WgXcQ?rel=0',
     );
   });
   it('YouTube Shorts → embed', () => {
     expect(videoEmbedUrl(m('https://www.youtube.com/shorts/abc123XYZ'))).toBe(
-      'https://www.youtube.com/embed/abc123XYZ?autoplay=1&rel=0',
+      'https://www.youtube.com/embed/abc123XYZ?rel=0',
     );
   });
-  it('Vimeo → player embed', () => {
+  it('Vimeo → player embed (autoplay only when asked)', () => {
     expect(videoEmbedUrl(m('https://vimeo.com/123456789'))).toBe(
+      'https://player.vimeo.com/video/123456789',
+    );
+    expect(videoEmbedUrl(m('https://vimeo.com/123456789'), { autoplay: true })).toBe(
       'https://player.vimeo.com/video/123456789?autoplay=1',
     );
   });
@@ -55,15 +65,19 @@ describe('videoEmbedUrl()', () => {
   });
   it('Dailymotion → embed', () => {
     expect(videoEmbedUrl(m('https://www.dailymotion.com/video/x8abcde'))).toBe(
-      'https://www.dailymotion.com/embed/video/x8abcde?autoplay=1',
+      'https://www.dailymotion.com/embed/video/x8abcde',
     );
   });
   it('Streamable → embed', () => {
     expect(videoEmbedUrl(m('https://streamable.com/abc12'))).toBe('https://streamable.com/e/abc12');
   });
-  it('Twitch VOD → player with parent', () => {
+  it('Twitch VOD → player with parent (explicit autoplay opt-out by default)', () => {
     // window absent under vitest's node env → twitchParent() falls back to localhost.
+    // Twitch's player autoplays unless told otherwise → default gets autoplay=false.
     expect(videoEmbedUrl(m('https://www.twitch.tv/videos/123456789'))).toBe(
+      'https://player.twitch.tv/?video=123456789&parent=localhost&autoplay=false',
+    );
+    expect(videoEmbedUrl(m('https://www.twitch.tv/videos/123456789'), { autoplay: true })).toBe(
       'https://player.twitch.tv/?video=123456789&parent=localhost&autoplay=true',
     );
   });

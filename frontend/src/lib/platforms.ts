@@ -32,6 +32,11 @@ interface PlatformDef extends PlatformMeta {
   embed?: EmbedFn;
   /** Portrait platforms (Instagram, TikTok) need a 9/16 container, not 16/9. */
   embedOrientation?: 'portrait';
+  /** Query fragment that turns autoplay ON (appended only when the caller asks
+   *  for it — the lightbox wants it, the detail page must NOT autoplay on load).
+   *  `off` is for players that autoplay by default (Twitch) and need an
+   *  explicit opt-out. */
+  autoplayQuery?: { on: string; off?: string };
 }
 
 // Parent domain Twitch's player requires. In the browser this is whatever host
@@ -51,13 +56,14 @@ const PLATFORMS: PlatformDef[] = [
     glyph: 'youtube',
     brandClass: 'om-brand-youtube',
     hosts: ['youtube.com', 'youtu.be', 'youtube-nocookie.com'],
+    autoplayQuery: { on: 'autoplay=1' },
     embed: (_raw, u) => {
       let id: string | null;
       if (u.hostname === 'youtu.be') id = u.pathname.slice(1).split('/')[0] || null;
       else if (u.pathname.startsWith('/shorts/')) id = u.pathname.split('/')[2] || null;
       else if (u.pathname.startsWith('/embed/')) id = u.pathname.split('/')[2] || null;
       else id = u.searchParams.get('v');
-      return id ? `https://www.youtube.com/embed/${id}?autoplay=1&rel=0` : null;
+      return id ? `https://www.youtube.com/embed/${id}?rel=0` : null;
     },
   },
   {
@@ -66,10 +72,11 @@ const PLATFORMS: PlatformDef[] = [
     glyph: 'vimeo',
     brandClass: 'om-brand-vimeo',
     hosts: ['vimeo.com'],
+    autoplayQuery: { on: 'autoplay=1' },
     embed: (_raw, u) => {
       // vimeo.com/{id}, vimeo.com/video/{id}, player.vimeo.com/video/{id}
       const m = u.pathname.match(/(?:\/video)?\/(\d+)/);
-      return m ? `https://player.vimeo.com/video/${m[1]}?autoplay=1` : null;
+      return m ? `https://player.vimeo.com/video/${m[1]}` : null;
     },
   },
   {
@@ -129,6 +136,7 @@ const PLATFORMS: PlatformDef[] = [
     glyph: 'dailymotion',
     brandClass: 'om-brand-dailymotion',
     hosts: ['dailymotion.com', 'dai.ly'],
+    autoplayQuery: { on: 'autoplay=1' },
     embed: (_raw, u) => {
       let id: string | null;
       if (u.hostname.includes('dai.ly')) id = u.pathname.slice(1).split('/')[0] || null;
@@ -136,7 +144,7 @@ const PLATFORMS: PlatformDef[] = [
         const m = u.pathname.match(/\/video\/([^/_?#]+)/);
         id = m ? m[1] : null;
       }
-      return id ? `https://www.dailymotion.com/embed/video/${id}?autoplay=1` : null;
+      return id ? `https://www.dailymotion.com/embed/video/${id}` : null;
     },
   },
   {
@@ -154,6 +162,8 @@ const PLATFORMS: PlatformDef[] = [
     glyph: 'twitch',
     brandClass: 'om-brand-twitch',
     hosts: ['twitch.tv'],
+    // Twitch's player autoplays unless told otherwise — needs an explicit off.
+    autoplayQuery: { on: 'autoplay=true', off: 'autoplay=false' },
     embed: (_raw, u) => {
       const parent = twitchParent();
       if (u.hostname.includes('clips.twitch.tv')) {
@@ -161,7 +171,7 @@ const PLATFORMS: PlatformDef[] = [
         return slug ? `https://clips.twitch.tv/embed?clip=${slug}&parent=${parent}` : null;
       }
       const vid = u.pathname.match(/\/videos\/(\d+)/);
-      if (vid) return `https://player.twitch.tv/?video=${vid[1]}&parent=${parent}&autoplay=true`;
+      if (vid) return `https://player.twitch.tv/?video=${vid[1]}&parent=${parent}`;
       const clip = u.pathname.match(/\/clip\/([^/?#]+)/);
       if (clip) return `https://clips.twitch.tv/embed?clip=${clip[1]}&parent=${parent}`;
       return null;
@@ -211,14 +221,23 @@ export function platformMeta(memo: Memo): PlatformMeta | null {
  * Inline-player iframe src for a remote video memo, or null when the host has
  * no embeddable player (or the URL lacks the id we need). Null → the UI offers
  * "open original" + "Make it local" instead of a dead "no preview".
+ *
+ * Autoplay is OPT-IN: the lightbox passes `{ autoplay: true }` (the user just
+ * clicked play), while the detail page uses the default so opening a memo
+ * never blasts audio on page load.
  */
-export function videoEmbedUrl(memo: Memo): string | null {
+export function videoEmbedUrl(memo: Memo, opts?: { autoplay?: boolean }): string | null {
   const url = memo.source_url;
   if (!url) return null;
   const def = defFor(url);
   if (!def?.embed) return null;
   try {
-    return def.embed(url, new URL(url));
+    const base = def.embed(url, new URL(url));
+    if (!base) return null;
+    const ap = def.autoplayQuery;
+    const param = opts?.autoplay ? ap?.on : ap?.off;
+    if (!param) return base;
+    return base + (base.includes('?') ? '&' : '?') + param;
   } catch {
     return null;
   }
