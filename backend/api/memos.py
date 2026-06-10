@@ -105,6 +105,7 @@ async def list_memos(
     type: Optional[str] = None,
     collection_id: Optional[str] = None,
     search: Optional[str] = None,
+    hidden: Optional[bool] = None,
     offset: int = 0,
     limit: int = 50,
     db: AsyncSession = Depends(get_db),
@@ -117,7 +118,8 @@ async def list_memos(
             Memo.id, Memo.type, Memo.title, Memo.description, Memo.content_text,
             Memo.source_url, Memo.source_domain, Memo.source_favicon,
             Memo.thumbnail_path, Memo.file_path, Memo.ai_summary, Memo.notes,
-            Memo.sort_order, Memo.pinned, Memo.audio_kind, Memo.audio_artist, Memo.is_processed,
+            Memo.sort_order, Memo.pinned, Memo.hidden, Memo.audio_kind,
+            Memo.audio_artist, Memo.is_processed,
             Memo.created_at, Memo.updated_at, Memo.recency_at,
         ),
         selectinload(Memo.collections),
@@ -127,6 +129,13 @@ async def list_memos(
     if workspace_id:
         query = query.where(Memo.workspace_id == workspace_id)
     query = query.where((Memo.is_deleted == False) | (Memo.is_deleted == None))  # noqa: E712
+    # Hidden memos (OPNMMO-0016): hidden=true lists ONLY hidden memos (the
+    # passcode-gated hidden section). Inside a collection they stay visible.
+    # Everywhere else (the main dashboard) they are filtered out.
+    if hidden:
+        query = query.where(Memo.hidden == True)  # noqa: E712
+    elif not collection_id:
+        query = query.where((Memo.hidden == False) | (Memo.hidden == None))  # noqa: E712
     if type and type != "all":
         # `type` may be a comma-separated group (e.g. the Files tab maps to
         # document,file,code,audio) so one tab can cover several memo types.
@@ -170,6 +179,7 @@ async def list_memos(
                 "notes": m.notes,
                 "sort_order": m.sort_order,
                 "pinned": m.pinned,
+                "hidden": m.hidden,
                 "audio_kind": m.audio_kind,
                 "audio_artist": m.audio_artist,
                 "is_processed": m.is_processed,
@@ -226,6 +236,7 @@ async def get_memo(memo_id: str, db: AsyncSession = Depends(get_db)):
         "notes": memo.notes,
         "sort_order": memo.sort_order,
         "pinned": memo.pinned,
+        "hidden": memo.hidden,
         "is_processed": memo.is_processed,
         "created_at": memo.created_at.isoformat(),
         "updated_at": memo.updated_at.isoformat(),
@@ -604,12 +615,14 @@ async def update_memo_pin(memo_id: str, body: PinUpdate, db: AsyncSession = Depe
 
 @router.get("/pinned/list")
 async def list_pinned_memos(db: AsyncSession = Depends(get_db)):
-    """Return memos with pinned=True, ordered by recency."""
+    """Return memos with pinned=True, ordered by recency. Hidden memos are
+    excluded — the pinned sidebar is a main-dashboard surface."""
     rows = (
         await db.execute(
             select(Memo)
             .where(Memo.pinned.is_(True))
             .where((Memo.is_deleted == False) | (Memo.is_deleted == None))  # noqa: E712
+            .where((Memo.hidden == False) | (Memo.hidden == None))  # noqa: E712
             .order_by(desc(Memo.recency_at), desc(Memo.created_at))
         )
     ).scalars().all()
@@ -626,6 +639,24 @@ async def list_pinned_memos(db: AsyncSession = Depends(get_db)):
         }
         for m in rows
     ]
+
+
+class HideUpdate(BaseModel):
+    hidden: bool
+
+
+@router.put("/{memo_id}/hide")
+async def update_memo_hidden(memo_id: str, body: HideUpdate, db: AsyncSession = Depends(get_db)):
+    """Hide or unhide a memo. Hidden memos disappear from the main dashboard
+    (and the pinned sidebar) but stay visible inside collections; the full set
+    is listed by GET /api/memos?hidden=true (OPNMMO-0016)."""
+    memo = await db.get(Memo, memo_id)
+    if not memo:
+        raise HTTPException(status_code=404, detail="Memo not found")
+    memo.hidden = bool(body.hidden)
+    memo.updated_at = datetime.utcnow()
+    await db.commit()
+    return {"id": memo.id, "hidden": memo.hidden, "status": "updated"}
 
 
 @router.delete("/{memo_id}")
