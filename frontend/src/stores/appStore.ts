@@ -142,6 +142,12 @@ interface AppState {
   // persisted, so a reload always re-asks for the passcode.
   hiddenUnlocked: boolean;
   setHiddenUnlocked: (unlocked: boolean) => void;
+
+  // Branded notice toast — in-app replacement for window.alert(). Auto-clears
+  // from the NoticeToast component.
+  notice: { message: string; kind: 'error' | 'info' } | null;
+  showNotice: (message: string, kind?: 'error' | 'info') => void;
+  clearNotice: () => void;
 }
 
 const persist = (partial: { chatModel?: string }) => {
@@ -242,4 +248,8 @@ export const useAppStore = create<AppState>((set) => ({
 
   hiddenUnlocked: false,
   setHiddenUnlocked: (unlocked) => set({ hiddenUnlocked: unlocked }),
+
+  notice: null,
+  showNotice: (message, kind = 'error') => set({ notice: { message, kind } }),
+  clearNotice: () => set({ notice: null }),
 }));

@@ -358,6 +358,7 @@ export function MemoCard({ memo, dragHandleProps, lightboxGroup }: CardProps) {
   const navigate = useNavigate();
   const openLightbox = useAppStore((s) => s.openLightbox);
   const showDeleteToast = useAppStore((s) => s.showDeleteToast);
+  const showNotice = useAppStore((s) => s.showNotice);
   const { play, playing, isActive } = useAudioPlayer();
   const [imageOrient, setImageOrient] = React.useState<'landscape' | 'portrait'>('landscape');
   const [confirmDeleteOpen, setConfirmDeleteOpen] = React.useState(false);
@@ -387,7 +388,7 @@ export function MemoCard({ memo, dragHandleProps, lightboxGroup }: CardProps) {
       queryClient.invalidateQueries({ queryKey: ['memos', 'pinned'] });
       showDeleteToast(memo.id, memo.title);
     } catch {
-      alert('Failed to delete memo');
+      showNotice('Couldn’t delete that memo. Try again.');
     }
   };
 
@@ -401,7 +402,7 @@ export function MemoCard({ memo, dragHandleProps, lightboxGroup }: CardProps) {
       await memoApi.hide(memo.id, !memo.hidden);
       queryClient.invalidateQueries({ queryKey: ['memos'] });
     } catch {
-      alert(memo.hidden ? 'Failed to unhide memo' : 'Failed to hide memo');
+      showNotice(memo.hidden ? 'Couldn’t unhide that memo. Try again.' : 'Couldn’t hide that memo. Try again.');
     }
   };
 
