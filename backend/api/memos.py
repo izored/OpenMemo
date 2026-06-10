@@ -380,6 +380,7 @@ async def transcribe_memo(
 
 class LocalizeRequest(BaseModel):
     mode: str = "video"  # video | audio (audio = explicit video→audio conversion)
+    quality: int = 1080  # video height cap: 720 | 1080 | 1440 | 2160 (OPNMMO-0022)
 
 
 @router.post("/{memo_id}/localize")
@@ -392,7 +393,7 @@ async def localize_memo(
     """"Make it local" — download a remote video/audio source via yt-dlp so the
     memo survives the original being deleted. Runs in the background; the client
     polls the memo until localize_status is done."""
-    from backend.core.localize_media import VALID_MODES
+    from backend.core.localize_media import VALID_MODES, VALID_QUALITIES
 
     memo = await db.get(Memo, memo_id)
     if not memo:
@@ -401,6 +402,8 @@ async def localize_memo(
         raise HTTPException(status_code=400, detail="Memo has no source URL to download")
     if body.mode not in VALID_MODES:
         raise HTTPException(status_code=400, detail=f"Invalid mode: {body.mode}")
+    if body.quality not in VALID_QUALITIES:
+        raise HTTPException(status_code=400, detail=f"Invalid quality: {body.quality}")
 
     memo.localize_status = "pending"
     memo.localize_error = None  # fresh attempt — drop the previous failure
@@ -409,8 +412,8 @@ async def localize_memo(
 
     from backend.api.ingest import localize_memo_task
 
-    background_tasks.add_task(localize_memo_task, memo_id, body.mode)
-    return {"id": memo_id, "status": "pending", "mode": body.mode}
+    background_tasks.add_task(localize_memo_task, memo_id, body.mode, body.quality)
+    return {"id": memo_id, "status": "pending", "mode": body.mode, "quality": body.quality}
 
 
 def _sniff_thumb_ext(raw: bytes) -> Optional[str]:

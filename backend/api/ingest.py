@@ -453,9 +453,10 @@ async def transcript_memo_task(memo_id: str):
         await process_memo(memo_id)
 
 
-async def localize_memo_task(memo_id: str, mode: str):
+async def localize_memo_task(memo_id: str, mode: str, quality: int = 1080):
     """Background: download a memo's remote source via yt-dlp and re-home it as a
     local video/audio memo. `mode='audio'` is an explicit video→audio conversion.
+    `quality` caps the video height (720/1080/1440/2160, OPNMMO-0022).
     Status flows pending → processing → done | error on memo.localize_status.
     """
     from backend.core.localize_media import localize_media, LocalizeError
@@ -471,7 +472,7 @@ async def localize_memo_task(memo_id: str, mode: str):
         await db.commit()
 
     try:
-        result = await localize_media(url, ws, mode)
+        result = await localize_media(url, ws, mode, quality)
     except LocalizeError as e:
         print(f"Localize failed for {memo_id}: {e}")
         async with AsyncSessionLocal() as db:

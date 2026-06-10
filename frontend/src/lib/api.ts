@@ -42,10 +42,10 @@ export const memoApi = {
   related: (id: string) => fetchJSON<any[]>(`/memos/${id}/related`),
   transcribe: (id: string) =>
     fetchJSON<{ id: string; status: string }>(`/memos/${id}/transcribe`, { method: 'POST' }),
-  localize: (id: string, mode: 'video' | 'audio') =>
+  localize: (id: string, mode: 'video' | 'audio', quality: number = 1080) =>
     fetchJSON<{ id: string; status: string; mode: string }>(`/memos/${id}/localize`, {
       method: 'POST',
-      body: JSON.stringify({ mode }),
+      body: JSON.stringify({ mode, quality }),
     }),
   // Set a custom thumbnail (already cropped client-side) for any memo. Multipart;
   // the browser sets the boundary, so don't add a Content-Type header.

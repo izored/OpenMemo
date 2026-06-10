@@ -27,10 +27,28 @@ from backend.core.app_settings import cookies_present, get_cookies_path
 
 VALID_MODES = {"video", "audio"}
 
-# Cap video so a "make it local" on a 4K 2-hour upload doesn't fill the disk.
-# yt-dlp format selector: best <=1080p mp4 video + m4a audio, else best.
-_VIDEO_FORMAT = "bestvideo[height<=1080][ext=mp4]+bestaudio[ext=m4a]/best[height<=1080]/best"
+# User-selectable video quality caps (OPNMMO-0022). 1080 stays the default so
+# a casual "make it local" never fills the disk; 4K is an explicit choice.
+VALID_QUALITIES = {720, 1080, 1440, 2160}
+DEFAULT_QUALITY = 1080
+
 _AUDIO_FORMAT = "bestaudio[ext=m4a]/bestaudio/best"
+
+
+def _video_format(quality: int) -> str:
+    """yt-dlp format selector capped at `quality` pixels of height.
+
+    mp4+m4a is preferred for native browser playback, but above 1080p most
+    hosts (YouTube included) only serve VP9/AV1 — so the selector falls back
+    to any codec at the requested height before degrading the resolution.
+    The merge step still remuxes into an mp4 container.
+    """
+    q = quality if quality in VALID_QUALITIES else DEFAULT_QUALITY
+    return (
+        f"bestvideo[height<={q}][ext=mp4]+bestaudio[ext=m4a]"
+        f"/bestvideo[height<={q}]+bestaudio"
+        f"/best[height<={q}]/best"
+    )
 
 
 class LocalizeError(Exception):
@@ -52,12 +70,12 @@ def _cookie_args() -> list[str]:
     return []
 
 
-def _run_ytdlp(url: str, out_template: str, mode: str) -> Path:
+def _run_ytdlp(url: str, out_template: str, mode: str, quality: int = DEFAULT_QUALITY) -> Path:
     """Invoke yt-dlp, return the path to the downloaded file. Blocking."""
     if not _have("yt-dlp"):
         raise LocalizeError("yt-dlp is not installed on the server")
 
-    fmt = _AUDIO_FORMAT if mode == "audio" else _VIDEO_FORMAT
+    fmt = _AUDIO_FORMAT if mode == "audio" else _video_format(quality)
     cmd = [
         "yt-dlp",
         "-f", fmt,
@@ -106,21 +124,21 @@ def _get_thumbnail_url(url: str) -> str | None:
     return None
 
 
-def _localize_sync(url: str, workspace_id: str, mode: str) -> dict:
+def _localize_sync(url: str, workspace_id: str, mode: str, quality: int) -> dict:
     base = Path(settings.FILES_DIR) / workspace_id
     base.mkdir(parents=True, exist_ok=True)
     file_id = str(uuid.uuid4())
     # yt-dlp fills in the real extension.
     out_template = str(base / f"{file_id}.%(ext)s")
 
-    path = _run_ytdlp(url, out_template, mode)
+    path = _run_ytdlp(url, out_template, mode, quality)
     memo_type = "audio" if mode == "audio" else "video"
     thumbnail_url = _get_thumbnail_url(url) if memo_type == "video" else None
     return {"path": str(path), "type": memo_type, "filename": path.name, "thumbnail_url": thumbnail_url}
 
 
-async def localize_media(url: str, workspace_id: str, mode: str) -> dict:
+async def localize_media(url: str, workspace_id: str, mode: str, quality: int = DEFAULT_QUALITY) -> dict:
     """Download `url` into FILES_DIR/<workspace>. Returns {path,type,filename}."""
     if mode not in VALID_MODES:
         raise LocalizeError(f"Invalid mode: {mode}")
-    return await asyncio.to_thread(_localize_sync, url, workspace_id, mode)
+    return await asyncio.to_thread(_localize_sync, url, workspace_id, mode, quality)
