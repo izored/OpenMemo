@@ -678,6 +678,8 @@ function MakeItLocalPanel({ memo }: { memo: Memo }) {
   // offer the audio download. Video sources keep both options.
   const isAudio = memo.type === 'audio';
   const [mode, setMode] = useState<'video' | 'audio'>(isAudio ? 'audio' : 'video');
+  // Video height cap (OPNMMO-0022). 1080 default; 4K is an explicit pick.
+  const [quality, setQuality] = useState(1080);
   const [starting, setStarting] = useState(false);
   const status = memo.localize_status;
   const busy = status === 'pending' || status === 'processing' || starting;
@@ -692,7 +694,7 @@ function MakeItLocalPanel({ memo }: { memo: Memo }) {
   const start = async () => {
     setStarting(true);
     try {
-      await memoApi.localize(memo.id, mode);
+      await memoApi.localize(memo.id, mode, quality);
       queryClient.invalidateQueries({ queryKey: ['memo', memo.id] });
     } catch (e) {
       console.error(e);
@@ -705,9 +707,16 @@ function MakeItLocalPanel({ memo }: { memo: Memo }) {
   const modes: { id: typeof mode; label: string; icon: React.ElementType; hint: string }[] = isAudio
     ? [{ id: 'audio', label: 'Save audio', icon: Music, hint: 'Download the audio track' }]
     : [
-        { id: 'video', label: 'Video', icon: Film, hint: 'Download the video (up to 1080p)' },
+        { id: 'video', label: 'Video', icon: Film, hint: 'Download the video at the quality you pick below' },
         { id: 'audio', label: 'Audio only', icon: Music, hint: 'Convert to an audio-only copy (podcast) — replaces the video view' },
       ];
+
+  const qualities: { value: number; label: string; hint: string }[] = [
+    { value: 720, label: '720p', hint: 'Smallest file' },
+    { value: 1080, label: '1080p', hint: 'Default — sharp and reasonably sized' },
+    { value: 1440, label: '1440p', hint: 'Big file' },
+    { value: 2160, label: '4K', hint: 'Source max — very large file' },
+  ];
 
   return (
     <div className="om-localize" style={{ marginBottom: '24px' }}>
@@ -760,6 +769,26 @@ function MakeItLocalPanel({ memo }: { memo: Memo }) {
               </button>
             ))}
           </div>
+          {!isAudio && mode === 'video' && (
+            <div className="om-localize-modes" style={{ marginTop: 8 }}>
+              {qualities.map((q) => (
+                <button
+                  key={q.value}
+                  className={cn('om-localize-mode', quality === q.value && 'active')}
+                  onClick={() => setQuality(q.value)}
+                  title={q.hint}
+                >
+                  <span>{q.label}</span>
+                  {quality === q.value && <Check size={13} className="om-localize-check" />}
+                </button>
+              ))}
+            </div>
+          )}
+          {!isAudio && mode === 'video' && quality > 1080 && (
+            <p className="om-detail-desc" style={{ marginTop: 10, fontStyle: 'italic' }}>
+              {quality === 2160 ? '4K' : '1440p'} downloads can be several gigabytes and most hosts serve them as VP9/AV1 — playback works in modern browsers, but the file is much heavier. If the source has no {quality === 2160 ? '4K' : '1440p'} stream, the best available below it is saved.
+            </p>
+          )}
           {!isAudio && mode === 'audio' && (
             <p className="om-detail-desc" style={{ marginTop: 10, fontStyle: 'italic' }}>
               Heads up: this turns the memo into an audio-only copy and replaces the video player. Want a transcript instead? Use <strong>Get transcript</strong> below — it keeps the video.

@@ -405,9 +405,20 @@ input, textarea { font: inherit; color: inherit; }
   background: var(--surface-2);
   border: 1px solid var(--border);
   max-width: 720px;
-  transition: max-width .25s cubic-bezier(.2,.7,.2,1);
+  width: 100%; /* explicit so the theater width change can animate */
+  transition: max-width .25s cubic-bezier(.2,.7,.2,1),
+              width .25s cubic-bezier(.2,.7,.2,1),
+              margin-left .25s cubic-bezier(.2,.7,.2,1);
 }
-.om-media-preview.theater { max-width: none; }
+/* Theater (OPNMMO-0021): the preview sits inside .om-detail-content (720px),
+   so dropping its own max-width alone changes nothing — break it out to the
+   full scroll-pane width via container units, keeping the text column at 720.
+   100cqw = .om-detail-scroll width; 96px = its 48px side paddings. */
+.om-media-preview.theater {
+  max-width: none;
+  width: calc(100cqw - 96px);
+  margin-left: calc((100% - (100cqw - 96px)) / 2);
+}
 .om-media-preview img,
 .om-media-preview video {
   display: block; width: 100%; height: auto; max-height: 70vh; object-fit: contain;
@@ -1128,7 +1139,9 @@ input, textarea { font: inherit; color: inherit; }
 @keyframes omDetailIn { from { opacity: 0; transform: translateX(16px); } to { opacity: 1; transform: none; } }
 @media (prefers-reduced-motion: reduce) { .om-detail-pane, .om-detail-chat { animation: none; } }
 
-.om-detail-scroll   { flex: 1; overflow-y: auto; padding: 24px 48px 64px; scrollbar-gutter: stable; }
+.om-detail-scroll   { flex: 1; overflow-y: auto; padding: 24px 48px 64px; scrollbar-gutter: stable;
+                      /* Container for the media theater breakout (OPNMMO-0021). */
+                      container-type: inline-size; }
 .om-detail-content  { max-width: 720px; margin: 0 auto; }
 
 /* Loading / spinner */
@@ -3804,6 +3817,24 @@ input, textarea { font: inherit; color: inherit; }
 }
 .om-stat-skel.wide { width: 100%; height: 16px; margin-top: 4px; }
 @keyframes omStatSkel { 0% { background-position: 100% 0; } 100% { background-position: 0 0; } }
+
+/* Generic in-card skeletons (OPNMMO-0019) — same shimmer as the stat tiles,
+   reused by any settings card whose data loads async so the bento never
+   shifts as sections become ready. */
+.om-skel {
+  display: inline-block; width: 120px; height: 12px; border-radius: 6px;
+  background: linear-gradient(90deg,
+    var(--surface-3) 25%,
+    color-mix(in oklab, var(--text-4) 22%, var(--surface-3)) 37%,
+    var(--surface-3) 63%);
+  background-size: 400% 100%;
+  animation: omStatSkel 1.4s ease infinite;
+}
+.om-skel.sm { width: 64px; }
+.om-skel.ctrl { width: 150px; height: 30px; border-radius: var(--r-sm); }
+.om-skel.line { display: block; width: 100%; height: 13px; }
+.om-skel.line.short { width: 60%; }
+.om-skel.avatar { display: block; width: 76px; height: 76px; border-radius: 50%; }
 
 /* ── Built with — auto-scrolling marquee band (pauses on hover) ─────────── */
 .om-bw-band {
