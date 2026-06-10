@@ -9,6 +9,8 @@ Two big pushes. The Settings page is rebuilt as a bento with the live appearance
 
 ### Added
 
+- 🎞️ **Pick your download quality** — "Make it local" now has quality pills: 720p, 1080p (default), 1440p and 4K. Above 1080p the backend falls back to VP9/AV1 (hosts don't serve mp4 there) and still remuxes into an mp4 the browser plays. A heads-up under the picker warns about file sizes; if the source has no stream at the picked height, the best below it is saved. Verified end-to-end: a 4K pick produces a real 3840×2160 file.
+- ⏳ **Every Settings card loads in place** — the whole bento now reserves its layout with the same shimmer the stats tiles use (a generic `.om-skel`). The Profile card no longer pops in and shifts the masonry; Local AI, Files & limits and the Trash row show skeletons until their data lands.
 - 🔑 **Guided fix for locked downloads** — a failed "Make it local" on a sign-in-gated source (age-restricted / private) now detects the gate from yt-dlp's error and offers a **Follow these steps** button next to Try again, with a softer "do you really want this one saved?" nudge. Opens a centered, fixed-height six-step guide popup (why it failed → **how safe is this?** → install exporter → sign in → export → upload) that walks through getting browser cookies and uploading them. The safety step spells out where the file lives (`data/yt_cookies.txt`), that only yt-dlp reads it, and that nothing is sent to any openMemo service. Generic providers still show the plain failure message.
 - 🍪 **yt-dlp cookie authentication** — a Netscape `cookies.txt` uploaded to openMemo is passed to yt-dlp (`--cookies`) for every "Make it local" download and thumbnail fetch. Centralized in one `_cookie_args()` helper so it works for every provider, not just YouTube (ADR-001). The jar lives under `DATA_DIR`, is never returned over the API or logged, and is git-ignored. New `POST` / `DELETE /api/settings/cookies` with format + size validation; `GET /api/settings` exposes a read-only `yt_cookies_present` flag.
 - 🧩 **Reusable GuideModal framework** — a new centered step-by-step popup (`GuideModal` + `GuideHost`, driven by an `activeGuide` store id) that any future guide can reuse: steps are data, any step can render a live control (the cookie upload is the first). Reuses the existing `.om-modal` design system, so it themes automatically.
@@ -29,6 +31,11 @@ Two big pushes. The Settings page is rebuilt as a bento with the live appearance
 - 🛟 **Data safety sits beside the Danger zone.** Backup & Restore and the destructive actions are a half-width duo at the bottom of the page, grouped where they belong.
 - 🎨 **Appearance hero follows the theme.** Switching light and dark cross-fades the hero background instead of snapping, the accent glow inside the card is gone, the "Open live preview" CTA inverts its colors on hover (and flips back when you hover "Replay product tour"), and the panel's "live" badge has a pulsing accent dot.
 - 🎵 **Music note on the player setting.** The Player size row in the appearance panel carries a small music icon.
+
+### Fixed
+
+- 🎭 **Theater mode actually goes theater** — the button toggled a class that had nothing to expand into: the preview lives inside the 720px detail column, so nothing moved. The scroll pane is now a CSS container and theater expands the image or video to the full pane width while the text column stays at 720px. Smoothly animated, works for images and made-local videos alike.
+- 🔇 **Opening a video memo no longer autoplays** — autoplay was baked into the platform embed URLs, so the detail page blasted playback on load. It is opt-in now: the lightbox keeps autoplay (you just clicked play), the detail page loads silent. Twitch needed an explicit opt-out since its player autoplays by default.
 
 ---
 ## [2.2.0] - 2026-06-05
