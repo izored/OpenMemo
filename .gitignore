@@ -79,3 +79,6 @@ TEST VIDEO UPLOAD.mp4
 # Local Docker rebuild helper (personal, not shared)
 rebuild.ps1
 rebuild.cmd
+
+# Personal local guide (not for the repo)
+docs/GIT-RESCUE-GUIDE.md
