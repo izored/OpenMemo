@@ -391,16 +391,39 @@ export function MemoCard({ memo, dragHandleProps, lightboxGroup }: CardProps) {
     }
   };
 
+  // Hide (OPNMMO-0016): drops the memo from the main dashboard but keeps it in
+  // its collections; it resurfaces in the passcode-gated hidden section. On an
+  // already-hidden memo (hidden section grid) the same slot unhides instead.
+  const confirmHide = async (e: React.MouseEvent) => {
+    e.stopPropagation();
+    setConfirmDeleteOpen(false);
+    try {
+      await memoApi.hide(memo.id, !memo.hidden);
+      queryClient.invalidateQueries({ queryKey: ['memos'] });
+    } catch {
+      alert(memo.hidden ? 'Failed to unhide memo' : 'Failed to hide memo');
+    }
+  };
+
+  const closeConfirm = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    setConfirmDeleteOpen(false);
+  };
+
   const confirmOverlay = confirmDeleteOpen ? (
-    <div
-      className="om-card-confirm"
-      role="dialog"
-      onClick={(e) => { e.stopPropagation(); setConfirmDeleteOpen(false); }}
-    >
+    <div className="om-card-confirm" role="dialog" onClick={closeConfirm}>
+      <button className="om-card-confirm-close" onClick={closeConfirm} title="Cancel" aria-label="Cancel">
+        <Icon name="x" size={14} />
+      </button>
       <div className="om-card-confirm-inner" onClick={(e) => e.stopPropagation()}>
         <p className="om-card-confirm-title">Delete memo?</p>
+        <p className="om-card-confirm-hint">
+          {memo.hidden
+            ? 'Unhide puts it back on the dashboard.'
+            : 'Hide keeps it in collections, off the dashboard.'}
+        </p>
         <div className="om-card-confirm-actions">
-          <button className="om-confirm-btn" onClick={(e) => { e.stopPropagation(); setConfirmDeleteOpen(false); }}>Cancel</button>
+          <button className="om-confirm-btn" onClick={confirmHide}>{memo.hidden ? 'Unhide' : 'Hide'}</button>
           <button className="om-confirm-btn danger" onClick={confirmDelete} autoFocus>Delete</button>
         </div>
       </div>

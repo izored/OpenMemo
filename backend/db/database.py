@@ -65,6 +65,12 @@ async def _run_migrations():
             await db.execute("UPDATE memos SET recency_at = created_at WHERE recency_at IS NULL")
             await db.commit()
 
+        # Hidden memos: out of the dashboard, still in collections, listed in
+        # the passcode-gated hidden section (OPNMMO-0016).
+        if "hidden" not in columns:
+            await db.execute("ALTER TABLE memos ADD COLUMN hidden BOOLEAN DEFAULT 0")
+            await db.commit()
+
         if "is_deleted" not in columns:
             await db.execute("ALTER TABLE memos ADD COLUMN is_deleted BOOLEAN DEFAULT 0")
             await db.commit()

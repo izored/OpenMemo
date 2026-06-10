@@ -67,6 +67,28 @@ export function Sidebar() {
   const theme = (tweaks.theme as ThemeValue) || 'light';
   const setTheme = (t: ThemeValue) => setTweak({ theme: t as 'light' | 'dark' });
 
+  // Hidden-section entry point (OPNMMO-0016): dwell on the "+" (new
+  // collection) for 1.5s and a "hidden" link fades in between the Collections
+  // label and the "+". It stays while the pointer remains on the head row.
+  const [hiddenRevealed, setHiddenRevealed] = React.useState(false);
+  const revealTimer = React.useRef<number | null>(null);
+  const cancelReveal = React.useCallback(() => {
+    if (revealTimer.current !== null) {
+      window.clearTimeout(revealTimer.current);
+      revealTimer.current = null;
+    }
+  }, []);
+  const startReveal = () => {
+    if (hiddenRevealed) return;
+    cancelReveal();
+    revealTimer.current = window.setTimeout(() => setHiddenRevealed(true), 1500);
+  };
+  const hideReveal = () => {
+    cancelReveal();
+    setHiddenRevealed(false);
+  };
+  React.useEffect(() => cancelReveal, [cancelReveal]);
+
   // Expose sidebar width as a CSS var so fixed overlays (lightbox) can clear it.
   React.useEffect(() => {
     document.documentElement.style.setProperty('--sidebar-w', sidebarCollapsed ? '76px' : '260px');
@@ -212,18 +234,31 @@ export function Sidebar() {
 
       {/* Collections header — fixed; only its LIST (below) scrolls. */}
       {!sidebarCollapsed && (
-        <div className="om-section-head om-collections-head">
+        <div className="om-section-head om-collections-head" onMouseLeave={hideReveal}>
           <span className="om-section-label mono">Collections</span>
-          <button
-            className="om-icon-btn sm"
-            title="New collection"
-            onClick={() => {
-              setEditingCollection(null);
-              setCollectionModalOpen(true);
-            }}
-          >
-            <Icon name="plus" size={11} />
-          </button>
+          <div className="om-collections-head-actions">
+            {hiddenRevealed && (
+              <button
+                className="om-hidden-reveal mono"
+                onClick={() => goRoute('/hidden')}
+                title="Open the hidden section"
+              >
+                hidden
+              </button>
+            )}
+            <button
+              className="om-icon-btn sm"
+              title="New collection"
+              onMouseEnter={startReveal}
+              onMouseLeave={cancelReveal}
+              onClick={() => {
+                setEditingCollection(null);
+                setCollectionModalOpen(true);
+              }}
+            >
+              <Icon name="plus" size={11} />
+            </button>
+          </div>
         </div>
       )}
 
