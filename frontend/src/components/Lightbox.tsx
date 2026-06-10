@@ -33,7 +33,8 @@ export function Lightbox() {
   const src = mediaSrc(memo);
   // Prefer a local file (no network, never expires) over a remote embed.
   const localVideo = memo.type === 'video' && memo.file_path ? `/api/memos/${memo.id}/file` : null;
-  const embed = memo.type === 'video' && !localVideo ? videoEmbedUrl(memo) : null;
+  // Autoplay is right here: the user explicitly clicked the card to play.
+  const embed = memo.type === 'video' && !localVideo ? videoEmbedUrl(memo, { autoplay: true }) : null;
   const hasPrevNext = group.length > 1;
   const ratio = embed ? embedAspectRatio(memo) : '16/9';
   const isPortrait = ratio === '9/16';
