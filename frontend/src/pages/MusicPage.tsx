@@ -226,20 +226,31 @@ export function MusicPage() {
   });
   const tracks: Memo[] = plTracks?.items ?? [];
 
-  const queueFrom = (all: Memo[], startMemo?: Memo) => {
+  const queueFrom = (all: Memo[], startMemo?: Memo, opts?: { shuffle?: boolean }) => {
     const ready = all.filter(isReady);
     if (!ready.length) return;
     const start = startMemo ? ready.findIndex((m) => m.id === startMemo.id) : 0;
-    playQueue(ready.map(memoToTrack), Math.max(0, start));
+    playQueue(ready.map(memoToTrack), Math.max(0, start), opts);
   };
 
-  const playPlaylist = async (p: MusicPlaylist) => {
+  const playPlaylist = async (p: MusicPlaylist, opts?: { shuffle?: boolean }) => {
     const res = await queryClient.fetchQuery({
       queryKey: ['memos', 'playlist-tracks', p.id],
       queryFn: () => memoApi.list({ type: 'audio', collection_id: p.id, limit: 200 }),
       staleTime: 10 * 1000,
     });
-    queueFrom(res.items as Memo[]);
+    queueFrom(res.items as Memo[], undefined, opts);
+  };
+
+  // Play the whole library as a queue (the grid is paginated, so fetch a
+  // fresh slice up to the same 200-track cap playlists use).
+  const playLibrary = async (opts?: { shuffle?: boolean }) => {
+    const res = await queryClient.fetchQuery({
+      queryKey: ['memos', 'music-library-queue'],
+      queryFn: () => memoApi.list({ type: 'audio', audio_kind: 'music', limit: 200 }),
+      staleTime: 10 * 1000,
+    });
+    queueFrom(res.items as Memo[], undefined, opts);
   };
 
   // Per-track "download locally" — same Make-it-local pipeline, one track.
@@ -300,6 +311,15 @@ export function MusicPage() {
               >
                 <Icon name="play" size={13} stroke={0} style={{ fill: 'currentColor' }} />
                 <span>Play all</span>
+              </button>
+              <button
+                className="om-btn-secondary"
+                onClick={() => queueFrom(tracks, undefined, { shuffle: true })}
+                disabled={!tracks.some(isReady)}
+                title="Play this playlist in random order"
+              >
+                <Icon name="shuffle" size={13} />
+                <span>Shuffle</span>
               </button>
               {playlist && hasRemote && !downloading && (
                 <button className="om-btn-secondary" onClick={() => downloadAll(playlist)} title="Download every remote track to this device">
@@ -404,7 +424,27 @@ export function MusicPage() {
       <section className="om-music-sect">
         <div className="om-section-head">
           <span className="om-section-label mono">Library</span>
-          <Icon name="music" size={11} className="om-section-icon" />
+          <span className="om-lib-actions">
+            <button
+              className="om-lib-act"
+              onClick={() => playLibrary()}
+              disabled={!library.some(isReady)}
+              title="Play the whole library"
+            >
+              <Icon name="play" size={11} stroke={0} style={{ fill: 'currentColor' }} />
+              <span>Play all</span>
+            </button>
+            <button
+              className="om-lib-act"
+              onClick={() => playLibrary({ shuffle: true })}
+              disabled={!library.some(isReady)}
+              title="Play the library in random order"
+            >
+              <Icon name="shuffle" size={11} />
+              <span>Shuffle</span>
+            </button>
+            <Icon name="music" size={11} className="om-section-icon" />
+          </span>
         </div>
         {libLoading ? (
           <div className="om-empty"><div className="om-empty-mark"><Icon name="refresh" size={24} /></div><p>Loading music…</p></div>

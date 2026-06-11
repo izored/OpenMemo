@@ -57,6 +57,8 @@ const ICON_PATHS: Record<string, string> = {
   skipForward: 'M5 4l10 8-10 8zM19 5v14',
   // Music page nav + playlist affordances.
   listMusic: 'M21 15V6M18.5 18a2.5 2.5 0 1 0 5 0 2.5 2.5 0 0 0-5 0zM12 12H3M16 6H3M12 18H3',
+  // Shuffle (queue plays in random order) — crossing arrows, lucide-style.
+  shuffle: 'M18 2l4 4-4 4M22 6h-6a4 4 0 0 0-3.3 1.8l-5.4 8.4A4 4 0 0 1 4 18H2M18 14l4 4-4 4M22 18h-6a4 4 0 0 1-3.3-1.8l-.4-.6M2 6h2a4 4 0 0 1 3.3 1.8l.4.6',
   eye: 'M2 12s4-7 10-7 10 7 10 7-4 7-10 7-10-7-10-7zM12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6z',
   database: 'M12 2c-4.97 0-9 1.34-9 3v14c0 1.66 4.03 3 9 3s9-1.34 9-3V5c0-1.66-4.03-3-9-3zM3 5c0 1.66 4.03 3 9 3s9-1.34 9-3M3 12c0 1.66 4.03 3 9 3s9-1.34 9-3',
   palette: 'M12 2a10 10 0 1 0 0 20 2 2 0 0 0 2-2v-1a2 2 0 0 1 2-2h2a4 4 0 0 0 4-4 10 10 0 0 0-10-11zM7.5 12a1.5 1.5 0 1 0 0-3 1.5 1.5 0 0 0 0 3zM12 7.5a1.5 1.5 0 1 0 0-3 1.5 1.5 0 0 0 0 3zM16.5 12a1.5 1.5 0 1 0 0-3 1.5 1.5 0 0 0 0 3z',
