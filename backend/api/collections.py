@@ -143,8 +143,18 @@ async def add_memo_to_collection(
     memo_id: str,
     db: AsyncSession = Depends(get_db),
 ):
-    """Add a memo to a collection."""
-    from sqlalchemy import insert
+    """Add a memo to a collection. Idempotent — re-adding is a no-op."""
+    from sqlalchemy import insert, select as _select
+    existing = (
+        await db.execute(
+            _select(memo_collections.c.memo_id).where(
+                memo_collections.c.memo_id == memo_id,
+                memo_collections.c.collection_id == collection_id,
+            )
+        )
+    ).first()
+    if existing:
+        return {"status": "exists"}
     await db.execute(
         insert(memo_collections).values(memo_id=memo_id, collection_id=collection_id)
     )

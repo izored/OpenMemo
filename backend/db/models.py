@@ -104,6 +104,10 @@ class Memo(Base):
     # sidebar list) but stay visible inside their collections. The full set
     # lives behind the passcode-gated hidden section (OPNMMO-0016).
     hidden = Column(Boolean, default=False)
+    # True for tracks created by whole-playlist ingest (ADR-015). Born tracks
+    # live inside their playlist and stay out of every list feed; a standalone
+    # song added to a playlist later keeps its library spot (flag stays False).
+    playlist_born = Column(Boolean, default=False)
     is_processed = Column(Boolean, default=False)
     is_deleted = Column(Boolean, default=False)
     deleted_at = Column(DateTime, nullable=True)

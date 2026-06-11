@@ -15,7 +15,7 @@ async function fetchJSON<T>(url: string, options?: RequestInit): Promise<T> {
 
 // Memos
 export const memoApi = {
-  list: (params?: { type?: string; audio_kind?: 'voice' | 'music'; collection_id?: string; search?: string; hidden?: boolean; offset?: number; limit?: number }) => {
+  list: (params?: { type?: string; audio_kind?: 'voice' | 'music'; collection_id?: string; search?: string; hidden?: boolean; sort?: 'recent' | 'title' | 'artist'; offset?: number; limit?: number }) => {
     const search = new URLSearchParams();
     if (params?.type && params.type !== 'all') search.set('type', params.type);
     if (params?.audio_kind) search.set('audio_kind', params.audio_kind);
@@ -24,6 +24,7 @@ export const memoApi = {
     // hidden=true lists ONLY hidden memos (the passcode-gated hidden section).
     // Omitted = dashboard behavior (hidden memos excluded server-side).
     if (params?.hidden) search.set('hidden', 'true');
+    if (params?.sort && params.sort !== 'recent') search.set('sort', params.sort);
     if (params?.offset) search.set('offset', String(params.offset));
     if (params?.limit) search.set('limit', String(params.limit));
     return fetchJSON<{ items: any[]; total: number; offset: number; limit: number }>(`/memos?${search}`);
@@ -88,12 +89,16 @@ export const ingestApi = {
       count: number;
       truncated: boolean;
       entries: { url: string; title: string; artist?: string | null; thumbnail?: string | null }[];
+      // Set when a playlist collection with this source URL already exists —
+      // the panel shows "already saved" instead of offering a duplicate pull.
+      already_saved?: { id: string; name: string } | null;
     }>('/ingest/playlist/probe', { method: 'POST', body: JSON.stringify({ url }) }),
   // Ingest a whole playlist: creates a playlist collection + one audio memo
   // per track. download=true starts the sequential background download;
   // download=false keeps tracks remote (pull them later, per track or all).
+  // status 'exists' = this URL was already pulled; collection_id points at it.
   playlist: (url: string, opts?: { title?: string; download?: boolean }) =>
-    fetchJSON<{ collection_id: string; title: string; total: number; truncated: boolean }>(
+    fetchJSON<{ collection_id: string; title: string; total: number; truncated: boolean; status: string }>(
       '/ingest/playlist',
       { method: 'POST', body: JSON.stringify({ url, title: opts?.title, download: opts?.download ?? true }) },
     ),
@@ -147,7 +152,7 @@ export const ingestApi = {
 // Collections
 export const collectionApi = {
   list: () => fetchJSON<any[]>('/collections'),
-  create: (data: { name: string; emoji?: string; description?: string; color?: string }) =>
+  create: (data: { name: string; emoji?: string; description?: string; color?: string; kind?: 'standard' | 'playlist' }) =>
     fetchJSON<{ id: string }>('/collections', { method: 'POST', body: JSON.stringify(data) }),
   update: (id: string, data: any) =>
     fetchJSON<any>(`/collections/${id}`, { method: 'PUT', body: JSON.stringify(data) }),

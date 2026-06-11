@@ -47,7 +47,7 @@ function CollectionRow({
   );
 }
 
-type ThemeValue = 'light' | 'dark' | 'system';
+type ThemeValue = 'light' | 'dark';
 
 export function Sidebar() {
   const navigate = useNavigate();
@@ -64,8 +64,10 @@ export function Sidebar() {
     setTweak,
   } = useAppStore();
 
-  const theme = (tweaks.theme as ThemeValue) || 'light';
-  const setTheme = (t: ThemeValue) => setTweak({ theme: t as 'light' | 'dark' });
+  // Two explicit themes only — the old "System" option is gone (dark mode is
+  // manually toggled, never auto-applied; see CLAUDE.md).
+  const theme: ThemeValue = tweaks.theme === 'dark' ? 'dark' : 'light';
+  const setTheme = (t: ThemeValue) => setTweak({ theme: t });
 
   // Hidden-section entry point (OPNMMO-0016): dwell on the "+" (new
   // collection) for 1.5s and a "hidden" link fades in between the Collections
@@ -141,7 +143,6 @@ export function Sidebar() {
   const themeOptions: { value: ThemeValue; icon: string; label: string }[] = [
     { value: 'light', icon: 'sun', label: 'Light' },
     { value: 'dark', icon: 'moon', label: 'Dark' },
-    { value: 'system', icon: 'monitor', label: 'System' },
   ];
 
   return (
@@ -289,8 +290,20 @@ export function Sidebar() {
       <SidebarPlayer />
 
       <div className="om-sidebar-foot">
-        {/* Theme selector — 3 icon buttons */}
-        {!sidebarCollapsed && (
+        {/* Theme selector — Light / Dark (System removed on purpose).
+            Collapsed sidebar: one toggle that flips to the other theme. */}
+        {sidebarCollapsed ? (
+          <div className="om-theme-row">
+            <button
+              className="om-theme-btn"
+              onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
+              title={theme === 'dark' ? 'Switch to light theme' : 'Switch to dark theme'}
+              aria-label="Toggle theme"
+            >
+              <Icon name={theme === 'dark' ? 'sun' : 'moon'} size={15} />
+            </button>
+          </div>
+        ) : (
           <div className="om-theme-row">
             {themeOptions.map((opt) => (
               <button

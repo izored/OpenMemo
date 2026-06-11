@@ -64,6 +64,19 @@ async def lifespan(app: FastAPI):
             for col in ("transcript_status", "transcript_lang", "localize_status", "localize_error", "audio_kind", "audio_artist"):
                 if col not in names:
                     await db.execute(_sql_text(f"ALTER TABLE memos ADD COLUMN {col} VARCHAR"))
+            if "playlist_born" not in names:
+                await db.execute(_sql_text(
+                    "ALTER TABLE memos ADD COLUMN playlist_born BOOLEAN DEFAULT 0"
+                ))
+                # Backfill: every track already in a playlist predates the flag.
+                # Treat them as playlist-born so the feeds stay clean (we can't
+                # tell a dragged-in track from an ingested one retroactively).
+                await db.execute(_sql_text(
+                    "UPDATE memos SET playlist_born = 1 WHERE id IN ("
+                    "SELECT mc.memo_id FROM memo_collections mc "
+                    "JOIN collections c ON c.id = mc.collection_id "
+                    "WHERE c.kind = 'playlist')"
+                ))
             await db.commit()
             # Backfill audio_kind for existing audio memos (idempotent — only NULLs).
             # Mic recordings (no source_url, "Voice memo …" title) → voice; all

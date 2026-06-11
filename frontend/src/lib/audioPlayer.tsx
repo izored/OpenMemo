@@ -43,16 +43,28 @@ interface AudioPlayerContextValue {
    * Load a track list as the play queue and start at `startIndex` (ADR-015).
    * On track end the queue auto-advances (repeat-one still wins); it stops
    * after the last track. Playing a single track anywhere clears the queue.
+   * `opts.shuffle` starts the queue shuffled: the start track plays first,
+   * the rest follow in random order.
    */
-  playQueue: (tracks: AudioTrack[], startIndex?: number) => void;
+  playQueue: (tracks: AudioTrack[], startIndex?: number, opts?: { shuffle?: boolean }) => void;
   /** Jump to the next queued track (no-op without a queue / at the end). */
   next: () => void;
   /** Jump to the previous queued track (no-op without a queue / at the start). */
   prev: () => void;
+  /** True while the queue plays in shuffled order. */
+  shuffled: boolean;
+  /** Shuffle the upcoming queue (current track stays put) / restore source order. */
+  toggleShuffle: () => void;
   /** Number of tracks in the active queue (0 = no queue). */
   queueLength: number;
   /** Index of the active track within the queue (-1 = no queue). */
   queueIndex: number;
+  /** The live queue, in play order (empty = no queue). For the Up-next list. */
+  queueTracks: AudioTrack[];
+  /** Jump straight to a queued track by index. */
+  jumpTo: (index: number) => void;
+  /** Drop a queued track by index (the playing track can't be removed). */
+  removeAt: (index: number) => void;
   /** Play/pause the currently loaded track. */
   toggle: () => void;
   /** Jump to an absolute position in seconds. */
@@ -135,6 +147,19 @@ export function AudioPlayerProvider({ children }: { children: React.ReactNode })
   // WebAudio analyser graph for the live waveform. A MediaElementSource can be
   // created only ONCE per <audio> element (a second call throws), so the ctx,
   // source, and analyser are built lazily on first play and kept in refs.
+  //
+  // MOBILE: the graph is skipped entirely on coarse-pointer devices. Routing
+  // the element through an AudioContext means the OS suspends the context on
+  // screen lock / tab minimize and playback goes SILENT in the background —
+  // the classic mobile background-audio killer. Without the graph the bare
+  // <audio> element keeps playing under lock, driven by the Media Session
+  // handlers below. getLevels() returns false and every waveform caller
+  // already falls back to its static bar pattern by design.
+  const allowGraphRef = useRef(
+    typeof window === 'undefined' || !window.matchMedia
+      ? true
+      : !window.matchMedia('(pointer: coarse)').matches,
+  );
   const audioCtxRef = useRef<AudioContext | null>(null);
   const analyserRef = useRef<AnalyserNode | null>(null);
   // Backed by a concrete ArrayBuffer so the type matches getByteFrequencyData's
@@ -143,7 +168,7 @@ export function AudioPlayerProvider({ children }: { children: React.ReactNode })
 
   const ensureGraph = useCallback(() => {
     const audio = audioRef.current;
-    if (!audio || audioCtxRef.current) return;
+    if (!audio || audioCtxRef.current || !allowGraphRef.current) return;
     try {
       const Ctx = window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
       const ctx = new Ctx();
@@ -180,6 +205,11 @@ export function AudioPlayerProvider({ children }: { children: React.ReactNode })
   const [queueIndex, setQueueIndex] = useState(-1);
   const queueRef = useRef<AudioTrack[]>([]);
   const queueIndexRef = useRef(-1);
+  // Shuffle: the queue plays in random order while the source order is kept
+  // aside, so toggling shuffle off restores it with the current track intact.
+  const [shuffled, setShuffled] = useState(false);
+  const shuffledRef = useRef(false);
+  const sourceOrderRef = useRef<AudioTrack[]>([]);
 
   // Load + play a track on the shared element (no toggle logic, no queue edits).
   const loadTrack = useCallback(
@@ -205,9 +235,23 @@ export function AudioPlayerProvider({ children }: { children: React.ReactNode })
   const clearQueue = useCallback(() => {
     queueRef.current = [];
     queueIndexRef.current = -1;
+    sourceOrderRef.current = [];
+    shuffledRef.current = false;
     setQueue([]);
     setQueueIndex(-1);
+    setShuffled(false);
   }, []);
+
+  // Fisher–Yates over everything except `first`, which stays at position 0 —
+  // the playing track never jumps when shuffle flips on.
+  const shuffleAfter = (tracks: AudioTrack[], first: AudioTrack): AudioTrack[] => {
+    const rest = tracks.filter((t) => t.memoId !== first.memoId);
+    for (let i = rest.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [rest[i], rest[j]] = [rest[j], rest[i]];
+    }
+    return [first, ...rest];
+  };
 
   const play = useCallback(
     (next: AudioTrack) => {
@@ -241,20 +285,79 @@ export function AudioPlayerProvider({ children }: { children: React.ReactNode })
   );
 
   const playQueue = useCallback(
-    (tracks: AudioTrack[], startIndex = 0) => {
+    (tracks: AudioTrack[], startIndex = 0, opts?: { shuffle?: boolean }) => {
       if (!tracks.length) return;
-      const i = Math.max(0, Math.min(startIndex, tracks.length - 1));
-      queueRef.current = tracks;
+      const start = Math.max(0, Math.min(startIndex, tracks.length - 1));
+      const doShuffle = !!opts?.shuffle;
+      const list = doShuffle ? shuffleAfter(tracks, tracks[start]) : tracks;
+      const i = doShuffle ? 0 : start;
+      sourceOrderRef.current = tracks;
+      shuffledRef.current = doShuffle;
+      queueRef.current = list;
       queueIndexRef.current = i;
-      setQueue(tracks);
+      setShuffled(doShuffle);
+      setQueue(list);
       setQueueIndex(i);
-      loadTrack(tracks[i]);
+      loadTrack(list[i]);
     },
     [loadTrack],
   );
 
+  const toggleShuffle = useCallback(() => {
+    const q = queueRef.current;
+    const i = queueIndexRef.current;
+    if (!q.length || i < 0) return;
+    const current = q[i];
+    if (!shuffledRef.current) {
+      sourceOrderRef.current = q;
+      const list = shuffleAfter(q, current);
+      queueRef.current = list;
+      queueIndexRef.current = 0;
+      shuffledRef.current = true;
+      setQueue(list);
+      setQueueIndex(0);
+      setShuffled(true);
+    } else {
+      const source = sourceOrderRef.current.length ? sourceOrderRef.current : q;
+      const si = Math.max(0, source.findIndex((t) => t.memoId === current.memoId));
+      queueRef.current = source;
+      queueIndexRef.current = si;
+      shuffledRef.current = false;
+      setQueue(source);
+      setQueueIndex(si);
+      setShuffled(false);
+    }
+  }, []);
+
   const next = useCallback(() => stepQueue(1), [stepQueue]);
   const prev = useCallback(() => stepQueue(-1), [stepQueue]);
+
+  const jumpTo = useCallback(
+    (index: number) => {
+      const q = queueRef.current;
+      if (index < 0 || index >= q.length) return;
+      queueIndexRef.current = index;
+      setQueueIndex(index);
+      loadTrack(q[index]);
+    },
+    [loadTrack],
+  );
+
+  const removeAt = useCallback((index: number) => {
+    const q = queueRef.current;
+    const cur = queueIndexRef.current;
+    if (index < 0 || index >= q.length || index === cur) return;
+    const removed = q[index];
+    const nq = q.filter((_, i) => i !== index);
+    queueRef.current = nq;
+    setQueue(nq);
+    // Keep the source order in sync so toggling shuffle off can't resurrect it.
+    sourceOrderRef.current = sourceOrderRef.current.filter((t) => t.memoId !== removed.memoId);
+    if (index < cur) {
+      queueIndexRef.current = cur - 1;
+      setQueueIndex(cur - 1);
+    }
+  }, []);
 
   const toggle = useCallback(() => {
     const audio = audioRef.current;
@@ -288,6 +391,87 @@ export function AudioPlayerProvider({ children }: { children: React.ReactNode })
 
   const isActive = useCallback((memoId: string) => track?.memoId === memoId, [track]);
 
+  // ── Continue listening (OPNMMO-0023 follow-up) ──
+  // The player snapshots itself to localStorage (track, queue, order, position)
+  // and a reload restores it PAUSED — never autoplay. Volume already persists.
+  const RESUME_KEY = 'om-player-resume';
+  const restoredRef = useRef(false);
+  const lastPosSaveRef = useRef(0);
+
+  useEffect(() => {
+    const audio = audioRef.current;
+    try {
+      const raw = localStorage.getItem(RESUME_KEY);
+      if (raw && audio) {
+        const snap = JSON.parse(raw) as {
+          track?: AudioTrack | null;
+          queue?: AudioTrack[];
+          sourceOrder?: AudioTrack[];
+          index?: number;
+          shuffled?: boolean;
+          position?: number;
+        };
+        if (snap?.track?.src) {
+          queueRef.current = Array.isArray(snap.queue) ? snap.queue : [];
+          sourceOrderRef.current = Array.isArray(snap.sourceOrder) ? snap.sourceOrder : [];
+          queueIndexRef.current = typeof snap.index === 'number' ? snap.index : -1;
+          shuffledRef.current = !!snap.shuffled;
+          setQueue(queueRef.current);
+          setQueueIndex(queueIndexRef.current);
+          setShuffled(shuffledRef.current);
+          setTrack(snap.track);
+          audio.src = snap.track.src;
+          audio.load();
+          audio.volume = volumeRef.current;
+          const pos = Number(snap.position) || 0;
+          lastPosSaveRef.current = pos;
+          if (pos > 0) {
+            const onMeta = () => {
+              try { audio.currentTime = Math.min(pos, audio.duration || pos); } catch { /* not seekable */ }
+            };
+            audio.addEventListener('loadedmetadata', onMeta, { once: true });
+          }
+          setCurrentTime(pos);
+        }
+      }
+    } catch { /* corrupted snapshot — start clean */ }
+    restoredRef.current = true;
+  }, []);
+
+  // Snapshot on any structural change (track / queue / order). Position rides
+  // along from the last throttled save so a fresh snapshot can't zero it.
+  useEffect(() => {
+    if (!restoredRef.current) return;
+    try {
+      if (!track) {
+        localStorage.removeItem(RESUME_KEY);
+        return;
+      }
+      localStorage.setItem(RESUME_KEY, JSON.stringify({
+        track,
+        queue: queueRef.current,
+        sourceOrder: sourceOrderRef.current,
+        index: queueIndexRef.current,
+        shuffled: shuffledRef.current,
+        position: audioRef.current?.currentTime || lastPosSaveRef.current,
+      }));
+    } catch { /* private mode / quota — resume is best-effort */ }
+  }, [track, queue, queueIndex, shuffled]);
+
+  // Throttled position save (~every 5s of playback + on pause).
+  const savePosition = useCallback((t: number, force = false) => {
+    if (!restoredRef.current) return;
+    if (!force && Math.abs(t - lastPosSaveRef.current) < 5) return;
+    lastPosSaveRef.current = t;
+    try {
+      const raw = localStorage.getItem(RESUME_KEY);
+      if (!raw) return;
+      const snap = JSON.parse(raw);
+      snap.position = t;
+      localStorage.setItem(RESUME_KEY, JSON.stringify(snap));
+    } catch { /* ignore */ }
+  }, []);
+
   // Media Session — lets the OS media keys (the keyboard play/pause key) and the
   // lock-screen / notification transport drive our player (ADR-005). Handlers are
   // bound once; they read the live <audio> via the ref.
@@ -296,7 +480,12 @@ export function AudioPlayerProvider({ children }: { children: React.ReactNode })
     const ms = navigator.mediaSession;
     const a = () => audioRef.current;
     try {
-      ms.setActionHandler('play', () => a()?.play().catch(() => {}));
+      // Resume a suspended AudioContext before play — a lock-screen / notif
+      // "play" tap must revive the graph (when one exists), not stay silent.
+      ms.setActionHandler('play', () => {
+        audioCtxRef.current?.resume?.().catch(() => {});
+        a()?.play().catch(() => {});
+      });
       ms.setActionHandler('pause', () => a()?.pause());
       ms.setActionHandler('seekbackward', (d) => { const el = a(); if (el) el.currentTime = Math.max(0, el.currentTime - (d.seekOffset || 10)); });
       ms.setActionHandler('seekforward', (d) => { const el = a(); if (el) el.currentTime = el.currentTime + (d.seekOffset || 10); });
@@ -343,9 +532,25 @@ export function AudioPlayerProvider({ children }: { children: React.ReactNode })
     }
   }, [playing]);
 
+  // Coming back to the tab with a suspended AudioContext while the element is
+  // "playing" = silence. Resume the graph on visibility return (desktop only —
+  // mobile never builds the graph, see ensureGraph).
+  useEffect(() => {
+    const onVisible = () => {
+      if (document.visibilityState !== 'visible') return;
+      const ctx = audioCtxRef.current;
+      const audio = audioRef.current;
+      if (ctx?.state === 'suspended' && audio && !audio.paused) {
+        ctx.resume().catch(() => {});
+      }
+    };
+    document.addEventListener('visibilitychange', onVisible);
+    return () => document.removeEventListener('visibilitychange', onVisible);
+  }, []);
+
   const value = useMemo<AudioPlayerContextValue>(
-    () => ({ track, playing, currentTime, duration, repeat, toggleRepeat, volume, muted, setVolume, toggleMute, play, playQueue, next, prev, queueLength: queue.length, queueIndex, toggle, seek, close, isActive, getLevels }),
-    [track, playing, currentTime, duration, repeat, toggleRepeat, volume, muted, setVolume, toggleMute, play, playQueue, next, prev, queue.length, queueIndex, toggle, seek, close, isActive, getLevels],
+    () => ({ track, playing, currentTime, duration, repeat, toggleRepeat, volume, muted, setVolume, toggleMute, play, playQueue, next, prev, shuffled, toggleShuffle, queueLength: queue.length, queueIndex, queueTracks: queue, jumpTo, removeAt, toggle, seek, close, isActive, getLevels }),
+    [track, playing, currentTime, duration, repeat, toggleRepeat, volume, muted, setVolume, toggleMute, play, playQueue, next, prev, shuffled, toggleShuffle, queue, queueIndex, jumpTo, removeAt, toggle, seek, close, isActive, getLevels],
   );
 
   return (
@@ -354,7 +559,10 @@ export function AudioPlayerProvider({ children }: { children: React.ReactNode })
         ref={audioRef}
         preload="metadata"
         onPlay={() => setPlaying(true)}
-        onPause={() => setPlaying(false)}
+        onPause={(e) => {
+          setPlaying(false);
+          savePosition(e.currentTarget.currentTime, true);
+        }}
         onEnded={() => {
           // Repeat-one: restart the same track instead of stopping (ADR-005).
           const audio = audioRef.current;
@@ -375,7 +583,10 @@ export function AudioPlayerProvider({ children }: { children: React.ReactNode })
           }
           setPlaying(false);
         }}
-        onTimeUpdate={(e) => setCurrentTime(e.currentTarget.currentTime)}
+        onTimeUpdate={(e) => {
+          setCurrentTime(e.currentTarget.currentTime);
+          savePosition(e.currentTarget.currentTime);
+        }}
         onLoadedMetadata={(e) => setDuration(e.currentTarget.duration || 0)}
         onDurationChange={(e) => setDuration(e.currentTarget.duration || 0)}
       />
