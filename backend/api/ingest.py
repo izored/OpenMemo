@@ -288,8 +288,19 @@ async def ingest_url(
 
 # --- Playlist ingestion (Music Experience V2, ADR-015) ---
 
+async def _find_saved_playlist(db: AsyncSession, url: str) -> Optional[Collection]:
+    """The playlist collection already pulled from this URL, if any."""
+    return (
+        await db.execute(
+            select(Collection).where(
+                Collection.kind == "playlist", Collection.source_url == url
+            )
+        )
+    ).scalars().first()
+
+
 @router.post("/playlist/probe")
-async def probe_playlist_url(data: PlaylistProbe):
+async def probe_playlist_url(data: PlaylistProbe, db: AsyncSession = Depends(get_db)):
     """Enumerate a playlist URL without downloading anything (--flat-playlist).
 
     The new-memo panel calls this when a pasted URL looks playlist-shaped, so
@@ -302,6 +313,9 @@ async def probe_playlist_url(data: PlaylistProbe):
         result = await probe_playlist(data.url)
     except PlaylistError as e:
         raise HTTPException(status_code=400, detail=str(e))
+    # Already pulled? The panel tells the user instead of letting them mint a
+    # duplicate; the ingest endpoint enforces the same rule server-side.
+    existing = await _find_saved_playlist(db, data.url)
     # The panel only needs a small preview; cap the entry list it gets back.
     return {
         "is_playlist": True,
@@ -310,6 +324,7 @@ async def probe_playlist_url(data: PlaylistProbe):
         "count": result["count"],
         "truncated": result["truncated"],
         "entries": result["entries"][:6],
+        "already_saved": {"id": existing.id, "name": existing.name} if existing else None,
     }
 
 
@@ -333,6 +348,17 @@ async def ingest_playlist(
     from backend.core.playlist import probe_playlist, PlaylistError
 
     validate_url(data.url)
+    # Same playlist pasted twice → hand back the existing collection instead
+    # of minting a duplicate (and re-creating every track memo with it).
+    existing = await _find_saved_playlist(db, data.url)
+    if existing:
+        return {
+            "collection_id": existing.id,
+            "title": existing.name,
+            "total": 0,
+            "truncated": False,
+            "status": "exists",
+        }
     try:
         probed = await probe_playlist(data.url)
     except PlaylistError as e:
@@ -352,9 +378,41 @@ async def ingest_playlist(
     # One pending audio memo per track. recency_at is staggered (now - i s) so
     # the default recency sort returns playlist order — same trick as the
     # drag-to-reorder endpoint.
+    #
+    # Track reuse: a song we already have (same source URL, audio, not
+    # deleted) is linked, never re-created — one memo, two memberships, one
+    # download. Its playlist_born flag stays untouched: a standalone song
+    # pulled into a playlist this way keeps its library spot.
+    entry_urls = [e["url"] for e in probed["entries"]]
+    existing_memos = (
+        await db.execute(
+            select(Memo).where(
+                Memo.source_url.in_(entry_urls),
+                Memo.type == "audio",
+                (Memo.is_deleted == False) | (Memo.is_deleted == None),  # noqa: E712
+            )
+        )
+    ).scalars().all()
+    by_url = {m.source_url: m for m in existing_memos}
+
     now = datetime.utcnow()
-    memo_ids: list[str] = []
+    memo_ids: list[str] = []       # playlist membership, in playlist order
+    download_ids: list[str] = []   # what the background download pass pulls
+    new_ids: list[str] = []        # freshly created (need thumbnail caching)
+    seen: set[str] = set()
     for i, entry in enumerate(probed["entries"]):
+        reused = by_url.get(entry["url"])
+        if reused is not None:
+            if reused.id in seen:
+                continue  # the same video listed twice in one playlist
+            seen.add(reused.id)
+            # Recency drives playlist order, so the reused track slots in.
+            reused.recency_at = now - timedelta(seconds=i)
+            memo_ids.append(reused.id)
+            if data.download and not reused.file_path and reused.localize_status not in ("processing", "done"):
+                reused.localize_status = "pending"
+                download_ids.append(reused.id)
+            continue
         try:
             domain = (_urlparse(entry["url"]).hostname or "").removeprefix("www.")
         except Exception:
@@ -382,21 +440,27 @@ async def ingest_playlist(
             recency_at=now - timedelta(seconds=i),
         )
         db.add(memo)
+        seen.add(memo.id)
         memo_ids.append(memo.id)
+        new_ids.append(memo.id)
+        if data.download:
+            download_ids.append(memo.id)
 
     await db.flush()
-    await db.execute(
-        insert(memo_collections),
-        [{"memo_id": mid, "collection_id": collection.id} for mid in memo_ids],
-    )
+    if memo_ids:
+        await db.execute(
+            insert(memo_collections),
+            [{"memo_id": mid, "collection_id": collection.id} for mid in memo_ids],
+        )
     await db.commit()
 
-    if data.download:
-        background_tasks.add_task(download_playlist_task, collection.id, memo_ids)
-    else:
+    if data.download and download_ids:
+        # The download pass caches each track's thumbnail as it goes.
+        background_tasks.add_task(download_playlist_task, collection.id, download_ids)
+    elif new_ids:
         # Still cache the remote cover thumbnails so the tiles survive the
         # source vanishing — metadata-only, no media downloads.
-        background_tasks.add_task(cache_playlist_thumbs_task, memo_ids)
+        background_tasks.add_task(cache_playlist_thumbs_task, new_ids)
 
     return {
         "collection_id": collection.id,
