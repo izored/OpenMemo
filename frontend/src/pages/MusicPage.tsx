@@ -167,8 +167,8 @@ function MusicTile({ m, index, active, playing, onPlay, onDownload, onRemove }: 
         </span>
       )}
       <span className="om-mtile-cap">
-        <span className="om-mtile-title">{m.title}</span>
         {m.audio_artist && <span className="om-mtile-artist">{m.audio_artist}</span>}
+        <span className="om-mtile-title">{m.title}</span>
       </span>
     </button>
   );
