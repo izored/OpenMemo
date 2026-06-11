@@ -1,0 +1,51 @@
+// Playlist-shaped URL detection (Music Experience V2, ADR-015).
+//
+// Cheap, client-side gate for the new-memo panel: only URLs that pass this
+// check trigger the backend playlist probe (which runs yt-dlp). Mirrors
+// backend/core/playlist.py `looks_like_playlist` — keep the two in sync.
+
+export interface PlaylistShape {
+  /** URL can be ingested as a whole playlist. */
+  isPlaylist: boolean;
+  /**
+   * URL ALSO points at a single item (e.g. a YouTube watch URL with a list=
+   * param). When true the panel defaults to "just this one"; when false the
+   * URL is playlist-only (e.g. /playlist?list=…) and defaults to "whole playlist".
+   */
+  hasSingleItem: boolean;
+}
+
+export function playlistShape(raw: string): PlaylistShape {
+  const none: PlaylistShape = { isPlaylist: false, hasSingleItem: false };
+  let url: URL;
+  try {
+    url = new URL(raw.trim());
+  } catch {
+    return none;
+  }
+  const host = url.hostname.toLowerCase().replace(/^www\./, '');
+  const path = url.pathname.toLowerCase();
+
+  if (host.endsWith('youtube.com') || host === 'youtu.be') {
+    const hasList = !!url.searchParams.get('list');
+    if (path.startsWith('/playlist')) return { isPlaylist: hasList, hasSingleItem: false };
+    if (hasList) {
+      // watch?v=…&list=… (or youtu.be/<id>?list=…) — both readings valid.
+      const hasVideo = !!url.searchParams.get('v') || (host === 'youtu.be' && path.length > 1);
+      return { isPlaylist: true, hasSingleItem: hasVideo };
+    }
+    return none;
+  }
+  if (host.endsWith('soundcloud.com')) {
+    return path.includes('/sets/') ? { isPlaylist: true, hasSingleItem: false } : none;
+  }
+  if (host.endsWith('bandcamp.com')) {
+    return path.includes('/album/') ? { isPlaylist: true, hasSingleItem: false } : none;
+  }
+  return none;
+}
+
+/** Convenience: true when the URL can be ingested as a playlist at all. */
+export function isPlaylistUrl(raw: string): boolean {
+  return playlistShape(raw).isPlaylist;
+}

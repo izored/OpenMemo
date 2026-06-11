@@ -60,9 +60,30 @@ export interface Collection {
   emoji: string;
   description?: string;
   color: string;
+  // Collection sub-kind (ADR-015): 'standard' = normal collection,
+  // 'playlist' = music playlist (Music page only). The API defaults to
+  // standard, so existing surfaces never see playlists.
+  kind?: 'standard' | 'playlist';
+  /** Playlists: the source playlist URL they were ingested from. */
+  source_url?: string | null;
   pinned: boolean;
   sort_order: number;
   created_at: string;
+}
+
+/** A music playlist as served by /api/music/playlists (ADR-015). */
+export interface MusicPlaylist {
+  id: string;
+  name: string;
+  source_url?: string | null;
+  created_at: string;
+  track_count: number;
+  /** Up to 4 track cover URLs for the collage. */
+  covers: string[];
+  /** Download progress derived from per-track localize_status. `pending`
+   *  counts tracks actively queued/downloading; remote tracks saved without
+   *  downloading count in none of done/error/pending. */
+  progress: { total: number; done: number; error: number; pending: number };
 }
 
 export interface ChatMessage {

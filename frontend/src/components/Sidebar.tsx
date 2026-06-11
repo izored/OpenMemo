@@ -118,6 +118,7 @@ export function Sidebar() {
     { id: 'home', label: 'All Memos', icon: 'home', path: '/' },
     { id: 'collections', label: 'Collections', icon: 'layers', path: '/collections' },
     { id: 'ask', label: 'Ask Memo', icon: 'sparkles', path: '/ask' },
+    { id: 'music', label: 'Music', icon: 'music', path: '/music' },
   ];
 
   const pinned = collections.filter((c: Collection) => c.pinned);
@@ -184,7 +185,9 @@ export function Sidebar() {
             key={n.id}
             className={cn(
               'om-nav-item',
-              location.pathname === n.path && !activeCollection && 'active'
+              (location.pathname === n.path ||
+                (n.path !== '/' && location.pathname.startsWith(n.path + '/'))) &&
+                !activeCollection && 'active'
             )}
             title={n.label}
             onClick={() => goRoute(n.path)}

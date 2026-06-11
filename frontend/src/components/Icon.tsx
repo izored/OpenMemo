@@ -52,6 +52,11 @@ const ICON_PATHS: Record<string, string> = {
   // Repeat-ONE: same loop with a "1" in the middle (active repeat-one state).
   repeat1: 'M17 2l4 4-4 4M3 11v-1a4 4 0 0 1 4-4h14M7 22l-4-4 4-4M21 13v1a4 4 0 0 1-4 4H3M11 10h1v4',
   music: 'M9 18V5l12-2v13M6 21a3 3 0 1 0 0-6 3 3 0 0 0 0 6zM18 19a3 3 0 1 0 0-6 3 3 0 0 0 0 6z',
+  // Queue transport (ADR-015) — sidebar player prev/next while a queue is live.
+  skipBack: 'M19 20 9 12l10-8zM5 19V5',
+  skipForward: 'M5 4l10 8-10 8zM19 5v14',
+  // Music page nav + playlist affordances.
+  listMusic: 'M21 15V6M18.5 18a2.5 2.5 0 1 0 5 0 2.5 2.5 0 0 0-5 0zM12 12H3M16 6H3M12 18H3',
   eye: 'M2 12s4-7 10-7 10 7 10 7-4 7-10 7-10-7-10-7zM12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6z',
   database: 'M12 2c-4.97 0-9 1.34-9 3v14c0 1.66 4.03 3 9 3s9-1.34 9-3V5c0-1.66-4.03-3-9-3zM3 5c0 1.66 4.03 3 9 3s9-1.34 9-3M3 12c0 1.66 4.03 3 9 3s9-1.34 9-3',
   palette: 'M12 2a10 10 0 1 0 0 20 2 2 0 0 0 2-2v-1a2 2 0 0 1 2-2h2a4 4 0 0 0 4-4 10 10 0 0 0-10-11zM7.5 12a1.5 1.5 0 1 0 0-3 1.5 1.5 0 0 0 0 3zM12 7.5a1.5 1.5 0 1 0 0-3 1.5 1.5 0 0 0 0 3zM16.5 12a1.5 1.5 0 1 0 0-3 1.5 1.5 0 0 0 0 3z',

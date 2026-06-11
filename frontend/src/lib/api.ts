@@ -15,9 +15,10 @@ async function fetchJSON<T>(url: string, options?: RequestInit): Promise<T> {
 
 // Memos
 export const memoApi = {
-  list: (params?: { type?: string; collection_id?: string; search?: string; hidden?: boolean; offset?: number; limit?: number }) => {
+  list: (params?: { type?: string; audio_kind?: 'voice' | 'music'; collection_id?: string; search?: string; hidden?: boolean; offset?: number; limit?: number }) => {
     const search = new URLSearchParams();
     if (params?.type && params.type !== 'all') search.set('type', params.type);
+    if (params?.audio_kind) search.set('audio_kind', params.audio_kind);
     if (params?.collection_id) search.set('collection_id', params.collection_id);
     if (params?.search) search.set('search', params.search);
     // hidden=true lists ONLY hidden memos (the passcode-gated hidden section).
@@ -77,6 +78,25 @@ export const ingestApi = {
       method: 'POST',
       body: JSON.stringify({ title, content, collection_id }),
     }),
+  // Enumerate a playlist URL (flat, no downloads) so the panel can ask
+  // "whole playlist or just this one?" with a real title + count (ADR-015).
+  probePlaylist: (url: string) =>
+    fetchJSON<{
+      is_playlist: boolean;
+      title: string;
+      uploader?: string | null;
+      count: number;
+      truncated: boolean;
+      entries: { url: string; title: string; artist?: string | null; thumbnail?: string | null }[];
+    }>('/ingest/playlist/probe', { method: 'POST', body: JSON.stringify({ url }) }),
+  // Ingest a whole playlist: creates a playlist collection + one audio memo
+  // per track. download=true starts the sequential background download;
+  // download=false keeps tracks remote (pull them later, per track or all).
+  playlist: (url: string, opts?: { title?: string; download?: boolean }) =>
+    fetchJSON<{ collection_id: string; title: string; total: number; truncated: boolean }>(
+      '/ingest/playlist',
+      { method: 'POST', body: JSON.stringify({ url, title: opts?.title, download: opts?.download ?? true }) },
+    ),
   file: async (
     file: File,
     collection_id?: string,
@@ -136,6 +156,15 @@ export const collectionApi = {
     fetchJSON<any>(`/collections/${collectionId}/memos/${memoId}`, { method: 'POST' }),
   removeMemo: (collectionId: string, memoId: string) =>
     fetchJSON<any>(`/collections/${collectionId}/memos/${memoId}`, { method: 'DELETE' }),
+};
+
+// Music page (ADR-015). Tracks come from memoApi.list (type=audio,
+// audio_kind=music, optional collection_id=<playlist>).
+export const musicApi = {
+  playlists: () => fetchJSON<import('@/types').MusicPlaylist[]>('/music/playlists'),
+  // "Download all" — queue every still-remote track of a playlist.
+  downloadPlaylist: (id: string) =>
+    fetchJSON<{ id: string; queued: number; status: string }>(`/music/playlists/${id}/download`, { method: 'POST' }),
 };
 
 // Chat
