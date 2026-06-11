@@ -102,9 +102,9 @@ function PlaylistCard({ p, onOpen, onPlay }: { p: MusicPlaylist; onOpen: () => v
 // artwork is the whole tile, title rides a bottom gradient, play on hover.
 // Remote tracks (saved without downloading) carry an explicit download chip —
 // like any music app; downloading/failed states show in the same spot.
-function MusicTile({ m, index, active, playing, onPlay, onDownload }: {
+function MusicTile({ m, index, active, playing, onPlay, onDownload, onRemove }: {
   m: Memo; index: number; active: boolean; playing: boolean;
-  onPlay: () => void; onDownload: () => void;
+  onPlay: () => void; onDownload: () => void; onRemove: () => void;
 }) {
   const ready = isReady(m);
   const failed = m.localize_status === 'error';
@@ -124,6 +124,17 @@ function MusicTile({ m, index, active, playing, onPlay, onDownload }: {
         <span className="om-mtile-glyph"><Icon name="music" size={26} /></span>
       )}
       <span className="om-mtile-num mono">{index + 1}</span>
+      <span
+        className="om-mtile-remove"
+        role="button"
+        tabIndex={0}
+        title="Remove from this playlist (the song stays saved)"
+        aria-label={`Remove ${m.title} from this playlist`}
+        onClick={(e) => { e.stopPropagation(); onRemove(); }}
+        onKeyDown={(e) => { if (e.key === 'Enter') { e.stopPropagation(); onRemove(); } }}
+      >
+        <Icon name="x" size={11} />
+      </span>
       {failed ? (
         <span
           className="om-mtile-state failed is-action"
@@ -253,6 +264,17 @@ export function MusicPage() {
     queueFrom(res.items as Memo[], undefined, opts);
   };
 
+  // Pull a track out of the open playlist. The memo survives — playlist-born
+  // tracks resurface in the library, dragged-in ones never left it.
+  const removeFromPlaylist = async (m: Memo) => {
+    if (!playlistId) return;
+    try {
+      await collectionApi.removeMemo(playlistId, m.id);
+    } catch { /* surfaced by the queries refetching */ }
+    queryClient.invalidateQueries({ queryKey: ['memos'] });
+    queryClient.invalidateQueries({ queryKey: ['music-playlists'] });
+  };
+
   // Per-track "download locally" — same Make-it-local pipeline, one track.
   const downloadTrack = async (m: Memo) => {
     try {
@@ -372,6 +394,7 @@ export function MusicPage() {
                   else navigate(`/memo/${m.id}`);
                 }}
                 onDownload={() => downloadTrack(m)}
+                onRemove={() => removeFromPlaylist(m)}
               />
             ))}
           </div>

@@ -4325,6 +4325,21 @@ button.om-add-link { background: none; border: 0; padding: 0; cursor: pointer; f
 .om-mtile-state.is-action { cursor: pointer; pointer-events: auto; transition: background .15s ease; }
 .om-mtile-state.is-action:hover { background: rgba(0, 0, 0, 0.72); }
 .om-mtile-state.failed.is-action:hover { background: rgba(190, 40, 34, 0.95); }
+/* Remove-from-playlist chip — hover-revealed (always on for touch). Drops to
+   the second row when a download/retry chip already owns the corner. */
+.om-mtile-remove {
+  position: absolute; top: 8px; right: 8px; z-index: 3;
+  width: 22px; height: 22px; border-radius: 50%;
+  display: grid; place-items: center;
+  background: rgba(0, 0, 0, 0.45); color: rgba(255, 255, 255, 0.92);
+  opacity: 0; transition: opacity .12s ease, background .12s ease;
+  cursor: pointer; pointer-events: auto;
+}
+.om-mtile:hover .om-mtile-remove, .om-mtile-remove:focus-visible { opacity: 1; }
+.om-mtile-remove:hover { background: rgba(190, 40, 34, 0.85); }
+.om-mtile:has(.om-mtile-state) .om-mtile-remove { top: 34px; }
+@media (hover: none) { .om-mtile-remove { opacity: 1; } }
+
 .om-mtile-play {
   position: absolute; inset: 0; z-index: 1; display: grid; place-items: center;
   color: #fff; opacity: 0; transition: opacity .15s ease;
