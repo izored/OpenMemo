@@ -1,12 +1,15 @@
-import { useRef, useEffect } from 'react';
+import { useRef, useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useQuery, useInfiniteQuery, useQueryClient } from '@tanstack/react-query';
 import { useDroppable } from '@dnd-kit/core';
+import { SortableContext, rectSortingStrategy, useSortable, arrayMove } from '@dnd-kit/sortable';
+import { CSS } from '@dnd-kit/utilities';
 import { MemoGrid } from '@/components/MemoGrid';
 import { Icon } from '@/components/Icon';
 import { musicApi, memoApi, collectionApi } from '@/lib/api';
 import { useAudioPlayer, type AudioTrack } from '@/lib/audioPlayer';
 import { useAppStore } from '@/stores/appStore';
+import { useDndBus } from '@/lib/dndBus';
 import { cn } from '@/lib/utils';
 import type { Memo, MusicPlaylist } from '@/types';
 
@@ -171,6 +174,22 @@ function MusicTile({ m, index, active, playing, onPlay, onDownload, onRemove }: 
   );
 }
 
+// Sortable wrapper for a playlist tile — same app-level DndContext the cards
+// use (distance: 8 keeps clicks working; see CLAUDE.md).
+function SortableTile({ id, children }: { id: string; children: React.ReactNode }) {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id });
+  return (
+    <div
+      ref={setNodeRef}
+      {...attributes}
+      {...(listeners || {})}
+      style={{ transform: CSS.Transform.toString(transform), transition, opacity: isDragging ? 0.4 : 1 }}
+    >
+      {children}
+    </div>
+  );
+}
+
 export function MusicPage() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
@@ -236,6 +255,62 @@ export function MusicPage() {
     refetchInterval: anyDownloading ? 2500 : false,
   });
   const tracks: Memo[] = plTracks?.items ?? [];
+
+  // Drag-to-reorder (playlist view). Local order mirrors the server list,
+  // diverges while a drag is live, and persists on drop by rewriting the
+  // recency stagger — the exact trick the dashboard grid uses.
+  const dndBus = useDndBus();
+  const [orderedTracks, setOrderedTracks] = useState<Memo[]>([]);
+  const orderRef = useRef<Memo[]>([]);
+  const draggingRef = useRef(false);
+  // Server list wins whenever no drag is live (same guard MemoGrid uses).
+  useEffect(() => {
+    if (draggingRef.current) return;
+    const list: Memo[] = plTracks?.items ?? [];
+    setOrderedTracks(list);
+    orderRef.current = list;
+  }, [plTracks]);
+
+  // eslint-disable-next-line react-hooks/immutability -- effect intentionally writes the shared handler-bus ref each render to keep handlers fresh (CLAUDE.md dnd bus)
+  useEffect(() => {
+    if (!dndBus || !playlistId) return;
+    // eslint-disable-next-line react-hooks/immutability -- intentional cross-component handler bus shared via a ref (see CLAUDE.md dnd bus)
+    dndBus.current = {
+      onDragStart: () => {
+        draggingRef.current = true;
+      },
+      onDragOver: (event) => {
+        const { active, over } = event;
+        if (!over || active.id === over.id) return;
+        const oldIndex = orderRef.current.findIndex((m) => m.id === active.id);
+        const newIndex = orderRef.current.findIndex((m) => m.id === over.id);
+        if (oldIndex === -1 || newIndex === -1) return;
+        orderRef.current = arrayMove(orderRef.current, oldIndex, newIndex);
+        setOrderedTracks([...orderRef.current]);
+      },
+      onDragEnd: () => {
+        const final = orderRef.current;
+        if (!final.length) {
+          draggingRef.current = false;
+          return;
+        }
+        // Top track gets NOW, each next 1s earlier — dragged order persists,
+        // and a memo added later still lands on top of the playlist.
+        const base = Date.now();
+        Promise.all(
+          final.map((m, i) => memoApi.setRecency(m.id, new Date(base - i * 1000).toISOString())),
+        )
+          .catch(() => { /* refetch below restores the server truth */ })
+          .finally(() => {
+            draggingRef.current = false;
+            queryClient.invalidateQueries({ queryKey: ['memos'] });
+          });
+      },
+    };
+    return () => {
+      if (dndBus) dndBus.current = {};
+    };
+  });
 
   const queueFrom = (all: Memo[], startMemo?: Memo, opts?: { shuffle?: boolean }) => {
     const ready = all.filter(isReady);
@@ -328,7 +403,7 @@ export function MusicPage() {
             <div className="om-pl-hero-actions">
               <button
                 className="om-btn-primary om-pl-playall"
-                onClick={() => queueFrom(tracks)}
+                onClick={() => queueFrom(orderedTracks)}
                 disabled={!tracks.some(isReady)}
               >
                 <Icon name="play" size={13} stroke={0} style={{ fill: 'currentColor' }} />
@@ -336,7 +411,7 @@ export function MusicPage() {
               </button>
               <button
                 className="om-btn-secondary"
-                onClick={() => queueFrom(tracks, undefined, { shuffle: true })}
+                onClick={() => queueFrom(orderedTracks, undefined, { shuffle: true })}
                 disabled={!tracks.some(isReady)}
                 title="Play this playlist in random order"
               >
@@ -378,26 +453,29 @@ export function MusicPage() {
             <p>No tracks in this playlist yet. Drag a song from the library onto its card.</p>
           </div>
         ) : (
-          <div className="om-track-grid">
-            {tracks.map((m, i) => (
-              <MusicTile
-                key={m.id}
-                m={m}
-                index={i}
-                active={isActive(m.id)}
-                playing={isActive(m.id) && playing}
-                onPlay={() => {
-                  if (isActive(m.id)) toggle();
-                  else if (isReady(m)) queueFrom(tracks, m);
-                  // Remote / failed → open the memo (embed, Make-it-local, error
-                  // detail). Downloads stay behind the explicit chip.
-                  else navigate(`/memo/${m.id}`);
-                }}
-                onDownload={() => downloadTrack(m)}
-                onRemove={() => removeFromPlaylist(m)}
-              />
-            ))}
-          </div>
+          <SortableContext items={orderedTracks.map((m) => m.id)} strategy={rectSortingStrategy}>
+            <div className="om-track-grid">
+              {orderedTracks.map((m, i) => (
+                <SortableTile key={m.id} id={m.id}>
+                  <MusicTile
+                    m={m}
+                    index={i}
+                    active={isActive(m.id)}
+                    playing={isActive(m.id) && playing}
+                    onPlay={() => {
+                      if (isActive(m.id)) toggle();
+                      else if (isReady(m)) queueFrom(orderedTracks, m);
+                      // Remote / failed → open the memo (embed, Make-it-local, error
+                      // detail). Downloads stay behind the explicit chip.
+                      else navigate(`/memo/${m.id}`);
+                    }}
+                    onDownload={() => downloadTrack(m)}
+                    onRemove={() => removeFromPlaylist(m)}
+                  />
+                </SortableTile>
+              ))}
+            </div>
+          </SortableContext>
         )}
       </div>
     );
