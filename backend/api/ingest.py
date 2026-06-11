@@ -364,6 +364,8 @@ async def ingest_playlist(
             workspace_id=ws,
             type="audio",
             audio_kind="music",
+            # Born from a playlist: lives inside it, stays out of the feeds.
+            playlist_born=True,
             title=entry["title"],
             audio_artist=entry.get("artist"),
             source_url=entry["url"],

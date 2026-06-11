@@ -17,7 +17,7 @@ What we added on top:
 - **Drag a track onto a playlist card** to file it, same gesture as sidebar collections.
 - **Not just YouTube.** SoundCloud sets and Bandcamp albums are playlists too. One detection helper, host-agnostic per ADR-001.
 - **Download is opt-in.** A playlist can be pulled as remote track memos only, like any music app: a download chip per tile, a Download all button on the playlist page. Or flip the toggle and it downloads everything up front.
-- **Every feed stays clean.** Playlist tracks live inside their playlist, full stop. They never flood All Memos, the type tabs, or the Music library. The library lists only the songs you saved one by one: a liked-songs shelf, not a dump of every playlist you ever pulled.
+- **Every feed stays clean.** Tracks born from a playlist ingest live inside their playlist, full stop. They never flood All Memos, the type tabs, or the Music library. The library lists only the songs you saved one by one: a liked-songs shelf, not a dump of every playlist you ever pulled. And filing a library song into a playlist does not steal it from the library: it lives in both, like every music app you know.
 
 ## Data model
 
@@ -28,7 +28,7 @@ Playlists are collections. No new table, one new column.
 
 The collections API filters by kind server-side. `GET /api/collections` returns standard collections only, so the sidebar, the collections page, and every collection picker hide playlists with zero frontend changes. `?kind=playlist` returns playlists. `?kind=all` returns everything.
 
-Tracks are plain audio memos (`type=audio`, `audio_kind=music`) linked to the playlist through the existing `memo_collections` table. They keep their detail pages and stay searchable, but the list feeds (dashboard, type tabs, Music library) exclude any memo that belongs to a playlist-kind collection. A track shows in exactly one list: its playlist. Delete the playlist and the tracks survive, exactly like collections; freed of their membership, they reappear in the library.
+Tracks are plain audio memos (`type=audio`, `audio_kind=music`) linked to the playlist through the existing `memo_collections` table. Playlist ingest stamps them `playlist_born` (additive boolean column, existing playlist members backfilled). They keep their detail pages and stay searchable, but the list feeds (dashboard, type tabs, Music library) exclude any memo that is playlist-born AND still belongs to a playlist-kind collection. Both halves matter: a standalone song you file into a playlist by hand is not born there, so it stays in the library too; delete a playlist and its born tracks lose the membership, so they resurface in the library instead of vanishing forever.
 
 Playlist order rides on `recency_at`: track i gets `now - i` seconds at ingest, so the default recency sort returns playlist order for free. Same trick drag-to-reorder already uses.
 

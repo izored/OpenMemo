@@ -137,17 +137,25 @@ async def list_memos(
         query = query.where(Memo.hidden == True)  # noqa: E712
     elif not collection_id:
         query = query.where((Memo.hidden == False) | (Memo.hidden == None))  # noqa: E712
-    # Keep every feed clean (OPNMMO-0023): tracks that belong to a music
-    # playlist live inside that playlist only. They are excluded from All
-    # Memos, the type tabs AND the Music page library, and appear only when
-    # their collection is opened explicitly (collection_id = playlist view).
+    # Keep every feed clean (OPNMMO-0023): playlist-BORN tracks live inside
+    # their playlist only. They are excluded from All Memos, the type tabs AND
+    # the Music page library, and appear only when their collection is opened
+    # explicitly (collection_id = playlist view). A standalone song added to a
+    # playlist later is not born there (playlist_born=False) and keeps its
+    # library spot — Spotify model. Both conditions matter: delete the playlist
+    # and a born track loses its membership, so it surfaces in the library
+    # instead of vanishing forever.
     if not collection_id:
         playlist_members = (
             select(memo_collections.c.memo_id)
             .join(Collection, Collection.id == memo_collections.c.collection_id)
             .where(Collection.kind == "playlist")
         )
-        query = query.where(~Memo.id.in_(playlist_members))
+        # coalesce: a NULL flag (row inserted outside the ORM) must read as
+        # not-born, or three-valued logic silently drops the row from feeds.
+        query = query.where(
+            ~((func.coalesce(Memo.playlist_born, False) == True) & Memo.id.in_(playlist_members))  # noqa: E712
+        )
     if type and type != "all":
         # `type` may be a comma-separated group (e.g. the Files tab maps to
         # document,file,code,audio) so one tab can cover several memo types.
