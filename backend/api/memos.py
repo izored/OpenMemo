@@ -89,13 +89,24 @@ class MemoResponse(BaseModel):
 
 # --- Routes ---
 
-def _apply_sort(query):
-    """Single sort order: most recent on top. `recency_at` is bumped to
-    NOW() on memo creation and rewritten when the user drags a card, so
-    "recent" implicitly captures both fresh memos and explicit drag intent.
+def _apply_sort(query, sort: str = "recent"):
+    """Default sort: most recent on top. `recency_at` is bumped to NOW() on
+    memo creation and rewritten when the user drags a card, so "recent"
+    implicitly captures both fresh memos and explicit drag intent.
     `created_at` is the stable tiebreaker for memos created in the same
     millisecond (test seeds, bulk imports).
+
+    sort=title / sort=artist are A→Z views for the Music library (artist
+    sorts unknown-artist tracks last, title as tiebreak).
     """
+    if sort == "title":
+        return query.order_by(func.lower(Memo.title))
+    if sort == "artist":
+        return query.order_by(
+            Memo.audio_artist.is_(None),
+            func.lower(Memo.audio_artist),
+            func.lower(Memo.title),
+        )
     return query.order_by(desc(Memo.recency_at), desc(Memo.created_at))
 
 
@@ -107,6 +118,7 @@ async def list_memos(
     collection_id: Optional[str] = None,
     search: Optional[str] = None,
     hidden: Optional[bool] = None,
+    sort: str = "recent",
     offset: int = 0,
     limit: int = 50,
     db: AsyncSession = Depends(get_db),
@@ -137,17 +149,25 @@ async def list_memos(
         query = query.where(Memo.hidden == True)  # noqa: E712
     elif not collection_id:
         query = query.where((Memo.hidden == False) | (Memo.hidden == None))  # noqa: E712
-    # Keep the main feed clean (OPNMMO-0023): tracks that belong to a music
-    # playlist live on the Music page, not in All Memos / the type tabs. They
-    # still appear when a collection is opened explicitly (playlist view) or
-    # when the caller asks for music directly (audio_kind filter / Music tab).
-    if not collection_id and audio_kind not in ("voice", "music"):
+    # Keep every feed clean (OPNMMO-0023): playlist-BORN tracks live inside
+    # their playlist only. They are excluded from All Memos, the type tabs AND
+    # the Music page library, and appear only when their collection is opened
+    # explicitly (collection_id = playlist view). A standalone song added to a
+    # playlist later is not born there (playlist_born=False) and keeps its
+    # library spot — Spotify model. Both conditions matter: delete the playlist
+    # and a born track loses its membership, so it surfaces in the library
+    # instead of vanishing forever.
+    if not collection_id:
         playlist_members = (
             select(memo_collections.c.memo_id)
             .join(Collection, Collection.id == memo_collections.c.collection_id)
             .where(Collection.kind == "playlist")
         )
-        query = query.where(~Memo.id.in_(playlist_members))
+        # coalesce: a NULL flag (row inserted outside the ORM) must read as
+        # not-born, or three-valued logic silently drops the row from feeds.
+        query = query.where(
+            ~((func.coalesce(Memo.playlist_born, False) == True) & Memo.id.in_(playlist_members))  # noqa: E712
+        )
     if type and type != "all":
         # `type` may be a comma-separated group (e.g. the Files tab maps to
         # document,file,code,audio) so one tab can cover several memo types.
@@ -174,7 +194,7 @@ async def list_memos(
     total = (await db.execute(count_query)).scalar()
 
     # Fetch with pagination
-    query = _apply_sort(query).offset(offset).limit(limit)
+    query = _apply_sort(query, sort).offset(offset).limit(limit)
     result = await db.execute(query)
     memos = result.scalars().all()
     

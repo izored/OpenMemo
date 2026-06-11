@@ -66,7 +66,12 @@ export function AddMemoPanel() {
   // Playlist detection (OPNMMO-0023 / ADR-015). A playlist-shaped URL triggers
   // a flat yt-dlp probe; the panel then asks: whole playlist or just this one?
   const plShape = playlistShape(url);
-  const [plProbe, setPlProbe] = useState<{ title: string; count: number; truncated: boolean } | null>(null);
+  const [plProbe, setPlProbe] = useState<{
+    title: string;
+    count: number;
+    truncated: boolean;
+    alreadySaved: { id: string; name: string } | null;
+  } | null>(null);
   const [plProbing, setPlProbing] = useState(false);
   const [plChoice, setPlChoice] = useState<'playlist' | 'single'>('single');
   // Off by default: pull the playlist as remote tracks first, download later
@@ -88,7 +93,12 @@ export function AddMemoPanel() {
     const t = setTimeout(async () => {
       try {
         const res = await ingestApi.probePlaylist(url.trim());
-        setPlProbe({ title: res.title, count: res.count, truncated: res.truncated });
+        setPlProbe({
+          title: res.title,
+          count: res.count,
+          truncated: res.truncated,
+          alreadySaved: res.already_saved ?? null,
+        });
       } catch {
         setPlProbe(null); // probe failed — the URL still saves as a single link
       } finally {
@@ -142,12 +152,12 @@ export function AddMemoPanel() {
         if (!url.trim()) return;
         if (plShape.isPlaylist && plChoice === 'playlist') {
           // Whole playlist → playlist collection; downloads only when asked.
-          // Land on the Music page where the new playlist (and any progress)
-          // is visible.
-          await ingestApi.playlist(url.trim(), { download: plDownload });
+          // Land on the playlist itself; a re-pasted URL returns the existing
+          // one (status 'exists'), so this never creates a duplicate.
+          const res = await ingestApi.playlist(url.trim(), { download: plDownload });
           queryClient.invalidateQueries({ queryKey: ['music-playlists'] });
           done();
-          navigate('/music');
+          navigate(`/music/${res.collection_id}`);
           return;
         }
         await ingestApi.url(url.trim(), collection || undefined);
@@ -351,9 +361,11 @@ export function AddMemoPanel() {
                           <span className="om-add-pl-opt-main">
                             <b>Whole playlist</b>
                             <small>
-                              {plProbe
-                                ? `${plProbe.title} · ${plProbe.count} tracks${plProbe.truncated ? ' (first 100)' : ''}`
-                                : 'Creates a music playlist'}
+                              {plProbe?.alreadySaved
+                                ? `Already in your Music as "${plProbe.alreadySaved.name}". Save opens it, no duplicate.`
+                                : plProbe
+                                  ? `${plProbe.title} · ${plProbe.count} tracks${plProbe.truncated ? ' (first 100)' : ''}`
+                                  : 'Creates a music playlist'}
                             </small>
                           </span>
                         </button>
@@ -540,7 +552,7 @@ export function AddMemoPanel() {
         </button>
         {tab !== 'voice' && (
           <button className="om-add-foot-btn primary" onClick={save} disabled={busy}>
-            <span>{progress ? `Uploading ${progress.done}/${progress.total}…` : busy ? 'Saving…' : tab === 'multimedia' ? 'Choose files' : tab === 'link' && plShape.isPlaylist && plChoice === 'playlist' ? 'Save playlist' : 'Save'}</span>
+            <span>{progress ? `Uploading ${progress.done}/${progress.total}…` : busy ? 'Saving…' : tab === 'multimedia' ? 'Choose files' : tab === 'link' && plShape.isPlaylist && plChoice === 'playlist' ? (plProbe?.alreadySaved ? 'Open playlist' : 'Save playlist') : 'Save'}</span>
             <span className="mono om-add-kbd-inv">⏎</span>
           </button>
         )}

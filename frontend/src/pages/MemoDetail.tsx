@@ -44,6 +44,7 @@ import { useAppStore } from '@/stores/appStore';
 import { useAudioPlayer, formatTime } from '@/lib/audioPlayer';
 import { useCoverMood } from '@/lib/coverMood';
 import { Icon } from '@/components/Icon';
+import { PlaylistMenu } from '@/components/PlaylistMenu';
 import { Marquee } from '@/components/Marquee';
 import { VolumeControl } from '@/components/VolumeControl';
 import ReactMarkdown from 'react-markdown';
@@ -898,6 +899,8 @@ export function MemoDetail() {
   const [showExtracted, setShowExtracted] = useState(false);
   const [saving, setSaving] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
+  // "Add to playlist" popover (music memos only).
+  const [plMenuOpen, setPlMenuOpen] = useState(false);
 
   // Edit form state
   const [editTitle, setEditTitle] = useState('');
@@ -1079,6 +1082,27 @@ export function MemoDetail() {
             <BackButton />
           </div>
           <div className="om-detail-actions">
+            {/* Add to playlist — music memos only, same popover as cards. */}
+            {!isEditing && audioKind(memo) === 'music' && (
+              <div style={{ position: 'relative' }}>
+                <button
+                  className="om-icon-btn"
+                  onClick={() => setPlMenuOpen((v) => !v)}
+                  title="Add to playlist"
+                  aria-label="Add to playlist"
+                  aria-expanded={plMenuOpen}
+                >
+                  <Icon name="listMusic" size={15} />
+                </button>
+                {plMenuOpen && (
+                  <PlaylistMenu
+                    memoId={memo.id}
+                    memberIds={(memo.collections ?? []).map((c: { id: string }) => c.id)}
+                    onClose={() => setPlMenuOpen(false)}
+                  />
+                )}
+              </div>
+            )}
             {/* Delete with inline confirm popover */}
             {!isEditing && (
               <div style={{ position: 'relative' }}>
