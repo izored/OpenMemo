@@ -73,14 +73,17 @@ Full-bleed square tiles (`om-mtile`) are the building block of every playlist vi
 - **Remove chip opens a confirm overlay.** Tapping the × does not remove the track immediately. A small overlay covers the tile with two choices: **Delete** (permanently removes the memo) and **Remove** (pulls it out of this playlist; playlist-born tracks resurface in the library, dragged-in ones stay there). Same visual language as the card-level confirm dialog.
 - **Remove chip on hover only (touch: always visible).** Destructive actions stay out of the way until you reach for them.
 - **Bottom gradient cap.** `linear-gradient(to top, rgba(0,0,0,0.74), transparent)` gives enough contrast for white text without covering the art. Two lines maximum: artist (10px, 75% opacity) and title (12px bold, 2-line clamp).
+- **Liked tracks get a wide tile.** A liked song shows a small filled heart above the artist line and spans two grid columns (1×2), so favourites jump out while scanning a long playlist. The column span lives on the sortable wrapper (the real grid cell); the tile flattens to roughly 2:1 and the cover recrops via `object-fit: cover`. Like from the big player's heart button; the hero's **Play liked** queues only those tracks.
 
 ## Visual design: big player
 
 The sidebar big player (`om-sb-player-big`) fills the sidebar with album art and a transport cluster in the bottom third. Layout order from top to bottom in the body:
 
-1. **Transport row.** Shuffle, previous, position counter (e.g. "44 / 101"), next, up-next queue. The counter is mono, 9px, so it reads as data without competing with the track title.
+1. **Transport row.** Shuffle, previous, position counter (e.g. "44 / 101"), next, heart. The heart likes the playing track (the `liked` flag, not pin). The counter is mono, 9px, centered in a fixed-width slot sized to the longest position string, so skipping tracks never nudges the buttons. The up-next button is hidden for now.
 2. **Scrubber.** The seek bar with current / total timestamps lives between the transport row and the title, so your eye moves from "where am I in the queue" to "where am I in this track" to "what track is this."
 3. **Title (with volume).** The `VolumeControl` wraps the track title so the volume knob lives inline with the marquee, saving vertical space.
+
+The corner cluster (ADR-010) is a right-side column: play in the top-right corner, pin to its left, repeat under play, add-to-playlist under repeat. Satellites stay out of the artwork's center.
 
 Rationale for scrubber placement: the scrubber is not a navigation control (that is the transport row). Separating them prevents accidental scrub when reaching for skip, and keeps the title reachable right below the seek bar.
 
