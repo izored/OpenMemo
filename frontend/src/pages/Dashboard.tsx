@@ -1,4 +1,5 @@
 import { useMemo, useRef, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useQuery, useInfiniteQuery } from '@tanstack/react-query';
 import { motion } from 'framer-motion';
 import {
@@ -73,7 +74,7 @@ const FILTERS = [
 ];
 
 export function Dashboard() {
-  const { activeFilter, setActiveFilter, activeCollection, filterOrder, setFilterOrder } = useAppStore();
+  const { activeFilter, setActiveFilter, activeCollection, setActiveCollection, filterOrder, setFilterOrder } = useAppStore();
 
   // Apply the user's saved tab order, reconciled with the current FILTERS set
   // (new tabs like Code/Audio get appended; removed ids are dropped).
@@ -152,6 +153,7 @@ export function Dashboard() {
     return () => observer.disconnect();
   }, [hasNextPage, isFetchingNextPage, fetchNextPage]);
 
+  const navigate = useNavigate();
   const collection = activeCollection
     ? collections.find((c: Collection) => c.id === activeCollection)
     : null;
@@ -164,6 +166,12 @@ export function Dashboard() {
   return (
     <>
       <header className="om-header">
+        {collection && (
+          <button className="om-music-back" onClick={() => { setActiveCollection(null); navigate('/collections'); }} title="Back to Collections">
+            <Icon name="chevronLeft" size={13} />
+            <span>Back to Collections</span>
+          </button>
+        )}
         <div className="om-greet">
           <span className="om-greet-eyebrow mono">{today}</span>
           <h1 className="om-greet-title">{collection ? collection.name : 'Today'}{import.meta.env.DEV && <span style={{color:'red',fontSize:'0.5em'}}> DEV</span>}</h1>

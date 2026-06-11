@@ -144,6 +144,7 @@ function MusicTile({ m, index, active, playing, onPlay, onDownload, onRemove, on
           <div className="om-mtile-confirm-inner" onClick={(e) => e.stopPropagation()}>
             <button className="om-confirm-btn danger" onClick={(e) => { e.stopPropagation(); onDelete(); setConfirm(false); }}>Delete</button>
             <button className="om-confirm-btn" onClick={(e) => { e.stopPropagation(); onRemove(); setConfirm(false); }}>Remove</button>
+            <button className="om-confirm-btn" style={{ opacity: 0.6 }} onClick={(e) => { e.stopPropagation(); setConfirm(false); }}>Cancel</button>
           </div>
         </div>
       )}

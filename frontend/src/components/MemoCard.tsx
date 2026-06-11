@@ -448,7 +448,7 @@ export function MemoCard({ memo, dragHandleProps, lightboxGroup }: CardProps) {
         <p className="om-card-confirm-hint">
           {memo.hidden
             ? 'Unhide puts it back on the dashboard.'
-            : 'Hide keeps it in collections, off the dashboard.'}
+            : 'Hide moves it to the Hidden section. Still searchable, just off the dashboard.'}
         </p>
       </div>
     </div>
