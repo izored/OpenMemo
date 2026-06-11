@@ -182,6 +182,8 @@ input, textarea { font: inherit; color: inherit; }
 .om-sidebar.collapsed .om-sidebar-foot { width: 100%; align-items: center; border-top: 1px solid var(--border); padding: 10px 0 14px; gap: 4px; }
 .om-sidebar.collapsed .om-foot-btn { width: 44px; height: 44px; padding: 0; grid-template-columns: 44px; justify-content: center; justify-items: center; border-radius: 12px; }
 .om-sidebar.collapsed .om-avatar { width: 32px; height: 32px; }
+.om-sidebar.collapsed .om-theme-row { justify-content: center; padding: 0 0 4px; }
+.om-sidebar.collapsed .om-theme-btn { width: 44px; height: 44px; border-radius: 12px; flex: 0 0 auto; }
 .om-app::after {
   content: ""; position: fixed; inset: 0; pointer-events: none;
   background-image: var(--grain); opacity: 1; mix-blend-mode: overlay; z-index: 0;
