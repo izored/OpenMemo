@@ -52,6 +52,7 @@ Two big pushes. The Settings page is rebuilt as a bento with the live appearance
 
 - 🎭 **Theater mode actually goes theater** — the button toggled a class that had nothing to expand into: the preview lives inside the 720px detail column, so nothing moved. The scroll pane is now a CSS container and theater expands the image or video to the full pane width while the text column stays at 720px. Smoothly animated, works for images and made-local videos alike.
 - 🔇 **Opening a video memo no longer autoplays** — autoplay was baked into the platform embed URLs, so the detail page blasted playback on load. It is opt-in now: the lightbox keeps autoplay (you just clicked play), the detail page loads silent. Twitch needed an explicit opt-out since its player autoplays by default.
+- 🧯 **A comma-separated `OLLAMA_HOSTS` no longer crashes boot** — once `backend/.env` started loading by absolute path, pydantic-settings began hard-failing the whole app when a list field arrived as anything but JSON. `OLLAMA_HOSTS` and `CORS_ORIGINS` now accept both spellings: the JSON array (`'["http://a","http://b"]'`, the docker-compose form) and the plain comma list (`http://a,http://b`).
 
 ---
 ## [2.2.0] - 2026-06-05
