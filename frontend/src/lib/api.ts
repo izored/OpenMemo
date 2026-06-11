@@ -34,10 +34,10 @@ export const memoApi = {
   delete: (id: string) => fetchJSON<any>(`/memos/${id}`, { method: 'DELETE' }),
   restore: (id: string) => fetchJSON<any>(`/memos/${id}/restore`, { method: 'POST' }),
   listDeleted: () => fetchJSON<{ id: string; type: string; title: string; deleted_at: string | null }[]>('/memos/deleted/list'),
-  summary: (id: string, mode: 'timestamp' | 'insights' | 'essay' = 'insights') =>
+  summary: (id: string, mode: 'timestamp' | 'insights' | 'essay' = 'insights', model?: string) =>
     fetchJSON<{ id: string; mode: string; summary: string }>(`/memos/${id}/summary`, {
       method: 'POST',
-      body: JSON.stringify({ mode }),
+      body: JSON.stringify({ mode, model: model || undefined }),
     }),
   related: (id: string) => fetchJSON<any[]>(`/memos/${id}/related`),
   transcribe: (id: string) =>
@@ -193,6 +193,9 @@ export interface AppSettings {
   avatar_data_url: string;
   mailing_list_consent: boolean;
   auto_download_audio: boolean;
+  // Default Ollama chat model for AI features, server-side so every client
+  // and the backend's own calls (summaries) agree. '' = backend env default.
+  chat_model: string;
   // Read-only flag: whether a yt-dlp cookie jar is on the server. The jar
   // itself is never sent over the API (it's account credentials).
   yt_cookies_present: boolean;
@@ -240,6 +243,13 @@ export const maintenanceApi = {
   clearCache: () => fetchJSON<{ ok: boolean; freed_bytes: number }>('/maintenance/clear-cache', { method: 'POST' }),
   localize: () => fetchJSON<{ memos_updated: number; images_localized: number }>('/maintenance/localize', { method: 'POST' }),
   reset: () => fetchJSON<{ ok: boolean }>('/maintenance/reset', { method: 'POST', body: JSON.stringify({ confirm: true }) }),
+  // Rebuild the whole vector index (re-embed every memo, purge ghost chunks).
+  // Slow-ish (one Ollama embed batch per memo) — show progress state in the UI.
+  reindex: () =>
+    fetchJSON<{ reindexed_memos: number; chunks_written: number; failed: number; ghost_chunks_purged: number }>(
+      '/maintenance/reindex',
+      { method: 'POST' },
+    ),
 };
 
 // Search

@@ -41,7 +41,7 @@ async def hybrid_search(
         async with AsyncSessionLocal() as db:
             if memo_ids:
                 result = await db.execute(
-                    select(Memo).where(Memo.id.in_(memo_ids))
+                    select(Memo).where(Memo.id.in_(memo_ids), Memo.is_deleted == False)  # noqa: E712
                 )
                 memos = result.scalars().all()
                 
@@ -69,7 +69,7 @@ async def hybrid_search(
             fts_ids = [r["memo_id"] for r in fts_results]
             async with AsyncSessionLocal() as db:
                 result = await db.execute(
-                    select(Memo).where(Memo.id.in_(fts_ids))
+                    select(Memo).where(Memo.id.in_(fts_ids), Memo.is_deleted == False)  # noqa: E712
                 )
                 memos = result.scalars().all()
                 
@@ -95,7 +95,7 @@ async def hybrid_search(
                             Memo.title.ilike(f"%{q}%"),
                             Memo.content_text.ilike(f"%{q}%"),
                         )
-                    ).where(Memo.workspace_id == workspace_id).limit(limit)
+                    ).where(Memo.workspace_id == workspace_id, Memo.is_deleted == False).limit(limit)  # noqa: E712
                 )
                 ft_memos = ft_result.scalars().all()
                 

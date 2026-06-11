@@ -786,21 +786,26 @@ const SUMMARY_OPTIONS: { id: SummaryMode; label: string; icon: React.ElementType
 
 function SummaryPanel({ memo }: { memo: Memo }) {
   const queryClient = useQueryClient();
+  const chatModel = useAppStore((s) => s.chatModel);
   const isMedia = memo.type === 'video' || memo.type === 'audio';
   const options = isMedia ? SUMMARY_OPTIONS : SUMMARY_OPTIONS.filter((o) => o.id !== 'timestamp');
   const [mode, setMode] = useState<SummaryMode>('insights');
   const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const summaries = memo.summaries || {};
   const current = summaries[mode] ?? (mode === 'insights' ? memo.ai_summary : undefined);
   const label = (options.find((o) => o.id === mode)?.label || 'summary').toLowerCase();
 
   const generate = async () => {
     setBusy(true);
+    setError(null);
     try {
-      await memoApi.summary(memo.id, mode);
+      await memoApi.summary(memo.id, mode, chatModel || undefined);
       queryClient.invalidateQueries({ queryKey: ['memo', memo.id] });
     } catch (e) {
-      console.error(e);
+      // The backend sends human-readable details (model missing, Ollama down,
+      // timeout) — show them instead of failing silently into the console.
+      setError(e instanceof Error ? e.message : 'Summary generation failed');
     } finally {
       setBusy(false);
     }
@@ -825,6 +830,11 @@ function SummaryPanel({ memo }: { memo: Memo }) {
           </button>
         ))}
       </div>
+      {error && !busy && (
+        <p className="om-detail-desc" role="alert" style={{ color: 'var(--om-danger, #e5484d)', marginBottom: 10 }}>
+          {error}
+        </p>
+      )}
       {busy ? (
         <p className="om-detail-desc">
           <Loader2 size={14} className="om-spin" style={{ verticalAlign: -2, marginRight: 6 }} />

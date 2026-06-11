@@ -198,10 +198,17 @@ function TrashRow() {
 }
 
 /** In-brand dropdown for the app-wide default chat model. Writes to the
- *  persisted `chatModel` in the app store, which every Ask/chat surface reads. */
+ *  persisted `chatModel` in the app store (read by every Ask/chat surface) AND
+ *  to the server-side `chat_model` setting, so backend-initiated calls
+ *  (summaries without an explicit model) use the same default. */
 function ModelSelect({ models }: { models: OllamaModel[] }) {
   const chatModel = useAppStore((s) => s.chatModel);
   const setChatModel = useAppStore((s) => s.setChatModel);
+  const persistServerDefault = (name: string) => {
+    settingsApi.update({ chat_model: name }).catch(() => {
+      /* server copy is best-effort; local store still drives the UI */
+    });
+  };
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
 
@@ -240,6 +247,7 @@ function ModelSelect({ models }: { models: OllamaModel[] }) {
               className={`om-model-select-opt mono${current === m.name ? ' active' : ''}`}
               onClick={() => {
                 setChatModel(m.name);
+                persistServerDefault(m.name);
                 setOpen(false);
               }}
             >
@@ -249,6 +257,39 @@ function ModelSelect({ models }: { models: OllamaModel[] }) {
           ))}
         </div>
       )}
+    </div>
+  );
+}
+
+/** One-click vector-index rebuild. Re-embeds every memo with the current
+ *  embedding model (incl. nomic task prefixes) and purges ghost chunks left by
+ *  deleted memos. Run after changing the embed model or upgrading past 2.2.x. */
+function ReindexRow() {
+  const [busy, setBusy] = useState(false);
+  const [result, setResult] = useState<string | null>(null);
+
+  const run = async () => {
+    setBusy(true);
+    setResult(null);
+    try {
+      const r = await maintenanceApi.reindex();
+      setResult(`${r.reindexed_memos} memos re-embedded, ${r.ghost_chunks_purged} stale chunks purged`);
+    } catch (e) {
+      setResult(e instanceof Error ? e.message : 'Reindex failed');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <div className="om-setting-row">
+      <div className="om-setting-row-text">
+        <p>Search index</p>
+        <span className="mono">{result ?? 'Rebuild embeddings for Ask Memo & related'}</span>
+      </div>
+      <button type="button" className="om-btn-ghost om-btn-pill" onClick={run} disabled={busy}>
+        {busy ? 'Reindexing…' : 'Rebuild'}
+      </button>
     </div>
   );
 }
@@ -308,7 +349,7 @@ export function SettingsPage() {
       })
       .catch(() => {
         setMaxUploadMb(5120);
-        setProfile({ max_upload_mb: 5120, display_name: '', email: '', avatar_data_url: '', mailing_list_consent: false, auto_download_audio: true, yt_cookies_present: false, bg_image_ext: '' });
+        setProfile({ max_upload_mb: 5120, display_name: '', email: '', avatar_data_url: '', mailing_list_consent: false, auto_download_audio: true, chat_model: '', yt_cookies_present: false, bg_image_ext: '' });
       });
   }, []);
 
@@ -616,6 +657,7 @@ export function SettingsPage() {
               </div>
               <span className="mono om-setting-val">{ollamaModels.length}</span>
             </div>
+            <ReindexRow />
           </SettingCard>
 
           <SettingCard title="Browser extension" eyebrow="Capture">

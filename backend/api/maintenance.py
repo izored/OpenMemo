@@ -113,6 +113,81 @@ def _empty_dir(path: Path) -> None:
             pass
 
 
+@router.post("/reindex")
+async def reindex_embeddings():
+    """Rebuild the vector index from scratch: re-embed every live memo with the
+    current chunking + embedding model (incl. nomic task prefixes), and purge
+    chunks belonging to deleted/missing memos ("ghosts").
+
+    Run this after changing EMBED_MODEL or upgrading past 2.2.x — embeddings
+    written by a different model live in a different vector space and make
+    retrieval garbage. Idempotent; safe to run anytime. Ollama must be up."""
+    from sqlalchemy import select
+    from backend.core.embedder import embed_memo
+    from backend.core.ollama_client import ollama_client
+    from backend.db.chroma_client import get_collection
+    from backend.db.database import AsyncSessionLocal
+    import asyncio as _asyncio
+
+    if not await ollama_client.health_check():
+        raise HTTPException(status_code=503, detail="Ollama is not reachable — start it first.")
+
+    async with AsyncSessionLocal() as db:
+        rows = (
+            await db.execute(
+                select(Memo).where(Memo.is_deleted == False)  # noqa: E712
+            )
+        ).scalars().all()
+        live_ids = {m.id for m in rows}
+
+        reindexed = 0
+        chunks_written = 0
+        failed = 0
+        for memo in rows:
+            text = memo.content_text
+            if not text or not text.strip():
+                continue
+            if memo.notes:
+                text += f"\n\n--- Notes ---\n{memo.notes}"
+            try:
+                ids = await embed_memo(
+                    memo_id=memo.id,
+                    text=text,
+                    metadata={
+                        "workspace_id": memo.workspace_id,
+                        "type": memo.type,
+                        "title": memo.title,
+                        "source_domain": memo.source_domain or "",
+                    },
+                )
+                memo.embedding_ids = ids
+                memo.is_processed = True
+                reindexed += 1
+                chunks_written += len(ids)
+            except Exception as e:
+                failed += 1
+                print(f"Reindex failed for {memo.id}: {e}")
+        await db.commit()
+
+    # Purge ghosts — chunks whose memo no longer exists or is soft-deleted.
+    collection = get_collection()
+    existing = await _asyncio.to_thread(collection.get, include=["metadatas"])
+    ghost_ids = [
+        cid
+        for cid, md in zip(existing["ids"], existing["metadatas"])
+        if md.get("memo_id") not in live_ids
+    ]
+    if ghost_ids:
+        await _asyncio.to_thread(collection.delete, ids=ghost_ids)
+
+    return {
+        "reindexed_memos": reindexed,
+        "chunks_written": chunks_written,
+        "failed": failed,
+        "ghost_chunks_purged": len(ghost_ids),
+    }
+
+
 @router.post("/localize")
 async def localize_content():
     """Backfill: download remote images in every memo's extracted content and

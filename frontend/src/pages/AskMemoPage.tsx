@@ -3,7 +3,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
 import { Icon } from '@/components/Icon';
 import { useAppStore } from '@/stores/appStore';
-import { chatApi, systemApi } from '@/lib/api';
+import { chatApi, systemApi, settingsApi } from '@/lib/api';
 import type { ChatSource, OllamaModel } from '@/types';
 import ReactMarkdown from 'react-markdown';
 import { cn } from '@/lib/utils';
@@ -40,17 +40,21 @@ export function AskMemoPage() {
   const scrollRef = useRef<HTMLDivElement>(null);
 
   const { data: modelsData } = useQuery({ queryKey: ['models'], queryFn: systemApi.models });
+  const { data: serverSettings } = useQuery({ queryKey: ['app-settings'], queryFn: settingsApi.get });
   const { data: sessions = [] } = useQuery<Session[]>({
     queryKey: ['chat-sessions'],
     queryFn: chatApi.sessions,
   });
 
+  // Pick a model when none is set (or the saved one was uninstalled):
+  // server-side default first, then the first installed model.
   useEffect(() => {
     const available = (modelsData?.models || []).map((m: OllamaModel) => m.name);
     if (available.length > 0 && (!chatModel || !available.includes(chatModel))) {
-      setChatModel(available[0]);
+      const serverDefault = serverSettings?.chat_model;
+      setChatModel(serverDefault && available.includes(serverDefault) ? serverDefault : available[0]);
     }
-  }, [modelsData]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [modelsData, serverSettings]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: 'smooth' });

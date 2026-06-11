@@ -17,6 +17,14 @@ Rules:
 
 GENERAL_SYSTEM_PROMPT = """You are MemoAI, a helpful general-purpose assistant. Answer the user's question to the best of your ability."""
 
+# Streamed verbatim (no LLM call) when retrieval finds nothing above the
+# relevance bar. Honest and instant beats a model hallucinating from an empty
+# context block.
+NO_CONTEXT_MESSAGE = (
+    "I couldn't find anything in your memos relevant to that question. "
+    "Try rephrasing it, or start your message with `@` to chat without memo context."
+)
+
 
 def build_context_prompt(sources: list[dict]) -> str:
     """Build context block from retrieved chunks."""
@@ -71,12 +79,20 @@ async def rag_chat(
             ],
         }
         
-        # Build messages
+        # Nothing relevant retrieved — answer honestly without burning an LLM
+        # call on an empty context (the model would either hallucinate or
+        # produce a slower version of this exact message).
+        if not sources:
+            yield {"type": "token", "data": NO_CONTEXT_MESSAGE}
+            return
+
+        # Build messages. History goes BEFORE the context+question turn so
+        # follow-ups ("and what about X?") keep working in RAG mode too.
         context = build_context_prompt(sources)
-        messages = [
-            {"role": "system", "content": SYSTEM_PROMPT},
-            {"role": "user", "content": f"{context}\n\nQuestion: {query}"},
-        ]
+        messages = [{"role": "system", "content": SYSTEM_PROMPT}]
+        if history:
+            messages.extend(history[-6:])  # Last 3 exchanges
+        messages.append({"role": "user", "content": f"{context}\n\nQuestion: {query}"})
     else:
         # Direct LLM query (no RAG)
         messages = [
