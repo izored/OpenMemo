@@ -154,23 +154,25 @@ export function CollectionsPage() {
 
   return (
     <div className="om-colls">
-      <div className="om-colls-headrow">
-        <div className="om-colls-head">
+      <header className="om-header">
+        <div className="om-greet">
           <span className="om-greet-eyebrow mono">Collections · {order.length}</span>
           <h1 className="om-greet-title">Your collections</h1>
           <p className="om-greet-sub">
             Folders, but with a memory. Drop a Memo onto one in the sidebar to file it.
           </p>
         </div>
-        <button
-          className={cn('om-btn-secondary', editMode && 'active')}
-          onClick={() => setEditMode((v) => !v)}
-          title="Edit collections"
-        >
-          <Icon name={editMode ? 'check' : 'edit'} size={13} />
-          {editMode ? 'Done' : 'Edit'}
-        </button>
-      </div>
+        <div className="om-filter-rail">
+          <button
+            className={cn('om-btn-secondary', editMode && 'active')}
+            onClick={() => setEditMode((v) => !v)}
+            title="Edit collections"
+          >
+            <Icon name={editMode ? 'check' : 'edit'} size={13} />
+            {editMode ? 'Done' : 'Edit'}
+          </button>
+        </div>
+      </header>
 
       <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={onDragEnd}>
         <SortableContext items={order.map((c) => c.id)} strategy={rectSortingStrategy}>
