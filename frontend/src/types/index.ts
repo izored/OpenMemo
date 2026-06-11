@@ -34,6 +34,9 @@ export interface Memo {
   audio_artist?: string | null;
   sort_order?: number;
   pinned?: boolean;
+  /** Hidden from the main dashboard (still visible in collections); listed in
+   *  the passcode-gated hidden section. */
+  hidden?: boolean;
   is_processed: boolean;
   created_at: string;
   updated_at: string;

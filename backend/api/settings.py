@@ -12,9 +12,12 @@ from backend.core.app_settings import (
     delete_cookies,
     get_background_path,
     get_settings,
+    hidden_passcode_set,
     save_background,
     save_cookies,
+    set_hidden_passcode,
     update_settings,
+    verify_hidden_passcode,
 )
 
 router = APIRouter(prefix="/api/settings", tags=["settings"])
@@ -46,6 +49,47 @@ async def read_settings():
 @router.put("")
 async def write_settings(patch: SettingsPatch):
     return update_settings(patch.model_dump(exclude_none=True))
+
+
+# --- Hidden-section passcode (OPNMMO-0016) ----------------------------------
+# Soft privacy gate for the hidden-memos UI. The hash never leaves the server;
+# only `hidden_passcode_set` is exposed. This is NOT an auth layer — the local
+# API itself is unauthenticated by design (local-first app).
+
+_MIN_PASSCODE_LEN = 4
+
+
+class HiddenPasscodeSet(BaseModel):
+    passcode: str
+    # Required once a passcode exists (change flow); ignored on first set.
+    current: Optional[str] = None
+
+
+class HiddenPasscodeVerify(BaseModel):
+    passcode: str
+
+
+@router.post("/hidden-passcode")
+async def write_hidden_passcode(body: HiddenPasscodeSet):
+    """Set the hidden-section passcode (first open), or change it given the
+    current one."""
+    if len(body.passcode) < _MIN_PASSCODE_LEN:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Passcode must be at least {_MIN_PASSCODE_LEN} characters.",
+        )
+    if hidden_passcode_set():
+        if not body.current or not verify_hidden_passcode(body.current):
+            raise HTTPException(status_code=403, detail="Current passcode is wrong.")
+    set_hidden_passcode(body.passcode)
+    return {"hidden_passcode_set": True}
+
+
+@router.post("/hidden-passcode/verify")
+async def check_hidden_passcode(body: HiddenPasscodeVerify):
+    if not hidden_passcode_set():
+        raise HTTPException(status_code=400, detail="No passcode has been set yet.")
+    return {"ok": verify_hidden_passcode(body.passcode)}
 
 
 def _looks_like_cookie_jar(text: str) -> bool:

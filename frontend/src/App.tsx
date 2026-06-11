@@ -5,6 +5,7 @@ import { CollectionsPage } from '@/pages/CollectionsPage';
 import { MemoDetail } from '@/pages/MemoDetail';
 import { AskMemoPage } from '@/pages/AskMemoPage';
 import { SettingsPage } from '@/pages/SettingsPage';
+import { HiddenPage } from '@/pages/HiddenPage';
 
 export default function App() {
   return (
@@ -16,6 +17,7 @@ export default function App() {
           <Route path="memo/:id" element={<MemoDetail />} />
           <Route path="ask" element={<AskMemoPage />} />
           <Route path="settings" element={<SettingsPage />} />
+          <Route path="hidden" element={<HiddenPage />} />
         </Route>
       </Routes>
     </BrowserRouter>

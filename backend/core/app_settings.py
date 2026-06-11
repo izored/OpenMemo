@@ -5,7 +5,10 @@ handful of values a user can change from the Settings page at runtime, e.g.
 the maximum upload size. Stored at DATA_DIR/app_settings.json.
 """
 
+import hashlib
+import hmac
 import json
+import secrets
 import threading
 from pathlib import Path
 from typing import Any
@@ -57,6 +60,14 @@ _DEFAULTS: dict[str, Any] = {
 _UNCAPPED_SENTINEL = 0
 _HARD_CEILING_MB = 1024 * 1024  # 1 TB
 
+# Hidden-section passcode (OPNMMO-0016). Stored as "salt$hash" (hex,
+# PBKDF2-HMAC-SHA256) in the same JSON file but deliberately NOT in _DEFAULTS:
+# get_settings() strips it so the hash never crosses the API — only the
+# boolean `hidden_passcode_set` does. This is a soft privacy gate for the UI
+# (the local API itself has no auth), not an encryption boundary.
+_PASSCODE_KEY = "hidden_passcode_hash"
+_PBKDF2_ITERATIONS = 200_000
+
 
 def _read() -> dict[str, Any]:
     try:
@@ -72,7 +83,15 @@ def _read() -> dict[str, Any]:
 def get_settings() -> dict[str, Any]:
     # `yt_cookies_present` is computed from disk, never persisted in the JSON —
     # so the UI can show cookie status without ever exposing the jar itself.
-    return {**_read(), "yt_cookies_present": cookies_present()}
+    # The hidden-section passcode hash is likewise stripped: the API only ever
+    # sees whether a passcode exists.
+    data = _read()
+    data.pop(_PASSCODE_KEY, None)
+    return {
+        **data,
+        "yt_cookies_present": cookies_present(),
+        "hidden_passcode_set": hidden_passcode_set(),
+    }
 
 
 def get_cookies_path() -> Path:
@@ -138,6 +157,15 @@ def delete_background() -> None:
     update_settings({"bg_image_ext": ""})
 
 
+def _write_raw(data: dict[str, Any]) -> None:
+    """Atomically persist the full settings dict (caller holds _LOCK)."""
+    _PATH.parent.mkdir(parents=True, exist_ok=True)
+    tmp = _PATH.with_suffix(".json.tmp")
+    with open(tmp, "w", encoding="utf-8") as f:
+        json.dump(data, f, indent=2)
+    tmp.replace(_PATH)
+
+
 def update_settings(patch: dict[str, Any]) -> dict[str, Any]:
     """Merge a patch into persisted settings. Only known keys are kept."""
     with _LOCK:
@@ -145,12 +173,38 @@ def update_settings(patch: dict[str, Any]) -> dict[str, Any]:
         for key, val in patch.items():
             if key in _DEFAULTS:
                 current[key] = val
-        _PATH.parent.mkdir(parents=True, exist_ok=True)
-        tmp = _PATH.with_suffix(".json.tmp")
-        with open(tmp, "w", encoding="utf-8") as f:
-            json.dump(current, f, indent=2)
-        tmp.replace(_PATH)
+        _write_raw(current)
         return current
+
+
+def hidden_passcode_set() -> bool:
+    return bool(_read().get(_PASSCODE_KEY))
+
+
+def set_hidden_passcode(passcode: str) -> None:
+    """Hash and store the hidden-section passcode (salt$hash, PBKDF2)."""
+    salt = secrets.token_hex(16)
+    digest = hashlib.pbkdf2_hmac(
+        "sha256", passcode.encode("utf-8"), bytes.fromhex(salt), _PBKDF2_ITERATIONS
+    ).hex()
+    with _LOCK:
+        current = _read()
+        current[_PASSCODE_KEY] = f"{salt}${digest}"
+        _write_raw(current)
+
+
+def verify_hidden_passcode(passcode: str) -> bool:
+    stored = _read().get(_PASSCODE_KEY) or ""
+    if "$" not in stored:
+        return False
+    salt, digest = stored.split("$", 1)
+    try:
+        candidate = hashlib.pbkdf2_hmac(
+            "sha256", passcode.encode("utf-8"), bytes.fromhex(salt), _PBKDF2_ITERATIONS
+        ).hex()
+    except ValueError:
+        return False
+    return hmac.compare_digest(candidate, digest)
 
 
 def get_max_upload_bytes() -> int:

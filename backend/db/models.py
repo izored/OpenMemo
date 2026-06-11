@@ -100,6 +100,10 @@ class Memo(Base):
     localize_error = Column(Text, nullable=True)
     sort_order = Column(Integer, default=0)
     pinned = Column(Boolean, default=False)
+    # Hidden memos are filtered out of the main dashboard (and the pinned
+    # sidebar list) but stay visible inside their collections. The full set
+    # lives behind the passcode-gated hidden section (OPNMMO-0016).
+    hidden = Column(Boolean, default=False)
     is_processed = Column(Boolean, default=False)
     is_deleted = Column(Boolean, default=False)
     deleted_at = Column(DateTime, nullable=True)

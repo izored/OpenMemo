@@ -354,7 +354,7 @@ export function SettingsPage() {
       })
       .catch(() => {
         setMaxUploadMb(5120);
-        setProfile({ max_upload_mb: 5120, display_name: '', email: '', avatar_data_url: '', mailing_list_consent: false, auto_download_audio: true, chat_model: '', yt_cookies_present: false, bg_image_ext: '' });
+        setProfile({ max_upload_mb: 5120, display_name: '', email: '', avatar_data_url: '', mailing_list_consent: false, auto_download_audio: true, chat_model: '', yt_cookies_present: false, bg_image_ext: '', hidden_passcode_set: false });
       });
   }, []);
 
