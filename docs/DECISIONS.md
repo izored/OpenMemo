@@ -7,6 +7,34 @@ the decision, and its consequences, so a future reader knows *why*, not just
 
 ---
 
+## ADR-016: Every page renders one shared PageHeader, never its own header markup
+
+**Date:** 2026-06-12 · **Status:** Shipped · **Builds on:** ADR-001 (define shared things once), ADR-011 (Settings layout)
+
+### Context
+
+Five pages, four header implementations. The Dashboard and Music page rendered the canonical `om-header` (sticky, backdrop blur, eyebrow / title / sub). Collections hand-rolled an `om-colls-headrow` with its own margins. Settings used `om-settings-head` with a smaller title size. Hidden copied the `om-header` markup by hand. On top of that, the page wrappers (`om-colls`, `om-settings`, `om-page`) each added their own top padding, stacking on whatever the header brought.
+
+The visible symptom: line up any two pages and the titles sit on different baselines. Every header tweak had to be repeated per page and was forgotten on at least one. This is the same failure mode ADR-001 bans for providers, applied to layout: a shared thing defined in N places drifts N ways.
+
+### Decision
+
+**One `PageHeader` component owns the header. Pages pass content, never markup.**
+
+- `frontend/src/components/PageHeader.tsx` renders the full skeleton: the sticky blurred `om-header`, an optional back pill (`om-music-back`), the `om-greet` block (eyebrow, title, sub), and an `om-filter-rail` for whatever the page puts under the title.
+- The API is content-shaped: `eyebrow`, `title`, `sub`, optional `back` (label + onClick), and `children` for the rail. The Dashboard passes its drag-to-reorder filter tabs as children; Collections passes its Edit toggle; Hidden passes its Lock button. The component does not know or care.
+- Page wrappers stopped padding the top. `om-header` owns the 48px top spacing, so every title sits on the same baseline under the same sticky blur. The Settings title override (28px) is gone; one type scale.
+- The playlist view's boxed hero (`om-pl-hero`) is not a page header and stays its own thing. Its back button reuses the same `om-music-back` class, so the affordance still matches.
+
+### Consequences
+
+- A header change (spacing, blur, type scale, a new slot) is one edit in one file, every page picks it up.
+- New pages cannot drift: there is no second header pattern to copy from anymore.
+- `om-colls-headrow`, `om-settings-head` and `om-music-head` rules are dead weight in the CSS and can be swept when convenient.
+- The rail is a free-form slot, so a page can still ship a bespoke control row without forking the header. That is the escape hatch; the eyebrow / title / sub block itself is deliberately not customizable.
+
+---
+
 ## ADR-015: Playlists are collections with a kind, and music lives on its own page
 
 **Date:** 2026-06-11 · **Status:** Shipped · **Builds on:** ADR-005 (voice vs music split), ADR-004 (yt-dlp is the shared engine for remote media), ADR-012 (one cookie jar for every yt-dlp call), ADR-001 (define shared things once)
