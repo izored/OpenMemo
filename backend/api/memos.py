@@ -128,6 +128,17 @@ async def list_memos(
     if workspace_id:
         query = query.where(Memo.workspace_id == workspace_id)
     query = query.where((Memo.is_deleted == False) | (Memo.is_deleted == None))  # noqa: E712
+    # Keep the main feed clean (OPNMMO-0023): tracks that belong to a music
+    # playlist live on the Music page, not in All Memos / the type tabs. They
+    # still appear when a collection is opened explicitly (playlist view) or
+    # when the caller asks for music directly (audio_kind filter / Music tab).
+    if not collection_id and audio_kind not in ("voice", "music"):
+        playlist_members = (
+            select(memo_collections.c.memo_id)
+            .join(Collection, Collection.id == memo_collections.c.collection_id)
+            .where(Collection.kind == "playlist")
+        )
+        query = query.where(~Memo.id.in_(playlist_members))
     if type and type != "all":
         # `type` may be a comma-separated group (e.g. the Files tab maps to
         # document,file,code,audio) so one tab can cover several memo types.

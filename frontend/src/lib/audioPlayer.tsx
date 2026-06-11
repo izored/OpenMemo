@@ -36,8 +36,23 @@ interface AudioPlayerContextValue {
   setVolume: (v: number) => void;
   /** Toggle mute. */
   toggleMute: () => void;
-  /** Load + play a track. If it is already the active track, toggle play/pause. */
+  /** Load + play a track. If it is already the active track, toggle play/pause.
+   *  Clears any active queue — a single-track play is never silently queued. */
   play: (track: AudioTrack) => void;
+  /**
+   * Load a track list as the play queue and start at `startIndex` (ADR-014).
+   * On track end the queue auto-advances (repeat-one still wins); it stops
+   * after the last track. Playing a single track anywhere clears the queue.
+   */
+  playQueue: (tracks: AudioTrack[], startIndex?: number) => void;
+  /** Jump to the next queued track (no-op without a queue / at the end). */
+  next: () => void;
+  /** Jump to the previous queued track (no-op without a queue / at the start). */
+  prev: () => void;
+  /** Number of tracks in the active queue (0 = no queue). */
+  queueLength: number;
+  /** Index of the active track within the queue (-1 = no queue). */
+  queueIndex: number;
   /** Play/pause the currently loaded track. */
   toggle: () => void;
   /** Jump to an absolute position in seconds. */
@@ -159,31 +174,87 @@ export function AudioPlayerProvider({ children }: { children: React.ReactNode })
     return true;
   }, [track]);
 
-  const play = useCallback(
-    (next: AudioTrack) => {
+  // Play queue (ADR-014). Mirrored into refs so the <audio> onEnded closure
+  // (bound once) can auto-advance without re-binding listeners.
+  const [queue, setQueue] = useState<AudioTrack[]>([]);
+  const [queueIndex, setQueueIndex] = useState(-1);
+  const queueRef = useRef<AudioTrack[]>([]);
+  const queueIndexRef = useRef(-1);
+
+  // Load + play a track on the shared element (no toggle logic, no queue edits).
+  const loadTrack = useCallback(
+    (t: AudioTrack) => {
       const audio = audioRef.current;
       if (!audio) return;
       ensureGraph();
       // A suspended context (autoplay policy) must be resumed on user gesture.
       audioCtxRef.current?.resume?.().catch(() => {});
-      // Same track already loaded → just toggle, don't restart it.
-      if (track && track.memoId === next.memoId) {
-        if (audio.paused) audio.play().catch(() => {});
-        else audio.pause();
-        return;
-      }
-      setTrack(next);
+      setTrack(t);
       setCurrentTime(0);
       setDuration(0);
-      audio.src = next.src;
+      audio.src = t.src;
       audio.load();
       // Apply the persisted volume / mute to the freshly-loaded element.
       audio.volume = volumeRef.current;
       audio.muted = mutedRef.current;
       audio.play().catch(() => {});
     },
-    [track, ensureGraph],
+    [ensureGraph],
   );
+
+  const clearQueue = useCallback(() => {
+    queueRef.current = [];
+    queueIndexRef.current = -1;
+    setQueue([]);
+    setQueueIndex(-1);
+  }, []);
+
+  const play = useCallback(
+    (next: AudioTrack) => {
+      const audio = audioRef.current;
+      if (!audio) return;
+      // Same track already loaded → just toggle, don't restart it (and keep
+      // any queue it belongs to).
+      if (track && track.memoId === next.memoId) {
+        ensureGraph();
+        audioCtxRef.current?.resume?.().catch(() => {});
+        if (audio.paused) audio.play().catch(() => {});
+        else audio.pause();
+        return;
+      }
+      clearQueue();
+      loadTrack(next);
+    },
+    [track, ensureGraph, clearQueue, loadTrack],
+  );
+
+  const stepQueue = useCallback(
+    (delta: number) => {
+      const q = queueRef.current;
+      const i = queueIndexRef.current + delta;
+      if (!q.length || i < 0 || i >= q.length) return;
+      queueIndexRef.current = i;
+      setQueueIndex(i);
+      loadTrack(q[i]);
+    },
+    [loadTrack],
+  );
+
+  const playQueue = useCallback(
+    (tracks: AudioTrack[], startIndex = 0) => {
+      if (!tracks.length) return;
+      const i = Math.max(0, Math.min(startIndex, tracks.length - 1));
+      queueRef.current = tracks;
+      queueIndexRef.current = i;
+      setQueue(tracks);
+      setQueueIndex(i);
+      loadTrack(tracks[i]);
+    },
+    [loadTrack],
+  );
+
+  const next = useCallback(() => stepQueue(1), [stepQueue]);
+  const prev = useCallback(() => stepQueue(-1), [stepQueue]);
 
   const toggle = useCallback(() => {
     const audio = audioRef.current;
@@ -208,11 +279,12 @@ export function AudioPlayerProvider({ children }: { children: React.ReactNode })
       audio.removeAttribute('src');
       audio.load();
     }
+    clearQueue();
     setTrack(null);
     setPlaying(false);
     setCurrentTime(0);
     setDuration(0);
-  }, []);
+  }, [clearQueue]);
 
   const isActive = useCallback((memoId: string) => track?.memoId === memoId, [track]);
 
@@ -229,19 +301,22 @@ export function AudioPlayerProvider({ children }: { children: React.ReactNode })
       ms.setActionHandler('seekbackward', (d) => { const el = a(); if (el) el.currentTime = Math.max(0, el.currentTime - (d.seekOffset || 10)); });
       ms.setActionHandler('seekforward', (d) => { const el = a(); if (el) el.currentTime = el.currentTime + (d.seekOffset || 10); });
       ms.setActionHandler('seekto', (d) => { const el = a(); if (el && d.seekTime != null) el.currentTime = d.seekTime; });
+      // Queue transport (ADR-014) — OS next/prev keys step the play queue.
+      ms.setActionHandler('nexttrack', () => stepQueue(1));
+      ms.setActionHandler('previoustrack', () => stepQueue(-1));
     } catch {
       /* some actions are unsupported on some browsers — ignore */
     }
     return () => {
       try {
-        for (const action of ['play', 'pause', 'seekbackward', 'seekforward', 'seekto'] as const) {
+        for (const action of ['play', 'pause', 'seekbackward', 'seekforward', 'seekto', 'nexttrack', 'previoustrack'] as const) {
           ms.setActionHandler(action, null);
         }
       } catch {
         /* ignore */
       }
     };
-  }, []);
+  }, [stepQueue]);
 
   // OS media-overlay metadata (title / artist / artwork) per track.
   useEffect(() => {
@@ -269,8 +344,8 @@ export function AudioPlayerProvider({ children }: { children: React.ReactNode })
   }, [playing]);
 
   const value = useMemo<AudioPlayerContextValue>(
-    () => ({ track, playing, currentTime, duration, repeat, toggleRepeat, volume, muted, setVolume, toggleMute, play, toggle, seek, close, isActive, getLevels }),
-    [track, playing, currentTime, duration, repeat, toggleRepeat, volume, muted, setVolume, toggleMute, play, toggle, seek, close, isActive, getLevels],
+    () => ({ track, playing, currentTime, duration, repeat, toggleRepeat, volume, muted, setVolume, toggleMute, play, playQueue, next, prev, queueLength: queue.length, queueIndex, toggle, seek, close, isActive, getLevels }),
+    [track, playing, currentTime, duration, repeat, toggleRepeat, volume, muted, setVolume, toggleMute, play, playQueue, next, prev, queue.length, queueIndex, toggle, seek, close, isActive, getLevels],
   );
 
   return (
@@ -286,9 +361,19 @@ export function AudioPlayerProvider({ children }: { children: React.ReactNode })
           if (repeatRef.current && audio) {
             audio.currentTime = 0;
             audio.play().catch(() => {});
-          } else {
-            setPlaying(false);
+            return;
           }
+          // Queue auto-advance (ADR-014): play the next queued track; stop
+          // after the last one.
+          const q = queueRef.current;
+          const i = queueIndexRef.current;
+          if (q.length && i >= 0 && i < q.length - 1) {
+            queueIndexRef.current = i + 1;
+            setQueueIndex(i + 1);
+            loadTrack(q[i + 1]);
+            return;
+          }
+          setPlaying(false);
         }}
         onTimeUpdate={(e) => setCurrentTime(e.currentTarget.currentTime)}
         onLoadedMetadata={(e) => setDuration(e.currentTarget.duration || 0)}

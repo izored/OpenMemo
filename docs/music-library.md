@@ -16,6 +16,8 @@ What we added on top:
 - **Progress you can watch.** The playlist card shows live download progress, computed from the database. Survives a server restart.
 - **Drag a track onto a playlist card** to file it, same gesture as sidebar collections.
 - **Not just YouTube.** SoundCloud sets and Bandcamp albums are playlists too. One detection helper, host-agnostic per ADR-001.
+- **Download is opt-in.** A playlist can be pulled as remote track memos only, like any music app: a download chip per tile, a Download all button on the playlist page. Or flip the toggle and it downloads everything up front.
+- **The home feed stays clean.** Playlist tracks never flood All Memos. They live on the Music page, in their playlist, and in the dashboard Music filter.
 
 ## Data model
 
@@ -36,10 +38,10 @@ The flow, end to end:
 
 1. You paste a URL in the new-memo panel. A cheap client-side heuristic (`lib/playlistUrl.ts`) spots playlist-shaped URLs: `list=` on YouTube hosts, `/sets/` on SoundCloud, `/album/` on Bandcamp.
 2. The panel probes the backend (`POST /api/ingest/playlist/probe`). yt-dlp enumerates the playlist with `--flat-playlist` — metadata only, no downloads, capped at 100 entries so a YouTube Mix can't enumerate forever.
-3. The panel asks: **the whole playlist, or just this one?** A watch URL with a `list=` param defaults to "just this one". A pure playlist URL defaults to "whole playlist".
+3. The panel asks: **the whole playlist, or just this one?** "Just this one" is always the default. Ingesting a hundred tracks is a deliberate pick, never an accident.
 4. "Just this one" goes down the normal `/ingest/url` path, untouched.
-5. "Whole playlist" hits `POST /api/ingest/playlist`. The backend creates the playlist collection plus one pending audio memo per track (title, artist, thumbnail from the flat probe), then a background worker downloads tracks one at a time with the existing yt-dlp audio pipeline. Sequential on purpose: kind to the host, kind to your disk.
-6. The panel closes and takes you to the Music page, where the new playlist card is already filling up.
+5. "Whole playlist" hits `POST /api/ingest/playlist`. The backend creates the playlist collection plus one audio memo per track (title, artist, thumbnail from the flat probe). A "Download tracks to this device now" toggle (off by default) decides what happens next: on, a background worker downloads tracks one at a time with the existing yt-dlp audio pipeline; off, tracks stay remote and you pull them later, per track or all at once. Sequential on purpose: kind to the host, kind to your disk.
+6. The panel closes and takes you to the Music page, where the new playlist card is waiting (and filling up, if you chose to download).
 
 Status rides on the per-memo `localize_status` the Make-it-local pipeline already uses: `pending → processing → done | error`. Progress is a COUNT query, not an in-memory job. Restart the server mid-playlist and finished tracks stay finished; pending ones can be retried per track.
 
@@ -51,11 +53,11 @@ Artist comes from the flat entry's artist or uploader field, with YouTube's " - 
 
 Three zones, in the visual language of the dashboard:
 
-- **Header.** Eyebrow, title, sub. Same `om-header` skeleton as Today. An "Add music" button opens the new-memo panel.
-- **Playlists.** A horizontal row of playlist cards. Each card is a 2x2 collage of the first four track covers, name, track count, a play button that queues the whole playlist, and a progress bar while tracks are still downloading. Cards accept memo-card drops, same as sidebar collections.
-- **Library.** Every music memo, newest first, in the standard masonry grid. Cards keep their inline player and aurora.
+- **Header.** Eyebrow, title, sub. Same `om-header` skeleton as Today. Adding music goes through the global FAB and New Memo panel, no extra chrome.
+- **Playlists.** A horizontal row of playlist cards. Each card is a 2x2 collage of the first four track covers, name, track count, a play button that queues the whole playlist, and a progress bar while tracks are downloading. Cards accept memo-card drops, same as sidebar collections.
+- **Library.** Every music memo, newest first, in the standard masonry grid. Music cards render full-bleed: square artwork edge to edge, title on a bottom gradient, no body bar.
 
-Click a playlist card and you get the playlist view (`/music/:id`): collage hero, play-all, and a numbered track list. Click a row to play; the queue picks up from that track. Deleting a playlist removes the collection, never the tracks.
+Click a playlist card and you get the playlist view (`/music/:id`): a boxed hero that names the playlist (collage, count, play-all, Download all, source link, delete), a "Back to Music" button above it, and the tracks as full-bleed cover tiles. Each tile carries its number, its title on a gradient, play on hover, and a download / retry chip when the track is still remote or failed. Click a ready tile to play; the queue picks up from that track. Deleting a playlist removes the collection, never the tracks.
 
 ## Dashboard filter
 

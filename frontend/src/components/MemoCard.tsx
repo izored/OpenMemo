@@ -652,7 +652,7 @@ export function MemoCard({ memo, dragHandleProps, lightboxGroup }: CardProps) {
           onPin={handlePin}
           onOpen={goDetail}
           bgSrc={src}
-          className={cn('om-card-audio', active && 'is-active', isMusic && 'is-music', isThisPlaying && 'is-playing')}
+          className={cn('om-card-audio', active && 'is-active', isMusic && 'is-music', richMusic && 'has-cover', isThisPlaying && 'is-playing')}
           confirmOverlay={confirmOverlay}
           playerOverlay={playerOverlay}
         >
