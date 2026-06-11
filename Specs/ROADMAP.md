@@ -105,7 +105,7 @@ Mixcloud, Audius, + graceful fallback), never SoundCloud-only.
 
 ## v1.7.4 — RAG + Broken Core Fixes *(P2)*
 
-- [ ] **[P] RAG full audit** — Verify ChromaDB receives embeddings on save, hybrid search (FTS5 + Chroma) returns results, retrieved context injects correctly. Add `GET /api/debug/rag?q=...` endpoint returning retrieved chunks
+- [x] **[P] RAG full audit** — Done in 2.3.0 (OPNMMO-0012, ADR-014, PR #46): nomic task prefixes at index+query time, live-only vector index + Settings Rebuild, `$in` collection scoping, distance cutoff, honest no-context answer, explicit `num_ctx`. Debug endpoint replaced by `POST /api/maintenance/reindex` + readable inline AI errors.
 - [ ] **[Q] System prompt injection** — Inject OpenMemo assistant system prompt as first `role: "system"` message on Ollama chat payload, never visible to user
 - [ ] **[R] Seamless RAG default** — Drop `@general` requirement; every chat message auto-queries knowledge base. Keep `@collection-name` syntax for scoped queries
 - [x] **[D] Image thumbnail on ingest** — Effectively fixed in 1.8.6: `/api/memos/{id}/file` serves originals inline, cards/MemoDetail point at it; cross-env `file_path` resolved via `backend/core/file_paths.resolve_memo_path()` (PR #17 + #18).
