@@ -76,6 +76,18 @@ async def lifespan(app: FastAPI):
                 "WHERE type = 'audio' AND audio_kind IS NULL"
             ))
             await db.commit()
+            # Collections: kind ('standard' | 'playlist', ADR-014) + the source
+            # playlist URL for ingested playlists. Backfill NULL kind so the
+            # API's default kind filter can use a plain equality.
+            ccols = (await db.execute(_sql_text("PRAGMA table_info(collections)"))).fetchall()
+            cnames = {c[1] for c in ccols}
+            for col in ("kind", "source_url"):
+                if col not in cnames:
+                    await db.execute(_sql_text(f"ALTER TABLE collections ADD COLUMN {col} VARCHAR"))
+            await db.execute(_sql_text(
+                "UPDATE collections SET kind = 'standard' WHERE kind IS NULL"
+            ))
+            await db.commit()
     except Exception as e:
         print(f"Schema migration warning (non-critical): {e}")
 
@@ -324,6 +336,7 @@ from backend.api.search import router as search_router
 from backend.api.maintenance import router as maintenance_router
 from backend.api.backup import router as backup_router
 from backend.api.settings import router as settings_router
+from backend.api.music import router as music_router
 
 app.include_router(memos_router)
 app.include_router(chat_router)
@@ -334,6 +347,7 @@ app.include_router(search_router)
 app.include_router(maintenance_router)
 app.include_router(backup_router)
 app.include_router(settings_router)
+app.include_router(music_router)
 
 
 def _dir_size(path: Path) -> int:
