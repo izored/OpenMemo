@@ -103,6 +103,7 @@ def _apply_sort(query):
 async def list_memos(
     workspace_id: Optional[str] = None,
     type: Optional[str] = None,
+    audio_kind: Optional[str] = None,
     collection_id: Optional[str] = None,
     search: Optional[str] = None,
     offset: int = 0,
@@ -135,6 +136,10 @@ async def list_memos(
             query = query.where(Memo.type == types[0])
         elif types:
             query = query.where(Memo.type.in_(types))
+    if audio_kind in ("voice", "music"):
+        # Audio sub-kind filter (ADR-005/014): splits the audio type into the
+        # dashboard's Music / Voice tabs and feeds the Music page library.
+        query = query.where(Memo.audio_kind == audio_kind)
     if collection_id:
         query = query.join(memo_collections).where(
             memo_collections.c.collection_id == collection_id

@@ -1,6 +1,6 @@
 """Content ingestion API - handles URL saving, file uploads, and processing."""
 import uuid
-from datetime import datetime
+from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Optional
 
@@ -13,7 +13,7 @@ from backend.db.database import get_db, AsyncSessionLocal
 from sqlalchemy import select
 from sqlalchemy.orm.attributes import set_committed_value
 
-from backend.db.models import Memo, Collection
+from backend.db.models import Memo, Collection, memo_collections
 from backend.core.security import sanitize_workspace_id, validate_url, FileUploadHandler
 from backend.core.classify import derive_memo_type, derive_audio_kind
 
@@ -45,6 +45,18 @@ class URLIngest(BaseModel):
     url: str
     workspace_id: Optional[str] = None
     collection_id: Optional[str] = None
+
+
+class PlaylistProbe(BaseModel):
+    url: str
+
+
+class PlaylistIngest(BaseModel):
+    url: str
+    # Optional user override for the playlist collection's name; defaults to
+    # the playlist title yt-dlp reports.
+    title: Optional[str] = None
+    workspace_id: Optional[str] = None
 
 
 class NoteIngest(BaseModel):
@@ -268,6 +280,138 @@ async def ingest_url(
         background_tasks.add_task(localize_memo_task, memo.id, "audio")
 
     return {"id": memo.id, "title": memo.title, "type": memo.type, "status": "processing"}
+
+
+# --- Playlist ingestion (Music Experience V2, ADR-014) ---
+
+@router.post("/playlist/probe")
+async def probe_playlist_url(data: PlaylistProbe):
+    """Enumerate a playlist URL without downloading anything (--flat-playlist).
+
+    The new-memo panel calls this when a pasted URL looks playlist-shaped, so
+    it can ask "whole playlist or just this one?" with a real title + count.
+    """
+    from backend.core.playlist import probe_playlist, PlaylistError
+
+    validate_url(data.url)
+    try:
+        result = await probe_playlist(data.url)
+    except PlaylistError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    # The panel only needs a small preview; cap the entry list it gets back.
+    return {
+        "is_playlist": True,
+        "title": result["title"],
+        "uploader": result.get("uploader"),
+        "count": result["count"],
+        "truncated": result["truncated"],
+        "entries": result["entries"][:6],
+    }
+
+
+@router.post("/playlist")
+async def ingest_playlist(
+    data: PlaylistIngest,
+    background_tasks: BackgroundTasks,
+    db: AsyncSession = Depends(get_db),
+):
+    """Ingest an entire playlist as a music playlist collection (ADR-014).
+
+    Enumerates the playlist (flat, no downloads), creates one playlist-kind
+    collection plus one pending audio memo per track (title / artist /
+    thumbnail from the flat probe), then downloads tracks sequentially in the
+    background via the Make-it-local audio pipeline. Progress is derived from
+    the per-memo localize_status — no in-memory job state, restart-safe.
+    """
+    from urllib.parse import urlparse as _urlparse
+
+    from sqlalchemy import insert
+    from backend.core.playlist import probe_playlist, PlaylistError
+
+    validate_url(data.url)
+    try:
+        probed = await probe_playlist(data.url)
+    except PlaylistError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+    ws = sanitize_workspace_id(data.workspace_id)
+    collection = Collection(
+        id=str(uuid.uuid4()),
+        workspace_id=ws,
+        name=(data.title or probed["title"]).strip()[:200] or "Playlist",
+        emoji="🎵",
+        kind="playlist",
+        source_url=data.url,
+    )
+    db.add(collection)
+
+    # One pending audio memo per track. recency_at is staggered (now - i s) so
+    # the default recency sort returns playlist order — same trick as the
+    # drag-to-reorder endpoint.
+    now = datetime.utcnow()
+    memo_ids: list[str] = []
+    for i, entry in enumerate(probed["entries"]):
+        try:
+            domain = (_urlparse(entry["url"]).hostname or "").removeprefix("www.")
+        except Exception:
+            domain = ""
+        memo = Memo(
+            id=str(uuid.uuid4()),
+            workspace_id=ws,
+            type="audio",
+            audio_kind="music",
+            title=entry["title"],
+            audio_artist=entry.get("artist"),
+            source_url=entry["url"],
+            source_domain=domain or None,
+            source_favicon=(
+                f"https://www.google.com/s2/favicons?domain={domain}&sz=32" if domain else None
+            ),
+            thumbnail_path=entry.get("thumbnail"),
+            localize_status="pending",
+            created_at=now,
+            updated_at=now,
+            recency_at=now - timedelta(seconds=i),
+        )
+        db.add(memo)
+        memo_ids.append(memo.id)
+
+    await db.flush()
+    await db.execute(
+        insert(memo_collections),
+        [{"memo_id": mid, "collection_id": collection.id} for mid in memo_ids],
+    )
+    await db.commit()
+
+    background_tasks.add_task(download_playlist_task, collection.id, memo_ids)
+
+    return {
+        "collection_id": collection.id,
+        "title": collection.name,
+        "total": len(memo_ids),
+        "truncated": probed["truncated"],
+        "status": "processing",
+    }
+
+
+async def download_playlist_task(collection_id: str, memo_ids: list[str]):
+    """Background: download a playlist's tracks one at a time.
+
+    Sequential on purpose — kind to the host and to the disk. Each track runs
+    the existing localize pipeline (status pending → processing → done|error on
+    the memo), then its remote thumbnail is cached locally. One dead track
+    never aborts the rest; failures stay retryable per memo via Make-it-local.
+    """
+    for memo_id in memo_ids:
+        try:
+            await localize_memo_task(memo_id, "audio")
+        except Exception as e:
+            print(f"Playlist track download crashed for {memo_id}: {e}")
+        try:
+            await cache_thumbnail(memo_id)
+        except Exception as e:
+            print(f"Playlist thumbnail cache failed for {memo_id}: {e}")
+    print(f"Playlist {collection_id}: download pass finished ({len(memo_ids)} track(s))")
 
 
 @router.post("/note")

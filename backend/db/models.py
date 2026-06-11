@@ -125,6 +125,14 @@ class Collection(Base):
     color = Column(String, default="#D97706")
     pinned = Column(Boolean, default=False)
     sort_order = Column(Integer, default=0)
+    # Collection sub-kind (ADR-014): 'standard' = a normal user collection;
+    # 'playlist' = a music playlist (Music page only — hidden from the
+    # collections page, sidebar, and every collection picker by the API's
+    # default kind filter). NULL rows predate the column and mean 'standard'.
+    kind = Column(String, default="standard")
+    # For playlists: the source playlist URL it was ingested from (provenance +
+    # future re-sync). NULL for standard collections.
+    source_url = Column(String, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
     
     workspace = relationship("Workspace", back_populates="collections")

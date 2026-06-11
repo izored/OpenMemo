@@ -20,6 +20,10 @@ class CollectionCreate(BaseModel):
     emoji: Optional[str] = "📁"
     description: Optional[str] = None
     color: Optional[str] = "#D97706"
+    # 'standard' (default) or 'playlist' (music playlist, ADR-014).
+    kind: Optional[str] = "standard"
+    # Playlists: the source playlist URL they were ingested from.
+    source_url: Optional[str] = None
     workspace_id: Optional[str] = None
 
 
@@ -35,16 +39,29 @@ class CollectionUpdate(BaseModel):
 @router.get("")
 async def list_collections(
     workspace_id: Optional[str] = None,
+    kind: str = "standard",
     db: AsyncSession = Depends(get_db),
 ):
-    """List all collections."""
+    """List collections, filtered by kind (ADR-014).
+
+    Default 'standard' keeps playlists out of the sidebar, the collections
+    page, and every collection picker with no frontend changes. Pass
+    kind=playlist for the Music page, kind=all for everything. NULL kind
+    (rows predating the column) counts as standard.
+    """
     query = select(Collection).order_by(Collection.pinned.desc(), Collection.sort_order)
+    if kind == "standard":
+        query = query.where(
+            (Collection.kind == "standard") | (Collection.kind == None)  # noqa: E711
+        )
+    elif kind != "all":
+        query = query.where(Collection.kind == kind)
     if workspace_id:
         query = query.where(Collection.workspace_id == sanitize_workspace_id(workspace_id))
-    
+
     result = await db.execute(query)
     collections = result.scalars().all()
-    
+
     return [
         {
             "id": c.id,
@@ -52,6 +69,8 @@ async def list_collections(
             "emoji": c.emoji,
             "description": c.description,
             "color": c.color,
+            "kind": c.kind or "standard",
+            "source_url": c.source_url,
             "pinned": c.pinned,
             "sort_order": c.sort_order,
             "created_at": c.created_at.isoformat(),
@@ -70,6 +89,8 @@ async def create_collection(data: CollectionCreate, db: AsyncSession = Depends(g
         emoji=data.emoji,
         description=data.description,
         color=data.color,
+        kind=data.kind if data.kind in ("standard", "playlist") else "standard",
+        source_url=data.source_url,
     )
     db.add(collection)
     await db.commit()
