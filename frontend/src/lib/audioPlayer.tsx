@@ -378,6 +378,87 @@ export function AudioPlayerProvider({ children }: { children: React.ReactNode })
 
   const isActive = useCallback((memoId: string) => track?.memoId === memoId, [track]);
 
+  // ── Continue listening (OPNMMO-0023 follow-up) ──
+  // The player snapshots itself to localStorage (track, queue, order, position)
+  // and a reload restores it PAUSED — never autoplay. Volume already persists.
+  const RESUME_KEY = 'om-player-resume';
+  const restoredRef = useRef(false);
+  const lastPosSaveRef = useRef(0);
+
+  useEffect(() => {
+    const audio = audioRef.current;
+    try {
+      const raw = localStorage.getItem(RESUME_KEY);
+      if (raw && audio) {
+        const snap = JSON.parse(raw) as {
+          track?: AudioTrack | null;
+          queue?: AudioTrack[];
+          sourceOrder?: AudioTrack[];
+          index?: number;
+          shuffled?: boolean;
+          position?: number;
+        };
+        if (snap?.track?.src) {
+          queueRef.current = Array.isArray(snap.queue) ? snap.queue : [];
+          sourceOrderRef.current = Array.isArray(snap.sourceOrder) ? snap.sourceOrder : [];
+          queueIndexRef.current = typeof snap.index === 'number' ? snap.index : -1;
+          shuffledRef.current = !!snap.shuffled;
+          setQueue(queueRef.current);
+          setQueueIndex(queueIndexRef.current);
+          setShuffled(shuffledRef.current);
+          setTrack(snap.track);
+          audio.src = snap.track.src;
+          audio.load();
+          audio.volume = volumeRef.current;
+          const pos = Number(snap.position) || 0;
+          lastPosSaveRef.current = pos;
+          if (pos > 0) {
+            const onMeta = () => {
+              try { audio.currentTime = Math.min(pos, audio.duration || pos); } catch { /* not seekable */ }
+            };
+            audio.addEventListener('loadedmetadata', onMeta, { once: true });
+          }
+          setCurrentTime(pos);
+        }
+      }
+    } catch { /* corrupted snapshot — start clean */ }
+    restoredRef.current = true;
+  }, []);
+
+  // Snapshot on any structural change (track / queue / order). Position rides
+  // along from the last throttled save so a fresh snapshot can't zero it.
+  useEffect(() => {
+    if (!restoredRef.current) return;
+    try {
+      if (!track) {
+        localStorage.removeItem(RESUME_KEY);
+        return;
+      }
+      localStorage.setItem(RESUME_KEY, JSON.stringify({
+        track,
+        queue: queueRef.current,
+        sourceOrder: sourceOrderRef.current,
+        index: queueIndexRef.current,
+        shuffled: shuffledRef.current,
+        position: audioRef.current?.currentTime || lastPosSaveRef.current,
+      }));
+    } catch { /* private mode / quota — resume is best-effort */ }
+  }, [track, queue, queueIndex, shuffled]);
+
+  // Throttled position save (~every 5s of playback + on pause).
+  const savePosition = useCallback((t: number, force = false) => {
+    if (!restoredRef.current) return;
+    if (!force && Math.abs(t - lastPosSaveRef.current) < 5) return;
+    lastPosSaveRef.current = t;
+    try {
+      const raw = localStorage.getItem(RESUME_KEY);
+      if (!raw) return;
+      const snap = JSON.parse(raw);
+      snap.position = t;
+      localStorage.setItem(RESUME_KEY, JSON.stringify(snap));
+    } catch { /* ignore */ }
+  }, []);
+
   // Media Session — lets the OS media keys (the keyboard play/pause key) and the
   // lock-screen / notification transport drive our player (ADR-005). Handlers are
   // bound once; they read the live <audio> via the ref.
@@ -444,7 +525,10 @@ export function AudioPlayerProvider({ children }: { children: React.ReactNode })
         ref={audioRef}
         preload="metadata"
         onPlay={() => setPlaying(true)}
-        onPause={() => setPlaying(false)}
+        onPause={(e) => {
+          setPlaying(false);
+          savePosition(e.currentTarget.currentTime, true);
+        }}
         onEnded={() => {
           // Repeat-one: restart the same track instead of stopping (ADR-005).
           const audio = audioRef.current;
@@ -465,7 +549,10 @@ export function AudioPlayerProvider({ children }: { children: React.ReactNode })
           }
           setPlaying(false);
         }}
-        onTimeUpdate={(e) => setCurrentTime(e.currentTarget.currentTime)}
+        onTimeUpdate={(e) => {
+          setCurrentTime(e.currentTarget.currentTime);
+          savePosition(e.currentTarget.currentTime);
+        }}
         onLoadedMetadata={(e) => setDuration(e.currentTarget.duration || 0)}
         onDurationChange={(e) => setDuration(e.currentTarget.duration || 0)}
       />
