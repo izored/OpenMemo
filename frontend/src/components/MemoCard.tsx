@@ -496,7 +496,7 @@ export function MemoCard({ memo, dragHandleProps, lightboxGroup }: CardProps) {
           <h3 className="om-note-title">{memo.title}</h3>
           {body && <p className="om-note-text">{body}</p>}
         </div>
-        <div className="om-meta" style={{ color: tint.text, opacity: 0.62 }}>
+        <div className="om-meta" style={{ opacity: 0.62 }}>
           <div className="om-meta-left">
             <Icon name="fileText" size={11} />
             <span className="om-meta-domain">Note</span>
