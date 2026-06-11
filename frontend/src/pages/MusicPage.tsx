@@ -208,10 +208,21 @@ export function MusicPage() {
   });
   const anyDownloading = playlists.some((p) => p.progress.pending > 0);
 
-  // The library: standalone music memos only, newest first (same infinite
-  // pattern as the dashboard). Playlist tracks are excluded server-side and
-  // live inside their playlist view. Polls along with playlist progress so a
-  // deleted playlist's freed tracks pop in.
+  // Library search + sort. Search debounces (no request per keystroke) and
+  // both feed the server: `search` is the same title/content filter the list
+  // API already had, `sort` is the new recent/title/artist order.
+  const [libSearch, setLibSearch] = useState('');
+  const [libQuery, setLibQuery] = useState('');
+  const [libSort, setLibSort] = useState<'recent' | 'title' | 'artist'>('recent');
+  useEffect(() => {
+    const t = setTimeout(() => setLibQuery(libSearch.trim()), 300);
+    return () => clearTimeout(t);
+  }, [libSearch]);
+
+  // The library: standalone music memos only (same infinite pattern as the
+  // dashboard). Playlist tracks are excluded server-side and live inside
+  // their playlist view. Polls along with playlist progress so a deleted
+  // playlist's freed tracks pop in.
   const {
     data: libData,
     isLoading: libLoading,
@@ -219,9 +230,15 @@ export function MusicPage() {
     hasNextPage,
     isFetchingNextPage,
   } = useInfiniteQuery({
-    queryKey: ['memos', 'music-library'],
+    queryKey: ['memos', 'music-library', libQuery, libSort],
     queryFn: ({ pageParam }) =>
-      memoApi.list({ type: 'audio', audio_kind: 'music', offset: pageParam }),
+      memoApi.list({
+        type: 'audio',
+        audio_kind: 'music',
+        search: libQuery || undefined,
+        sort: libSort,
+        offset: pageParam,
+      }),
     initialPageParam: 0,
     getNextPageParam: (lastPage) => {
       const next = lastPage.offset + lastPage.limit;
@@ -328,12 +345,19 @@ export function MusicPage() {
     queueFrom(res.items as Memo[], undefined, opts);
   };
 
-  // Play the whole library as a queue (the grid is paginated, so fetch a
-  // fresh slice up to the same 200-track cap playlists use).
+  // Play the library as a queue — what you see is what queues (current
+  // search + sort), fetched fresh up to the same 200-track cap playlists use.
   const playLibrary = async (opts?: { shuffle?: boolean }) => {
     const res = await queryClient.fetchQuery({
-      queryKey: ['memos', 'music-library-queue'],
-      queryFn: () => memoApi.list({ type: 'audio', audio_kind: 'music', limit: 200 }),
+      queryKey: ['memos', 'music-library-queue', libQuery, libSort],
+      queryFn: () =>
+        memoApi.list({
+          type: 'audio',
+          audio_kind: 'music',
+          search: libQuery || undefined,
+          sort: libSort,
+          limit: 200,
+        }),
       staleTime: 10 * 1000,
     });
     queueFrom(res.items as Memo[], undefined, opts);
@@ -526,6 +550,31 @@ export function MusicPage() {
         <div className="om-section-head">
           <span className="om-section-label mono">Library</span>
           <span className="om-lib-actions">
+            <span className="om-lib-search">
+              <Icon name="search" size={11} />
+              <input
+                value={libSearch}
+                onChange={(e) => setLibSearch(e.target.value)}
+                placeholder="Search songs"
+                aria-label="Search the music library"
+              />
+              {libSearch && (
+                <button className="om-lib-search-x" onClick={() => setLibSearch('')} title="Clear search" aria-label="Clear search">
+                  <Icon name="x" size={10} />
+                </button>
+              )}
+            </span>
+            <select
+              className="om-lib-sort mono"
+              value={libSort}
+              onChange={(e) => setLibSort(e.target.value as 'recent' | 'title' | 'artist')}
+              title="Sort the library"
+              aria-label="Sort the library"
+            >
+              <option value="recent">Recent</option>
+              <option value="title">Title A–Z</option>
+              <option value="artist">Artist A–Z</option>
+            </select>
             <button
               className="om-lib-act"
               onClick={() => playLibrary()}
@@ -549,6 +598,11 @@ export function MusicPage() {
         </div>
         {libLoading ? (
           <div className="om-empty"><div className="om-empty-mark"><Icon name="refresh" size={24} /></div><p>Loading music…</p></div>
+        ) : library.length === 0 && libQuery ? (
+          <div className="om-empty">
+            <div className="om-empty-mark"><Icon name="search" size={24} /></div>
+            <p>No songs match “{libQuery}”.</p>
+          </div>
         ) : library.length === 0 ? (
           <div className="om-empty">
             <div className="om-empty-mark"><Icon name="music" size={26} /></div>

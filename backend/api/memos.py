@@ -89,13 +89,24 @@ class MemoResponse(BaseModel):
 
 # --- Routes ---
 
-def _apply_sort(query):
-    """Single sort order: most recent on top. `recency_at` is bumped to
-    NOW() on memo creation and rewritten when the user drags a card, so
-    "recent" implicitly captures both fresh memos and explicit drag intent.
+def _apply_sort(query, sort: str = "recent"):
+    """Default sort: most recent on top. `recency_at` is bumped to NOW() on
+    memo creation and rewritten when the user drags a card, so "recent"
+    implicitly captures both fresh memos and explicit drag intent.
     `created_at` is the stable tiebreaker for memos created in the same
     millisecond (test seeds, bulk imports).
+
+    sort=title / sort=artist are A→Z views for the Music library (artist
+    sorts unknown-artist tracks last, title as tiebreak).
     """
+    if sort == "title":
+        return query.order_by(func.lower(Memo.title))
+    if sort == "artist":
+        return query.order_by(
+            Memo.audio_artist.is_(None),
+            func.lower(Memo.audio_artist),
+            func.lower(Memo.title),
+        )
     return query.order_by(desc(Memo.recency_at), desc(Memo.created_at))
 
 
@@ -107,6 +118,7 @@ async def list_memos(
     collection_id: Optional[str] = None,
     search: Optional[str] = None,
     hidden: Optional[bool] = None,
+    sort: str = "recent",
     offset: int = 0,
     limit: int = 50,
     db: AsyncSession = Depends(get_db),
@@ -182,7 +194,7 @@ async def list_memos(
     total = (await db.execute(count_query)).scalar()
 
     # Fetch with pagination
-    query = _apply_sort(query).offset(offset).limit(limit)
+    query = _apply_sort(query, sort).offset(offset).limit(limit)
     result = await db.execute(query)
     memos = result.scalars().all()
     
