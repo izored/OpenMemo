@@ -165,7 +165,7 @@ export function MusicPage() {
   const queryClient = useQueryClient();
   const { playlistId } = useParams();
   const setAddPanelOpen = useAppStore((s) => s.setAddPanelOpen);
-  const { playQueue, play, toggle, isActive, playing } = useAudioPlayer();
+  const { playQueue, toggle, isActive, playing } = useAudioPlayer();
 
   const { data: playlists = [] } = useQuery({
     queryKey: ['music-playlists'],
