@@ -21,6 +21,10 @@ export interface AudioTrack {
   liked?: boolean;
 }
 
+/** Where the live queue came from. Set when a playlist is queued, so the
+ *  player's cover art can link back to the playlist instead of the memo. */
+export type QueueSource = { kind: 'playlist'; id: string } | null;
+
 interface AudioPlayerContextValue {
   track: AudioTrack | null;
   playing: boolean;
@@ -46,9 +50,12 @@ interface AudioPlayerContextValue {
    * On track end the queue auto-advances (repeat-one still wins); it stops
    * after the last track. Playing a single track anywhere clears the queue.
    * `opts.shuffle` starts the queue shuffled: the start track plays first,
-   * the rest follow in random order.
+   * the rest follow in random order. `opts.source` records where the queue
+   * came from (a playlist), so the player can link back to it.
    */
-  playQueue: (tracks: AudioTrack[], startIndex?: number, opts?: { shuffle?: boolean }) => void;
+  playQueue: (tracks: AudioTrack[], startIndex?: number, opts?: { shuffle?: boolean; source?: QueueSource }) => void;
+  /** Where the live queue came from (null = ad-hoc queue / single track). */
+  queueSource: QueueSource;
   /** Jump to the next queued track (no-op without a queue / at the end). */
   next: () => void;
   /** Jump to the previous queued track (no-op without a queue / at the start). */
@@ -212,6 +219,9 @@ export function AudioPlayerProvider({ children }: { children: React.ReactNode })
   const [shuffled, setShuffled] = useState(false);
   const shuffledRef = useRef(false);
   const sourceOrderRef = useRef<AudioTrack[]>([]);
+  // Queue provenance — survives in a ref for the snapshot writer.
+  const [queueSource, setQueueSource] = useState<QueueSource>(null);
+  const queueSourceRef = useRef<QueueSource>(null);
 
   // Load + play a track on the shared element (no toggle logic, no queue edits).
   const loadTrack = useCallback(
@@ -239,9 +249,11 @@ export function AudioPlayerProvider({ children }: { children: React.ReactNode })
     queueIndexRef.current = -1;
     sourceOrderRef.current = [];
     shuffledRef.current = false;
+    queueSourceRef.current = null;
     setQueue([]);
     setQueueIndex(-1);
     setShuffled(false);
+    setQueueSource(null);
   }, []);
 
   // Fisher–Yates over everything except `first`, which stays at position 0 —
@@ -287,7 +299,7 @@ export function AudioPlayerProvider({ children }: { children: React.ReactNode })
   );
 
   const playQueue = useCallback(
-    (tracks: AudioTrack[], startIndex = 0, opts?: { shuffle?: boolean }) => {
+    (tracks: AudioTrack[], startIndex = 0, opts?: { shuffle?: boolean; source?: QueueSource }) => {
       if (!tracks.length) return;
       const start = Math.max(0, Math.min(startIndex, tracks.length - 1));
       const doShuffle = !!opts?.shuffle;
@@ -297,9 +309,11 @@ export function AudioPlayerProvider({ children }: { children: React.ReactNode })
       shuffledRef.current = doShuffle;
       queueRef.current = list;
       queueIndexRef.current = i;
+      queueSourceRef.current = opts?.source ?? null;
       setShuffled(doShuffle);
       setQueue(list);
       setQueueIndex(i);
+      setQueueSource(opts?.source ?? null);
       loadTrack(list[i]);
     },
     [loadTrack],
@@ -412,15 +426,18 @@ export function AudioPlayerProvider({ children }: { children: React.ReactNode })
           index?: number;
           shuffled?: boolean;
           position?: number;
+          source?: QueueSource;
         };
         if (snap?.track?.src) {
           queueRef.current = Array.isArray(snap.queue) ? snap.queue : [];
           sourceOrderRef.current = Array.isArray(snap.sourceOrder) ? snap.sourceOrder : [];
           queueIndexRef.current = typeof snap.index === 'number' ? snap.index : -1;
           shuffledRef.current = !!snap.shuffled;
+          queueSourceRef.current = snap.source ?? null;
           setQueue(queueRef.current);
           setQueueIndex(queueIndexRef.current);
           setShuffled(shuffledRef.current);
+          setQueueSource(queueSourceRef.current);
           setTrack(snap.track);
           audio.src = snap.track.src;
           audio.load();
@@ -455,6 +472,7 @@ export function AudioPlayerProvider({ children }: { children: React.ReactNode })
         sourceOrder: sourceOrderRef.current,
         index: queueIndexRef.current,
         shuffled: shuffledRef.current,
+        source: queueSourceRef.current,
         position: audioRef.current?.currentTime || lastPosSaveRef.current,
       }));
     } catch { /* private mode / quota — resume is best-effort */ }
@@ -551,8 +569,8 @@ export function AudioPlayerProvider({ children }: { children: React.ReactNode })
   }, []);
 
   const value = useMemo<AudioPlayerContextValue>(
-    () => ({ track, playing, currentTime, duration, repeat, toggleRepeat, volume, muted, setVolume, toggleMute, play, playQueue, next, prev, shuffled, toggleShuffle, queueLength: queue.length, queueIndex, queueTracks: queue, jumpTo, removeAt, toggle, seek, close, isActive, getLevels }),
-    [track, playing, currentTime, duration, repeat, toggleRepeat, volume, muted, setVolume, toggleMute, play, playQueue, next, prev, shuffled, toggleShuffle, queue, queueIndex, jumpTo, removeAt, toggle, seek, close, isActive, getLevels],
+    () => ({ track, playing, currentTime, duration, repeat, toggleRepeat, volume, muted, setVolume, toggleMute, play, playQueue, next, prev, shuffled, toggleShuffle, queueLength: queue.length, queueIndex, queueTracks: queue, queueSource, jumpTo, removeAt, toggle, seek, close, isActive, getLevels }),
+    [track, playing, currentTime, duration, repeat, toggleRepeat, volume, muted, setVolume, toggleMute, play, playQueue, next, prev, shuffled, toggleShuffle, queue, queueIndex, queueSource, jumpTo, removeAt, toggle, seek, close, isActive, getLevels],
   );
 
   return (
