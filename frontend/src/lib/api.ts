@@ -151,7 +151,7 @@ export const ingestApi = {
 // Collections
 export const collectionApi = {
   list: () => fetchJSON<any[]>('/collections'),
-  create: (data: { name: string; emoji?: string; description?: string; color?: string }) =>
+  create: (data: { name: string; emoji?: string; description?: string; color?: string; kind?: 'standard' | 'playlist' }) =>
     fetchJSON<{ id: string }>('/collections', { method: 'POST', body: JSON.stringify(data) }),
   update: (id: string, data: any) =>
     fetchJSON<any>(`/collections/${id}`, { method: 'PUT', body: JSON.stringify(data) }),

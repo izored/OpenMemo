@@ -2404,6 +2404,7 @@ input, textarea { font: inherit; color: inherit; }
 .om-sb-player-sat.active { background: #fff; color: #111; }
 .om-sb-player-big-pin { top: 8px; right: 60px; }    /* top edge flush with play */
 .om-sb-player-big-repeat { top: 60px; right: 8px; }  /* right edge flush with play */
+.om-sb-player-big-addpl { top: 60px; right: 60px; } /* fills the cluster corner */
 
 .om-sb-player-head { display: flex; align-items: center; gap: 10px; min-width: 0; }
 .om-sb-player-cover-btn { padding: 0; border: 0; background: none; cursor: pointer; flex-shrink: 0; line-height: 0; }
@@ -4418,6 +4419,60 @@ button.om-add-link { background: none; border: 0; padding: 0; cursor: pointer; f
 .om-upnext-row:hover .om-upnext-x, .om-upnext-x:focus-visible { opacity: 1; }
 .om-upnext-x:hover { background: var(--surface-3); color: var(--text); }
 @media (hover: none) { .om-upnext-x { opacity: 1; } }
+
+/* "Add to playlist" popover — shared by cards, the sidebar player, and the
+   memo detail page. Placement comes from the anchoring parent below. */
+.om-plmenu-backdrop { position: fixed; inset: 0; z-index: 59; }
+.om-plmenu {
+  position: absolute; z-index: 60; min-width: 200px;
+  background: var(--surface-2); border: 1px solid var(--border-2);
+  border-radius: 12px; box-shadow: 0 12px 32px rgba(0, 0, 0, 0.35);
+  display: flex; flex-direction: column; overflow: hidden;
+  animation: omSbPlayerIn .2s cubic-bezier(0.16, 0.84, 0.34, 1);
+  cursor: default;
+}
+.om-card .om-plmenu { top: 44px; right: 8px; width: 230px; }
+.om-sb-player .om-plmenu { bottom: calc(100% + 8px); left: 0; right: 0; }
+.om-detail-actions .om-plmenu { top: calc(100% + 6px); right: 0; width: 230px; }
+.om-plmenu-head {
+  padding: 9px 12px 6px; font-size: 10px; letter-spacing: 0.08em;
+  text-transform: uppercase; color: var(--text-4);
+}
+.om-plmenu-list { max-height: 200px; overflow-y: auto; padding: 0 4px; }
+.om-plmenu-empty { margin: 0; padding: 4px 8px 8px; font-size: 11.5px; color: var(--text-4); }
+.om-plmenu-row {
+  width: 100%; display: flex; align-items: center; gap: 8px;
+  padding: 6px 8px; border: 0; border-radius: 8px; background: transparent;
+  cursor: pointer; text-align: left; color: var(--text-2); font-size: 12.5px;
+}
+.om-plmenu-row:hover { background: var(--surface-3); }
+.om-plmenu-row.is-member { color: var(--text); }
+.om-plmenu-check {
+  width: 16px; height: 16px; flex-shrink: 0; display: grid; place-items: center;
+  border: 1px solid var(--border-2); border-radius: 5px; color: var(--accent);
+}
+.om-plmenu-row.is-member .om-plmenu-check { border-color: var(--accent); }
+.om-plmenu-name { flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.om-plmenu-count { font-size: 10px; color: var(--text-4); flex-shrink: 0; }
+.om-plmenu-add {
+  display: flex; align-items: center; gap: 6px; margin: 4px; padding: 6px 8px;
+  border: 0; border-radius: 8px; background: transparent; cursor: pointer;
+  color: var(--text-3); font-size: 12px; font-weight: 600;
+}
+.om-plmenu-add:hover { background: var(--surface-3); color: var(--text); }
+.om-plmenu-new { display: flex; align-items: center; gap: 6px; padding: 6px 8px 8px; }
+.om-plmenu-new input {
+  flex: 1; min-width: 0; padding: 5px 8px; font-size: 12px;
+  background: var(--surface); color: var(--text);
+  border: 1px solid var(--border-2); border-radius: 8px; outline: none;
+}
+.om-plmenu-new input:focus { border-color: var(--accent); }
+.om-plmenu-go {
+  width: 26px; height: 26px; flex-shrink: 0; border: 0; border-radius: 50%;
+  display: grid; place-items: center; cursor: pointer;
+  background: var(--text); color: var(--bg);
+}
+.om-plmenu-go:disabled { opacity: .45; cursor: default; }
 
 /* New-memo panel — playlist choice (whole playlist vs just this one). */
 .om-add-pl { display: flex; flex-direction: column; }
