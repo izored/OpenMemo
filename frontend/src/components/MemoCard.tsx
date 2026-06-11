@@ -441,15 +441,15 @@ export function MemoCard({ memo, dragHandleProps, lightboxGroup }: CardProps) {
       </button>
       <div className="om-card-confirm-inner" onClick={(e) => e.stopPropagation()}>
         <p className="om-card-confirm-title">Delete memo?</p>
+        <div className="om-card-confirm-actions">
+          <button className="om-confirm-btn" onClick={confirmHide}>{memo.hidden ? 'Unhide' : 'Hide'}</button>
+          <button className="om-confirm-btn danger" onClick={confirmDelete} autoFocus>Delete</button>
+        </div>
         <p className="om-card-confirm-hint">
           {memo.hidden
             ? 'Unhide puts it back on the dashboard.'
             : 'Hide keeps it in collections, off the dashboard.'}
         </p>
-        <div className="om-card-confirm-actions">
-          <button className="om-confirm-btn" onClick={confirmHide}>{memo.hidden ? 'Unhide' : 'Hide'}</button>
-          <button className="om-confirm-btn danger" onClick={confirmDelete} autoFocus>Delete</button>
-        </div>
       </div>
     </div>
   ) : null;

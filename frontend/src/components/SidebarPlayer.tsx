@@ -204,7 +204,10 @@ export function SidebarPlayer() {
       <button className="om-sb-player-btn" onClick={prev} disabled={queueIndex <= 0} title="Previous track" aria-label="Previous track">
         <Icon name="skipBack" size={14} />
       </button>
-      <span className="om-sb-player-queue-pos mono">{queueIndex + 1} / {queueLength}</span>
+      <span
+        className="om-sb-player-queue-pos mono"
+        style={{ minWidth: `${String(queueLength).length * 2 + 3}ch` }}
+      >{queueIndex + 1} / {queueLength}</span>
       <button className="om-sb-player-btn" onClick={next} disabled={queueIndex >= queueLength - 1} title="Next track" aria-label="Next track">
         <Icon name="skipForward" size={14} />
       </button>
