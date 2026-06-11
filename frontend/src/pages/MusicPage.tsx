@@ -391,6 +391,21 @@ export function MusicPage() {
     queryClient.invalidateQueries({ queryKey: ['music-playlists'] });
   };
 
+  // Create an empty playlist right on the page — no URL, no memo needed.
+  const [creatingPl, setCreatingPl] = useState(false);
+  const [newPlName, setNewPlName] = useState('');
+  const createPlaylist = async () => {
+    const name = newPlName.trim();
+    if (!name) return;
+    try {
+      const created = await collectionApi.create({ name, kind: 'playlist' });
+      setNewPlName('');
+      setCreatingPl(false);
+      queryClient.invalidateQueries({ queryKey: ['music-playlists'] });
+      navigate(`/music/${created.id}`);
+    } catch { /* keep the input so the name survives a retry */ }
+  };
+
   const deletePlaylist = async (p: MusicPlaylist) => {
     const ok = window.confirm(
       `Delete the playlist "${p.name}"?\n\nIts ${p.track_count} track(s) move back to your music library. Only the playlist goes.`,
@@ -521,13 +536,40 @@ export function MusicPage() {
       <section className="om-music-sect">
         <div className="om-section-head">
           <span className="om-section-label mono">Playlists</span>
-          <Icon name="listMusic" size={11} className="om-section-icon" />
+          <span className="om-lib-actions">
+            {creatingPl ? (
+              <span className="om-lib-search">
+                <Icon name="listMusic" size={11} />
+                <input
+                  autoFocus
+                  value={newPlName}
+                  onChange={(e) => setNewPlName(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') createPlaylist();
+                    if (e.key === 'Escape') { setCreatingPl(false); setNewPlName(''); }
+                  }}
+                  placeholder="Playlist name"
+                  maxLength={200}
+                  aria-label="New playlist name"
+                />
+                <button className="om-lib-search-x" onClick={createPlaylist} disabled={!newPlName.trim()} title="Create playlist" aria-label="Create playlist">
+                  <Icon name="check" size={10} />
+                </button>
+              </span>
+            ) : (
+              <button className="om-lib-act" onClick={() => setCreatingPl(true)} title="Create an empty playlist">
+                <Icon name="plus" size={11} />
+                <span>New playlist</span>
+              </button>
+            )}
+            <Icon name="listMusic" size={11} className="om-section-icon" />
+          </span>
         </div>
         {playlists.length === 0 ? (
           <div className="om-pl-empty">
             <Icon name="listMusic" size={18} />
             <p>
-              No playlists yet. Paste a YouTube Music playlist link into{' '}
+              No playlists yet. Create one here, or paste a YouTube Music playlist link into{' '}
               <button className="om-add-link" onClick={() => setAddPanelOpen(true)}>New Memo</button>{' '}
               and pick “whole playlist”.
             </p>
