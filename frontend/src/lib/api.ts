@@ -15,11 +15,14 @@ async function fetchJSON<T>(url: string, options?: RequestInit): Promise<T> {
 
 // Memos
 export const memoApi = {
-  list: (params?: { type?: string; collection_id?: string; search?: string; offset?: number; limit?: number }) => {
+  list: (params?: { type?: string; collection_id?: string; search?: string; hidden?: boolean; offset?: number; limit?: number }) => {
     const search = new URLSearchParams();
     if (params?.type && params.type !== 'all') search.set('type', params.type);
     if (params?.collection_id) search.set('collection_id', params.collection_id);
     if (params?.search) search.set('search', params.search);
+    // hidden=true lists ONLY hidden memos (the passcode-gated hidden section).
+    // Omitted = dashboard behavior (hidden memos excluded server-side).
+    if (params?.hidden) search.set('hidden', 'true');
     if (params?.offset) search.set('offset', String(params.offset));
     if (params?.limit) search.set('limit', String(params.limit));
     return fetchJSON<{ items: any[]; total: number; offset: number; limit: number }>(`/memos?${search}`);
@@ -30,6 +33,7 @@ export const memoApi = {
   setRecency: (id: string, recency_at: string) =>
     fetchJSON<{ id: string; recency_at: string }>(`/memos/${id}/recency`, { method: 'PUT', body: JSON.stringify({ recency_at }) }),
   pin: (id: string, pinned: boolean) => fetchJSON<{ id: string; pinned: boolean }>(`/memos/${id}/pin`, { method: 'PUT', body: JSON.stringify({ pinned }) }),
+  hide: (id: string, hidden: boolean) => fetchJSON<{ id: string; hidden: boolean }>(`/memos/${id}/hide`, { method: 'PUT', body: JSON.stringify({ hidden }) }),
   listPinned: () => fetchJSON<{ id: string; type: string; title: string; thumbnail_path?: string; source_domain?: string; source_favicon?: string; pinned: boolean }[]>('/memos/pinned/list'),
   delete: (id: string) => fetchJSON<any>(`/memos/${id}`, { method: 'DELETE' }),
   restore: (id: string) => fetchJSON<any>(`/memos/${id}/restore`, { method: 'POST' }),
@@ -202,6 +206,9 @@ export interface AppSettings {
   // Extension of the active custom background image (server-stored, full
   // quality), or '' if none. The image is served at /api/settings/background.
   bg_image_ext: string;
+  // Read-only flag: whether a hidden-section passcode exists. The hash itself
+  // never crosses the API.
+  hidden_passcode_set: boolean;
 }
 
 export const settingsApi = {
@@ -237,6 +244,17 @@ export const settingsApi = {
   },
   deleteBackground: () =>
     fetchJSON<{ bg_image_present: boolean }>('/settings/background', { method: 'DELETE' }),
+  // Hidden-section passcode. Set (first open) or change (requires current).
+  setHiddenPasscode: (passcode: string, current?: string) =>
+    fetchJSON<{ hidden_passcode_set: boolean }>('/settings/hidden-passcode', {
+      method: 'POST',
+      body: JSON.stringify({ passcode, current }),
+    }),
+  verifyHiddenPasscode: (passcode: string) =>
+    fetchJSON<{ ok: boolean }>('/settings/hidden-passcode/verify', {
+      method: 'POST',
+      body: JSON.stringify({ passcode }),
+    }),
 };
 
 export const maintenanceApi = {

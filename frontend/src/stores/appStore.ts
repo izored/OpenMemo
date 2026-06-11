@@ -137,6 +137,17 @@ interface AppState {
   deleteToast: { memoId: string; title: string } | null;
   showDeleteToast: (memoId: string, title: string) => void;
   clearDeleteToast: () => void;
+
+  // Hidden section (OPNMMO-0016): unlocked for this tab session only — never
+  // persisted, so a reload always re-asks for the passcode.
+  hiddenUnlocked: boolean;
+  setHiddenUnlocked: (unlocked: boolean) => void;
+
+  // Branded notice toast — in-app replacement for window.alert(). Auto-clears
+  // from the NoticeToast component.
+  notice: { message: string; kind: 'error' | 'info' } | null;
+  showNotice: (message: string, kind?: 'error' | 'info') => void;
+  clearNotice: () => void;
 }
 
 const persist = (partial: { chatModel?: string }) => {
@@ -234,4 +245,11 @@ export const useAppStore = create<AppState>((set) => ({
   deleteToast: null,
   showDeleteToast: (memoId, title) => set({ deleteToast: { memoId, title } }),
   clearDeleteToast: () => set({ deleteToast: null }),
+
+  hiddenUnlocked: false,
+  setHiddenUnlocked: (unlocked) => set({ hiddenUnlocked: unlocked }),
+
+  notice: null,
+  showNotice: (message, kind = 'error') => set({ notice: { message, kind } }),
+  clearNotice: () => set({ notice: null }),
 }));
