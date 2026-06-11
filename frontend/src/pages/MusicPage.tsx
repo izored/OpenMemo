@@ -105,14 +105,15 @@ function PlaylistCard({ p, onOpen, onPlay }: { p: MusicPlaylist; onOpen: () => v
 // artwork is the whole tile, title rides a bottom gradient, play on hover.
 // Remote tracks (saved without downloading) carry an explicit download chip —
 // like any music app; downloading/failed states show in the same spot.
-function MusicTile({ m, index, active, playing, onPlay, onDownload, onRemove }: {
+function MusicTile({ m, index, active, playing, onPlay, onDownload, onRemove, onDelete }: {
   m: Memo; index: number; active: boolean; playing: boolean;
-  onPlay: () => void; onDownload: () => void; onRemove: () => void;
+  onPlay: () => void; onDownload: () => void; onRemove: () => void; onDelete: () => void;
 }) {
   const ready = isReady(m);
   const failed = m.localize_status === 'error';
   const fetching = m.localize_status === 'pending' || m.localize_status === 'processing';
   const remote = !ready && !failed && !fetching;
+  const [confirm, setConfirm] = useState(false);
   return (
     <button
       className={cn('om-mtile', active && 'is-active', fetching && 'is-pending')}
@@ -131,13 +132,21 @@ function MusicTile({ m, index, active, playing, onPlay, onDownload, onRemove }: 
         className="om-mtile-remove"
         role="button"
         tabIndex={0}
-        title="Remove from this playlist (the song stays saved)"
+        title="Remove from this playlist"
         aria-label={`Remove ${m.title} from this playlist`}
-        onClick={(e) => { e.stopPropagation(); onRemove(); }}
-        onKeyDown={(e) => { if (e.key === 'Enter') { e.stopPropagation(); onRemove(); } }}
+        onClick={(e) => { e.stopPropagation(); setConfirm(true); }}
+        onKeyDown={(e) => { if (e.key === 'Enter') { e.stopPropagation(); setConfirm(true); } }}
       >
         <Icon name="x" size={11} />
       </span>
+      {confirm && (
+        <div className="om-mtile-confirm" onClick={(e) => { e.stopPropagation(); setConfirm(false); }}>
+          <div className="om-mtile-confirm-inner" onClick={(e) => e.stopPropagation()}>
+            <button className="om-confirm-btn danger" onClick={(e) => { e.stopPropagation(); onDelete(); setConfirm(false); }}>Delete</button>
+            <button className="om-confirm-btn" onClick={(e) => { e.stopPropagation(); onRemove(); setConfirm(false); }}>Remove</button>
+          </div>
+        </div>
+      )}
       {failed ? (
         <span
           className="om-mtile-state failed is-action"
@@ -363,6 +372,14 @@ export function MusicPage() {
     queueFrom(res.items as Memo[], undefined, opts);
   };
 
+  const deleteMemo = async (m: Memo) => {
+    try {
+      await memoApi.delete(m.id);
+    } catch { /* errors surface via query refetch */ }
+    queryClient.invalidateQueries({ queryKey: ['memos'] });
+    queryClient.invalidateQueries({ queryKey: ['music-playlists'] });
+  };
+
   // Pull a track out of the open playlist. The memo survives — playlist-born
   // tracks resurface in the library, dragged-in ones never left it.
   const removeFromPlaylist = async (m: Memo) => {
@@ -510,6 +527,7 @@ export function MusicPage() {
                     }}
                     onDownload={() => downloadTrack(m)}
                     onRemove={() => removeFromPlaylist(m)}
+                    onDelete={() => deleteMemo(m)}
                   />
                 </SortableTile>
               ))}

@@ -575,7 +575,7 @@ input, textarea { font: inherit; color: inherit; }
 .om-card-confirm-close:hover { background: rgba(255,255,255,0.16); color: #fff; }
 .om-card-confirm-hint {
   font-size: 12px; line-height: 1.45; color: rgba(255,255,255,0.6);
-  margin: -10px 0 0; padding: 0 20px; text-align: center; max-width: 240px;
+  margin: 6px 0 0; padding: 0 20px; text-align: center; max-width: 240px;
 }
 
 /* ─ Hidden section (OPNMMO-0016) ──────────────────────────────────────── */
@@ -3294,6 +3294,11 @@ input, textarea { font: inherit; color: inherit; }
 [data-bg="random"] .om-card-note[data-tint="3"] {
   background: color-mix(in oklab, var(--bg-c3) 22%, #2A2622) !important;
 }
+/* Dark mode beats random-bg !important via higher specificity (0,3,0) + later source position. */
+[data-theme="hi"][data-bg="random"] .om-card-note { background: color-mix(in oklab, var(--accent) 10%, #2E2A26) !important; color: #D4C8B4; }
+[data-theme="hi"][data-bg="random"] .om-card-note[data-tint="1"] { background: color-mix(in oklab, var(--accent) 10%, #28241F) !important; }
+[data-theme="hi"][data-bg="random"] .om-card-note[data-tint="2"] { background: color-mix(in oklab, var(--accent) 10%, #2A2621) !important; }
+[data-theme="hi"][data-bg="random"] .om-card-note[data-tint="3"] { background: color-mix(in oklab, var(--accent) 10%, #1E1B18) !important; color: #D4C8B4; }
 [data-bg="random"] .om-doc-frame {
   background: color-mix(in oklab, var(--bg-c2) 14%, var(--surface-3));
   transition: background 0.7s ease;
@@ -4488,7 +4493,23 @@ button.om-add-link { background: none; border: 0; padding: 0; cursor: pointer; f
 .om-sb-player .om-plmenu { bottom: calc(100% + 8px); left: 0; right: 0; }
 /* Big player has overflow:hidden (cover corners), so an above-the-player
    popover gets clipped — anchor it INSIDE, overlaying the artwork. */
-.om-sb-player-big .om-plmenu { top: 8px; bottom: auto; left: 8px; right: 8px; z-index: 5; }
+.om-sb-player-big .om-plmenu { top: 8px; bottom: auto; left: 8px; right: 8px; z-index: 65; }
+.om-sb-player-big .om-plmenu-backdrop { display: none; }
+
+/* Tile confirm overlay (Delete vs Remove from playlist). */
+.om-mtile-confirm {
+  position: absolute; inset: 0; z-index: 8;
+  background: rgba(0,0,0,0.72);
+  border-radius: inherit;
+  display: flex; align-items: center; justify-content: center;
+}
+.om-mtile-confirm-inner {
+  display: flex; flex-direction: column; gap: 8px; padding: 12px;
+  width: 100%;
+}
+.om-mtile-confirm-inner .om-confirm-btn {
+  width: 100%; font-size: 12px; padding: 8px 0;
+}
 
 /* Big player: controls fade after ~5s of playback; pointer activity brings
    them back. Idle = title, scrubber, volume, artwork, mood only. */
