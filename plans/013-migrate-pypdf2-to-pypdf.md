@@ -1,0 +1,196 @@
+# Plan 013: PDF extraction uses the maintained `pypdf` instead of abandoned `PyPDF2`
+
+> **Executor instructions**: Follow this plan step by step. Run every
+> verification command and confirm the expected result before moving to the
+> next step. If anything in the "STOP conditions" section occurs, stop and
+> report — do not improvise. When done, update the status row for this plan
+> in `plans/README.md`.
+>
+> **Drift check (run first)**: `git diff --stat d847160..HEAD -- backend/requirements.txt backend/core/extractor.py`
+> If either file changed since this plan was written, compare the "Current
+> state" excerpts against the live code before proceeding; on a mismatch,
+> treat it as a STOP condition.
+
+## Status
+
+- **Priority**: P3
+- **Effort**: S
+- **Risk**: LOW
+- **Depends on**: none
+- **Category**: dependencies
+- **Planned at**: commit `d847160`, 2026-06-11
+
+## Why this matters
+
+`PyPDF2` is archived and no longer maintained; its successor `pypdf` is the active
+fork with the same `PdfReader` API and ongoing security fixes. PDFs are a supported
+ingest type (users upload `.pdf`), so an unpatched PDF parser is a real
+supply-chain exposure. The migration is mechanical: swap the dependency and change
+one import line.
+
+## Current state
+
+- `backend/requirements.txt` pins `PyPDF2==3.0.1`.
+- `backend/core/extractor.py:299` imports it:
+  ```python
+  from PyPDF2 import PdfReader
+  ```
+  `grep -rn "PyPDF2\|pypdf" backend/ --include=*.py` shows this is the **only**
+  usage (confirm at execution time). `pypdf`'s `PdfReader` is API-compatible for
+  the common `PdfReader(file)` + `.pages` + `page.extract_text()` flow.
+
+## Commands you will need
+
+| Purpose | Command (from project root unless noted) | Expected on success |
+|---------|------------------------------------------|---------------------|
+| Find all usages | `grep -rn "PyPDF2\|pypdf" backend/ --include=*.py` | only `extractor.py` |
+| Install (in the project's Python env) | `pip install "pypdf>=4.0.0"` then `pip uninstall -y PyPDF2` | exit 0 |
+| Import smoke | `python -c "from backend.main import app; print('OK')"` | prints `OK` |
+| Extractor import | `python -c "from backend.core import extractor; print('OK')"` | prints `OK` |
+| Backend tests | `pytest backend/tests/` | all pass |
+
+(Windows PowerShell: separate commands with `;`, not `&&`.)
+
+> NOTE: this plan **does** edit `requirements.txt` and install a package — that's
+> the task. The advisor's no-install rule doesn't bind you as the executor.
+
+## Scope
+
+**In scope**:
+- `backend/requirements.txt`
+- `backend/core/extractor.py` (the one import line; plus any `PyPDF2`-specific
+  symbol if used)
+- `backend/tests/test_pdf_extract.py` (create — minimal)
+
+**Out of scope**:
+- Any other extractor logic (HTML, docx, audio).
+- Frontend.
+
+## Git workflow
+
+- Branch: `advisor/013-migrate-pypdf2-to-pypdf`
+- One commit, conventional style:
+  `chore(deps): migrate PyPDF2 (abandoned) to maintained pypdf`.
+- Do NOT push or open a PR unless instructed.
+
+## Steps
+
+### Step 1: Confirm the blast radius
+
+Run `grep -rn "PyPDF2\|pypdf" backend/ --include=*.py`. Expect a single hit in
+`backend/core/extractor.py`. If there are more (e.g. a `PdfReadError` exception
+import, `PyPDF2.errors`), note them — each needs the equivalent `pypdf` symbol in
+Step 3.
+
+**Verify**: command lists only `extractor.py` (or you've recorded the extra sites).
+
+### Step 2: Swap the dependency
+
+In `backend/requirements.txt`, replace:
+
+```
+PyPDF2==3.0.1
+```
+
+with:
+
+```
+pypdf>=4.0.0
+```
+
+Then install into the project env: `pip install "pypdf>=4.0.0"` and
+`pip uninstall -y PyPDF2`.
+
+**Verify**: `python -c "import pypdf; print(pypdf.__version__)"` → prints a 4.x+
+version. `python -c "import PyPDF2" ` → ModuleNotFoundError (uninstalled).
+
+### Step 3: Update the import
+
+In `backend/core/extractor.py:299`, change:
+
+```python
+from PyPDF2 import PdfReader
+```
+
+to:
+
+```python
+from pypdf import PdfReader
+```
+
+If Step 1 found `PyPDF2`-specific symbols (e.g. `from PyPDF2 import PdfReadError`),
+map them to `pypdf` equivalents (`from pypdf.errors import PdfReadError`). Do not
+change the extraction logic itself.
+
+**Verify**: `grep -rn "PyPDF2" backend/ --include=*.py` → returns nothing.
+`python -c "from backend.core import extractor; print('OK')"` → prints `OK`.
+
+### Step 4: Minimal PDF extraction test
+
+Create `backend/tests/test_pdf_extract.py`. Generate a tiny PDF in-memory and run
+it through the extractor's PDF path to prove `pypdf` reads it. If the extractor
+exposes a callable like `extract_pdf(file_bytes)` use it; otherwise test the
+`PdfReader` round-trip directly:
+
+```python
+import io
+from pypdf import PdfReader, PdfWriter
+
+
+def test_pypdf_reads_a_generated_pdf():
+    writer = PdfWriter()
+    writer.add_blank_page(width=72, height=72)
+    buf = io.BytesIO()
+    writer.write(buf)
+    buf.seek(0)
+    reader = PdfReader(buf)
+    assert len(reader.pages) == 1
+```
+
+If the extractor has a public PDF function, prefer a test that calls it with the
+generated bytes and asserts it returns a string without raising. Read
+`extractor.py` around line 299 to find the enclosing function name.
+
+**Verify**: `pytest backend/tests/test_pdf_extract.py -v` → pass.
+
+### Step 5: Full backend checks
+
+**Verify**:
+- `python -c "from backend.main import app; print('OK')"` → `OK`
+- `pytest backend/tests/` → all pass.
+
+## Test plan
+
+- New file `backend/tests/test_pdf_extract.py`: a generated 1-page PDF is read by
+  `pypdf` (and, if a public extractor function exists, extracted without error).
+- Verification: `pytest backend/tests/` → all pass.
+
+## Done criteria
+
+ALL must hold:
+
+- [ ] `grep -rn "PyPDF2" backend/` returns nothing
+- [ ] `backend/requirements.txt` lists `pypdf>=4.0.0`, no `PyPDF2`
+- [ ] `python -c "from backend.core import extractor; print('OK')"` prints `OK`
+- [ ] `pytest backend/tests/` exits 0; `test_pdf_extract.py` passes
+- [ ] No files outside the in-scope list modified (`git status`)
+- [ ] `plans/README.md` status row updated
+
+## STOP conditions
+
+Stop and report (do not improvise) if:
+
+- `grep` finds `PyPDF2` usage beyond a simple `PdfReader` import that doesn't have
+  an obvious `pypdf` equivalent — report the symbols.
+- The extractor relies on PyPDF2 behavior that pypdf changed (extraction output
+  differs materially) — report; do not paper over it.
+- Installing `pypdf` conflicts with another pinned dependency — report the
+  resolver error.
+
+## Maintenance notes
+
+- `pypdf` 3.x→4.x dropped some deprecated APIs; the `PdfReader`/`extract_text`
+  path used here is stable, but reviewer should glance at the extractor's
+  `extract_text` call for any deprecated kwargs.
+- Future PDF features (encrypted PDFs, form fields) should build on `pypdf`.
+- Keep the floor pin (`>=4.0.0`) rather than an exact pin so security patches flow.
