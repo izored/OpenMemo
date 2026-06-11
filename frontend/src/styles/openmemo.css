@@ -2352,7 +2352,7 @@ input, textarea { font: inherit; color: inherit; }
 /* Big player (appearance pref `playerSize: 'big'`) — full cover dissolving into
    the mood color, transport below, like a now-playing card. Music-with-cover only
    (falls back to small). White controls; dark base when no mood color was read. */
-.om-sb-player-big { position: relative; padding: 0; overflow: hidden; background: #17171b; }
+.om-sb-player-big { position: relative; padding: 0; overflow: hidden; background: #17171b; border: none; }
 /* Vertical mood gradient as the surface; the cover masks INTO it so there's no
    hard cut — the artwork dissolves smoothly into the color (matches the reference). */
 .om-sb-player.om-sb-player-big.is-tinted {
@@ -4431,7 +4431,7 @@ button.om-add-link { background: none; border: 0; padding: 0; cursor: pointer; f
 
 /* Sidebar player queue row (big layout) — prev / position / next. */
 .om-sb-player-queue { display: flex; align-items: center; justify-content: center; gap: 10px; }
-.om-sb-player-queue-pos { font-size: 9px; color: var(--text-4); font-variant-numeric: tabular-nums; }
+.om-sb-player-queue-pos { font-size: 9px; color: var(--text-4); font-variant-numeric: tabular-nums; text-align: center; }
 .om-sb-player.is-tinted .om-sb-player-queue-pos { color: rgba(255, 255, 255, 0.72); }
 .om-sb-player-btn:disabled { opacity: 0.35; cursor: default; }
 .om-sb-player-btn:disabled:hover { background: transparent; color: var(--text-3); }

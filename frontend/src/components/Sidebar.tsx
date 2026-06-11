@@ -119,8 +119,8 @@ export function Sidebar() {
   const navItems = [
     { id: 'home', label: 'All Memos', icon: 'home', path: '/' },
     { id: 'collections', label: 'Collections', icon: 'layers', path: '/collections' },
-    { id: 'ask', label: 'Ask Memo', icon: 'sparkles', path: '/ask' },
     { id: 'music', label: 'Music', icon: 'music', path: '/music' },
+    { id: 'ask', label: 'Ask Memo', icon: 'sparkles', path: '/ask' },
   ];
 
   const pinned = collections.filter((c: Collection) => c.pinned);

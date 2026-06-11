@@ -198,6 +198,17 @@ export function SidebarPlayer() {
   // stays exactly as ADR-010 placed it).
   const queueRow = hasQueue ? (
     <div className="om-sb-player-queue">
+      {isMusic && (
+        <button
+          className={cn('om-sb-player-btn', plMenuOpen && 'active')}
+          onClick={() => setPlMenuOpen((v) => !v)}
+          title="Add to playlist"
+          aria-label="Add to playlist"
+          aria-expanded={plMenuOpen}
+        >
+          <Icon name="plus" size={14} />
+        </button>
+      )}
       <button className={cn('om-sb-player-btn', shuffled && 'active')} onClick={toggleShuffle} title={shuffled ? 'Shuffle: on' : 'Shuffle: off'} aria-pressed={shuffled} aria-label="Shuffle">
         <Icon name="shuffle" size={14} />
       </button>
@@ -305,17 +316,6 @@ export function SidebarPlayer() {
         >
           <Icon name={repeat ? 'repeat1' : 'repeat'} size={14} />
         </button>
-        {isMusic && (
-          <button
-            className={cn('om-sb-player-sat om-sb-player-big-addpl', plMenuOpen && 'active')}
-            onClick={() => setPlMenuOpen((v) => !v)}
-            title="Add to playlist"
-            aria-label="Add to playlist"
-            aria-expanded={plMenuOpen}
-          >
-            <Icon name="plus" size={14} />
-          </button>
-        )}
         {plMenuOpen && <PlaylistMenu memoId={track.memoId} onClose={() => setPlMenuOpen(false)} />}
 
         <div className="om-sb-player-big-body">
