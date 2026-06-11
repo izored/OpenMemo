@@ -137,11 +137,11 @@ async def list_memos(
         query = query.where(Memo.hidden == True)  # noqa: E712
     elif not collection_id:
         query = query.where((Memo.hidden == False) | (Memo.hidden == None))  # noqa: E712
-    # Keep the main feed clean (OPNMMO-0023): tracks that belong to a music
-    # playlist live on the Music page, not in All Memos / the type tabs. They
-    # still appear when a collection is opened explicitly (playlist view) or
-    # when the caller asks for music directly (audio_kind filter / Music tab).
-    if not collection_id and audio_kind not in ("voice", "music"):
+    # Keep every feed clean (OPNMMO-0023): tracks that belong to a music
+    # playlist live inside that playlist only. They are excluded from All
+    # Memos, the type tabs AND the Music page library, and appear only when
+    # their collection is opened explicitly (collection_id = playlist view).
+    if not collection_id:
         playlist_members = (
             select(memo_collections.c.memo_id)
             .join(Collection, Collection.id == memo_collections.c.collection_id)
