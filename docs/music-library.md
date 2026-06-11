@@ -17,7 +17,7 @@ What we added on top:
 - **Drag a track onto a playlist card** to file it, same gesture as sidebar collections.
 - **Not just YouTube.** SoundCloud sets and Bandcamp albums are playlists too. One detection helper, host-agnostic per ADR-001.
 - **Download is opt-in.** A playlist can be pulled as remote track memos only, like any music app: a download chip per tile, a Download all button on the playlist page. Or flip the toggle and it downloads everything up front.
-- **The home feed stays clean.** Playlist tracks never flood All Memos. They live on the Music page, in their playlist, and in the dashboard Music filter.
+- **Every feed stays clean.** Playlist tracks live inside their playlist, full stop. They never flood All Memos, the type tabs, or the Music library. The library lists only the songs you saved one by one: a liked-songs shelf, not a dump of every playlist you ever pulled.
 
 ## Data model
 
@@ -28,7 +28,7 @@ Playlists are collections. No new table, one new column.
 
 The collections API filters by kind server-side. `GET /api/collections` returns standard collections only, so the sidebar, the collections page, and every collection picker hide playlists with zero frontend changes. `?kind=playlist` returns playlists. `?kind=all` returns everything.
 
-Tracks are plain audio memos (`type=audio`, `audio_kind=music`) linked to the playlist through the existing `memo_collections` table. They show up in the dashboard, in search, in the library. Delete the playlist and the tracks survive, exactly like collections.
+Tracks are plain audio memos (`type=audio`, `audio_kind=music`) linked to the playlist through the existing `memo_collections` table. They keep their detail pages and stay searchable, but the list feeds (dashboard, type tabs, Music library) exclude any memo that belongs to a playlist-kind collection. A track shows in exactly one list: its playlist. Delete the playlist and the tracks survive, exactly like collections; freed of their membership, they reappear in the library.
 
 Playlist order rides on `recency_at`: track i gets `now - i` seconds at ingest, so the default recency sort returns playlist order for free. Same trick drag-to-reorder already uses.
 
@@ -55,7 +55,7 @@ Three zones, in the visual language of the dashboard:
 
 - **Header.** Eyebrow, title, sub. Same `om-header` skeleton as Today. Adding music goes through the global FAB and New Memo panel, no extra chrome.
 - **Playlists.** A horizontal row of playlist cards. Each card is a 2x2 collage of the first four track covers, name, track count, a play button that queues the whole playlist, and a progress bar while tracks are downloading. Cards accept memo-card drops, same as sidebar collections.
-- **Library.** Every music memo, newest first, in the standard masonry grid. Music cards render full-bleed: square artwork edge to edge, title on a bottom gradient, no body bar.
+- **Library.** The songs you saved one by one, newest first, in the standard masonry grid. Playlist tracks are not here; they live behind their playlist card. Music cards render full-bleed: square artwork edge to edge, title on a bottom gradient, no body bar.
 
 Click a playlist card and you get the playlist view (`/music/:id`): a boxed hero that names the playlist (collage, count, play-all, Download all, source link, delete), a "Back to Music" button above it, and the tracks as full-bleed cover tiles. Each tile carries its number, its title on a gradient, play on hover, and a download / retry chip when the track is still remote or failed. Click a ready tile to play; the queue picks up from that track. Deleting a playlist removes the collection, never the tracks.
 

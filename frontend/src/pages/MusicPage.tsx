@@ -178,8 +178,10 @@ export function MusicPage() {
   });
   const anyDownloading = playlists.some((p) => p.progress.pending > 0);
 
-  // The library: every music memo, newest first (same infinite pattern as the
-  // dashboard). Polls along with playlist progress so finished tracks pop in.
+  // The library: standalone music memos only, newest first (same infinite
+  // pattern as the dashboard). Playlist tracks are excluded server-side and
+  // live inside their playlist view. Polls along with playlist progress so a
+  // deleted playlist's freed tracks pop in.
   const {
     data: libData,
     isLoading: libLoading,
@@ -259,7 +261,7 @@ export function MusicPage() {
 
   const deletePlaylist = async (p: MusicPlaylist) => {
     const ok = window.confirm(
-      `Delete the playlist "${p.name}"?\n\nIts ${p.track_count} track(s) stay in your music library — only the playlist goes.`,
+      `Delete the playlist "${p.name}"?\n\nIts ${p.track_count} track(s) move back to your music library. Only the playlist goes.`,
     );
     if (!ok) return;
     await collectionApi.delete(p.id);
@@ -411,7 +413,7 @@ export function MusicPage() {
             <div className="om-empty-mark"><Icon name="music" size={26} /></div>
             <span className="mono om-greet-eyebrow">Nothing here yet</span>
             <h2>No music yet</h2>
-            <p>Paste a track or playlist link, or upload audio files — they all land here.</p>
+            <p>Paste a track link or upload audio files. Whole playlists keep their tracks on the shelf above.</p>
           </div>
         ) : (
           <>
