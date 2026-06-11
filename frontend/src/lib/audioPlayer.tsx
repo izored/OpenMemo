@@ -147,6 +147,19 @@ export function AudioPlayerProvider({ children }: { children: React.ReactNode })
   // WebAudio analyser graph for the live waveform. A MediaElementSource can be
   // created only ONCE per <audio> element (a second call throws), so the ctx,
   // source, and analyser are built lazily on first play and kept in refs.
+  //
+  // MOBILE: the graph is skipped entirely on coarse-pointer devices. Routing
+  // the element through an AudioContext means the OS suspends the context on
+  // screen lock / tab minimize and playback goes SILENT in the background —
+  // the classic mobile background-audio killer. Without the graph the bare
+  // <audio> element keeps playing under lock, driven by the Media Session
+  // handlers below. getLevels() returns false and every waveform caller
+  // already falls back to its static bar pattern by design.
+  const allowGraphRef = useRef(
+    typeof window === 'undefined' || !window.matchMedia
+      ? true
+      : !window.matchMedia('(pointer: coarse)').matches,
+  );
   const audioCtxRef = useRef<AudioContext | null>(null);
   const analyserRef = useRef<AnalyserNode | null>(null);
   // Backed by a concrete ArrayBuffer so the type matches getByteFrequencyData's
@@ -155,7 +168,7 @@ export function AudioPlayerProvider({ children }: { children: React.ReactNode })
 
   const ensureGraph = useCallback(() => {
     const audio = audioRef.current;
-    if (!audio || audioCtxRef.current) return;
+    if (!audio || audioCtxRef.current || !allowGraphRef.current) return;
     try {
       const Ctx = window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
       const ctx = new Ctx();
@@ -467,7 +480,12 @@ export function AudioPlayerProvider({ children }: { children: React.ReactNode })
     const ms = navigator.mediaSession;
     const a = () => audioRef.current;
     try {
-      ms.setActionHandler('play', () => a()?.play().catch(() => {}));
+      // Resume a suspended AudioContext before play — a lock-screen / notif
+      // "play" tap must revive the graph (when one exists), not stay silent.
+      ms.setActionHandler('play', () => {
+        audioCtxRef.current?.resume?.().catch(() => {});
+        a()?.play().catch(() => {});
+      });
       ms.setActionHandler('pause', () => a()?.pause());
       ms.setActionHandler('seekbackward', (d) => { const el = a(); if (el) el.currentTime = Math.max(0, el.currentTime - (d.seekOffset || 10)); });
       ms.setActionHandler('seekforward', (d) => { const el = a(); if (el) el.currentTime = el.currentTime + (d.seekOffset || 10); });
@@ -513,6 +531,22 @@ export function AudioPlayerProvider({ children }: { children: React.ReactNode })
       navigator.mediaSession.playbackState = playing ? 'playing' : 'paused';
     }
   }, [playing]);
+
+  // Coming back to the tab with a suspended AudioContext while the element is
+  // "playing" = silence. Resume the graph on visibility return (desktop only —
+  // mobile never builds the graph, see ensureGraph).
+  useEffect(() => {
+    const onVisible = () => {
+      if (document.visibilityState !== 'visible') return;
+      const ctx = audioCtxRef.current;
+      const audio = audioRef.current;
+      if (ctx?.state === 'suspended' && audio && !audio.paused) {
+        ctx.resume().catch(() => {});
+      }
+    };
+    document.addEventListener('visibilitychange', onVisible);
+    return () => document.removeEventListener('visibilitychange', onVisible);
+  }, []);
 
   const value = useMemo<AudioPlayerContextValue>(
     () => ({ track, playing, currentTime, duration, repeat, toggleRepeat, volume, muted, setVolume, toggleMute, play, playQueue, next, prev, shuffled, toggleShuffle, queueLength: queue.length, queueIndex, queueTracks: queue, jumpTo, removeAt, toggle, seek, close, isActive, getLevels }),
