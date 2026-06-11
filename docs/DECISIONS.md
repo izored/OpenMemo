@@ -7,6 +7,36 @@ the decision, and its consequences, so a future reader knows *why*, not just
 
 ---
 
+## ADR-014: Playlists are collections with a kind, and music lives on its own page
+
+**Date:** 2026-06-11 · **Status:** Built, not merged · **Builds on:** ADR-005 (voice vs music split), ADR-004 (yt-dlp is the shared engine for remote media), ADR-012 (one cookie jar for every yt-dlp call), ADR-001 (define shared things once)
+
+### Context
+
+Music Experience V2 (OPNMMO-0023) needs playlists, a Music page, playlist ingestion from a single pasted URL, and a clean home feed. The tempting design is a parallel world: a `playlists` table, a `tracks` table, a music-specific player. That doubles every concern we already solved for memos and collections: linking, deletion, search, embedding, file serving, drag and drop.
+
+### Decision
+
+**No parallel world. Playlists are collections, tracks are audio memos, and one `kind` column keeps the two UIs apart.**
+
+- `collections.kind` is `'standard'` or `'playlist'` (additive migration, NULL backfilled). `collections.source_url` records where a playlist came from, for provenance and a future re-sync.
+- The collections API filters to `kind=standard` **by default**, so the sidebar, the collections page, and every picker hide playlists with zero frontend changes. The Music page asks for `kind=playlist` explicitly.
+- Tracks are plain audio memos (`audio_kind='music'`) linked through the existing `memo_collections` table. Playlist order rides on the same `recency_at` stagger drag-to-reorder uses (track i gets `now - i` seconds).
+- Ingestion is two explicit steps: a `--flat-playlist` probe (metadata only, capped at 100 entries because a YouTube Mix is infinite) behind a cheap URL-shape gate, then a per-track sequential download through the existing localize pipeline. **Saving a playlist is always a deliberate pick in the New Memo panel, never a default**, and downloading is opt-in (`download: false` keeps tracks remote, with per-track and download-all affordances later — like any music app).
+- Progress is **derived state**: counts over per-track `localize_status`, computed by `GET /api/music/playlists`. No job table, no in-memory job registry; a server restart loses nothing, and failed tracks stay individually retryable.
+- The home feed excludes playlist members server-side (unless a collection or an `audio_kind` is asked for explicitly). A hundred ingested tracks never flood All Memos; the Music page and the Music filter own them.
+- The shared single-`<audio>` player (ADR-005) gains a queue (`playQueue` / next / prev, auto-advance on end, repeat-one wins). Playing a single track anywhere clears the queue — no hidden state.
+
+### Consequences
+
+- Every memo feature works on tracks for free: detail page, pin, delete-with-undo, search, thumbnail editing, drag onto a collection or playlist card (the same `col-` droppable namespace).
+- Deleting a playlist deletes only the collection; the tracks stay in the library, consistent with collections everywhere else.
+- The feed exclusion means a memo filed in BOTH a standard collection and a playlist is hidden from All Memos; accepted, the Music page shows it.
+- `memo_collections` has no position column, so manual playlist reorder is deferred (order = ingest stagger).
+- Embedded streaming of undownloaded YouTube tracks is not possible through the shared `<audio>` graph (cross-origin media silences the WebAudio analyser path); remote tracks open their memo instead, and the download chips are the music-app answer until a same-origin stream proxy exists.
+
+---
+
 ## ADR-013: Custom appearance backgrounds are ingested server-side at full quality
 
 **Date:** 2026-06-07 · **Status:** Shipped · **Builds on:** ADR-011 (the live appearance preview is the Settings hero), ADR-001 (define shared things once)

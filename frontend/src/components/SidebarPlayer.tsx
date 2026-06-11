@@ -21,7 +21,7 @@ export function SidebarPlayer() {
   const queryClient = useQueryClient();
   const collapsed = useAppStore((s) => s.sidebarCollapsed);
   const playerSize = useAppStore((s) => s.tweaks.playerSize);
-  const { track, playing, currentTime, duration, repeat, toggleRepeat, toggle, seek, close } = useAudioPlayer();
+  const { track, playing, currentTime, duration, repeat, toggleRepeat, toggle, seek, close, next, prev, queueLength, queueIndex } = useAudioPlayer();
 
   // Pin state seeded from the playing track, toggled optimistically here. Reset
   // during render when the track changes (React's "store info from previous
@@ -99,6 +99,9 @@ export function SidebarPlayer() {
     </div>
   );
 
+  // Queue transport (ADR-014) — prev/next show only while a playlist queue is
+  // live. A single track keeps the familiar 4-control row.
+  const hasQueue = queueLength > 1;
   const transport = (
     <div className="om-sb-player-transport">
       <VolumeControl className="om-sb-player-vol" size={14} />
@@ -111,6 +114,17 @@ export function SidebarPlayer() {
       >
         <Icon name={repeat ? 'repeat1' : 'repeat'} size={14} />
       </button>
+      {hasQueue && (
+        <button
+          className="om-sb-player-btn"
+          onClick={prev}
+          disabled={queueIndex <= 0}
+          title="Previous track"
+          aria-label="Previous track"
+        >
+          <Icon name="skipBack" size={14} />
+        </button>
+      )}
       <button
         className="om-sb-player-play"
         onClick={toggle}
@@ -119,6 +133,17 @@ export function SidebarPlayer() {
       >
         <Icon name={playing ? 'pause' : 'play'} size={15} stroke={0} style={{ fill: 'currentColor' }} />
       </button>
+      {hasQueue && (
+        <button
+          className="om-sb-player-btn"
+          onClick={next}
+          disabled={queueIndex >= queueLength - 1}
+          title="Next track"
+          aria-label="Next track"
+        >
+          <Icon name="skipForward" size={14} />
+        </button>
+      )}
       <button
         className={cn('om-sb-player-btn', pinned && 'active')}
         onClick={onPin}
@@ -130,6 +155,20 @@ export function SidebarPlayer() {
       </button>
     </div>
   );
+
+  // Big layout: queue transport lives under the scrubber (the corner cluster
+  // stays exactly as ADR-010 placed it).
+  const queueRow = hasQueue ? (
+    <div className="om-sb-player-queue">
+      <button className="om-sb-player-btn" onClick={prev} disabled={queueIndex <= 0} title="Previous track" aria-label="Previous track">
+        <Icon name="skipBack" size={14} />
+      </button>
+      <span className="om-sb-player-queue-pos mono">{queueIndex + 1} / {queueLength}</span>
+      <button className="om-sb-player-btn" onClick={next} disabled={queueIndex >= queueLength - 1} title="Next track" aria-label="Next track">
+        <Icon name="skipForward" size={14} />
+      </button>
+    </div>
+  ) : null;
 
   // ── Collapsed sidebar: cover + progress ring, tap to play/pause ──
   if (collapsed) {
@@ -215,6 +254,7 @@ export function SidebarPlayer() {
 
         <div className="om-sb-player-big-body">
           {scrub}
+          {queueRow}
           <VolumeControl size={16}>
             <button className="om-sb-player-big-title" onClick={goMemo}>
               <Marquee text={track.title} auto />

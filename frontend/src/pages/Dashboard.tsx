@@ -62,7 +62,10 @@ const FILTERS = [
   { id: 'link', label: 'Links' },
   { id: 'image', label: 'Images' },
   { id: 'video', label: 'Videos' },
-  { id: 'audio', label: 'Audio' },
+  // The old Audio tab split in two (OPNMMO-0023): `type:audio_kind` ids map to
+  // the server's audio_kind filter — music and voice are different things.
+  { id: 'audio:music', label: 'Music' },
+  { id: 'audio:voice', label: 'Voice' },
   { id: 'code', label: 'Code' },
   // Files = real documents + generic uploads. Code and audio are their own
   // tabs. Comma group expands server-side into a Memo.type IN (...) filter.
@@ -112,8 +115,14 @@ export function Dashboard() {
   } = useInfiniteQuery({
     queryKey: ['memos', activeFilter, activeCollection],
     queryFn: ({ pageParam }) => {
-      const params: { type?: string; collection_id?: string; offset?: number } = {};
-      if (activeFilter !== 'all') params.type = activeFilter;
+      const params: { type?: string; audio_kind?: 'voice' | 'music'; collection_id?: string; offset?: number } = {};
+      if (activeFilter !== 'all') {
+        // `type:audio_kind` ids (Music / Voice tabs) carry the audio sub-kind
+        // after the colon; everything else is a plain type (group) filter.
+        const [type, kind] = activeFilter.split(':');
+        params.type = type;
+        if (kind === 'voice' || kind === 'music') params.audio_kind = kind;
+      }
       if (activeCollection) params.collection_id = activeCollection;
       params.offset = pageParam;
       return memoApi.list(params);

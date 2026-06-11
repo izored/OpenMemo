@@ -56,6 +56,10 @@ class PlaylistIngest(BaseModel):
     # Optional user override for the playlist collection's name; defaults to
     # the playlist title yt-dlp reports.
     title: Optional[str] = None
+    # False = pull the playlist as remote track memos only (metadata, no media
+    # files). Tracks can be downloaded later, per track or all at once, like
+    # any music app. True = start the sequential download right away.
+    download: bool = True
     workspace_id: Optional[str] = None
 
 
@@ -368,7 +372,9 @@ async def ingest_playlist(
                 f"https://www.google.com/s2/favicons?domain={domain}&sz=32" if domain else None
             ),
             thumbnail_path=entry.get("thumbnail"),
-            localize_status="pending",
+            # download=False leaves the track remote (no status) — it can be
+            # pulled later per track or via the playlist's "download all".
+            localize_status="pending" if data.download else None,
             created_at=now,
             updated_at=now,
             recency_at=now - timedelta(seconds=i),
@@ -383,15 +389,29 @@ async def ingest_playlist(
     )
     await db.commit()
 
-    background_tasks.add_task(download_playlist_task, collection.id, memo_ids)
+    if data.download:
+        background_tasks.add_task(download_playlist_task, collection.id, memo_ids)
+    else:
+        # Still cache the remote cover thumbnails so the tiles survive the
+        # source vanishing — metadata-only, no media downloads.
+        background_tasks.add_task(cache_playlist_thumbs_task, memo_ids)
 
     return {
         "collection_id": collection.id,
         "title": collection.name,
         "total": len(memo_ids),
         "truncated": probed["truncated"],
-        "status": "processing",
+        "status": "processing" if data.download else "saved",
     }
+
+
+async def cache_playlist_thumbs_task(memo_ids: list[str]):
+    """Background: cache remote track thumbnails locally (no media download)."""
+    for memo_id in memo_ids:
+        try:
+            await cache_thumbnail(memo_id)
+        except Exception as e:
+            print(f"Playlist thumbnail cache failed for {memo_id}: {e}")
 
 
 async def download_playlist_task(collection_id: str, memo_ids: list[str]):
