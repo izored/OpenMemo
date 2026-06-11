@@ -7,6 +7,17 @@ from typing import AsyncGenerator
 from backend.config import settings
 
 
+class OllamaModelMissing(Exception):
+    """Raised when the requested model is not installed on any reachable host."""
+
+    def __init__(self, model: str):
+        self.model = model
+        super().__init__(
+            f"Model '{model}' is not installed in Ollama. "
+            f"Pull it with `ollama pull {model}` or pick another model in Settings."
+        )
+
+
 class OllamaClient:
     def __init__(self):
         self.hosts = settings.OLLAMA_HOSTS if settings.OLLAMA_HOSTS else [settings.OLLAMA_HOST]
@@ -20,6 +31,11 @@ class OllamaClient:
         self._status_cache_val: bool = False
         self._status_cache_time: float = 0.0
         self._status_ttl: float = 15.0
+        # Installed-model-name cache for resolve_chat_model (60s — model installs
+        # are rare; a stale miss just means one extra fallback hop).
+        self._models_cache: list[str] = []
+        self._models_cache_time: float = 0.0
+        self._models_ttl: float = 60.0
 
     async def _get_working_host(self) -> str:
         """Return the first responsive Ollama host, with caching."""
@@ -89,6 +105,63 @@ class OllamaClient:
             data = resp.json()
             return data.get("models", [])
 
+    async def installed_model_names(self) -> list[str]:
+        """Installed model names, cached for 60s. Empty list when Ollama is down."""
+        now = time.monotonic()
+        if self._models_cache and (now - self._models_cache_time) < self._models_ttl:
+            return self._models_cache
+        try:
+            models = await self.list_models()
+            self._models_cache = [m.get("name", "") for m in models if m.get("name")]
+            self._models_cache_time = now
+        except Exception:
+            self._models_cache = []
+        return self._models_cache
+
+    async def resolve_chat_model(self, requested: str | None = None) -> str:
+        """Resolve a chat model that actually exists on the Ollama host.
+
+        Resolution order (first installed candidate wins):
+          1. the explicitly requested model (per-request override),
+          2. the user's runtime default (Settings → app_settings.json `chat_model`),
+          3. the env/static default (DEFAULT_CHAT_MODEL),
+          4. any installed non-embedding model.
+        Matching is case-insensitive ("Qwen2.5:3b" vs "qwen2.5:3b") and returns the
+        canonical installed name. Raises OllamaModelMissing when an explicit request
+        can't be honored, so the API can report WHICH model is absent instead of a
+        bare 500. When Ollama is unreachable the requested/default name is returned
+        as-is — the actual call will fail with a connection error, which is the
+        truthful failure to surface.
+        """
+        from backend.core.app_settings import get_settings as get_app_settings
+
+        installed = await self.installed_model_names()
+        if not installed:
+            return requested or settings.DEFAULT_CHAT_MODEL
+
+        by_lower = {name.lower(): name for name in installed}
+
+        def find(name: str | None) -> str | None:
+            return by_lower.get(name.strip().lower()) if name and name.strip() else None
+
+        if requested:
+            hit = find(requested)
+            if hit:
+                return hit
+            raise OllamaModelMissing(requested)
+
+        runtime_default = (get_app_settings().get("chat_model") or "").strip()
+        for candidate in (runtime_default, settings.DEFAULT_CHAT_MODEL):
+            hit = find(candidate)
+            if hit:
+                return hit
+
+        # Last resort: first installed model that isn't embedding-only.
+        for name in installed:
+            if "embed" not in name.lower():
+                return name
+        raise OllamaModelMissing(settings.DEFAULT_CHAT_MODEL)
+
     def _is_endpoint_not_found(self, resp: httpx.Response) -> bool:
         """True only when the route itself is missing, not when the model is missing."""
         if resp.status_code != 404:
@@ -150,14 +223,24 @@ class OllamaClient:
         model: str | None = None,
         stream: bool = True,
     ) -> AsyncGenerator[str, None]:
-        model = model or settings.DEFAULT_CHAT_MODEL
+        model = await self.resolve_chat_model(model)
         host = await self._get_working_host()
         async with httpx.AsyncClient(timeout=self.timeout) as client:
             async with client.stream(
                 "POST",
                 f"{host}/api/chat",
-                json={"model": model, "messages": messages, "stream": stream},
+                json={
+                    "model": model,
+                    "messages": messages,
+                    "stream": stream,
+                    # Ollama defaults num_ctx to 4096 and SILENTLY truncates longer
+                    # prompts — a full RAG context or a long transcript loses its
+                    # tail without any error. Raise the window explicitly.
+                    "options": {"num_ctx": settings.OLLAMA_NUM_CTX},
+                },
             ) as resp:
+                if resp.status_code == 404:
+                    raise OllamaModelMissing(model)
                 resp.raise_for_status()
                 async for line in resp.aiter_lines():
                     if line:
@@ -173,13 +256,20 @@ class OllamaClient:
         messages: list[dict],
         model: str | None = None,
     ) -> str:
-        model = model or settings.DEFAULT_CHAT_MODEL
+        model = await self.resolve_chat_model(model)
         host = await self._get_working_host()
         async with httpx.AsyncClient(timeout=self.timeout) as client:
             resp = await client.post(
                 f"{host}/api/chat",
-                json={"model": model, "messages": messages, "stream": False},
+                json={
+                    "model": model,
+                    "messages": messages,
+                    "stream": False,
+                    "options": {"num_ctx": settings.OLLAMA_NUM_CTX},
+                },
             )
+            if resp.status_code == 404:
+                raise OllamaModelMissing(model)
             resp.raise_for_status()
             data = resp.json()
             return data["message"]["content"]
@@ -207,6 +297,8 @@ class OllamaClient:
                     "stream": False,
                 },
             )
+            if resp.status_code == 404:
+                raise OllamaModelMissing(model)
             resp.raise_for_status()
             data = resp.json()
             return data["message"]["content"]

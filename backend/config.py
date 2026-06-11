@@ -26,9 +26,12 @@ class Settings(BaseSettings):
     CHROMA_PERSIST_DIR: str = str(Path(__file__).parent.parent / "data" / "chroma")
     CHROMA_COLLECTION: str = "memos"
     
-    # Chunking
-    CHUNK_SIZE: int = 512
-    CHUNK_OVERLAP: int = 50
+    # Chunking. CHUNK_SIZE must leave headroom inside the embedding model's
+    # context window (nomic-embed v1/v2: 512 tokens) for the task prefix
+    # ("search_document: ") — chunks that overflow get their tail silently
+    # truncated by Ollama, so they embed as if the lost text never existed.
+    CHUNK_SIZE: int = 384
+    CHUNK_OVERLAP: int = 64
 
     # Speech-to-text (faster-whisper). Multilingual, runs locally. Override via
     # env (e.g. WHISPER_MODEL=large-v3) — see docs. On CPU, "small" is a good
@@ -40,6 +43,14 @@ class Settings(BaseSettings):
     
     # RAG
     RAG_TOP_K: int = 8
+    # Cosine-distance ceiling for retrieved chunks (0 = identical, 2 = opposite).
+    # Chunks farther than this are noise and are dropped instead of being fed to
+    # the model. Lenient by default — tighten per-corpus if answers drift.
+    RAG_MAX_DISTANCE: float = 0.80
+
+    # Context window requested from Ollama for chat/summary calls. Ollama's own
+    # default (4096) silently truncates long RAG contexts and transcripts.
+    OLLAMA_NUM_CTX: int = 8192
     
     # Server
     HOST: str = "0.0.0.0"
@@ -62,7 +73,11 @@ class Settings(BaseSettings):
         return v
     
     class Config:
-        env_file = ".env"
+        # Anchored to backend/.env regardless of CWD. The old relative ".env"
+        # only loaded when uvicorn was started from backend/ — started from the
+        # repo root (the documented dev command), the file was silently skipped
+        # and the API ran with code defaults (wrong embed/chat models).
+        env_file = (Path(__file__).parent / ".env", ".env")
         env_file_encoding = "utf-8"
 
 
