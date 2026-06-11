@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useQueryClient } from '@tanstack/react-query';
 import { Icon } from './Icon';
@@ -27,6 +27,28 @@ export function SidebarPlayer() {
   const [upNextOpen, setUpNextOpen] = useState(false);
   // "Add to playlist" for the playing track (music only).
   const [plMenuOpen, setPlMenuOpen] = useState(false);
+  // Big layout: controls fade after ~5s of playback; pointer activity over the
+  // player brings them back for another 5s. Paused = always visible.
+  const [controlsOn, setControlsOn] = useState(true);
+  const hideTimerRef = useRef<number | null>(null);
+  const pokeControls = useCallback(() => {
+    setControlsOn(true);
+    if (hideTimerRef.current) window.clearTimeout(hideTimerRef.current);
+    hideTimerRef.current = window.setTimeout(() => setControlsOn(false), 5000);
+  }, []);
+  const showControls = useCallback(() => {
+    if (hideTimerRef.current) window.clearTimeout(hideTimerRef.current);
+    setControlsOn(true);
+  }, []);
+  /* eslint-disable react-hooks/set-state-in-effect -- syncing the fade timer to playback state is exactly an external-system subscription; the setState arms/disarms a timeout */
+  useEffect(() => {
+    if (playing) pokeControls();
+    else showControls();
+    return () => {
+      if (hideTimerRef.current) window.clearTimeout(hideTimerRef.current);
+    };
+  }, [playing, pokeControls, showControls]);
+  /* eslint-enable react-hooks/set-state-in-effect */
 
   // Pin state seeded from the playing track, toggled optimistically here. Reset
   // during render when the track changes (React's "store info from previous
@@ -236,10 +258,11 @@ export function SidebarPlayer() {
   if (playerSize === 'big' && hasCover) {
     return (
       <div
-        className={cn('om-sb-player', 'om-sb-player-big', mood && 'is-tinted')}
+        className={cn('om-sb-player', 'om-sb-player-big', mood && 'is-tinted', !controlsOn && 'controls-off')}
         role="region"
         aria-label="Now playing"
         style={moodStyle}
+        onPointerMove={playing ? pokeControls : undefined}
       >
         <div
           className="om-sb-player-big-cover"

@@ -7,8 +7,14 @@ All notable changes to OpenMemo are documented here.
 
 Two big pushes. The Settings page is rebuilt as a bento with the live appearance preview as its hero. And restricted videos stop being a dead end: when "Make it local" fails behind a sign-in (age-restricted or private), the panel walks you through the fix instead of a bare "Try again", and yt-dlp can authenticate with your own browser cookies.
 
+### Fixed
+
+- 🫥 **Playlist tiles vanished after drag-reorder shipped** — the sortable wrapper became the grid cell and the tile inside collapsed to zero width. One CSS rule makes tiles fill their wrapper again.
+- ➕ **Big player's add-to-playlist did nothing** — the popover opened above the player, straight into the big layout's `overflow: hidden`. It now opens inside, overlaying the artwork. The + also moves under the repeat button, completing the right-side column.
+
 ### Changed
 
+- 🕶️ **Big player controls get out of the way** — while a song plays, the transport (play, pin, repeat, add, close, queue row) fades out after 5 seconds, leaving artwork, title, scrubber and volume. Move the pointer over the player and they come back for another 5. Paused keeps everything visible.
 - 🌓 **Theme selector slims down** — the sidebar's System option is gone (dark mode is a deliberate flip, never an OS guess); Light and Dark remain. Collapsed sidebar now shows a single toggle that flips to the other theme instead of hiding the control entirely.
 
 ### Added
