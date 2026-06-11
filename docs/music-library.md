@@ -45,6 +45,8 @@ The flow, end to end:
 
 Status rides on the per-memo `localize_status` the Make-it-local pipeline already uses: `pending → processing → done | error`. Progress is a COUNT query, not an in-memory job. Restart the server mid-playlist and finished tracks stay finished; pending ones can be retried per track.
 
+Paste it twice, get it once. The probe tells the panel when a playlist collection with the same source URL already exists ("Already in your Music"), and the ingest endpoint returns the existing collection (`status: 'exists'`) instead of minting a duplicate. Tracks dedupe too: a song already in your library (same source URL) is linked to the new playlist, never re-created. One memo, two memberships, one download. Its `playlist_born` flag stays untouched, so a standalone song reused this way keeps its library spot.
+
 Artist comes from the flat entry's artist or uploader field, with YouTube's " - Topic" suffix stripped. That is source metadata, not a domain fallback, so ADR-010 holds. Cookies (ADR-012) apply to private playlists for free.
 
 ## The Music page

@@ -88,12 +88,16 @@ export const ingestApi = {
       count: number;
       truncated: boolean;
       entries: { url: string; title: string; artist?: string | null; thumbnail?: string | null }[];
+      // Set when a playlist collection with this source URL already exists —
+      // the panel shows "already saved" instead of offering a duplicate pull.
+      already_saved?: { id: string; name: string } | null;
     }>('/ingest/playlist/probe', { method: 'POST', body: JSON.stringify({ url }) }),
   // Ingest a whole playlist: creates a playlist collection + one audio memo
   // per track. download=true starts the sequential background download;
   // download=false keeps tracks remote (pull them later, per track or all).
+  // status 'exists' = this URL was already pulled; collection_id points at it.
   playlist: (url: string, opts?: { title?: string; download?: boolean }) =>
-    fetchJSON<{ collection_id: string; title: string; total: number; truncated: boolean }>(
+    fetchJSON<{ collection_id: string; title: string; total: number; truncated: boolean; status: string }>(
       '/ingest/playlist',
       { method: 'POST', body: JSON.stringify({ url, title: opts?.title, download: opts?.download ?? true }) },
     ),
