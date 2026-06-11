@@ -316,8 +316,8 @@ export function SidebarPlayer() {
         {plMenuOpen && <PlaylistMenu memoId={track.memoId} onClose={() => setPlMenuOpen(false)} />}
 
         <div className="om-sb-player-big-body">
-          {scrub}
           {queueRow}
+          {scrub}
           <VolumeControl size={16}>
             <button className="om-sb-player-big-title" onClick={goMemo}>
               <Marquee text={track.title} auto />

@@ -9,6 +9,16 @@ Two big pushes. The Settings page is rebuilt as a bento with the live appearance
 
 ### Fixed
 
+- 🌙 **Note cards stayed beige in dark mode** — the warm background was an inline style that CSS could not override. Backgrounds now come from CSS rules keyed on `data-tint` and `[data-theme="hi"]`, using `color-mix` to nudge each tint toward your accent color. All four tint variants darken properly when you flip to dark mode and transition smoothly with the rest of the UI.
+- 📐 **Playlist detail page squashed at the top** — the "Back to Music" button had no top margin, so the page started flush against the window edge instead of breathing like every other page. Now matches the 48 px top padding the main header uses.
+
+### Changed
+
+- 🎵 **Artist above title in playlist tiles** — the artist name moves to the smaller, dimmer line above the title, so the song title is the bold anchor at the bottom of each tile. Mirrors the reading order of most music apps.
+- 👻 **Track position badge is hover-only** — the number (e.g. "71") is hidden at rest and fades in on hover, reducing visual noise without hiding the information.
+- 🔢 **Queue position counter shrinks to 9 px** — the "44 / 101" readout in the big sidebar player was a touch too large; 9 px mono keeps it readable as data without competing with the title.
+- ↕️ **Big player: scrubber moves below the transport row** — the seek bar now sits between the skip/shuffle row and the track title instead of above the controls. Eyes move from "where am I in the queue" to "where am I in this track" to "what track is this" top to bottom.
+
 - 🫥 **Playlist tiles vanished after drag-reorder shipped** — the sortable wrapper became the grid cell and the tile inside collapsed to zero width. One CSS rule makes tiles fill their wrapper again.
 - ➕ **Big player's add-to-playlist did nothing** — the popover opened above the player, straight into the big layout's `overflow: hidden`. It now opens inside, overlaying the artwork. The + also moves under the repeat button, completing the right-side column.
 

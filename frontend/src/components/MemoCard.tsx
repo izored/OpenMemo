@@ -480,7 +480,6 @@ export function MemoCard({ memo, dragHandleProps, lightboxGroup }: CardProps) {
   // ── Note ──
   if (memo.type === 'note') {
     const tintIdx = hashId(memo.id) % NOTE_TINTS.length;
-    const tint = NOTE_TINTS[tintIdx];
     const body = memo.content_text || memo.content_raw || memo.description || '';
     return (
       <>
@@ -490,7 +489,6 @@ export function MemoCard({ memo, dragHandleProps, lightboxGroup }: CardProps) {
         onDelete={handleDelete} onPin={handlePin}
         onOpen={goDetail}
         className="om-card-note"
-        style={{ background: tint.bg, color: tint.text }}
         dataTint={tintIdx}
         confirmOverlay={confirmOverlay}
       >

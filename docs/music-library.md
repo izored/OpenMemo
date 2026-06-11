@@ -63,6 +63,26 @@ Three zones, in the visual language of the dashboard:
 
 Click a playlist card and you get the playlist view (`/music/:id`): a boxed hero that names the playlist (collage, count, play-all, shuffle, Download all, source link, delete), a "Back to Music" button above it, and the tracks as full-bleed cover tiles. Each tile carries its number, its title on a gradient, play on hover, a remove chip (pull the song out, nothing gets deleted), and a download / retry chip when the track is still remote or failed. Tiles reorder by drag; the order persists through the recency stagger. Click a ready tile to play; the queue picks up from that track. Deleting a playlist removes the collection, never the tracks: born tracks move back to the library.
 
+## Visual design: playlist tiles
+
+Full-bleed square tiles (`om-mtile`) are the building block of every playlist view. Design decisions:
+
+- **Artist above title.** The artist name sits in the smaller, dimmer line above; the song title is the larger, bolder anchor at the bottom. This mirrors the reading order of most music apps and treats the artist as context, not the headline.
+- **Track position on hover only.** The position badge (e.g. "71") is hidden at rest and fades in on hover. Showing it permanently on every tile added visual noise without helping playback. You need the number when you are navigating the list, not when you are glancing at art.
+- **Play overlay on hover.** The play badge covers the tile on hover and when the track is active. It does not compete with the art at rest.
+- **Remove chip on hover only (touch: always visible).** Destructive actions stay out of the way until you reach for them.
+- **Bottom gradient cap.** `linear-gradient(to top, rgba(0,0,0,0.74), transparent)` gives enough contrast for white text without covering the art. Two lines maximum: artist (10px, 75% opacity) and title (12px bold, 2-line clamp).
+
+## Visual design: big player
+
+The sidebar big player (`om-sb-player-big`) fills the sidebar with album art and a transport cluster in the bottom third. Layout order from top to bottom in the body:
+
+1. **Transport row.** Shuffle, previous, position counter (e.g. "44 / 101"), next, up-next queue. The counter is mono, 9px, so it reads as data without competing with the track title.
+2. **Scrubber.** The seek bar with current / total timestamps lives between the transport row and the title, so your eye moves from "where am I in the queue" to "where am I in this track" to "what track is this."
+3. **Title (with volume).** The `VolumeControl` wraps the track title so the volume knob lives inline with the marquee, saving vertical space.
+
+Rationale for scrubber placement: the scrubber is not a navigation control (that is the transport row). Separating them prevents accidental scrub when reaching for skip, and keeps the title reachable right below the seek bar.
+
 ## Dashboard filter
 
 The old Audio tab lumped voice notes and music together. It splits into two:
