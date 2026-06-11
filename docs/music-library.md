@@ -18,6 +18,8 @@ What we added on top:
 - **Not just YouTube.** SoundCloud sets and Bandcamp albums are playlists too. One detection helper, host-agnostic per ADR-001.
 - **Download is opt-in.** A playlist can be pulled as remote track memos only, like any music app: a download chip per tile, a Download all button on the playlist page. Or flip the toggle and it downloads everything up front.
 - **Every feed stays clean.** Tracks born from a playlist ingest live inside their playlist, full stop. They never flood All Memos, the type tabs, or the Music library. The library lists only the songs you saved one by one: a liked-songs shelf, not a dump of every playlist you ever pulled. And filing a library song into a playlist does not steal it from the library: it lives in both, like every music app you know.
+- **Playlists are editable, no drag required.** An "Add to playlist" popover lives on every music surface (card actions, memo detail, the sidebar player) with membership ticks and inline new-playlist creation. Tiles in the playlist view carry a remove chip and reorder by drag. Touch works everywhere.
+- **The player behaves like a player.** Shuffle (current track pinned, source order restorable), an Up-next popover showing the live queue (jump or drop tracks), and continue-listening: a reload restores track, queue and position, paused.
 
 ## Data model
 
@@ -57,9 +59,9 @@ Three zones, in the visual language of the dashboard:
 
 - **Header.** Eyebrow, title, sub. Same `om-header` skeleton as Today. Adding music goes through the global FAB and New Memo panel, no extra chrome.
 - **Playlists.** A horizontal row of playlist cards. Each card is a 2x2 collage of the first four track covers, name, track count, a play button that queues the whole playlist, and a progress bar while tracks are downloading. Cards accept memo-card drops, same as sidebar collections.
-- **Library.** The songs you saved one by one, newest first, in the standard masonry grid. Playlist tracks are not here; they live behind their playlist card. Music cards render full-bleed: square artwork edge to edge, title on a bottom gradient, no body bar.
+- **Library.** The songs you saved one by one, in the standard masonry grid. Playlist-born tracks are not here; they live behind their playlist card. The header carries a debounced search box, a sort pill (Recent / Title / Artist), and Play all + Shuffle that queue exactly the filtered view. Music cards render full-bleed: square artwork edge to edge, title on a bottom gradient, no body bar.
 
-Click a playlist card and you get the playlist view (`/music/:id`): a boxed hero that names the playlist (collage, count, play-all, Download all, source link, delete), a "Back to Music" button above it, and the tracks as full-bleed cover tiles. Each tile carries its number, its title on a gradient, play on hover, and a download / retry chip when the track is still remote or failed. Click a ready tile to play; the queue picks up from that track. Deleting a playlist removes the collection, never the tracks.
+Click a playlist card and you get the playlist view (`/music/:id`): a boxed hero that names the playlist (collage, count, play-all, shuffle, Download all, source link, delete), a "Back to Music" button above it, and the tracks as full-bleed cover tiles. Each tile carries its number, its title on a gradient, play on hover, a remove chip (pull the song out, nothing gets deleted), and a download / retry chip when the track is still remote or failed. Tiles reorder by drag; the order persists through the recency stagger. Click a ready tile to play; the queue picks up from that track. Deleting a playlist removes the collection, never the tracks: born tracks move back to the library.
 
 ## Dashboard filter
 
@@ -74,16 +76,18 @@ The old Audio tab lumped voice notes and music together. It splits into two:
 
 The shared audio player (one `<audio>` element, ADR-005) learns a queue:
 
-- `playQueue(tracks, startIndex)` loads a list and starts at a track.
-- `next()` / `prev()`, exposed with `queueIndex` / `queueLength`.
+- `playQueue(tracks, startIndex, { shuffle })` loads a list and starts at a track, optionally shuffled.
+- `next()` / `prev()` / `jumpTo(i)` / `removeAt(i)`, exposed with `queueIndex` / `queueLength` / `queueTracks`.
+- Shuffle keeps the playing track at position 0 and reorders the rest; the source order is kept aside so toggling off restores it with your place intact.
 - On track end: repeat-one wins if set, otherwise auto-advance, stop at the end.
 - Playing a single track anywhere clears the queue. No hidden state.
+- The whole player state (track, queue, order, position) snapshots to localStorage and restores PAUSED on reload. Never autoplay.
 
-The sidebar player shows previous and next buttons only while a queue is live.
+The sidebar player shows previous / next / shuffle and the Up-next popover only while a queue is live.
 
 ## Out of scope, on purpose
 
-- **Manual playlist creation and editing.** Playlists are born from URLs for now. Drag-to-add works; create-empty and reorder come later.
+- **A full playlist editor page.** Creation happens inline (the "New playlist" row in the Add-to-playlist popover) and editing happens in place (drag-reorder, remove chips). A dedicated edit screen is not planned.
 - **Video playlists.** A playlist ingests as music (audio-only download). Saving a whole playlist as video memos is a different feature.
 - **Re-sync.** `source_url` is stored so a future "pull new tracks" can exist. It does not exist yet.
 - **Duration column.** We do not store track duration; probing per row is waste. The active track shows time in the player.
