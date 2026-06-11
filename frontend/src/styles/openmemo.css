@@ -2404,7 +2404,7 @@ input, textarea { font: inherit; color: inherit; }
 .om-sb-player-sat.active { background: #fff; color: #111; }
 .om-sb-player-big-pin { top: 8px; right: 60px; }    /* top edge flush with play */
 .om-sb-player-big-repeat { top: 60px; right: 8px; }  /* right edge flush with play */
-.om-sb-player-big-addpl { top: 60px; right: 60px; } /* fills the cluster corner */
+.om-sb-player-big-addpl { top: 112px; right: 8px; } /* right column: play → repeat → add */
 
 .om-sb-player-head { display: flex; align-items: center; gap: 10px; min-width: 0; }
 .om-sb-player-cover-btn { padding: 0; border: 0; background: none; cursor: pointer; flex-shrink: 0; line-height: 0; }
@@ -4319,6 +4319,9 @@ button.om-add-link { background: none; border: 0; padding: 0; cursor: pointer; f
   display: grid; grid-template-columns: repeat(auto-fill, minmax(168px, 1fr));
   gap: 14px;
 }
+/* Tiles sit one div deeper since drag-reorder (SortableTile wrapper). The
+   wrapper is the grid cell; the tile must fill it or it collapses to 0. */
+.om-track-grid .om-mtile { width: 100%; display: block; }
 .om-mtile {
   position: relative; aspect-ratio: 1 / 1; border: 0; padding: 0; cursor: pointer;
   border-radius: var(--r-lg, 14px); overflow: hidden; text-align: left;
@@ -4474,6 +4477,20 @@ button.om-add-link { background: none; border: 0; padding: 0; cursor: pointer; f
 }
 .om-card .om-plmenu { top: 44px; right: 8px; width: 230px; }
 .om-sb-player .om-plmenu { bottom: calc(100% + 8px); left: 0; right: 0; }
+/* Big player has overflow:hidden (cover corners), so an above-the-player
+   popover gets clipped — anchor it INSIDE, overlaying the artwork. */
+.om-sb-player-big .om-plmenu { top: 8px; bottom: auto; left: 8px; right: 8px; z-index: 5; }
+
+/* Big player: controls fade after ~5s of playback; pointer activity brings
+   them back. Idle = title, scrubber, volume, artwork, mood only. */
+.om-sb-player-big .om-sb-player-big-play,
+.om-sb-player-big .om-sb-player-sat,
+.om-sb-player-big .om-sb-player-big-x,
+.om-sb-player-big .om-sb-player-queue { transition: opacity .4s ease; }
+.om-sb-player-big.controls-off .om-sb-player-big-play,
+.om-sb-player-big.controls-off .om-sb-player-sat,
+.om-sb-player-big.controls-off .om-sb-player-big-x,
+.om-sb-player-big.controls-off .om-sb-player-queue { opacity: 0; pointer-events: none; }
 .om-detail-actions .om-plmenu { top: calc(100% + 6px); right: 0; width: 230px; }
 .om-plmenu-head {
   padding: 9px 12px 6px; font-size: 10px; letter-spacing: 0.08em;
