@@ -201,9 +201,6 @@ export function SidebarPlayer() {
       <button className={cn('om-sb-player-btn', shuffled && 'active')} onClick={toggleShuffle} title={shuffled ? 'Shuffle: on' : 'Shuffle: off'} aria-pressed={shuffled} aria-label="Shuffle">
         <Icon name="shuffle" size={14} />
       </button>
-      <button className={cn('om-sb-player-btn', repeat && 'active')} onClick={toggleRepeat} title={repeat ? 'Repeat one: on' : 'Repeat one: off'} aria-pressed={repeat} aria-label="Repeat one">
-        <Icon name={repeat ? 'repeat1' : 'repeat'} size={14} />
-      </button>
       <button className="om-sb-player-btn" onClick={prev} disabled={queueIndex <= 0} title="Previous track" aria-label="Previous track">
         <Icon name="skipBack" size={14} />
       </button>
@@ -289,6 +286,15 @@ export function SidebarPlayer() {
           aria-label="Pin memo"
         >
           <Icon name="pin" size={14} />
+        </button>
+        <button
+          className={cn('om-sb-player-sat om-sb-player-big-repeat', repeat && 'active')}
+          onClick={toggleRepeat}
+          title={repeat ? 'Repeat one: on' : 'Repeat one: off'}
+          aria-pressed={repeat}
+          aria-label="Repeat one"
+        >
+          <Icon name={repeat ? 'repeat1' : 'repeat'} size={14} />
         </button>
         {isMusic && (
           <button
