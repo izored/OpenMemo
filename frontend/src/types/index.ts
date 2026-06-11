@@ -34,6 +34,8 @@ export interface Memo {
   audio_artist?: string | null;
   sort_order?: number;
   pinned?: boolean;
+  /** Liked track (music surfaces: heart on the tile, wide tile, Play liked). */
+  liked?: boolean;
   /** Hidden from the main dashboard (still visible in collections); listed in
    *  the passcode-gated hidden section. */
   hidden?: boolean;

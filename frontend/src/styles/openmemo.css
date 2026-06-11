@@ -3080,7 +3080,7 @@ input, textarea { font: inherit; color: inherit; }
 .om-swatch svg { filter: drop-shadow(0 1px 1px rgba(255,255,255,0.5)); }
 
 /* ─ Collections page ───────────────────────────────────────────────────── */
-.om-colls { max-width: 1180px; margin: 0 auto; padding: 8px 0 60px; }
+.om-colls { max-width: 1180px; margin: 0 auto; padding: 0 0 60px; }
 .om-colls-head { display: flex; flex-direction: column; gap: 8px; margin-bottom: 36px; max-width: 720px; }
 
 .om-colls-grid {
@@ -3667,7 +3667,9 @@ input, textarea { font: inherit; color: inherit; }
 .om-settings, .om-colls, .om-page {
   max-width: var(--page-max);
   margin: 0 auto;
-  padding: 40px 0 24px;
+  /* No top padding — the shared PageHeader (om-header) owns the 48px top
+     spacing, so titles sit on the same baseline as the dashboard. */
+  padding: 0 0 24px;
 }
 [data-layout="full"] .om-page,
 [data-layout="full"] .om-colls {
@@ -3708,7 +3710,6 @@ input, textarea { font: inherit; color: inherit; }
 /* ─ Type scale standardisation ──────────────────────────────────────────────
    Lighter, smaller headings; readable minimum body/caption size. */
 .om-greet-title, .om-ask-title { font-size: 32px; font-weight: 400; letter-spacing: -0.02em; }
-.om-settings-head .om-greet-title { font-size: 28px; }
 .om-setting-title, .om-coll-title { font-size: 16px; font-weight: 500; }
 .om-setting-eyebrow, .om-greet-eyebrow, .om-add-eyebrow,
 .om-setting-row-text span, .om-ap-label span { letter-spacing: 0.06em; }
@@ -4322,7 +4323,8 @@ button.om-add-link { background: none; border: 0; padding: 0; cursor: pointer; f
 }
 .om-pl-hero-body { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
 .om-pl-hero-actions { display: flex; align-items: center; gap: 8px; margin-top: 10px; }
-.om-pl-playall { display: inline-flex; align-items: center; gap: 7px; }
+/* No trailing kbd chip here, so the global 6px right padding reads cramped. */
+.om-pl-playall { display: inline-flex; align-items: center; gap: 7px; padding-right: 16px; }
 .om-pl-playall:disabled { opacity: 0.5; cursor: default; }
 .om-pl-delete:hover { color: #ef5048; }
 
@@ -4410,6 +4412,15 @@ button.om-add-link { background: none; border: 0; padding: 0; cursor: pointer; f
   font-size: 10px; color: rgba(255, 255, 255, 0.75);
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
+/* Liked badge — small filled heart above the artist line. */
+.om-mtile-heart { display: inline-flex; color: rgba(255, 255, 255, 0.92); margin-bottom: 2px; }
+/* Liked tracks read as featured: the tile spans two columns (1×2). The span
+   lives on the Sortable WRAPPER (the real grid cell); the tile flattens to
+   ~2:1 so its height matches the square neighbors, and the cover recrops via
+   object-fit. height:100% wins when squares set the row height; the aspect
+   ratio keeps the tile from collapsing in an all-liked row. */
+.om-track-grid > div:has(.om-mtile.is-liked) { grid-column: span 2; }
+.om-mtile.is-liked { aspect-ratio: 2.08 / 1; height: 100%; }
 
 /* Full-bleed music memo cards (user feedback on 0023, normal card style):
    square cover edge-to-edge, title + meta on a bottom gradient overlay —

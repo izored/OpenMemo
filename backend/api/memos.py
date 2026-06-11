@@ -131,7 +131,7 @@ async def list_memos(
             Memo.id, Memo.type, Memo.title, Memo.description, Memo.content_text,
             Memo.source_url, Memo.source_domain, Memo.source_favicon,
             Memo.thumbnail_path, Memo.file_path, Memo.ai_summary, Memo.notes,
-            Memo.sort_order, Memo.pinned, Memo.hidden, Memo.audio_kind,
+            Memo.sort_order, Memo.pinned, Memo.liked, Memo.hidden, Memo.audio_kind,
             Memo.audio_artist, Memo.is_processed,
             Memo.created_at, Memo.updated_at, Memo.recency_at,
         ),
@@ -215,6 +215,7 @@ async def list_memos(
                 "notes": m.notes,
                 "sort_order": m.sort_order,
                 "pinned": m.pinned,
+                "liked": m.liked,
                 "hidden": m.hidden,
                 "audio_kind": m.audio_kind,
                 "audio_artist": m.audio_artist,
@@ -272,6 +273,7 @@ async def get_memo(memo_id: str, db: AsyncSession = Depends(get_db)):
         "notes": memo.notes,
         "sort_order": memo.sort_order,
         "pinned": memo.pinned,
+        "liked": memo.liked,
         "hidden": memo.hidden,
         "is_processed": memo.is_processed,
         "created_at": memo.created_at.isoformat(),
@@ -650,6 +652,22 @@ async def update_memo_pin(memo_id: str, body: PinUpdate, db: AsyncSession = Depe
     memo.updated_at = datetime.utcnow()
     await db.commit()
     return {"id": memo.id, "pinned": memo.pinned, "status": "updated"}
+
+
+class LikeUpdate(BaseModel):
+    liked: bool
+
+
+@router.put("/{memo_id}/like")
+async def update_memo_like(memo_id: str, body: LikeUpdate, db: AsyncSession = Depends(get_db)):
+    """Like or unlike a track. Music-surface flag, independent of pin."""
+    memo = await db.get(Memo, memo_id)
+    if not memo:
+        raise HTTPException(status_code=404, detail="Memo not found")
+    memo.liked = bool(body.liked)
+    memo.updated_at = datetime.utcnow()
+    await db.commit()
+    return {"id": memo.id, "liked": memo.liked, "status": "updated"}
 
 
 @router.get("/pinned/list")

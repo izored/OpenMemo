@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { MemoGrid } from '@/components/MemoGrid';
+import { PageHeader } from '@/components/PageHeader';
 import { Icon } from '@/components/Icon';
 import { memoApi, settingsApi } from '@/lib/api';
 import { useAppStore } from '@/stores/appStore';
@@ -120,19 +121,16 @@ export function HiddenPage() {
 
   return (
     <>
-      <header className="om-header">
-        <div className="om-greet">
-          <span className="om-greet-eyebrow mono">Passcode-gated</span>
-          <h1 className="om-greet-title">Hidden</h1>
-          <p className="om-greet-sub">
-            Off the dashboard, still in their collections. Unhide a Memo to bring it back.
-          </p>
-        </div>
+      <PageHeader
+        eyebrow="Passcode-gated"
+        title="Hidden"
+        sub="Off the dashboard, still in their collections. Unhide a Memo to bring it back."
+      >
         <button className="om-passgate-lock" onClick={() => setHiddenUnlocked(false)} title="Lock the hidden section">
           <Icon name="eye" size={13} />
           <span>Lock</span>
         </button>
-      </header>
+      </PageHeader>
 
       {isLoading ? (
         <div className="om-empty">

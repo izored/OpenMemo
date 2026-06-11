@@ -5,6 +5,7 @@ import { useDroppable } from '@dnd-kit/core';
 import { SortableContext, rectSortingStrategy, useSortable, arrayMove } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import { MemoGrid } from '@/components/MemoGrid';
+import { PageHeader } from '@/components/PageHeader';
 import { Icon } from '@/components/Icon';
 import { musicApi, memoApi, collectionApi } from '@/lib/api';
 import { useAudioPlayer, type AudioTrack } from '@/lib/audioPlayer';
@@ -28,6 +29,7 @@ function memoToTrack(m: Memo): AudioTrack {
     kind: 'music',
     cover: m.thumbnail_path || null,
     pinned: m.pinned,
+    liked: m.liked,
   };
 }
 
@@ -116,7 +118,7 @@ function MusicTile({ m, index, active, playing, onPlay, onDownload, onRemove, on
   const [confirm, setConfirm] = useState(false);
   return (
     <button
-      className={cn('om-mtile', active && 'is-active', fetching && 'is-pending')}
+      className={cn('om-mtile', active && 'is-active', fetching && 'is-pending', m.liked && 'is-liked')}
       onClick={onPlay}
       disabled={fetching}
       title={ready ? `Play ${m.title}` : failed ? 'Download failed — tap the chip to retry' : fetching ? 'Downloading…' : 'Remote track — open it, or tap the chip to download'}
@@ -177,6 +179,11 @@ function MusicTile({ m, index, active, playing, onPlay, onDownload, onRemove, on
         </span>
       )}
       <span className="om-mtile-cap">
+        {m.liked && (
+          <span className="om-mtile-heart" aria-label="Liked" title="Liked">
+            <Icon name="heart" size={11} style={{ fill: 'currentColor' }} />
+          </span>
+        )}
         {m.audio_artist && <span className="om-mtile-artist">{m.audio_artist}</span>}
         <span className="om-mtile-title">{m.title}</span>
       </span>
@@ -475,6 +482,16 @@ export function MusicPage() {
                 <Icon name="shuffle" size={13} />
                 <span>Shuffle</span>
               </button>
+              {orderedTracks.some((m) => m.liked && isReady(m)) && (
+                <button
+                  className="om-btn-secondary"
+                  onClick={() => queueFrom(orderedTracks.filter((m) => m.liked))}
+                  title="Play only the liked tracks"
+                >
+                  <Icon name="heart" size={13} />
+                  <span>Play liked</span>
+                </button>
+              )}
               {playlist && hasRemote && !downloading && (
                 <button className="om-btn-secondary" onClick={() => downloadAll(playlist)} title="Download every remote track to this device">
                   <Icon name="download" size={13} />
@@ -542,15 +559,9 @@ export function MusicPage() {
   // ── Hub view (/music) ──
   return (
     <div className="om-music">
-      {/* Same header skeleton as the dashboard — adding music goes through the
-          global FAB / New Memo panel, no extra chrome here. */}
-      <header className="om-header om-music-head">
-        <div className="om-greet">
-          <span className="om-greet-eyebrow mono">Music library</span>
-          <h1 className="om-greet-title">Music</h1>
-          <p className="om-greet-sub">Every song you saved, ready to play.</p>
-        </div>
-      </header>
+      {/* Same header as every page — adding music goes through the global
+          FAB / New Memo panel, no extra chrome here. */}
+      <PageHeader eyebrow="Music library" title="Music" sub="Every song you saved, ready to play." />
 
       <section className="om-music-sect">
         <div className="om-section-head">

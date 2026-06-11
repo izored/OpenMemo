@@ -17,6 +17,8 @@ export interface AudioTrack {
   cover?: string | null;
   /** Pinned state at play time — seeds the player's pin toggle. */
   pinned?: boolean;
+  /** Liked state at play time — seeds the player's heart toggle (music). */
+  liked?: boolean;
 }
 
 interface AudioPlayerContextValue {
