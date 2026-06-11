@@ -43,12 +43,18 @@ interface AudioPlayerContextValue {
    * Load a track list as the play queue and start at `startIndex` (ADR-015).
    * On track end the queue auto-advances (repeat-one still wins); it stops
    * after the last track. Playing a single track anywhere clears the queue.
+   * `opts.shuffle` starts the queue shuffled: the start track plays first,
+   * the rest follow in random order.
    */
-  playQueue: (tracks: AudioTrack[], startIndex?: number) => void;
+  playQueue: (tracks: AudioTrack[], startIndex?: number, opts?: { shuffle?: boolean }) => void;
   /** Jump to the next queued track (no-op without a queue / at the end). */
   next: () => void;
   /** Jump to the previous queued track (no-op without a queue / at the start). */
   prev: () => void;
+  /** True while the queue plays in shuffled order. */
+  shuffled: boolean;
+  /** Shuffle the upcoming queue (current track stays put) / restore source order. */
+  toggleShuffle: () => void;
   /** Number of tracks in the active queue (0 = no queue). */
   queueLength: number;
   /** Index of the active track within the queue (-1 = no queue). */
@@ -180,6 +186,11 @@ export function AudioPlayerProvider({ children }: { children: React.ReactNode })
   const [queueIndex, setQueueIndex] = useState(-1);
   const queueRef = useRef<AudioTrack[]>([]);
   const queueIndexRef = useRef(-1);
+  // Shuffle: the queue plays in random order while the source order is kept
+  // aside, so toggling shuffle off restores it with the current track intact.
+  const [shuffled, setShuffled] = useState(false);
+  const shuffledRef = useRef(false);
+  const sourceOrderRef = useRef<AudioTrack[]>([]);
 
   // Load + play a track on the shared element (no toggle logic, no queue edits).
   const loadTrack = useCallback(
@@ -205,9 +216,23 @@ export function AudioPlayerProvider({ children }: { children: React.ReactNode })
   const clearQueue = useCallback(() => {
     queueRef.current = [];
     queueIndexRef.current = -1;
+    sourceOrderRef.current = [];
+    shuffledRef.current = false;
     setQueue([]);
     setQueueIndex(-1);
+    setShuffled(false);
   }, []);
+
+  // Fisher–Yates over everything except `first`, which stays at position 0 —
+  // the playing track never jumps when shuffle flips on.
+  const shuffleAfter = (tracks: AudioTrack[], first: AudioTrack): AudioTrack[] => {
+    const rest = tracks.filter((t) => t.memoId !== first.memoId);
+    for (let i = rest.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [rest[i], rest[j]] = [rest[j], rest[i]];
+    }
+    return [first, ...rest];
+  };
 
   const play = useCallback(
     (next: AudioTrack) => {
@@ -241,17 +266,49 @@ export function AudioPlayerProvider({ children }: { children: React.ReactNode })
   );
 
   const playQueue = useCallback(
-    (tracks: AudioTrack[], startIndex = 0) => {
+    (tracks: AudioTrack[], startIndex = 0, opts?: { shuffle?: boolean }) => {
       if (!tracks.length) return;
-      const i = Math.max(0, Math.min(startIndex, tracks.length - 1));
-      queueRef.current = tracks;
+      const start = Math.max(0, Math.min(startIndex, tracks.length - 1));
+      const doShuffle = !!opts?.shuffle;
+      const list = doShuffle ? shuffleAfter(tracks, tracks[start]) : tracks;
+      const i = doShuffle ? 0 : start;
+      sourceOrderRef.current = tracks;
+      shuffledRef.current = doShuffle;
+      queueRef.current = list;
       queueIndexRef.current = i;
-      setQueue(tracks);
+      setShuffled(doShuffle);
+      setQueue(list);
       setQueueIndex(i);
-      loadTrack(tracks[i]);
+      loadTrack(list[i]);
     },
     [loadTrack],
   );
+
+  const toggleShuffle = useCallback(() => {
+    const q = queueRef.current;
+    const i = queueIndexRef.current;
+    if (!q.length || i < 0) return;
+    const current = q[i];
+    if (!shuffledRef.current) {
+      sourceOrderRef.current = q;
+      const list = shuffleAfter(q, current);
+      queueRef.current = list;
+      queueIndexRef.current = 0;
+      shuffledRef.current = true;
+      setQueue(list);
+      setQueueIndex(0);
+      setShuffled(true);
+    } else {
+      const source = sourceOrderRef.current.length ? sourceOrderRef.current : q;
+      const si = Math.max(0, source.findIndex((t) => t.memoId === current.memoId));
+      queueRef.current = source;
+      queueIndexRef.current = si;
+      shuffledRef.current = false;
+      setQueue(source);
+      setQueueIndex(si);
+      setShuffled(false);
+    }
+  }, []);
 
   const next = useCallback(() => stepQueue(1), [stepQueue]);
   const prev = useCallback(() => stepQueue(-1), [stepQueue]);
@@ -344,8 +401,8 @@ export function AudioPlayerProvider({ children }: { children: React.ReactNode })
   }, [playing]);
 
   const value = useMemo<AudioPlayerContextValue>(
-    () => ({ track, playing, currentTime, duration, repeat, toggleRepeat, volume, muted, setVolume, toggleMute, play, playQueue, next, prev, queueLength: queue.length, queueIndex, toggle, seek, close, isActive, getLevels }),
-    [track, playing, currentTime, duration, repeat, toggleRepeat, volume, muted, setVolume, toggleMute, play, playQueue, next, prev, queue.length, queueIndex, toggle, seek, close, isActive, getLevels],
+    () => ({ track, playing, currentTime, duration, repeat, toggleRepeat, volume, muted, setVolume, toggleMute, play, playQueue, next, prev, shuffled, toggleShuffle, queueLength: queue.length, queueIndex, toggle, seek, close, isActive, getLevels }),
+    [track, playing, currentTime, duration, repeat, toggleRepeat, volume, muted, setVolume, toggleMute, play, playQueue, next, prev, shuffled, toggleShuffle, queue.length, queueIndex, toggle, seek, close, isActive, getLevels],
   );
 
   return (

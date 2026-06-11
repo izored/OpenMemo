@@ -21,7 +21,7 @@ export function SidebarPlayer() {
   const queryClient = useQueryClient();
   const collapsed = useAppStore((s) => s.sidebarCollapsed);
   const playerSize = useAppStore((s) => s.tweaks.playerSize);
-  const { track, playing, currentTime, duration, repeat, toggleRepeat, toggle, seek, close, next, prev, queueLength, queueIndex } = useAudioPlayer();
+  const { track, playing, currentTime, duration, repeat, toggleRepeat, toggle, seek, close, next, prev, queueLength, queueIndex, shuffled, toggleShuffle } = useAudioPlayer();
 
   // Pin state seeded from the playing track, toggled optimistically here. Reset
   // during render when the track changes (React's "store info from previous
@@ -116,6 +116,17 @@ export function SidebarPlayer() {
       </button>
       {hasQueue && (
         <button
+          className={cn('om-sb-player-btn', shuffled && 'active')}
+          onClick={toggleShuffle}
+          title={shuffled ? 'Shuffle: on' : 'Shuffle: off'}
+          aria-pressed={shuffled}
+          aria-label="Shuffle"
+        >
+          <Icon name="shuffle" size={14} />
+        </button>
+      )}
+      {hasQueue && (
+        <button
           className="om-sb-player-btn"
           onClick={prev}
           disabled={queueIndex <= 0}
@@ -160,6 +171,9 @@ export function SidebarPlayer() {
   // stays exactly as ADR-010 placed it).
   const queueRow = hasQueue ? (
     <div className="om-sb-player-queue">
+      <button className={cn('om-sb-player-btn', shuffled && 'active')} onClick={toggleShuffle} title={shuffled ? 'Shuffle: on' : 'Shuffle: off'} aria-pressed={shuffled} aria-label="Shuffle">
+        <Icon name="shuffle" size={14} />
+      </button>
       <button className="om-sb-player-btn" onClick={prev} disabled={queueIndex <= 0} title="Previous track" aria-label="Previous track">
         <Icon name="skipBack" size={14} />
       </button>
