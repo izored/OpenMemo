@@ -17,7 +17,10 @@ class Settings(BaseSettings):
     
     # Ollama
     OLLAMA_HOST: str = "http://localhost:11434"
-    OLLAMA_HOSTS: list[str] = ["http://localhost:11434", "http://localhost:11435", "http://host.docker.internal:11434", "http://host.docker.internal:11435"]
+    # `| str` keeps pydantic-settings from hard-failing on a non-JSON env value
+    # (it falls through to the comma-split validator below), so both
+    # OLLAMA_HOSTS='["http://a","http://b"]' and OLLAMA_HOSTS=http://a,http://b work.
+    OLLAMA_HOSTS: list[str] | str = ["http://localhost:11434", "http://localhost:11435", "http://host.docker.internal:11434", "http://host.docker.internal:11435"]
     EMBED_MODEL: str = "nomic-embed-text"
     DEFAULT_CHAT_MODEL: str = "qwen2.5:7b"
     DEFAULT_VISION_MODEL: str = "gemma3:4b"
@@ -55,7 +58,7 @@ class Settings(BaseSettings):
     # Server
     HOST: str = "0.0.0.0"
     PORT: int = 8000
-    CORS_ORIGINS: list[str] = [
+    CORS_ORIGINS: list[str] | str = [
         "http://localhost:3000",
         "http://localhost:5173",
         "http://127.0.0.1:3000",
