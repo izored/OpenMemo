@@ -18,6 +18,7 @@ import {
 } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import { MemoGrid } from '@/components/MemoGrid';
+import { PageHeader } from '@/components/PageHeader';
 import { Icon } from '@/components/Icon';
 import { useAppStore } from '@/stores/appStore';
 import { memoApi, collectionApi } from '@/lib/api';
@@ -165,39 +166,27 @@ export function Dashboard() {
 
   return (
     <>
-      <header className="om-header">
-        {collection && (
-          <button className="om-music-back" onClick={() => { setActiveCollection(null); navigate('/collections'); }} title="Back to Collections">
-            <Icon name="chevronLeft" size={13} />
-            <span>Back to Collections</span>
-          </button>
-        )}
-        <div className="om-greet">
-          <span className="om-greet-eyebrow mono">{today}</span>
-          <h1 className="om-greet-title">{collection ? collection.name : 'Today'}{import.meta.env.DEV && <span style={{color:'red',fontSize:'0.5em'}}> DEV</span>}</h1>
-          <p className="om-greet-sub">
-            {collection
-              ? `Everything filed under ${collection.name}.`
-              : "A quiet place for what you're keeping."}
-          </p>
-        </div>
-        <div className="om-filter-rail">
-          <DndContext sensors={tabSensors} collisionDetection={closestCenter} onDragEnd={handleTabDragEnd}>
-            <SortableContext items={orderedFilters.map((f) => f.id)} strategy={horizontalListSortingStrategy}>
-              <div className="om-filter-tabs">
-                {orderedFilters.map((f) => (
-                  <SortableFilterTab
-                    key={f.id}
-                    f={f}
-                    active={activeFilter === f.id}
-                    onSelect={() => setActiveFilter(f.id)}
-                  />
-                ))}
-              </div>
-            </SortableContext>
-          </DndContext>
-        </div>
-      </header>
+      <PageHeader
+        eyebrow={today}
+        title={<>{collection ? collection.name : 'Today'}{import.meta.env.DEV && <span style={{color:'red',fontSize:'0.5em'}}> DEV</span>}</>}
+        sub={collection ? `Everything filed under ${collection.name}.` : "A quiet place for what you're keeping."}
+        back={collection ? { label: 'Back to Collections', onClick: () => { setActiveCollection(null); navigate('/collections'); } } : undefined}
+      >
+        <DndContext sensors={tabSensors} collisionDetection={closestCenter} onDragEnd={handleTabDragEnd}>
+          <SortableContext items={orderedFilters.map((f) => f.id)} strategy={horizontalListSortingStrategy}>
+            <div className="om-filter-tabs">
+              {orderedFilters.map((f) => (
+                <SortableFilterTab
+                  key={f.id}
+                  f={f}
+                  active={activeFilter === f.id}
+                  onSelect={() => setActiveFilter(f.id)}
+                />
+              ))}
+            </div>
+          </SortableContext>
+        </DndContext>
+      </PageHeader>
 
       {isLoading ? (
         <div className="om-empty">

@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { motion } from 'framer-motion';
 import { Icon } from '@/components/Icon';
+import { PageHeader } from '@/components/PageHeader';
 import { ChangelogModal, cmpVersion } from '@/components/ChangelogModal';
 import { ONBOARDING_KEY } from '@/lib/onboarding';
 import { useAppStore } from '@/stores/appStore';
@@ -467,11 +468,11 @@ export function SettingsPage() {
 
   return (
     <div className="om-settings">
-      <div className="om-settings-head">
-        <span className="om-greet-eyebrow mono">Workspace · Personal</span>
-        <h1 className="om-greet-title">Settings</h1>
-        <p className="om-greet-sub">Everything here is stored on your machine. No cloud, no account.</p>
-      </div>
+      <PageHeader
+        eyebrow="Workspace · Personal"
+        title="Settings"
+        sub="Everything here is stored on your machine. No cloud, no account."
+      />
 
       <div className="om-bento-stack">
 

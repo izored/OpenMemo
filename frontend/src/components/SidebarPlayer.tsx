@@ -54,12 +54,15 @@ export function SidebarPlayer() {
   // during render when the track changes (React's "store info from previous
   // renders" pattern) — no effect, no cascading-render lint warning.
   const [pinned, setPinned] = useState<boolean>(!!track?.pinned);
+  // Liked state, same optimistic seed/reset pattern as pinned.
+  const [liked, setLiked] = useState<boolean>(!!track?.liked);
   const [seenMemo, setSeenMemo] = useState<string | undefined>(track?.memoId);
   // Tint the player to the cover's mood (music only), matching the reference UI.
   const mood = useCoverMood(track?.kind === 'music' ? track?.cover : null);
   if (track && track.memoId !== seenMemo) {
     setSeenMemo(track.memoId);
     setPinned(!!track.pinned);
+    setLiked(!!track.liked);
   }
 
   if (!track) return null;
@@ -90,6 +93,18 @@ export function SidebarPlayer() {
       queryClient.invalidateQueries({ queryKey: ['memos', 'pinned'] });
     } catch {
       setPinned(!next); // revert on failure
+    }
+  };
+
+  const onLike = async (e: React.MouseEvent) => {
+    e.stopPropagation();
+    const next = !liked;
+    setLiked(next); // optimistic
+    try {
+      await memoApi.like(track.memoId, next);
+      queryClient.invalidateQueries({ queryKey: ['memos'] });
+    } catch {
+      setLiked(!next); // revert on failure
     }
   };
 
@@ -211,6 +226,17 @@ export function SidebarPlayer() {
       <button className="om-sb-player-btn" onClick={next} disabled={queueIndex >= queueLength - 1} title="Next track" aria-label="Next track">
         <Icon name="skipForward" size={14} />
       </button>
+      {isMusic && (
+        <button
+          className={cn('om-sb-player-btn', liked && 'active')}
+          onClick={onLike}
+          title={liked ? 'Unlike' : 'Like'}
+          aria-label={liked ? 'Unlike' : 'Like'}
+          aria-pressed={liked}
+        >
+          <Icon name="heart" size={13} style={liked ? { fill: 'currentColor' } : undefined} />
+        </button>
+      )}
     </div>
   ) : null;
 

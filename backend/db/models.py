@@ -100,6 +100,10 @@ class Memo(Base):
     localize_error = Column(Text, nullable=True)
     sort_order = Column(Integer, default=0)
     pinned = Column(Boolean, default=False)
+    # Liked songs (music UX). Distinct from pinned: pin = sidebar shortcut for
+    # any memo, like = a per-track flag the music surfaces read (heart on the
+    # tile, wide tile in playlist grids, "Play liked").
+    liked = Column(Boolean, default=False)
     # Hidden memos are filtered out of the main dashboard (and the pinned
     # sidebar list) but stay visible inside their collections. The full set
     # lives behind the passcode-gated hidden section (OPNMMO-0016).

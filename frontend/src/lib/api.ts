@@ -35,6 +35,7 @@ export const memoApi = {
   setRecency: (id: string, recency_at: string) =>
     fetchJSON<{ id: string; recency_at: string }>(`/memos/${id}/recency`, { method: 'PUT', body: JSON.stringify({ recency_at }) }),
   pin: (id: string, pinned: boolean) => fetchJSON<{ id: string; pinned: boolean }>(`/memos/${id}/pin`, { method: 'PUT', body: JSON.stringify({ pinned }) }),
+  like: (id: string, liked: boolean) => fetchJSON<{ id: string; liked: boolean }>(`/memos/${id}/like`, { method: 'PUT', body: JSON.stringify({ liked }) }),
   hide: (id: string, hidden: boolean) => fetchJSON<{ id: string; hidden: boolean }>(`/memos/${id}/hide`, { method: 'PUT', body: JSON.stringify({ hidden }) }),
   listPinned: () => fetchJSON<{ id: string; type: string; title: string; thumbnail_path?: string; source_domain?: string; source_favicon?: string; pinned: boolean }[]>('/memos/pinned/list'),
   delete: (id: string) => fetchJSON<any>(`/memos/${id}`, { method: 'DELETE' }),

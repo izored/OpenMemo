@@ -12,6 +12,7 @@ import {
 import { SortableContext, useSortable, arrayMove, rectSortingStrategy } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import { Icon } from '@/components/Icon';
+import { PageHeader } from '@/components/PageHeader';
 import { collectionApi, memoApi } from '@/lib/api';
 import { useAppStore } from '@/stores/appStore';
 import { cn } from '@/lib/utils';
@@ -154,25 +155,20 @@ export function CollectionsPage() {
 
   return (
     <div className="om-colls">
-      <header className="om-header">
-        <div className="om-greet">
-          <span className="om-greet-eyebrow mono">Collections · {order.length}</span>
-          <h1 className="om-greet-title">Your collections</h1>
-          <p className="om-greet-sub">
-            Folders, but with a memory. Drop a Memo onto one in the sidebar to file it.
-          </p>
-        </div>
-        <div className="om-filter-rail">
-          <button
-            className={cn('om-btn-secondary', editMode && 'active')}
-            onClick={() => setEditMode((v) => !v)}
-            title="Edit collections"
-          >
-            <Icon name={editMode ? 'check' : 'edit'} size={13} />
-            {editMode ? 'Done' : 'Edit'}
-          </button>
-        </div>
-      </header>
+      <PageHeader
+        eyebrow={`Collections · ${order.length}`}
+        title="Your collections"
+        sub="Folders, but with a memory. Drop a Memo onto one in the sidebar to file it."
+      >
+        <button
+          className={cn('om-btn-secondary', editMode && 'active')}
+          onClick={() => setEditMode((v) => !v)}
+          title="Edit collections"
+        >
+          <Icon name={editMode ? 'check' : 'edit'} size={13} />
+          {editMode ? 'Done' : 'Edit'}
+        </button>
+      </PageHeader>
 
       <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={onDragEnd}>
         <SortableContext items={order.map((c) => c.id)} strategy={rectSortingStrategy}>
