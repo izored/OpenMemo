@@ -75,12 +75,14 @@ async def chat_stream(data: ChatRequest, db: AsyncSession = Depends(get_db)):
         use_rag = False
         query = query.removeprefix("@general ").removeprefix("@general").removeprefix("@").strip()
     
-    # Get chat history for context
+    # Get chat history for context. Exclude the user message we just saved —
+    # rag_chat appends the current query itself; including it here would send
+    # the question to the model twice.
     history = []
     if data.session_id:
         result = await db.execute(
             select(Message)
-            .where(Message.session_id == session_id)
+            .where(Message.session_id == session_id, Message.id != user_msg.id)
             .order_by(Message.created_at.desc())
             .limit(6)
         )

@@ -48,6 +48,10 @@ _DEFAULTS: dict[str, Any] = {
     # Extension (without dot) of the active custom background image, e.g. "jpg".
     # Empty = no custom background. The file lives at DATA_DIR/background.<ext>.
     "bg_image_ext": "",
+    # Default Ollama chat model for AI features (Ask Memo, summaries). Empty =
+    # fall through to the env default, then to any installed model — see
+    # OllamaClient.resolve_chat_model for the full resolution order.
+    "chat_model": "",
 }
 
 _UNCAPPED_SENTINEL = 0

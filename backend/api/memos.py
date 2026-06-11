@@ -633,25 +633,39 @@ async def list_pinned_memos(db: AsyncSession = Depends(get_db)):
 
 @router.delete("/{memo_id}")
 async def delete_memo(memo_id: str, db: AsyncSession = Depends(get_db)):
-    """Soft-delete a memo (recoverable from Settings within the session)."""
+    """Soft-delete a memo (recoverable from Settings within the session).
+
+    Embeddings are purged immediately — the vector index must only ever hold
+    live memos, or Ask Memo retrieves (and cites) ghosts that 404 on click.
+    Restore re-embeds, so nothing is lost."""
     memo = await db.get(Memo, memo_id)
     if not memo:
         raise HTTPException(status_code=404, detail="Memo not found")
     memo.is_deleted = True
     memo.deleted_at = datetime.utcnow()
     await db.commit()
+    try:
+        from backend.core.embedder import delete_memo_embeddings
+        await delete_memo_embeddings(memo_id)
+    except Exception as e:
+        # Non-fatal: a reindex sweeps any stragglers.
+        print(f"Embedding purge failed for {memo_id}: {e}")
     return {"status": "deleted"}
 
 
 @router.post("/{memo_id}/restore")
 async def restore_memo(memo_id: str, db: AsyncSession = Depends(get_db)):
-    """Restore a soft-deleted memo."""
+    """Restore a soft-deleted memo (and rebuild its embeddings in background)."""
     memo = await db.get(Memo, memo_id)
     if not memo:
         raise HTTPException(status_code=404, detail="Memo not found")
     memo.is_deleted = False
     memo.deleted_at = None
     await db.commit()
+    if memo.content_text:
+        import asyncio
+        from backend.api.ingest import process_memo
+        asyncio.create_task(process_memo(memo_id))
     return {"status": "restored"}
 
 
@@ -676,6 +690,7 @@ async def list_deleted_memos(db: AsyncSession = Depends(get_db)):
 
 class SummaryRequest(BaseModel):
     mode: str = "insights"  # insights | timestamp | essay
+    model: str | None = None  # per-request Ollama model override
 
 
 @router.post("/{memo_id}/summary")
@@ -686,8 +701,13 @@ async def generate_memo_summary(
 ):
     """Generate an AI summary for a memo in one of three modes, fed the full
     transcript/content. Results are cached per-mode in `summaries` so switching
-    back to a mode is instant. `insights` mirrors to `ai_summary` for back-compat."""
+    back to a mode is instant. `insights` mirrors to `ai_summary` for back-compat.
+
+    Ollama failures surface as 502/503 with a human-readable detail — the
+    frontend shows it inline. A bare 500 here means a bug, not a model issue."""
+    import httpx
     from backend.core.rag import SUMMARY_MODES
+    from backend.core.ollama_client import OllamaModelMissing
 
     if body.mode not in SUMMARY_MODES:
         raise HTTPException(status_code=400, detail=f"Invalid summary mode: {body.mode}")
@@ -702,7 +722,22 @@ async def generate_memo_summary(
         raise HTTPException(status_code=400, detail="This memo can't be summarized")
 
     from backend.core.rag import generate_summary
-    summary = await generate_summary(memo.content_text, mode=body.mode)
+    try:
+        summary = await generate_summary(memo.content_text, mode=body.mode, model=body.model)
+    except OllamaModelMissing as e:
+        raise HTTPException(status_code=502, detail=str(e))
+    except httpx.ConnectError:
+        raise HTTPException(
+            status_code=503,
+            detail="Ollama is not reachable. Start it (`ollama serve`) and try again.",
+        )
+    except httpx.TimeoutException:
+        raise HTTPException(
+            status_code=504,
+            detail="Ollama timed out generating the summary. The model may be loading — try again.",
+        )
+    except httpx.HTTPStatusError as e:
+        raise HTTPException(status_code=502, detail=f"Ollama error: {e.response.text[:300]}")
 
     # Cache per-mode. dict(...) forces a new object so SQLAlchemy detects the
     # change on the JSON column (in-place mutation of a JSON dict isn't tracked).

@@ -7,6 +7,43 @@ the decision, and its consequences, so a future reader knows *why*, not just
 
 ---
 
+## ADR-014: Ollama integration is resilient by construction: resolved models, prefixed embeddings, a live-only vector index
+
+**Date:** 2026-06-10 · **Status:** Shipped · **Builds on:** ADR-001 (define shared things once), ADR-007 (one summarize predicate), ADR-008 (keep work off the hot path)
+
+### Context
+
+The AI layer looked wired up but failed quietly at every seam. Summarize returned a bare 500 on most memos. Ask Memo retrieved chunks that had nothing to do with the question. Nobody got an error message for any of it.
+
+Five independent faults stacked:
+
+1. **The configured chat model did not exist.** `DEFAULT_CHAT_MODEL=qwen2.5:7b` was never pulled. Every backend-initiated Ollama call 404'd, the API turned that into a 500, and the frontend logged it to the console and showed nothing.
+2. **Embeddings were generated wrong for the embed model.** `nomic-embed-text-v2-moe` is trained with task prefixes (`search_document:` / `search_query:`). Without them, documents and queries land in different regions of the vector space and nearest-neighbour search returns near-noise. We sent raw text on both sides.
+3. **The vector index kept ghosts.** Soft-deleting a memo never touched ChromaDB. 60 of 145 chunks belonged to deleted memos, so retrieval cited cards that 404 on click.
+4. **Scoping was silently broken.** `search_similar` accepted `collection_id` and ignored it: collection chat searched the whole library. A multi-key Chroma `where` would also crash on current Chroma (needs `$and`).
+5. **Context windows were silently truncated, twice.** Ollama defaults `num_ctx` to 4096 and drops the prompt tail without erroring, so long transcripts lost their second half. And 512-token chunks plus the nomic prefix overflow the embed model's own 512-token window, so chunk tails embedded as if they did not exist.
+
+### Decision
+
+**1. Models are resolved, never assumed.** Every chat/summary call goes through `OllamaClient.resolve_chat_model()`: explicit request → user's Settings default (`app_settings.chat_model`, persisted server-side) → env `DEFAULT_CHAT_MODEL` → any installed non-embed model. Matching is case-insensitive against `ollama list`. An explicit request for an absent model raises `OllamaModelMissing`, which the API maps to a 502 with the pull command in the message. The frontend shows that text inline (SummaryPanel error state, chat `error` SSE event) instead of swallowing it.
+
+**2. Embedding calls carry the model's task prefixes.** `embedder.py` prepends `search_document:` at index time and `search_query:` at query time whenever the embed model is a nomic family member. Stored chunk text stays clean; the prefix exists only in the embedding input. Chunk size dropped to 384 tokens (overlap 64) so chunk + prefix fit the embed model's 512-token window.
+
+**3. The vector index only ever holds live memos.** Soft-delete purges the memo's chunks; restore re-embeds in the background. `POST /api/maintenance/reindex` (Settings → Local AI → Rebuild) rebuilds everything with the current model and chunking and sweeps ghosts, for upgrades and embed-model changes. Search results additionally filter `is_deleted` on the SQL side as a belt-and-braces.
+
+**4. Retrieval is scoped and thresholded.** `collection_id` resolves to that collection's live memo ids and filters with `$in`; multi-condition filters build a proper `$and`. Chunks beyond `RAG_MAX_DISTANCE` (cosine, default 0.80) are dropped. Zero surviving chunks short-circuits to an honest "nothing relevant in your memos" message instead of letting the model improvise over an empty context. Chat history now also rides along in RAG mode, so follow-ups work.
+
+**5. The context window is explicit.** All chat calls pass `options.num_ctx` (`OLLAMA_NUM_CTX`, default 8192). Config loads from `backend/.env` by absolute path, so the dev server started from the repo root stops silently running on code defaults.
+
+### Consequences
+
+- A wrong or missing model degrades to the best installed one, and every Ollama failure reaches the user as readable text, never a silent console line.
+- Retrieval quality is a property of the index. After changing `EMBED_MODEL`, run Rebuild; mixed-model vector spaces are garbage and nothing can fix them at query time.
+- The default model is one server-side setting shared by every surface (Settings dropdown writes it, summaries and chat read it). Per-request overrides stay possible.
+- Reindex is a heavy, Ollama-dependent endpoint; it stays manual (a Settings button), never automatic on startup.
+
+---
+
 ## ADR-013: Custom appearance backgrounds are ingested server-side at full quality
 
 **Date:** 2026-06-07 · **Status:** Shipped · **Builds on:** ADR-011 (the live appearance preview is the Settings hero), ADR-001 (define shared things once)
