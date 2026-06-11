@@ -22,7 +22,7 @@ export function SidebarPlayer() {
   const queryClient = useQueryClient();
   const collapsed = useAppStore((s) => s.sidebarCollapsed);
   const playerSize = useAppStore((s) => s.tweaks.playerSize);
-  const { track, playing, currentTime, duration, repeat, toggleRepeat, toggle, seek, close, next, prev, queueLength, queueIndex, shuffled, toggleShuffle } = useAudioPlayer();
+  const { track, playing, currentTime, duration, repeat, toggleRepeat, toggle, seek, close, next, prev, queueLength, queueIndex, shuffled, toggleShuffle, queueSource } = useAudioPlayer();
   // Up-next popover (ADR-015) — the queue, inspectable and editable in place.
   const [upNextOpen, setUpNextOpen] = useState(false);
   // "Add to playlist" for the playing track (music only).
@@ -76,6 +76,11 @@ export function SidebarPlayer() {
     : undefined;
 
   const goMemo = () => navigate(`/memo/${track.memoId}`);
+  // Cover art links to where the queue came from (the playlist); the title
+  // keeps linking to the track's memo. Ad-hoc queues fall back to the memo.
+  const goCover = () =>
+    queueSource?.kind === 'playlist' ? navigate(`/music/${queueSource.id}`) : goMemo();
+  const coverTitle = queueSource?.kind === 'playlist' ? 'Open playlist' : track.title;
 
   const onScrub = (e: React.MouseEvent<HTMLDivElement>) => {
     if (!hasDur) return;
@@ -287,10 +292,10 @@ export function SidebarPlayer() {
         <div
           className="om-sb-player-big-cover"
           style={{ backgroundImage: `url(${track.cover})` }}
-          onClick={goMemo}
+          onClick={goCover}
           role="button"
-          aria-label={`Open ${track.title}`}
-          title={track.title}
+          aria-label={queueSource?.kind === 'playlist' ? 'Open playlist' : `Open ${track.title}`}
+          title={coverTitle}
         />
         <button className="om-sb-player-big-x" onClick={close} aria-label="Close player" title="Close">
           <Icon name="x" size={14} />
@@ -357,7 +362,7 @@ export function SidebarPlayer() {
       style={moodStyle}
     >
       <div className="om-sb-player-head">
-        <button className="om-sb-player-cover-btn" onClick={goMemo} title={track.title}>
+        <button className="om-sb-player-cover-btn" onClick={goCover} title={coverTitle}>
           {cover}
         </button>
         <button className="om-sb-player-meta" onClick={goMemo}>

@@ -4386,6 +4386,19 @@ button.om-add-link { background: none; border: 0; padding: 0; cursor: pointer; f
 .om-mtile-remove:hover { background: rgba(190, 40, 34, 0.85); }
 .om-mtile:has(.om-mtile-state) .om-mtile-remove { top: 34px; }
 @media (hover: none) { .om-mtile-remove { opacity: 1; } }
+/* Edit-thumbnail pen — left column under the number badge, hover-revealed.
+   Opens the shared ThumbnailEditModal (same flow as the card pen). */
+.om-mtile-pen {
+  position: absolute; top: 34px; left: 8px; z-index: 3;
+  width: 22px; height: 22px; border-radius: 50%;
+  display: grid; place-items: center;
+  background: rgba(0, 0, 0, 0.45); color: rgba(255, 255, 255, 0.92);
+  opacity: 0; transition: opacity .12s ease, background .12s ease;
+  cursor: pointer; pointer-events: auto;
+}
+.om-mtile:hover .om-mtile-pen, .om-mtile-pen:focus-visible { opacity: 1; }
+.om-mtile-pen:hover { background: rgba(0, 0, 0, 0.72); }
+@media (hover: none) { .om-mtile-pen { opacity: 1; } }
 
 .om-mtile-play {
   position: absolute; inset: 0; z-index: 1; display: grid; place-items: center;

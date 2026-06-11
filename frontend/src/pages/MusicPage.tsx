@@ -107,9 +107,10 @@ function PlaylistCard({ p, onOpen, onPlay }: { p: MusicPlaylist; onOpen: () => v
 // artwork is the whole tile, title rides a bottom gradient, play on hover.
 // Remote tracks (saved without downloading) carry an explicit download chip —
 // like any music app; downloading/failed states show in the same spot.
-function MusicTile({ m, index, active, playing, onPlay, onDownload, onRemove, onDelete }: {
+function MusicTile({ m, index, active, playing, onPlay, onDownload, onRemove, onDelete, onEditThumb }: {
   m: Memo; index: number; active: boolean; playing: boolean;
   onPlay: () => void; onDownload: () => void; onRemove: () => void; onDelete: () => void;
+  onEditThumb: () => void;
 }) {
   const ready = isReady(m);
   const failed = m.localize_status === 'error';
@@ -130,6 +131,17 @@ function MusicTile({ m, index, active, playing, onPlay, onDownload, onRemove, on
         <span className="om-mtile-glyph"><Icon name="music" size={26} /></span>
       )}
       <span className="om-mtile-num mono">{index + 1}</span>
+      <span
+        className="om-mtile-pen"
+        role="button"
+        tabIndex={0}
+        title="Edit thumbnail & title"
+        aria-label={`Edit thumbnail for ${m.title}`}
+        onClick={(e) => { e.stopPropagation(); onEditThumb(); }}
+        onKeyDown={(e) => { if (e.key === 'Enter') { e.stopPropagation(); onEditThumb(); } }}
+      >
+        <Icon name="edit" size={11} />
+      </span>
       <span
         className="om-mtile-remove"
         role="button"
@@ -212,6 +224,7 @@ export function MusicPage() {
   const queryClient = useQueryClient();
   const { playlistId } = useParams();
   const setAddPanelOpen = useAppStore((s) => s.setAddPanelOpen);
+  const openThumbEdit = useAppStore((s) => s.openThumbEdit);
   const { playQueue, toggle, isActive, playing } = useAudioPlayer();
 
   const { data: playlists = [] } = useQuery({
@@ -346,11 +359,17 @@ export function MusicPage() {
     };
   });
 
-  const queueFrom = (all: Memo[], startMemo?: Memo, opts?: { shuffle?: boolean }) => {
+  const queueFrom = (all: Memo[], startMemo?: Memo, opts?: { shuffle?: boolean; sourcePlaylistId?: string }) => {
     const ready = all.filter(isReady);
     if (!ready.length) return;
     const start = startMemo ? ready.findIndex((m) => m.id === startMemo.id) : 0;
-    playQueue(ready.map(memoToTrack), Math.max(0, start), opts);
+    // Stamp the queue with its playlist (the open one, or the card that was
+    // played) so the player's cover art links back to it.
+    const plId = opts?.sourcePlaylistId ?? playlistId;
+    playQueue(ready.map(memoToTrack), Math.max(0, start), {
+      shuffle: opts?.shuffle,
+      source: plId ? { kind: 'playlist', id: plId } : null,
+    });
   };
 
   const playPlaylist = async (p: MusicPlaylist, opts?: { shuffle?: boolean }) => {
@@ -359,7 +378,7 @@ export function MusicPage() {
       queryFn: () => memoApi.list({ type: 'audio', collection_id: p.id, limit: 200 }),
       staleTime: 10 * 1000,
     });
-    queueFrom(res.items as Memo[], undefined, opts);
+    queueFrom(res.items as Memo[], undefined, { ...opts, sourcePlaylistId: p.id });
   };
 
   // Play the library as a queue — what you see is what queues (current
@@ -546,6 +565,7 @@ export function MusicPage() {
                     onDownload={() => downloadTrack(m)}
                     onRemove={() => removeFromPlaylist(m)}
                     onDelete={() => deleteMemo(m)}
+                    onEditThumb={() => openThumbEdit(m)}
                   />
                 </SortableTile>
               ))}
