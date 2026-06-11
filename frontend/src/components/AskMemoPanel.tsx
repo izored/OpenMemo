@@ -49,6 +49,11 @@ export function AskMemoPanel({ memoId, collectionId }: AskMemoPanelProps) {
         model: chatModel,
       });
 
+      if (!resp.ok) {
+        const err = await resp.json().catch(() => ({ detail: `HTTP ${resp.status}` }));
+        throw new Error(err.detail || `HTTP ${resp.status}`);
+      }
+
       const reader = resp.body?.getReader();
       const decoder = new TextDecoder();
 
@@ -78,6 +83,15 @@ export function AskMemoPanel({ memoId, collectionId }: AskMemoPanelProps) {
                   const updated = [...prev];
                   const last = updated[updated.length - 1];
                   if (last.role === 'assistant') last.sources = data.data;
+                  return [...updated];
+                });
+              } else if (data.type === 'error') {
+                // Backend streams Ollama failures (model missing, host down) as
+                // an error event — surface it instead of a silently empty reply.
+                setMessages((prev) => {
+                  const updated = [...prev];
+                  const last = updated[updated.length - 1];
+                  if (last.role === 'assistant' && !last.content) last.content = 'Error: ' + data.data;
                   return [...updated];
                 });
               } else if (data.type === 'done') {
