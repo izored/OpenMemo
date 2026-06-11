@@ -70,6 +70,7 @@ Full-bleed square tiles (`om-mtile`) are the building block of every playlist vi
 - **Artist above title.** The artist name sits in the smaller, dimmer line above; the song title is the larger, bolder anchor at the bottom. This mirrors the reading order of most music apps and treats the artist as context, not the headline.
 - **Track position on hover only.** The position badge (e.g. "71") is hidden at rest and fades in on hover. Showing it permanently on every tile added visual noise without helping playback. You need the number when you are navigating the list, not when you are glancing at art.
 - **Play overlay on hover.** The play badge covers the tile on hover and when the track is active. It does not compete with the art at rest.
+- **Remove chip opens a confirm overlay.** Tapping the × does not remove the track immediately. A small overlay covers the tile with two choices: **Delete** (permanently removes the memo) and **Remove** (pulls it out of this playlist; playlist-born tracks resurface in the library, dragged-in ones stay there). Same visual language as the card-level confirm dialog.
 - **Remove chip on hover only (touch: always visible).** Destructive actions stay out of the way until you reach for them.
 - **Bottom gradient cap.** `linear-gradient(to top, rgba(0,0,0,0.74), transparent)` gives enough contrast for white text without covering the art. Two lines maximum: artist (10px, 75% opacity) and title (12px bold, 2-line clamp).
 
@@ -82,6 +83,8 @@ The sidebar big player (`om-sb-player-big`) fills the sidebar with album art and
 3. **Title (with volume).** The `VolumeControl` wraps the track title so the volume knob lives inline with the marquee, saving vertical space.
 
 Rationale for scrubber placement: the scrubber is not a navigation control (that is the transport row). Separating them prevents accidental scrub when reaching for skip, and keeps the title reachable right below the seek bar.
+
+The Add-to-playlist popover anchors inside the player (overlaying the artwork) because the big layout uses `overflow: hidden` to round its corners, which clips any above-the-player popover. Z-index 65 (menu) + 64 (backdrop) stacks above all player controls while keeping backdrop-tap-to-dismiss working.
 
 ## Dashboard filter
 
