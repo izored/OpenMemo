@@ -15,6 +15,7 @@ import { Pencil } from 'lucide-react';
 import { LiveWaveform } from './LiveWaveform';
 import { Marquee } from './Marquee';
 import { VolumeControl } from './VolumeControl';
+import { PlaylistMenu } from './PlaylistMenu';
 import type { Memo, MemoType } from '@/types';
 
 // Warm tint palette for cards without media (notes / plain docs).
@@ -159,6 +160,9 @@ function Chrome({
 }) {
   const navigate = useNavigate();
   const openThumbEdit = useAppStore((s) => s.openThumbEdit);
+  // "Add to playlist" — music memos only, touch-first (no drag needed).
+  const [plMenuOpen, setPlMenuOpen] = React.useState(false);
+  const isMusicCard = audioKind(memo) === 'music';
   const handleClick = () => {
     if (onCardClick) onCardClick();
     else navigate(`/memo/${memo.id}`);
@@ -198,6 +202,18 @@ function Chrome({
             <Icon name="arrowUpRight" size={14} />
           </button>
         )}
+        {isMusicCard && (
+          <button
+            className={cn('om-action', plMenuOpen && 'pinned')}
+            onClick={(e) => { e.stopPropagation(); setPlMenuOpen((v) => !v); }}
+            onPointerDown={(e) => e.stopPropagation()}
+            title="Add to playlist"
+            aria-label="Add to playlist"
+            aria-expanded={plMenuOpen}
+          >
+            <Icon name="listMusic" size={14} />
+          </button>
+        )}
         <button
           className={cn('om-action', memo.pinned && 'pinned')}
           onClick={onPin}
@@ -209,6 +225,13 @@ function Chrome({
           <Icon name="x" size={15} />
         </button>
       </div>
+      {plMenuOpen && (
+        <PlaylistMenu
+          memoId={memo.id}
+          memberIds={(memo.collections ?? []).map((c) => c.id)}
+          onClose={() => setPlMenuOpen(false)}
+        />
+      )}
       {children}
     </div>
   );

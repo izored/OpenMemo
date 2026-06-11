@@ -9,6 +9,7 @@ import { useAudioPlayer, formatTime } from '@/lib/audioPlayer';
 import { useCoverMood } from '@/lib/coverMood';
 import { Marquee } from './Marquee';
 import { VolumeControl } from './VolumeControl';
+import { PlaylistMenu } from './PlaylistMenu';
 
 // Persistent now-playing surface in the sidebar foot (ADR-005). Drives the one
 // shared <audio>. Two sizes (appearance pref `playerSize`):
@@ -24,6 +25,8 @@ export function SidebarPlayer() {
   const { track, playing, currentTime, duration, repeat, toggleRepeat, toggle, seek, close, next, prev, queueLength, queueIndex, shuffled, toggleShuffle } = useAudioPlayer();
   // Up-next popover (ADR-015) — the queue, inspectable and editable in place.
   const [upNextOpen, setUpNextOpen] = useState(false);
+  // "Add to playlist" for the playing track (music only).
+  const [plMenuOpen, setPlMenuOpen] = useState(false);
 
   // Pin state seeded from the playing track, toggled optimistically here. Reset
   // during render when the track changes (React's "store info from previous
@@ -276,6 +279,18 @@ export function SidebarPlayer() {
         >
           <Icon name={repeat ? 'repeat1' : 'repeat'} size={14} />
         </button>
+        {isMusic && (
+          <button
+            className={cn('om-sb-player-sat om-sb-player-big-addpl', plMenuOpen && 'active')}
+            onClick={() => setPlMenuOpen((v) => !v)}
+            title="Add to playlist"
+            aria-label="Add to playlist"
+            aria-expanded={plMenuOpen}
+          >
+            <Icon name="plus" size={14} />
+          </button>
+        )}
+        {plMenuOpen && <PlaylistMenu memoId={track.memoId} onClose={() => setPlMenuOpen(false)} />}
 
         <div className="om-sb-player-big-body">
           {scrub}
@@ -306,6 +321,17 @@ export function SidebarPlayer() {
         <button className="om-sb-player-meta" onClick={goMemo}>
           <Marquee text={track.title} className="om-sb-player-title" auto />
         </button>
+        {isMusic && (
+          <button
+            className={cn('om-sb-player-close', plMenuOpen && 'active')}
+            onClick={() => setPlMenuOpen((v) => !v)}
+            title="Add to playlist"
+            aria-label="Add to playlist"
+            aria-expanded={plMenuOpen}
+          >
+            <Icon name="plus" size={13} />
+          </button>
+        )}
         {hasQueue && (
           <button
             className={cn('om-sb-player-close', upNextOpen && 'active')}
@@ -324,6 +350,7 @@ export function SidebarPlayer() {
       {scrub}
       {transport}
       <UpNext open={upNextOpen} onClose={() => setUpNextOpen(false)} />
+      {plMenuOpen && <PlaylistMenu memoId={track.memoId} onClose={() => setPlMenuOpen(false)} />}
     </div>
   );
 }
