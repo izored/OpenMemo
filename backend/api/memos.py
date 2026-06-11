@@ -103,6 +103,7 @@ def _apply_sort(query):
 async def list_memos(
     workspace_id: Optional[str] = None,
     type: Optional[str] = None,
+    audio_kind: Optional[str] = None,
     collection_id: Optional[str] = None,
     search: Optional[str] = None,
     hidden: Optional[bool] = None,
@@ -136,6 +137,17 @@ async def list_memos(
         query = query.where(Memo.hidden == True)  # noqa: E712
     elif not collection_id:
         query = query.where((Memo.hidden == False) | (Memo.hidden == None))  # noqa: E712
+    # Keep the main feed clean (OPNMMO-0023): tracks that belong to a music
+    # playlist live on the Music page, not in All Memos / the type tabs. They
+    # still appear when a collection is opened explicitly (playlist view) or
+    # when the caller asks for music directly (audio_kind filter / Music tab).
+    if not collection_id and audio_kind not in ("voice", "music"):
+        playlist_members = (
+            select(memo_collections.c.memo_id)
+            .join(Collection, Collection.id == memo_collections.c.collection_id)
+            .where(Collection.kind == "playlist")
+        )
+        query = query.where(~Memo.id.in_(playlist_members))
     if type and type != "all":
         # `type` may be a comma-separated group (e.g. the Files tab maps to
         # document,file,code,audio) so one tab can cover several memo types.
@@ -144,6 +156,10 @@ async def list_memos(
             query = query.where(Memo.type == types[0])
         elif types:
             query = query.where(Memo.type.in_(types))
+    if audio_kind in ("voice", "music"):
+        # Audio sub-kind filter (ADR-005/014): splits the audio type into the
+        # dashboard's Music / Voice tabs and feeds the Music page library.
+        query = query.where(Memo.audio_kind == audio_kind)
     if collection_id:
         query = query.join(memo_collections).where(
             memo_collections.c.collection_id == collection_id

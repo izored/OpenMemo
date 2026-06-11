@@ -1,8 +1,10 @@
 import React, { useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Icon } from './Icon';
 import { VoiceRecorder } from './VoiceRecorder';
 import { ingestApi, collectionApi } from '@/lib/api';
+import { playlistShape } from '@/lib/playlistUrl';
 import { useAppStore } from '@/stores/appStore';
 import { cn } from '@/lib/utils';
 import type { Collection } from '@/types';
@@ -59,6 +61,42 @@ export function AddMemoPanel() {
   const [progress, setProgress] = useState<{ done: number; total: number } | null>(null);
   const [error, setError] = useState('');
   const fileRef = useRef<HTMLInputElement>(null);
+  const navigate = useNavigate();
+
+  // Playlist detection (OPNMMO-0023 / ADR-015). A playlist-shaped URL triggers
+  // a flat yt-dlp probe; the panel then asks: whole playlist or just this one?
+  const plShape = playlistShape(url);
+  const [plProbe, setPlProbe] = useState<{ title: string; count: number; truncated: boolean } | null>(null);
+  const [plProbing, setPlProbing] = useState(false);
+  const [plChoice, setPlChoice] = useState<'playlist' | 'single'>('single');
+  // Off by default: pull the playlist as remote tracks first, download later
+  // from the Music page (per track or all at once) — like any music app.
+  const [plDownload, setPlDownload] = useState(false);
+  useEffect(() => {
+    const shape = playlistShape(url);
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- reset probe state as the URL changes
+    setPlProbe(null);
+    if (!shape.isPlaylist) {
+      setPlProbing(false);
+      return;
+    }
+    // ALWAYS default to "just this one" — ingesting 100 tracks must be a
+    // deliberate, explicit pick, never a default (user feedback on 0023).
+    setPlChoice('single');
+    setPlProbing(true);
+    // Debounce so typing/pasting doesn't fire a probe per keystroke.
+    const t = setTimeout(async () => {
+      try {
+        const res = await ingestApi.probePlaylist(url.trim());
+        setPlProbe({ title: res.title, count: res.count, truncated: res.truncated });
+      } catch {
+        setPlProbe(null); // probe failed — the URL still saves as a single link
+      } finally {
+        setPlProbing(false);
+      }
+    }, 600);
+    return () => clearTimeout(t);
+  }, [url]);
 
   useEffect(() => {
     if (open) {
@@ -102,6 +140,16 @@ export function AddMemoPanel() {
     try {
       if (tab === 'link') {
         if (!url.trim()) return;
+        if (plShape.isPlaylist && plChoice === 'playlist') {
+          // Whole playlist → playlist collection; downloads only when asked.
+          // Land on the Music page where the new playlist (and any progress)
+          // is visible.
+          await ingestApi.playlist(url.trim(), { download: plDownload });
+          queryClient.invalidateQueries({ queryKey: ['music-playlists'] });
+          done();
+          navigate('/music');
+          return;
+        }
         await ingestApi.url(url.trim(), collection || undefined);
       } else if (tab === 'note') {
         if (!noteTitle.trim() && !note.trim()) return;
@@ -286,9 +334,65 @@ export function AddMemoPanel() {
                   onKeyDown={(e) => e.key === 'Enter' && save()}
                 />
               </div>
-              <p className="om-add-hint mono">
-                Preview, metadata, and a screenshot will be captured automatically.
-              </p>
+              {plShape.isPlaylist ? (
+                // Playlist-shaped URL → ask: whole playlist or just this one?
+                <div className="om-add-pl">
+                  {plProbing && !plProbe ? (
+                    <p className="om-add-hint mono">Checking playlist…</p>
+                  ) : (
+                    <>
+                      <div className="om-add-sect mono">This link is a playlist</div>
+                      <div className="om-add-pl-opts">
+                        <button
+                          className={cn('om-add-pl-opt', plChoice === 'playlist' && 'active')}
+                          onClick={() => setPlChoice('playlist')}
+                        >
+                          <Icon name="listMusic" size={13} />
+                          <span className="om-add-pl-opt-main">
+                            <b>Whole playlist</b>
+                            <small>
+                              {plProbe
+                                ? `${plProbe.title} · ${plProbe.count} tracks${plProbe.truncated ? ' (first 100)' : ''}`
+                                : 'Creates a music playlist'}
+                            </small>
+                          </span>
+                        </button>
+                        <button
+                          className={cn('om-add-pl-opt', plChoice === 'single' && 'active')}
+                          onClick={() => setPlChoice('single')}
+                        >
+                          <Icon name={plShape.hasSingleItem ? 'video' : 'link'} size={13} />
+                          <span className="om-add-pl-opt-main">
+                            <b>{plShape.hasSingleItem ? 'Just this video' : 'Just this link'}</b>
+                            <small>Saves one memo, like any link</small>
+                          </span>
+                        </button>
+                      </div>
+                      {plChoice === 'playlist' && (
+                        <>
+                          <label className="om-add-pl-dl">
+                            <input
+                              type="checkbox"
+                              checked={plDownload}
+                              onChange={(e) => setPlDownload(e.target.checked)}
+                            />
+                            <span>Download tracks to this device now</span>
+                          </label>
+                          <p className="om-add-hint mono">
+                            {plDownload
+                              ? 'Tracks download one by one — follow progress on the Music page.'
+                              : 'Saves the playlist + track info only. Download per track (or all) from the Music page.'}
+                          </p>
+                        </>
+                      )}
+                    </>
+                  )}
+                </div>
+              ) : (
+                <p className="om-add-hint mono">
+                  Preview, metadata, and a screenshot will be captured automatically.
+                </p>
+              )}
             </div>
           )}
 
@@ -436,7 +540,7 @@ export function AddMemoPanel() {
         </button>
         {tab !== 'voice' && (
           <button className="om-add-foot-btn primary" onClick={save} disabled={busy}>
-            <span>{progress ? `Uploading ${progress.done}/${progress.total}…` : busy ? 'Saving…' : tab === 'multimedia' ? 'Choose files' : 'Save'}</span>
+            <span>{progress ? `Uploading ${progress.done}/${progress.total}…` : busy ? 'Saving…' : tab === 'multimedia' ? 'Choose files' : tab === 'link' && plShape.isPlaylist && plChoice === 'playlist' ? 'Save playlist' : 'Save'}</span>
             <span className="mono om-add-kbd-inv">⏎</span>
           </button>
         )}
