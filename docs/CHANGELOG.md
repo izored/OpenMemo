@@ -9,11 +9,15 @@ Two big pushes. The Settings page is rebuilt as a bento with the live appearance
 
 ### Fixed
 
-- 🌙 **Note cards stayed beige in dark mode** — the warm background was an inline style that CSS could not override. Backgrounds now come from CSS rules keyed on `data-tint` and `[data-theme="hi"]`, using `color-mix` to nudge each tint toward your accent color. All four tint variants darken properly when you flip to dark mode and transition smoothly with the rest of the UI.
+- 🌙 **Note cards stayed beige in dark mode** — the warm background was an inline style that CSS could not override. Backgrounds now come from CSS rules keyed on `data-tint` and `[data-theme="hi"]`, using `color-mix` to nudge each tint toward your accent color. All four tint variants darken properly when you flip to dark mode and transition smoothly with the rest of the UI. The random-bg override (which uses `!important`) now gets a higher-specificity dark mode rule so it also darkens correctly when both are active.
 - 📐 **Playlist detail page squashed at the top** — the "Back to Music" button had no top margin, so the page started flush against the window edge instead of breathing like every other page. Now matches the 48 px top padding the main header uses.
+- 🎵 **Add-to-playlist menu not clickable in the big sidebar player** — the menu's z-index (5) was below the fixed backdrop's (59), so the backdrop swallowed every click. Z-index raised to 65 and the backdrop hidden inside the big player (it is self-contained; no backdrop needed).
+- 📋 **Confirm hint sat above the buttons** — the "Hide keeps it in collections" note appeared between the title and the buttons instead of below them. Moved below the action row and margin fixed (was -10 px pulling it into the buttons).
+- 📏 **Queue position counter shifted layout on shuffle** — when shuffle pinned a two-digit track at position 1, the "1 / 101" span shrank, nudging the skip buttons. The span now reserves `minWidth` based on the longest position string in the queue.
 
 ### Changed
 
+- 🎶 **Playlist tile remove chip shows a confirm overlay** — tapping the × on a track no longer removes it instantly. A small overlay (Delete / Remove) covers the tile so you can choose between permanently deleting the memo and simply pulling it out of this playlist. Same visual language as the card-level confirm dialog.
 - 🎵 **Artist above title in playlist tiles** — the artist name moves to the smaller, dimmer line above the title, so the song title is the bold anchor at the bottom of each tile. Mirrors the reading order of most music apps.
 - 👻 **Track position badge is hover-only** — the number (e.g. "71") is hidden at rest and fades in on hover, reducing visual noise without hiding the information.
 - 🔢 **Queue position counter shrinks to 9 px** — the "44 / 101" readout in the big sidebar player was a touch too large; 9 px mono keeps it readable as data without competing with the title.
