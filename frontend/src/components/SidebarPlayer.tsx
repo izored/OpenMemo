@@ -198,19 +198,11 @@ export function SidebarPlayer() {
   // stays exactly as ADR-010 placed it).
   const queueRow = hasQueue ? (
     <div className="om-sb-player-queue">
-      {isMusic && (
-        <button
-          className={cn('om-sb-player-btn', plMenuOpen && 'active')}
-          onClick={() => setPlMenuOpen((v) => !v)}
-          title="Add to playlist"
-          aria-label="Add to playlist"
-          aria-expanded={plMenuOpen}
-        >
-          <Icon name="plus" size={14} />
-        </button>
-      )}
       <button className={cn('om-sb-player-btn', shuffled && 'active')} onClick={toggleShuffle} title={shuffled ? 'Shuffle: on' : 'Shuffle: off'} aria-pressed={shuffled} aria-label="Shuffle">
         <Icon name="shuffle" size={14} />
+      </button>
+      <button className={cn('om-sb-player-btn', repeat && 'active')} onClick={toggleRepeat} title={repeat ? 'Repeat one: on' : 'Repeat one: off'} aria-pressed={repeat} aria-label="Repeat one">
+        <Icon name={repeat ? 'repeat1' : 'repeat'} size={14} />
       </button>
       <button className="om-sb-player-btn" onClick={prev} disabled={queueIndex <= 0} title="Previous track" aria-label="Previous track">
         <Icon name="skipBack" size={14} />
@@ -221,15 +213,6 @@ export function SidebarPlayer() {
       >{queueIndex + 1} / {queueLength}</span>
       <button className="om-sb-player-btn" onClick={next} disabled={queueIndex >= queueLength - 1} title="Next track" aria-label="Next track">
         <Icon name="skipForward" size={14} />
-      </button>
-      <button
-        className={cn('om-sb-player-btn', upNextOpen && 'active')}
-        onClick={() => setUpNextOpen((v) => !v)}
-        title="Up next"
-        aria-label="Up next"
-        aria-expanded={upNextOpen}
-      >
-        <Icon name="listMusic" size={14} />
       </button>
     </div>
   ) : null;
@@ -307,15 +290,17 @@ export function SidebarPlayer() {
         >
           <Icon name="pin" size={14} />
         </button>
-        <button
-          className={cn('om-sb-player-sat om-sb-player-big-repeat', repeat && 'active')}
-          onClick={toggleRepeat}
-          title={repeat ? 'Repeat one: on' : 'Repeat one: off'}
-          aria-pressed={repeat}
-          aria-label="Repeat one"
-        >
-          <Icon name={repeat ? 'repeat1' : 'repeat'} size={14} />
-        </button>
+        {isMusic && (
+          <button
+            className={cn('om-sb-player-sat om-sb-player-big-addpl', plMenuOpen && 'active')}
+            onClick={() => setPlMenuOpen((v) => !v)}
+            title="Add to playlist"
+            aria-label="Add to playlist"
+            aria-expanded={plMenuOpen}
+          >
+            <Icon name="plus" size={14} />
+          </button>
+        )}
         {plMenuOpen && <PlaylistMenu memoId={track.memoId} onClose={() => setPlMenuOpen(false)} />}
 
         <div className="om-sb-player-big-body">
@@ -327,7 +312,6 @@ export function SidebarPlayer() {
             </button>
           </VolumeControl>
         </div>
-        <UpNext open={upNextOpen} onClose={() => setUpNextOpen(false)} />
       </div>
     );
   }
@@ -358,24 +342,12 @@ export function SidebarPlayer() {
             <Icon name="plus" size={13} />
           </button>
         )}
-        {hasQueue && (
-          <button
-            className={cn('om-sb-player-close', upNextOpen && 'active')}
-            onClick={() => setUpNextOpen((v) => !v)}
-            title="Up next"
-            aria-label="Up next"
-            aria-expanded={upNextOpen}
-          >
-            <Icon name="listMusic" size={13} />
-          </button>
-        )}
         <button className="om-sb-player-close" onClick={close} aria-label="Close player" title="Close">
           <Icon name="x" size={13} />
         </button>
       </div>
       {scrub}
       {transport}
-      <UpNext open={upNextOpen} onClose={() => setUpNextOpen(false)} />
       {plMenuOpen && <PlaylistMenu memoId={track.memoId} onClose={() => setPlMenuOpen(false)} />}
     </div>
   );
