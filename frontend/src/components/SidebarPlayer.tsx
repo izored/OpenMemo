@@ -22,6 +22,8 @@ export function SidebarPlayer() {
   const collapsed = useAppStore((s) => s.sidebarCollapsed);
   const playerSize = useAppStore((s) => s.tweaks.playerSize);
   const { track, playing, currentTime, duration, repeat, toggleRepeat, toggle, seek, close, next, prev, queueLength, queueIndex, shuffled, toggleShuffle } = useAudioPlayer();
+  // Up-next popover (ADR-015) — the queue, inspectable and editable in place.
+  const [upNextOpen, setUpNextOpen] = useState(false);
 
   // Pin state seeded from the playing track, toggled optimistically here. Reset
   // during render when the track changes (React's "store info from previous
@@ -181,6 +183,15 @@ export function SidebarPlayer() {
       <button className="om-sb-player-btn" onClick={next} disabled={queueIndex >= queueLength - 1} title="Next track" aria-label="Next track">
         <Icon name="skipForward" size={14} />
       </button>
+      <button
+        className={cn('om-sb-player-btn', upNextOpen && 'active')}
+        onClick={() => setUpNextOpen((v) => !v)}
+        title="Up next"
+        aria-label="Up next"
+        aria-expanded={upNextOpen}
+      >
+        <Icon name="listMusic" size={14} />
+      </button>
     </div>
   ) : null;
 
@@ -275,6 +286,7 @@ export function SidebarPlayer() {
             </button>
           </VolumeControl>
         </div>
+        <UpNext open={upNextOpen} onClose={() => setUpNextOpen(false)} />
       </div>
     );
   }
@@ -294,12 +306,74 @@ export function SidebarPlayer() {
         <button className="om-sb-player-meta" onClick={goMemo}>
           <Marquee text={track.title} className="om-sb-player-title" auto />
         </button>
+        {hasQueue && (
+          <button
+            className={cn('om-sb-player-close', upNextOpen && 'active')}
+            onClick={() => setUpNextOpen((v) => !v)}
+            title="Up next"
+            aria-label="Up next"
+            aria-expanded={upNextOpen}
+          >
+            <Icon name="listMusic" size={13} />
+          </button>
+        )}
         <button className="om-sb-player-close" onClick={close} aria-label="Close player" title="Close">
           <Icon name="x" size={13} />
         </button>
       </div>
       {scrub}
       {transport}
+      <UpNext open={upNextOpen} onClose={() => setUpNextOpen(false)} />
     </div>
+  );
+}
+
+// Up-next popover — the live queue above the player. Click a row to jump,
+// × to drop it from the queue (the playing track can't be removed).
+function UpNext({ open, onClose }: { open: boolean; onClose: () => void }) {
+  const { queueTracks, queueIndex, jumpTo, removeAt, playing } = useAudioPlayer();
+  if (!open || !queueTracks.length) return null;
+  return (
+    <>
+      <div className="om-upnext-backdrop" onClick={onClose} aria-hidden />
+      <div className="om-upnext" role="dialog" aria-label="Up next" data-lenis-prevent>
+        <div className="om-upnext-head mono">Up next · {queueIndex + 1} / {queueTracks.length}</div>
+        <div className="om-upnext-list">
+          {queueTracks.map((t, i) => (
+            <div key={`${t.memoId}-${i}`} className={cn('om-upnext-row', i === queueIndex && 'is-current')}>
+              <button
+                className="om-upnext-main"
+                onClick={() => { if (i !== queueIndex) jumpTo(i); }}
+                title={i === queueIndex ? 'Now playing' : `Play ${t.title}`}
+              >
+                <span className="om-upnext-num mono">{i + 1}</span>
+                {t.cover ? (
+                  <img src={t.cover} alt="" loading="lazy" />
+                ) : (
+                  <span className="om-upnext-glyph"><Icon name="music" size={12} /></span>
+                )}
+                <span className="om-upnext-meta">
+                  <span className="om-upnext-title">{t.title}</span>
+                  {t.subtitle && <span className="om-upnext-sub">{t.subtitle}</span>}
+                </span>
+                {i === queueIndex && (
+                  <Icon name={playing ? 'pause' : 'play'} size={11} className="om-upnext-now" />
+                )}
+              </button>
+              {i !== queueIndex && (
+                <button
+                  className="om-upnext-x"
+                  onClick={() => removeAt(i)}
+                  title="Remove from queue"
+                  aria-label={`Remove ${t.title} from queue`}
+                >
+                  <Icon name="x" size={11} />
+                </button>
+              )}
+            </div>
+          ))}
+        </div>
+      </div>
+    </>
   );
 }

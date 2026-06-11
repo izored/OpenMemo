@@ -59,6 +59,12 @@ interface AudioPlayerContextValue {
   queueLength: number;
   /** Index of the active track within the queue (-1 = no queue). */
   queueIndex: number;
+  /** The live queue, in play order (empty = no queue). For the Up-next list. */
+  queueTracks: AudioTrack[];
+  /** Jump straight to a queued track by index. */
+  jumpTo: (index: number) => void;
+  /** Drop a queued track by index (the playing track can't be removed). */
+  removeAt: (index: number) => void;
   /** Play/pause the currently loaded track. */
   toggle: () => void;
   /** Jump to an absolute position in seconds. */
@@ -313,6 +319,33 @@ export function AudioPlayerProvider({ children }: { children: React.ReactNode })
   const next = useCallback(() => stepQueue(1), [stepQueue]);
   const prev = useCallback(() => stepQueue(-1), [stepQueue]);
 
+  const jumpTo = useCallback(
+    (index: number) => {
+      const q = queueRef.current;
+      if (index < 0 || index >= q.length) return;
+      queueIndexRef.current = index;
+      setQueueIndex(index);
+      loadTrack(q[index]);
+    },
+    [loadTrack],
+  );
+
+  const removeAt = useCallback((index: number) => {
+    const q = queueRef.current;
+    const cur = queueIndexRef.current;
+    if (index < 0 || index >= q.length || index === cur) return;
+    const removed = q[index];
+    const nq = q.filter((_, i) => i !== index);
+    queueRef.current = nq;
+    setQueue(nq);
+    // Keep the source order in sync so toggling shuffle off can't resurrect it.
+    sourceOrderRef.current = sourceOrderRef.current.filter((t) => t.memoId !== removed.memoId);
+    if (index < cur) {
+      queueIndexRef.current = cur - 1;
+      setQueueIndex(cur - 1);
+    }
+  }, []);
+
   const toggle = useCallback(() => {
     const audio = audioRef.current;
     if (!audio || !track) return;
@@ -401,8 +434,8 @@ export function AudioPlayerProvider({ children }: { children: React.ReactNode })
   }, [playing]);
 
   const value = useMemo<AudioPlayerContextValue>(
-    () => ({ track, playing, currentTime, duration, repeat, toggleRepeat, volume, muted, setVolume, toggleMute, play, playQueue, next, prev, shuffled, toggleShuffle, queueLength: queue.length, queueIndex, toggle, seek, close, isActive, getLevels }),
-    [track, playing, currentTime, duration, repeat, toggleRepeat, volume, muted, setVolume, toggleMute, play, playQueue, next, prev, shuffled, toggleShuffle, queue.length, queueIndex, toggle, seek, close, isActive, getLevels],
+    () => ({ track, playing, currentTime, duration, repeat, toggleRepeat, volume, muted, setVolume, toggleMute, play, playQueue, next, prev, shuffled, toggleShuffle, queueLength: queue.length, queueIndex, queueTracks: queue, jumpTo, removeAt, toggle, seek, close, isActive, getLevels }),
+    [track, playing, currentTime, duration, repeat, toggleRepeat, volume, muted, setVolume, toggleMute, play, playQueue, next, prev, shuffled, toggleShuffle, queue, queueIndex, jumpTo, removeAt, toggle, seek, close, isActive, getLevels],
   );
 
   return (

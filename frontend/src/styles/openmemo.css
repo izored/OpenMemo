@@ -2310,6 +2310,8 @@ input, textarea { font: inherit; color: inherit; }
   background: color-mix(in oklab, var(--surface-2) 70%, transparent);
   border: 1px solid var(--border);
   display: flex; flex-direction: column; gap: 10px;
+  /* Anchor for the Up-next popover (absolute, floats above the player). */
+  position: relative;
   animation: omSbPlayerIn .3s cubic-bezier(0.16, 0.84, 0.34, 1);
 }
 @keyframes omSbPlayerIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
@@ -4372,6 +4374,50 @@ button.om-add-link { background: none; border: 0; padding: 0; cursor: pointer; f
 .om-sb-player.is-tinted .om-sb-player-queue-pos { color: rgba(255, 255, 255, 0.72); }
 .om-sb-player-btn:disabled { opacity: 0.35; cursor: default; }
 .om-sb-player-btn:disabled:hover { background: transparent; color: var(--text-3); }
+/* Queue mode adds shuffle — let the compact row wrap instead of clipping. */
+.om-sb-player-transport { flex-wrap: wrap; row-gap: 4px; }
+
+/* Up-next queue popover (ADR-015) — the live queue above the sidebar player.
+   Click a row to jump; × drops a track. The playing row is accent-washed. */
+.om-upnext-backdrop { position: fixed; inset: 0; z-index: 59; }
+.om-upnext {
+  position: absolute; bottom: calc(100% + 8px); left: 0; right: 0; z-index: 60;
+  background: var(--surface-2); border: 1px solid var(--border-2);
+  border-radius: 12px; box-shadow: 0 12px 32px rgba(0, 0, 0, 0.35);
+  display: flex; flex-direction: column; overflow: hidden;
+  animation: omSbPlayerIn .2s cubic-bezier(0.16, 0.84, 0.34, 1);
+}
+.om-upnext-head {
+  padding: 9px 12px 6px; font-size: 10px; letter-spacing: 0.08em;
+  text-transform: uppercase; color: var(--text-4);
+}
+.om-upnext-list { max-height: 240px; overflow-y: auto; padding: 0 4px 4px; }
+.om-upnext-row { display: flex; align-items: center; gap: 2px; border-radius: 8px; }
+.om-upnext-row.is-current { background: color-mix(in oklab, var(--accent) 14%, transparent); }
+.om-upnext-row:hover:not(.is-current) { background: var(--surface-3); }
+.om-upnext-main {
+  flex: 1; min-width: 0; display: flex; align-items: center; gap: 8px;
+  padding: 5px 6px; border: 0; background: transparent; cursor: pointer;
+  text-align: left; color: var(--text-2);
+}
+.om-upnext-num { width: 16px; font-size: 9.5px; color: var(--text-4); text-align: right; flex-shrink: 0; }
+.om-upnext-main img, .om-upnext-glyph {
+  width: 26px; height: 26px; border-radius: 6px; object-fit: cover; flex-shrink: 0;
+}
+.om-upnext-glyph { display: grid; place-items: center; background: var(--surface-3); color: var(--text-4); }
+.om-upnext-meta { min-width: 0; display: flex; flex-direction: column; }
+.om-upnext-title { font-size: 12px; font-weight: 600; color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.om-upnext-sub { font-size: 10.5px; color: var(--text-4); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.om-upnext-now { margin-left: auto; color: var(--accent); flex-shrink: 0; }
+.om-upnext-x {
+  width: 24px; height: 24px; margin-right: 4px; flex-shrink: 0; border: 0;
+  border-radius: 50%; display: grid; place-items: center;
+  background: transparent; color: var(--text-4); cursor: pointer; opacity: 0;
+  transition: opacity .12s ease, color .12s ease, background .12s ease;
+}
+.om-upnext-row:hover .om-upnext-x, .om-upnext-x:focus-visible { opacity: 1; }
+.om-upnext-x:hover { background: var(--surface-3); color: var(--text); }
+@media (hover: none) { .om-upnext-x { opacity: 1; } }
 
 /* New-memo panel — playlist choice (whole playlist vs just this one). */
 .om-add-pl { display: flex; flex-direction: column; }
