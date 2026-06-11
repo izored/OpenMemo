@@ -4193,6 +4193,32 @@ input, textarea { font: inherit; color: inherit; }
 }
 .om-lib-act:hover:not(:disabled) { color: var(--text); border-color: var(--border-2); background: var(--surface-2); }
 .om-lib-act:disabled { opacity: .45; cursor: default; }
+.om-lib-actions { flex-wrap: wrap; justify-content: flex-end; row-gap: 6px; }
+.om-lib-search {
+  display: inline-flex; align-items: center; gap: 5px;
+  padding: 3px 8px; border: 1px solid var(--border); border-radius: 999px;
+  color: var(--text-4); background: transparent;
+  transition: border-color .15s ease;
+}
+.om-lib-search:focus-within { border-color: var(--border-2); color: var(--text-3); }
+.om-lib-search input {
+  width: 110px; border: 0; background: transparent; outline: none;
+  font-size: 11px; color: var(--text);
+}
+.om-lib-search input::placeholder { color: var(--text-4); }
+.om-lib-search-x {
+  width: 16px; height: 16px; border: 0; border-radius: 50%;
+  display: grid; place-items: center; cursor: pointer;
+  background: transparent; color: var(--text-4);
+}
+.om-lib-search-x:hover { color: var(--text); background: var(--surface-3); }
+.om-lib-sort {
+  padding: 3px 8px; border: 1px solid var(--border); border-radius: 999px;
+  background: transparent; color: var(--text-3); cursor: pointer;
+  font-size: 10.5px; outline: none;
+}
+.om-lib-sort:hover, .om-lib-sort:focus { border-color: var(--border-2); color: var(--text); }
+.om-lib-sort option { background: var(--surface-2); color: var(--text); }
 
 .om-music-back {
   align-self: flex-start; display: inline-flex; align-items: center; gap: 4px;
