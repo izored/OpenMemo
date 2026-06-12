@@ -665,13 +665,16 @@ input, textarea { font: inherit; color: inherit; }
 .om-btn-ghost:hover { background: var(--surface-2); color: var(--text); }
 .om-btn-primary {
   display: inline-flex; align-items: center; gap: 8px;
-  height: 36px; padding: 0 6px 0 14px; border-radius: 10px;
+  height: 36px; padding: 0 14px; border-radius: 10px;
   font-size: 13px; font-weight: 500;
   background: var(--text);
   color: var(--bg);
   transition: transform .12s ease;
 }
 .om-btn-primary:hover { transform: translateY(-1px); }
+/* Trailing kbd chip carries its own background, so only then may the right
+   padding shrink — never bake asymmetric padding into the shared class. */
+.om-btn-primary:has(.om-kbd-inv) { padding-right: 6px; }
 .om-btn-primary .om-kbd-inv { background: rgba(0,0,0,0.12); color: inherit; }
 .om-btn-secondary {
   display: inline-flex; align-items: center; gap: 6px;
@@ -4443,8 +4446,7 @@ button.om-add-link { background: none; border: 0; padding: 0; cursor: pointer; f
 }
 .om-pl-hero-body { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
 .om-pl-hero-actions { display: flex; align-items: center; gap: 8px; margin-top: 10px; }
-/* No trailing kbd chip here, so the global 6px right padding reads cramped. */
-.om-pl-playall { display: inline-flex; align-items: center; gap: 7px; padding-right: 16px; }
+.om-pl-playall { display: inline-flex; align-items: center; gap: 7px; }
 .om-pl-playall:disabled { opacity: 0.5; cursor: default; }
 .om-pl-delete:hover { color: #ef5048; }
 
