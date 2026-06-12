@@ -672,6 +672,7 @@ export function MemoCard({ memo, dragHandleProps, lightboxGroup }: CardProps) {
         play({
           memoId: memo.id, title: memo.title, src: audioSrc,
           subtitle: memo.audio_artist || memo.source_domain || undefined,
+          album: memo.audio_album || undefined,
           kind: audioKind(memo), cover: src, pinned: memo.pinned, liked: memo.liked,
         });
       } else {

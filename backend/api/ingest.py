@@ -389,6 +389,9 @@ async def ingest_playlist(
         name=(data.title or probed["title"]).strip()[:200] or "Playlist",
         emoji="🎵",
         kind="playlist",
+        # YouTube album playlists carry the OLAK5uy_ list-id prefix; everything
+        # else yt-dlp enumerates here is a regular playlist/mix.
+        music_kind="album" if "OLAK5uy" in data.url else "playlist",
         source_url=data.url,
     )
     db.add(collection)
@@ -645,6 +648,8 @@ async def ingest_spotify(
         name=(data.title or probed["title"]).strip()[:200] or "Playlist",
         emoji="🎵",
         kind="playlist",
+        # parse_spotify_url told us exactly what this is.
+        music_kind="album" if kind == "album" else "playlist",
         source_url=canonical,
     )
     db.add(collection)
@@ -691,6 +696,9 @@ async def ingest_spotify(
             playlist_born=True,
             title=track["title"],
             audio_artist=track.get("artist"),
+            # An album's tracks share the album name; playlist tracks get
+            # theirs later from the Qobuz match during download.
+            audio_album=probed["title"][:200] if kind == "album" else None,
             source_url=turl,
             source_domain="open.spotify.com",
             source_favicon="https://www.google.com/s2/favicons?domain=spotify.com&sz=32",
@@ -976,13 +984,17 @@ async def _localize_spotify_track(memo_id: str, url: str, ws: str):
 
     async with AsyncSessionLocal() as db:
         memo = await db.get(Memo, memo_id)
-        # Pass known title/artist so the resolver can skip the embed lookup.
+        # Pass known title/artist so the resolver can skip the embed lookup,
+        # and the cover URL so it gets embedded into the FLAC's tags.
         title = memo.title if memo else None
         artist = memo.audio_artist if memo else None
+        cover = memo.thumbnail_path if memo else None
+        if cover and not cover.startswith("http"):
+            cover = None  # already cached locally — tagging wants the source URL
 
     try:
         result = await asyncio.to_thread(
-            download_spotify_track, url, dest_dir, quality, title, artist
+            download_spotify_track, url, dest_dir, quality, title, artist, cover
         )
     except SpotiFlacError as e:
         print(f"SpotiFLAC failed for {memo_id}: {e}")
@@ -1014,6 +1026,8 @@ async def _localize_spotify_track(memo_id: str, url: str, ws: str):
         memo.audio_kind = "music"
         if result.get("artist") and not memo.audio_artist:
             memo.audio_artist = result["artist"][:200]
+        if result.get("album") and not memo.audio_album:
+            memo.audio_album = result["album"][:200]
         # Keep the Spotify cover as the thumbnail when none is set yet; the
         # caller schedules cache_thumbnail to re-home it locally.
         if result.get("cover") and not memo.thumbnail_path:
