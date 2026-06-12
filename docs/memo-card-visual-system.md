@@ -69,6 +69,8 @@ Single unified rule across all themes and card styles. No per-theme variants.
 
 > **Note cards (minimal):** action buttons stack vertically. Note cards have a solid tinted background so charcoal + white remains readable without any override — intentional.
 
+The edit-thumbnail pen (`.om-card-edit`) joins the cluster from below: top-right, directly under the delete ✕, same 4px rhythm as the row. Two exceptions keep it on the top-left instead: minimal note cards (their actions stack down the right edge) and the active music card (the play cluster owns that corner, and its actions move left too).
+
 ---
 
 ## Hover Behavior — Minimal cards only

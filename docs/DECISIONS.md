@@ -35,6 +35,14 @@ The temptation is to bolt a second, Spotify-specific download world onto the sid
 - The provider endpoints and api key are AES-GCM-obfuscated in the upstream binary; the decrypted values are inlined as documented constants (they sit in a public binary, and they rarely rotate). No `cryptography` runtime dependency was added — the service is `httpx` + stdlib only. A rotation is a one-line edit, with the derivation noted in the source.
 - Availability is third-party: if the community endpoints disappear, Spotify ingest fails per track (status `error`, retryable) and nothing else in the app is affected. Lossless Spotify is a bonus capability, never load-bearing.
 
+### Update (2026-06-12, same day)
+
+Three refinements shipped after the first albums went through the chain:
+
+- **Rate-limit second pass.** Even sequential downloads tripped the community endpoint's 429 window on a 10-track album (3 of 10 stuck in `error`). `download_playlist_task` now re-runs every still-errored track once after a 90s cooldown — empirically enough for the window to pass. The retry is cause-agnostic (any `error` gets one more shot), so transient yt-dlp failures benefit too. Single-track ingests keep one attempt; the per-memo retry chip covers them.
+- **Albums are not playlists.** `collections.music_kind` (`'album' | 'playlist'`, NULL = playlist) records what the source was: Spotify `/album/` and YouTube `OLAK5uy_` list ids classify as albums, backfilled from `source_url` at startup. Albums render a single cover (one release, one artwork — the 4-up collage is for mixed-art playlists) and an "Album" label on cards, the hero, and the add-panel preview.
+- **The FLAC keeps its identity.** The community CDN serves files with zero tags and no art (verified with mutagen). Each download now gets Vorbis tags — title, artist, album — plus embedded cover art. The album name comes from the Qobuz search match, the only place in the chain that has it (the Spotify embed has no album field). It also lands on the memo (`memos.audio_album`, backfilled from album-kind collections) and surfaces in the big player ("album — artist" marquee under the title) and the OS media overlay.
+
 ---
 
 ## ADR-016: Every page renders one shared PageHeader, never its own header markup
