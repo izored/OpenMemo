@@ -182,7 +182,8 @@ function Chrome({
         </div>
       )}
       {confirmOverlay}
-      {/* Top-left pen: edit this card's thumbnail + title (any memo type).
+      {/* Pen under the delete ✕ (top-left on minimal/active-audio variants):
+          edit this card's thumbnail + title (any memo type).
           stopPropagation so it never triggers the card click / drag. */}
       <button
         className="om-action om-card-edit"

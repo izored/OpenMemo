@@ -1006,10 +1006,15 @@ input, textarea { font: inherit; color: inherit; }
    .om-action chip (size, colour, hover); this only anchors it top-left and
    reveals it on card hover, mirroring the .om-card-actions cluster on the right. */
 .om-card-edit {
-  position: absolute; top: 10px; left: 10px; z-index: 10;
+  /* Under the delete ✕ — the action row is 20px tall at top 10, so 34 keeps
+     the same 4px rhythm the row itself uses. */
+  position: absolute; top: 34px; right: 10px; z-index: 10;
   opacity: 0; transition: opacity .2s, background .15s;
 }
 .om-card:hover .om-card-edit { opacity: 1; }
+/* Minimal notes stack their actions in a column on the right — the pen keeps
+   its old top-left spot there instead of colliding with that column. */
+[data-card="minimal"] .om-card-edit { top: 10px; left: 10px; right: auto; }
 
 /* Hero / image / video frames */
 .om-card-hero, .om-image-frame, .om-video-frame, .om-doc-frame {
@@ -2463,7 +2468,7 @@ input, textarea { font: inherit; color: inherit; }
 .om-sb-player-sat.active { background: #fff; color: #111; }
 .om-sb-player-big-pin { top: 8px; right: 60px; }    /* top edge flush with play */
 .om-sb-player-big-repeat { top: 60px; right: 8px; }  /* right edge flush with play */
-.om-sb-player-big-addpl { top: 112px; right: 8px; } /* right column: play → repeat → add */
+.om-sb-player-big-addpl { top: 98px; right: 8px; }  /* same 8px rhythm: repeat ends at 90 */
 
 .om-sb-player-head { display: flex; align-items: center; gap: 10px; min-width: 0; }
 .om-sb-player-cover-btn { padding: 0; border: 0; background: none; cursor: pointer; flex-shrink: 0; line-height: 0; }
@@ -2649,6 +2654,9 @@ input, textarea { font: inherit; color: inherit; }
 /* The active music card's hover actions move to the top-LEFT so they don't sit
    under the play cluster now living in the top-right corner (ADR-010). */
 .om-card-audio.is-active .om-card-actions { left: 10px; right: auto; }
+/* The play cluster owns the active card's top-right — pen follows the actions
+   to the left edge, same below-the-row spot. */
+.om-card-audio.is-active .om-card-edit { left: 10px; right: auto; }
 
 /* ── One-line scrolling title (Marquee.tsx, ADR-010) ──────────────────────────
    Ellipsis at rest; on hover, if the text overflows, it slides left to reveal
