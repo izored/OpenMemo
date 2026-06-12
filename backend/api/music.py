@@ -74,6 +74,8 @@ async def list_playlists(db: AsyncSession = Depends(get_db)):
             "id": p.id,
             "name": p.name,
             "source_url": p.source_url,
+            # NULL predates the column (or a hand-made playlist) → playlist.
+            "music_kind": p.music_kind or "playlist",
             "created_at": p.created_at.isoformat(),
             "track_count": by_playlist[p.id]["total"],
             "covers": by_playlist[p.id]["covers"],

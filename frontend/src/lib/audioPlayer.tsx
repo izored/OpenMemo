@@ -11,6 +11,8 @@ export interface AudioTrack {
   title: string;
   src: string;
   subtitle?: string;
+  /** Album name (music only) — shown in the big player + OS media overlay. */
+  album?: string;
   /** 'voice' | 'music' (ADR-005) — drives the player's cover-vs-glyph styling. */
   kind?: 'voice' | 'music' | null;
   /** Cover-art image src (music only); absent → the player shows a glyph. */
@@ -538,6 +540,7 @@ export function AudioPlayerProvider({ children }: { children: React.ReactNode })
       navigator.mediaSession.metadata = new MediaMetadata({
         title: track.title,
         artist: track.subtitle || '',
+        album: track.album || '',
         artwork: track.cover ? [{ src: track.cover, sizes: '512x512', type: 'image/png' }] : [],
       });
     } catch {

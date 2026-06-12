@@ -325,7 +325,7 @@ export function MusicAddModal() {
                       <small className="mono">
                         {spProbe.kind === 'track'
                           ? spProbe.artist || 'Track'
-                          : `${spProbe.kind} · ${spProbe.count} track${spProbe.count === 1 ? '' : 's'}`}
+                          : `${spProbe.kind === 'album' ? 'Album' : 'Playlist'} · ${spProbe.count} track${spProbe.count === 1 ? '' : 's'}`}
                       </small>
                       {spProbe.alreadySaved && (
                         <small className="om-mm-saved mono">Already saved.</small>

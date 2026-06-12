@@ -32,6 +32,9 @@ export interface Memo {
   audio_kind?: 'voice' | 'music' | null;
   /** Artist from an uploaded music file's tags (ID3/Vorbis/…), when present. */
   audio_artist?: string | null;
+  /** Album name (music only) — Qobuz match on SpotiFLAC downloads, or the
+   *  source album's name at ingest. */
+  audio_album?: string | null;
   sort_order?: number;
   pinned?: boolean;
   /** Liked track (music surfaces: heart on the tile, wide tile, Play liked). */
@@ -78,6 +81,9 @@ export interface MusicPlaylist {
   id: string;
   name: string;
   source_url?: string | null;
+  /** What the source was: an album shows a single cover + "Album" label,
+   *  a playlist keeps the 4-cover collage. */
+  music_kind: 'album' | 'playlist';
   created_at: string;
   track_count: number;
   /** Up to 4 track cover URLs for the collage. */

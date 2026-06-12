@@ -26,6 +26,7 @@ function memoToTrack(m: Memo): AudioTrack {
     title: m.title,
     src: `/api/memos/${m.id}/file`,
     subtitle: m.audio_artist || m.source_domain || undefined,
+    album: m.audio_album || undefined,
     kind: 'music',
     cover: m.thumbnail_path || null,
     pinned: m.pinned,
@@ -38,16 +39,19 @@ function isReady(m: Memo): boolean {
   return !!m.file_path || m.localize_status === 'done';
 }
 
-function PlaylistCover({ covers, size = 'md' }: { covers: string[]; size?: 'md' | 'lg' }) {
+function PlaylistCover({ covers, size = 'md', kind = 'playlist' }: { covers: string[]; size?: 'md' | 'lg'; kind?: 'album' | 'playlist' }) {
+  // An album is one release with one artwork — always a single cover. The
+  // 4-up collage is reserved for playlists, whose tracks have mixed art.
+  const single = kind === 'album' || covers.length < 4;
   return (
-    <div className={cn('om-pl-cover', `om-pl-cover-${size}`, covers.length < 4 && 'few')}>
+    <div className={cn('om-pl-cover', `om-pl-cover-${size}`, single && 'few')}>
       {covers.length === 0 && (
         <span className="om-pl-cover-glyph"><Icon name="music" size={size === 'lg' ? 28 : 22} /></span>
       )}
-      {covers.length > 0 && covers.length < 4 && (
+      {covers.length > 0 && single && (
         <img src={covers[0]} alt="" loading="lazy" onError={(e) => ((e.target as HTMLImageElement).style.visibility = 'hidden')} />
       )}
-      {covers.length >= 4 &&
+      {!single && covers.length >= 4 &&
         covers.slice(0, 4).map((c, i) => (
           <img key={i} src={c} alt="" loading="lazy" onError={(e) => ((e.target as HTMLImageElement).style.visibility = 'hidden')} />
         ))}
@@ -64,11 +68,12 @@ function PlaylistCard({ p, onOpen, onPlay }: { p: MusicPlaylist; onOpen: () => v
   // "stuck at 0%", it's simply remote (meta says how many are local).
   const downloading = p.progress.pending > 0;
   const pct = p.progress.total ? Math.round((p.progress.done / p.progress.total) * 100) : 0;
+  const kindLabel = p.music_kind === 'album' ? 'Album' : 'Playlist';
   const meta = downloading
-    ? `${p.progress.done} / ${p.progress.total} downloaded`
+    ? `${kindLabel} · ${p.progress.done} / ${p.progress.total} downloaded`
     : p.progress.done < p.track_count
-      ? `${p.track_count} track${p.track_count === 1 ? '' : 's'} · ${p.progress.done} local`
-      : `${p.track_count} track${p.track_count === 1 ? '' : 's'}`;
+      ? `${kindLabel} · ${p.track_count} track${p.track_count === 1 ? '' : 's'} · ${p.progress.done} local`
+      : `${kindLabel} · ${p.track_count} track${p.track_count === 1 ? '' : 's'}`;
   return (
     <div
       ref={setNodeRef}
@@ -79,7 +84,7 @@ function PlaylistCard({ p, onOpen, onPlay }: { p: MusicPlaylist; onOpen: () => v
       onKeyDown={(e) => e.key === 'Enter' && onOpen()}
     >
       <div className="om-pl-card-art">
-        <PlaylistCover covers={p.covers} />
+        <PlaylistCover covers={p.covers} kind={p.music_kind} />
         <button
           className="om-pl-card-play"
           onClick={(e) => { e.stopPropagation(); onPlay(); }}
@@ -476,10 +481,14 @@ export function MusicPage() {
         </button>
 
         <header className="om-pl-hero">
-          <PlaylistCover covers={playlist?.covers ?? tracks.filter((t) => t.thumbnail_path).slice(0, 4).map((t) => t.thumbnail_path!)} size="lg" />
+          <PlaylistCover
+            covers={playlist?.covers ?? tracks.filter((t) => t.thumbnail_path).slice(0, 4).map((t) => t.thumbnail_path!)}
+            size="lg"
+            kind={playlist?.music_kind}
+          />
           <div className="om-pl-hero-body">
             <span className="om-greet-eyebrow mono">
-              Playlist · {trackTotal} track{trackTotal === 1 ? '' : 's'}
+              {playlist?.music_kind === 'album' ? 'Album' : 'Playlist'} · {trackTotal} track{trackTotal === 1 ? '' : 's'}
               {downloading && playlist && ` · ${playlist.progress.done}/${playlist.progress.total} downloaded`}
             </span>
             <h1 className="om-greet-title">{playlist?.name ?? 'Playlist'}</h1>
