@@ -27,6 +27,8 @@ Playlists are collections. No new table, one new column.
 
 - `collections.kind` — `'standard'` (default) or `'playlist'`. Additive migration, NULL backfilled to `'standard'`.
 - `collections.source_url` — the playlist URL it was pulled from. Nullable. Kept for provenance and a future re-sync.
+- `collections.music_kind` — `'album'` or `'playlist'` (NULL reads as playlist). What the source actually was: Spotify `/album/` links and YouTube `OLAK5uy_` list ids are albums. Backfilled from `source_url` at startup. Albums show a single cover and an "Album" label; playlists keep the 4-cover collage.
+- `memos.audio_album` — the album a track belongs to (music only). Set at ingest for album sources, or from the Qobuz match when a Spotify download resolves. Shown in the big player and the OS media overlay.
 
 The collections API filters by kind server-side. `GET /api/collections` returns standard collections only, so the sidebar, the collections page, and every collection picker hide playlists with zero frontend changes. `?kind=playlist` returns playlists. `?kind=all` returns everything.
 
@@ -52,6 +54,7 @@ Spotify is not a yt-dlp source and has no public download, but people paste Spot
 2. **ISRC** is resolved through song.link (Odesli), falling back to Deezer's public API.
 3. **A Qobuz track id** comes from the signed Qobuz public API (embedded default app credentials, MD5 request signature), searched by ISRC then by "title artist".
 4. **The FLAC URL** comes from the SpotiFLAC community endpoint (`/api/dl`), which returns a *direct* Qobuz stream — no DRM, no transcode. It is streamed to `FILES_DIR`, magic-byte checked (`fLaC`).
+5. **Tags are written after download.** The CDN serves the file with zero tags and no art, so openMemo writes Vorbis tags (title, artist, album) plus embedded cover art with mutagen. The album name comes from the Qobuz search match — the only link in the chain that has it. It also lands on the memo as `audio_album`.
 
 Only Qobuz is wired today, because its community provider returns an undecrypted FLAC. The Tidal and Amazon community providers return encrypted DASH / MP4 (CENC) that would need an MP4 decryptor plus ffmpeg; the resolver is provider-shaped and `music_provider` exists so they can be added without a migration.
 
@@ -62,7 +65,7 @@ Ingestion mirrors the yt-dlp playlist flow exactly (`POST /api/ingest/spotify`, 
 
 The crucial reuse: a Spotify track source is detected inside the shared `localize_memo_task`, which routes it to the FLAC resolver instead of yt-dlp. So the per-track download chip, the playlist's **Download all**, and playlist auto-download all handle Spotify with no extra wiring — the same single-seam win the rest of Music V2 is built on. Status rides the same `pending → processing → done | error`.
 
-The community endpoint is shared and rate-limited; the resolver ports SpotiFLAC's `Retry-After` backoff, and playlist downloads stay sequential. The embed track list caps around 50 entries for very large playlists — the cost of the no-account path.
+The community endpoint is shared and rate-limited; the resolver ports SpotiFLAC's `Retry-After` backoff, and playlist downloads stay sequential. Even so, bigger albums can trip the 429 window — so the playlist downloader takes a second pass at every still-errored track after a 90-second cooldown, which empirically clears it. Stubborn tracks stay retryable per memo. The embed track list caps around 50 entries for very large playlists — the cost of the no-account path.
 
 ## Playlist ingestion
 
@@ -88,10 +91,10 @@ Artist comes from the flat entry's artist or uploader field, with YouTube's " - 
 Three zones, in the visual language of the dashboard:
 
 - **Header.** Eyebrow, title, sub. Same `om-header` skeleton as Today, plus an **Add music** action in the rail. On `/music` both that button and the global FAB open the music-specific add panel (see "Adding music" below), not the generic New Memo panel.
-- **Playlists.** A horizontal row of playlist cards. Each card is a 2x2 collage of the first four track covers, name, track count, a play button that queues the whole playlist, and a progress bar while tracks are downloading. Cards accept memo-card drops, same as sidebar collections.
+- **Playlists.** A horizontal row of playlist cards. Each card is the artwork (a 2x2 collage of the first four track covers for playlists; albums show their one cover full-bleed), an eyebrow meta line above the name ("10 tracks · Album" / "5 tracks · Playlist"), a play button that queues the whole thing, and a progress bar while tracks are downloading. Cards accept memo-card drops, same as sidebar collections.
 - **Library.** The songs you saved one by one, in the standard masonry grid. Playlist-born tracks are not here; they live behind their playlist card. The header carries a debounced search box, a sort pill (Recent / Title / Artist), and Play all + Shuffle that queue exactly the filtered view. Music cards render full-bleed: square artwork edge to edge, title on a bottom gradient, no body bar.
 
-Click a playlist card and you get the playlist view (`/music/:id`): a boxed hero that names the playlist (collage, count, play-all, shuffle, Download all, source link, delete), a "Back to Music" button above it, and the tracks as full-bleed cover tiles. Each tile carries its number, its title on a gradient, play on hover, a remove chip (pull the song out, nothing gets deleted), and a download / retry chip when the track is still remote or failed. Tiles reorder by drag; the order persists through the recency stagger. Click a ready tile to play; the queue picks up from that track. Deleting a playlist removes the collection, never the tracks: born tracks move back to the library.
+Click a playlist card and you get the playlist view (`/music/:id`): a boxed hero that names the playlist (artwork — collage for playlists, single cover for albums — an "Album · N tracks" / "Playlist · N tracks" eyebrow, play-all, shuffle, Download all, source link, delete), a "Back to Music" button above it, and the tracks as full-bleed cover tiles. Each tile carries its number, its title on a gradient, play on hover, a remove chip (pull the song out, nothing gets deleted), and a download / retry chip when the track is still remote or failed. Tiles reorder by drag; the order persists through the recency stagger. Click a ready tile to play; the queue picks up from that track. Deleting a playlist removes the collection, never the tracks: born tracks move back to the library.
 
 ## Visual design: playlist tiles
 
@@ -112,8 +115,9 @@ The sidebar big player (`om-sb-player-big`) fills the sidebar with album art and
 1. **Transport row.** Shuffle, previous, position counter (e.g. "44 / 101"), next, heart. The heart likes the playing track (the `liked` flag, not pin). The counter is mono, 9px, centered in a fixed-width slot sized to the longest position string, so skipping tracks never nudges the buttons. The up-next button is hidden for now.
 2. **Scrubber.** The seek bar with current / total timestamps lives between the transport row and the title, so your eye moves from "where am I in the queue" to "where am I in this track" to "what track is this."
 3. **Title (with volume).** The `VolumeControl` wraps the track title so the volume knob lives inline with the marquee, saving vertical space.
+4. **Album — artist.** A dimmer mono line under the title ("HIT ME HARD AND SOFT — Billie Eilish"), aligned with the title text and sliding with the same auto Marquee when it overflows. Fed by `audio_album` / `audio_artist`; absent fields just drop out of the line.
 
-The corner cluster (ADR-010) is a right-side column: play in the top-right corner, pin to its left, repeat under play, add-to-playlist under repeat. Satellites stay out of the artwork's center.
+The corner cluster (ADR-010) is a right-side column: play in the top-right corner, pin to its left, repeat under play, add-to-playlist under repeat — all on the same 8px rhythm. Satellites stay out of the artwork's center.
 
 Rationale for scrubber placement: the scrubber is not a navigation control (that is the transport row). Separating them prevents accidental scrub when reaching for skip, and keeps the title reachable right below the seek bar.
 
