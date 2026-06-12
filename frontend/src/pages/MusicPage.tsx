@@ -70,10 +70,10 @@ function PlaylistCard({ p, onOpen, onPlay }: { p: MusicPlaylist; onOpen: () => v
   const pct = p.progress.total ? Math.round((p.progress.done / p.progress.total) * 100) : 0;
   const kindLabel = p.music_kind === 'album' ? 'Album' : 'Playlist';
   const meta = downloading
-    ? `${kindLabel} · ${p.progress.done} / ${p.progress.total} downloaded`
+    ? `${p.progress.done} / ${p.progress.total} downloaded · ${kindLabel}`
     : p.progress.done < p.track_count
-      ? `${kindLabel} · ${p.track_count} track${p.track_count === 1 ? '' : 's'} · ${p.progress.done} local`
-      : `${kindLabel} · ${p.track_count} track${p.track_count === 1 ? '' : 's'}`;
+      ? `${p.track_count} track${p.track_count === 1 ? '' : 's'} · ${p.progress.done} local · ${kindLabel}`
+      : `${p.track_count} track${p.track_count === 1 ? '' : 's'} · ${kindLabel}`;
   return (
     <div
       ref={setNodeRef}
