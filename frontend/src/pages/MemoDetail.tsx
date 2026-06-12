@@ -223,7 +223,7 @@ function AudioMemoPlayer({ memo }: { memo: Memo }) {
     else play({
       memoId: memo.id, title: memo.title, src,
       subtitle: memo.source_domain || undefined,
-      kind: audioKind(memo), cover: memo.thumbnail_path || null, pinned: memo.pinned,
+      kind: audioKind(memo), cover: memo.thumbnail_path || null, pinned: memo.pinned, liked: memo.liked,
     });
   };
   const onScrub = (e: React.MouseEvent<HTMLDivElement>) => {
@@ -314,7 +314,7 @@ function MusicDetailPlayer({ memo }: { memo: Memo }) {
     else play({
       memoId: memo.id, title: memo.title, src,
       subtitle: memo.audio_artist || memo.source_domain || undefined,
-      kind: audioKind(memo), cover, pinned: memo.pinned,
+      kind: audioKind(memo), cover, pinned: memo.pinned, liked: memo.liked,
     });
   };
   const onScrub = (e: React.MouseEvent<HTMLDivElement>) => {
