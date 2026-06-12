@@ -350,7 +350,7 @@ export function SidebarPlayer() {
           </VolumeControl>
           {(track.subtitle || track.album) && (
             <span className="om-sb-player-big-sub mono">
-              {[track.subtitle, track.album].filter(Boolean).join(' — ')}
+              {[track.album, track.subtitle].filter(Boolean).join(' — ')}
             </span>
           )}
         </div>
