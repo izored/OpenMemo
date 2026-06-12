@@ -20,6 +20,30 @@ import type { Memo, MusicPlaylist } from '@/types';
 // Tracks are plain audio memos (audio_kind=music); playlists are
 // playlist-kind collections, invisible everywhere else.
 
+// Sideways rails vs the page's Lenis smooth-scroll. Two failure modes:
+// data-lenis-prevent freezes the vertical wheel over a rail (lenis.css sets
+// overscroll-behavior: contain, and the rail has no vertical axis to give),
+// while WITHOUT the attribute Lenis preventDefaults every wheel event and
+// horizontal deltas die. So: no prevent attribute — a vertical wheel over a
+// rail page-scrolls smoothly like everywhere else — and a native non-passive
+// listener claims clearly-horizontal deltas (trackpad swipe, shift+wheel)
+// for the rail before they bubble up to Lenis.
+const railBound = new WeakSet<HTMLDivElement>();
+function bindRailWheel(el: HTMLDivElement | null) {
+  if (!el || railBound.has(el)) return;
+  railBound.add(el);
+  el.addEventListener(
+    'wheel',
+    (e) => {
+      if (Math.abs(e.deltaX) <= Math.abs(e.deltaY)) return;
+      e.preventDefault();
+      e.stopPropagation();
+      el.scrollLeft += e.deltaX;
+    },
+    { passive: false },
+  );
+}
+
 function memoToTrack(m: Memo): AudioTrack {
   return {
     memoId: m.id,
@@ -206,6 +230,80 @@ function MusicTile({ m, index, active, playing, onPlay, onDownload, onRemove, on
         <span className="om-mtile-title">{m.title}</span>
       </span>
     </button>
+  );
+}
+
+// Big hero card (Apple-Music-style top rail): full-bleed art, gradient veil,
+// kind eyebrow + name + track count pinned bottom-left, play on hover.
+function HeroCard({ p, onOpen, onPlay }: { p: MusicPlaylist; onOpen: () => void; onPlay: () => void }) {
+  const kindLabel = p.music_kind === 'album' ? 'Album' : 'Playlist';
+  const collage = p.music_kind === 'playlist' && p.covers.length >= 4;
+  return (
+    <div
+      className="om-hero-card"
+      onClick={onOpen}
+      role="button"
+      tabIndex={0}
+      onKeyDown={(e) => e.key === 'Enter' && onOpen()}
+    >
+      <div className="om-hero-art">
+        {p.covers.length === 0 ? (
+          <span className="om-hero-glyph"><Icon name="music" size={40} /></span>
+        ) : collage ? (
+          <PlaylistCover covers={p.covers} kind="playlist" />
+        ) : (
+          <img src={p.covers[0]} alt="" loading="lazy" onError={(e) => ((e.target as HTMLImageElement).style.visibility = 'hidden')} />
+        )}
+      </div>
+      <div className="om-hero-veil" />
+      <div className="om-hero-cap">
+        <span className="om-hero-eyebrow mono">{kindLabel}</span>
+        <span className="om-hero-name">{p.name}</span>
+        <span className="om-hero-meta">{p.track_count} track{p.track_count === 1 ? '' : 's'}</span>
+      </div>
+      <button
+        className="om-hero-play"
+        onClick={(e) => { e.stopPropagation(); onPlay(); }}
+        title={`Play ${p.name}`}
+        aria-label={`Play ${p.name}`}
+      >
+        <Icon name="play" size={17} stroke={0} style={{ fill: 'currentColor', marginLeft: 2 }} />
+      </button>
+    </div>
+  );
+}
+
+// "Favourite Songs" hero — every liked music memo as one tap-to-play queue
+// (no server-side liked filter; the click fetches the library and keeps the
+// liked ones). Art is a brand gradient + heart, like Apple's starred card.
+function HeroLikedCard({ onPlay, onShuffle }: { onPlay: () => void; onShuffle: () => void }) {
+  return (
+    <div
+      className="om-hero-card om-hero-liked"
+      onClick={onPlay}
+      role="button"
+      tabIndex={0}
+      onKeyDown={(e) => e.key === 'Enter' && onPlay()}
+      title="Play every liked song"
+    >
+      <div className="om-hero-art om-hero-liked-art">
+        <Icon name="heart" size={56} style={{ fill: 'currentColor' }} />
+      </div>
+      <div className="om-hero-veil" />
+      <div className="om-hero-cap">
+        <span className="om-hero-eyebrow mono">Made from your likes</span>
+        <span className="om-hero-name">Favourite Songs</span>
+        <span className="om-hero-meta">Every song you liked</span>
+      </div>
+      <button
+        className="om-hero-play"
+        onClick={(e) => { e.stopPropagation(); onShuffle(); }}
+        title="Shuffle liked songs"
+        aria-label="Shuffle liked songs"
+      >
+        <Icon name="shuffle" size={15} />
+      </button>
+    </div>
   );
 }
 
@@ -405,6 +503,17 @@ export function MusicPage() {
     queueFrom(res.items as Memo[], undefined, opts);
   };
 
+  // Liked queue — no liked filter on the list API, so fetch the library
+  // (same 200-track cap as everything else) and keep the liked ones.
+  const playLiked = async (opts?: { shuffle?: boolean }) => {
+    const res = await queryClient.fetchQuery({
+      queryKey: ['memos', 'music-liked-queue'],
+      queryFn: () => memoApi.list({ type: 'audio', audio_kind: 'music', limit: 200 }),
+      staleTime: 10 * 1000,
+    });
+    queueFrom((res.items as Memo[]).filter((m) => m.liked), undefined, opts);
+  };
+
   const deleteMemo = async (m: Memo) => {
     try {
       await memoApi.delete(m.id);
@@ -587,6 +696,14 @@ export function MusicPage() {
   }
 
   // ── Hub view (/music) ──
+  // Apple-Music-style hub: hero rail (Favourite Songs + newest saves), then
+  // an Albums rail, a Playlists rail, and the full library grid below. Every
+  // rail scrolls sideways.
+  const albums = playlists.filter((p) => p.music_kind === 'album');
+  const plOnly = playlists.filter((p) => p.music_kind === 'playlist');
+  // Hero features the newest few saves (API order = newest first), any kind.
+  const heroItems = playlists.slice(0, 4);
+  const showHero = playlists.length > 0 || library.length > 0;
   return (
     <div className="om-music">
       {/* Same header as every page; the Music page's own add-modal (SpotiFLAC,
@@ -597,6 +714,41 @@ export function MusicPage() {
           <span>Add music</span>
         </button>
       </PageHeader>
+
+      {showHero && (
+        <section className="om-music-sect">
+          <div className="om-hero-row" ref={bindRailWheel}>
+            <HeroLikedCard onPlay={() => playLiked()} onShuffle={() => playLiked({ shuffle: true })} />
+            {heroItems.map((p) => (
+              <HeroCard
+                key={p.id}
+                p={p}
+                onOpen={() => navigate(`/music/${p.id}`)}
+                onPlay={() => playPlaylist(p)}
+              />
+            ))}
+          </div>
+        </section>
+      )}
+
+      {albums.length > 0 && (
+        <section className="om-music-sect">
+          <div className="om-section-head">
+            <span className="om-section-label mono">Albums</span>
+            <Icon name="music" size={11} className="om-section-icon" />
+          </div>
+          <div className="om-pl-row" ref={bindRailWheel}>
+            {albums.map((p) => (
+              <PlaylistCard
+                key={p.id}
+                p={p}
+                onOpen={() => navigate(`/music/${p.id}`)}
+                onPlay={() => playPlaylist(p)}
+              />
+            ))}
+          </div>
+        </section>
+      )}
 
       <section className="om-music-sect">
         <div className="om-section-head">
@@ -630,7 +782,7 @@ export function MusicPage() {
             <Icon name="listMusic" size={11} className="om-section-icon" />
           </span>
         </div>
-        {playlists.length === 0 ? (
+        {plOnly.length === 0 ? (
           <div className="om-pl-empty">
             <Icon name="listMusic" size={18} />
             <p>
@@ -640,8 +792,8 @@ export function MusicPage() {
             </p>
           </div>
         ) : (
-          <div className="om-pl-row" data-lenis-prevent>
-            {playlists.map((p) => (
+          <div className="om-pl-row" ref={bindRailWheel}>
+            {plOnly.map((p) => (
               <PlaylistCard
                 key={p.id}
                 p={p}
