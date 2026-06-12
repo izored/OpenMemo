@@ -1,8 +1,8 @@
 # Music Library
 
-openMemo already knows the difference between a voice note and a song (ADR-005). The Music library gives songs a home. One page for everything you collect by ear: playlists pulled straight from YouTube Music, single tracks, uploads. All local, all yours.
+openMemo already knows the difference between a voice note and a song (ADR-005). The Music library gives songs a home. One page for everything you collect by ear: playlists pulled straight from YouTube Music, tracks and playlists from Spotify in lossless FLAC, single tracks, uploads. All local, all yours.
 
-This doc is the spec for Music Experience V2 (entry OPNMMO-0023). It covers the UX, the data model, the playlist ingestion flow, and what we deliberately left out.
+This doc is the spec for Music Experience V2 (entry OPNMMO-0023). It covers the UX, the data model, the playlist ingestion flow, the Spotify → FLAC pipeline (ADR-017), and what we deliberately left out.
 
 ## The idea, improved
 
@@ -34,6 +34,36 @@ Tracks are plain audio memos (`type=audio`, `audio_kind=music`) linked to the pl
 
 Playlist order rides on `recency_at`: track i gets `now - i` seconds at ingest, so the default recency sort returns playlist order for free. Same trick drag-to-reorder already uses.
 
+## Adding music
+
+The Music page has its own add surface, separate from the global New Memo panel — `MusicAddModal`, the same bottom-right glass panel and slide-in gesture, opened by the **Add music** button or the FAB on `/music`. It is fixed-height so it never jumps as content changes. Three tabs:
+
+- **Link.** Paste any track or playlist URL. A Spotify link previews its cover, title, and (for albums/playlists) track count, then resolves to lossless FLAC (below). A YouTube / SoundCloud / Bandcamp playlist link goes down the existing playlist flow; any other audio link saves like a normal audio memo.
+- **Upload.** Drop audio files straight into the library as music memos (`audio_kind=music`).
+- **Playlist.** Name an empty playlist and land on it, ready for drag-and-drop.
+
+A gear in the header opens a settings drawer: lossless quality (CD 16-bit / Hi-Res 24-bit) and the auto-download-linked-audio toggle, both persisted server-side (`music_quality`, `auto_download_audio`).
+
+## Spotify → lossless FLAC
+
+Spotify is not a yt-dlp source and has no public download, but people paste Spotify links and want lossless. So openMemo ports the account-free chain from the open-source [SpotiFLAC](https://github.com/spotbye/SpotiFLAC) project into `backend/core/spotiflac.py` (ADR-017). The whole chain needs no Spotify login:
+
+1. **Metadata** comes from the public `open.spotify.com/embed/<kind>/<id>` page — its `__NEXT_DATA__` JSON carries title, artist, cover, and the track list for albums and playlists. No token, no TOTP.
+2. **ISRC** is resolved through song.link (Odesli), falling back to Deezer's public API.
+3. **A Qobuz track id** comes from the signed Qobuz public API (embedded default app credentials, MD5 request signature), searched by ISRC then by "title artist".
+4. **The FLAC URL** comes from the SpotiFLAC community endpoint (`/api/dl`), which returns a *direct* Qobuz stream — no DRM, no transcode. It is streamed to `FILES_DIR`, magic-byte checked (`fLaC`).
+
+Only Qobuz is wired today, because its community provider returns an undecrypted FLAC. The Tidal and Amazon community providers return encrypted DASH / MP4 (CENC) that would need an MP4 decryptor plus ffmpeg; the resolver is provider-shaped and `music_provider` exists so they can be added without a migration.
+
+Ingestion mirrors the yt-dlp playlist flow exactly (`POST /api/ingest/spotify`, with `/probe` for the preview):
+
+- A **track** becomes one music memo (`source_url` = `open.spotify.com/track/<id>`).
+- An **album or playlist** becomes a playlist-kind collection plus one music memo per track, same dedupe/reuse rules as the yt-dlp path.
+
+The crucial reuse: a Spotify track source is detected inside the shared `localize_memo_task`, which routes it to the FLAC resolver instead of yt-dlp. So the per-track download chip, the playlist's **Download all**, and playlist auto-download all handle Spotify with no extra wiring — the same single-seam win the rest of Music V2 is built on. Status rides the same `pending → processing → done | error`.
+
+The community endpoint is shared and rate-limited; the resolver ports SpotiFLAC's `Retry-After` backoff, and playlist downloads stay sequential. The embed track list caps around 50 entries for very large playlists — the cost of the no-account path.
+
 ## Playlist ingestion
 
 The flow, end to end:
@@ -57,7 +87,7 @@ Artist comes from the flat entry's artist or uploader field, with YouTube's " - 
 
 Three zones, in the visual language of the dashboard:
 
-- **Header.** Eyebrow, title, sub. Same `om-header` skeleton as Today. Adding music goes through the global FAB and New Memo panel, no extra chrome.
+- **Header.** Eyebrow, title, sub. Same `om-header` skeleton as Today, plus an **Add music** action in the rail. On `/music` both that button and the global FAB open the music-specific add panel (see "Adding music" below), not the generic New Memo panel.
 - **Playlists.** A horizontal row of playlist cards. Each card is a 2x2 collage of the first four track covers, name, track count, a play button that queues the whole playlist, and a progress bar while tracks are downloading. Cards accept memo-card drops, same as sidebar collections.
 - **Library.** The songs you saved one by one, in the standard masonry grid. Playlist-born tracks are not here; they live behind their playlist card. The header carries a debounced search box, a sort pill (Recent / Title / Artist), and Play all + Shuffle that queue exactly the filtered view. Music cards render full-bleed: square artwork edge to edge, title on a bottom gradient, no body bar.
 
@@ -120,4 +150,4 @@ The sidebar player shows previous / next / shuffle and the Up-next popover only 
 
 ## Decision record
 
-See ADR-015 in `docs/DECISIONS.md`: playlists are collections with a kind, never a parallel table.
+See ADR-015 in `docs/DECISIONS.md`: playlists are collections with a kind, never a parallel table. And ADR-017: Spotify links resolve to lossless FLAC through a no-account provider chain, dispatched from the same `localize_memo_task` seam, with the Music page owning its own add panel.

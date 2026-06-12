@@ -63,6 +63,24 @@ class PlaylistIngest(BaseModel):
     workspace_id: Optional[str] = None
 
 
+class SpotifyProbe(BaseModel):
+    url: str
+
+
+class SpotifyIngest(BaseModel):
+    url: str
+    # False = save metadata-only remote track memo(s); download later per track
+    # or via the playlist's "download all". True = start the FLAC pull now.
+    download: bool = True
+    # "16" (CD lossless) | "24" (hi-res). None = the saved music_quality setting.
+    quality: Optional[str] = None
+    # Override the playlist/album collection name (tracks: ignored).
+    title: Optional[str] = None
+    workspace_id: Optional[str] = None
+    # Single track only — file it into an existing playlist collection.
+    collection_id: Optional[str] = None
+
+
 class NoteIngest(BaseModel):
     title: str
     content: str
@@ -471,6 +489,245 @@ async def ingest_playlist(
     }
 
 
+# --- Spotify ingestion (SpotiFLAC integration) ---
+
+@router.post("/spotify/probe")
+async def probe_spotify_url(data: SpotifyProbe, db: AsyncSession = Depends(get_db)):
+    """Preview a Spotify track / album / playlist link without downloading.
+
+    The Music add-modal calls this to show a real title + track count and to
+    flag an already-saved playlist before the user commits.
+    """
+    import asyncio
+
+    import httpx as _httpx
+
+    from backend.core.spotiflac import (
+        parse_spotify_url, spotify_track_meta, spotify_collection_meta,
+    )
+
+    parsed = parse_spotify_url(data.url)
+    if not parsed:
+        raise HTTPException(status_code=400, detail="Not a Spotify link")
+    kind, sid = parsed
+
+    def _fetch():
+        with _httpx.Client(follow_redirects=True) as client:
+            if kind == "track":
+                return {"kind": "track", **spotify_track_meta(client, sid)}
+            return {"kind": kind, **spotify_collection_meta(client, kind, sid)}
+
+    try:
+        meta = await asyncio.to_thread(_fetch)
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"Could not read Spotify link: {e}")
+
+    if meta["kind"] == "track":
+        return {
+            "kind": "track",
+            "title": meta["title"],
+            "artist": meta.get("artist"),
+            "cover": meta.get("cover"),
+            "count": 1,
+        }
+    canonical = f"https://open.spotify.com/{kind}/{sid}"
+    existing = await _find_saved_playlist(db, canonical)
+    return {
+        "kind": kind,
+        "title": meta["title"],
+        "cover": meta.get("cover"),
+        "count": len(meta["tracks"]),
+        "entries": [
+            {"title": t["title"], "artist": t.get("artist")} for t in meta["tracks"][:6]
+        ],
+        "already_saved": {"id": existing.id, "name": existing.name} if existing else None,
+    }
+
+
+@router.post("/spotify")
+async def ingest_spotify(
+    data: SpotifyIngest,
+    background_tasks: BackgroundTasks,
+    db: AsyncSession = Depends(get_db),
+):
+    """Ingest a Spotify track / album / playlist as lossless music (SpotiFLAC).
+
+    A track becomes one music memo; an album/playlist becomes a playlist
+    collection plus one music memo per track. Each track's `source_url` is its
+    canonical Spotify URL, so the shared localize pipeline (which dispatches
+    Spotify sources to the FLAC resolver) downloads it — per track, all at
+    once, or right now when `download` is true.
+    """
+    import asyncio
+
+    import httpx as _httpx
+    from sqlalchemy import insert
+
+    from backend.core.app_settings import get_settings, update_settings
+    from backend.core.spotiflac import (
+        parse_spotify_url, spotify_track_url, spotify_track_meta,
+        spotify_collection_meta, VALID_QUALITIES,
+    )
+
+    parsed = parse_spotify_url(data.url)
+    if not parsed:
+        raise HTTPException(status_code=400, detail="Not a Spotify link")
+    kind, sid = parsed
+    ws = sanitize_workspace_id(data.workspace_id)
+
+    # A chosen quality is remembered as the music default (the modal's setting).
+    if data.quality and data.quality in VALID_QUALITIES:
+        update_settings({"music_quality": data.quality})
+    elif data.quality:
+        raise HTTPException(status_code=400, detail="quality must be '16' or '24'")
+    _ = get_settings()  # ensure the settings file exists
+
+    # --- Single track ---
+    if kind == "track":
+        def _meta():
+            with _httpx.Client(follow_redirects=True) as client:
+                return spotify_track_meta(client, sid)
+        try:
+            meta = await asyncio.to_thread(_meta)
+        except Exception as e:
+            raise HTTPException(status_code=400, detail=f"Could not read Spotify track: {e}")
+
+        now = datetime.utcnow()
+        memo = Memo(
+            id=str(uuid.uuid4()),
+            workspace_id=ws,
+            type="audio",
+            audio_kind="music",
+            title=meta["title"],
+            audio_artist=meta.get("artist"),
+            source_url=meta["spotify_url"],
+            source_domain="open.spotify.com",
+            source_favicon="https://www.google.com/s2/favicons?domain=spotify.com&sz=32",
+            thumbnail_path=meta.get("cover"),
+            localize_status="pending" if data.download else None,
+            created_at=now,
+            updated_at=now,
+            recency_at=now,
+        )
+        db.add(memo)
+        await _attach_collection(db, memo, data.collection_id)
+        await db.commit()
+
+        if memo.thumbnail_path and memo.thumbnail_path.startswith("http"):
+            background_tasks.add_task(cache_thumbnail, memo.id)
+        if data.download:
+            background_tasks.add_task(localize_memo_task, memo.id, "audio")
+
+        return {"id": memo.id, "title": memo.title, "type": "audio",
+                "status": "processing" if data.download else "saved"}
+
+    # --- Album / playlist ---
+    canonical = f"https://open.spotify.com/{kind}/{sid}"
+    existing = await _find_saved_playlist(db, canonical)
+    if existing:
+        return {"collection_id": existing.id, "title": existing.name,
+                "total": 0, "status": "exists"}
+
+    def _coll():
+        with _httpx.Client(follow_redirects=True) as client:
+            return spotify_collection_meta(client, kind, sid)
+    try:
+        probed = await asyncio.to_thread(_coll)
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"Could not read Spotify {kind}: {e}")
+
+    if not probed["tracks"]:
+        raise HTTPException(status_code=400, detail="No tracks found in this Spotify link")
+
+    collection = Collection(
+        id=str(uuid.uuid4()),
+        workspace_id=ws,
+        name=(data.title or probed["title"]).strip()[:200] or "Playlist",
+        emoji="🎵",
+        kind="playlist",
+        source_url=canonical,
+    )
+    db.add(collection)
+
+    # Reuse a track we already hold (same Spotify URL, audio, not deleted) —
+    # one memo, two memberships, one download. Same rule as yt-dlp playlists.
+    entry_urls = [t["spotify_url"] for t in probed["tracks"] if t.get("spotify_url")]
+    existing_memos = (
+        await db.execute(
+            select(Memo).where(
+                Memo.source_url.in_(entry_urls),
+                Memo.type == "audio",
+                (Memo.is_deleted == False) | (Memo.is_deleted == None),  # noqa: E712
+            )
+        )
+    ).scalars().all()
+    by_url = {m.source_url: m for m in existing_memos}
+
+    now = datetime.utcnow()
+    memo_ids: list[str] = []
+    download_ids: list[str] = []
+    new_ids: list[str] = []
+    seen: set[str] = set()
+    for i, track in enumerate(probed["tracks"]):
+        turl = track.get("spotify_url")
+        if not turl:
+            continue
+        reused = by_url.get(turl)
+        if reused is not None:
+            if reused.id in seen:
+                continue
+            seen.add(reused.id)
+            reused.recency_at = now - timedelta(seconds=i)
+            memo_ids.append(reused.id)
+            if data.download and not reused.file_path and reused.localize_status not in ("processing", "done"):
+                reused.localize_status = "pending"
+                download_ids.append(reused.id)
+            continue
+        memo = Memo(
+            id=str(uuid.uuid4()),
+            workspace_id=ws,
+            type="audio",
+            audio_kind="music",
+            playlist_born=True,
+            title=track["title"],
+            audio_artist=track.get("artist"),
+            source_url=turl,
+            source_domain="open.spotify.com",
+            source_favicon="https://www.google.com/s2/favicons?domain=spotify.com&sz=32",
+            thumbnail_path=track.get("cover") or probed.get("cover"),
+            localize_status="pending" if data.download else None,
+            created_at=now,
+            updated_at=now,
+            recency_at=now - timedelta(seconds=i),
+        )
+        db.add(memo)
+        seen.add(memo.id)
+        memo_ids.append(memo.id)
+        new_ids.append(memo.id)
+        if data.download:
+            download_ids.append(memo.id)
+
+    await db.flush()
+    if memo_ids:
+        await db.execute(
+            insert(memo_collections),
+            [{"memo_id": mid, "collection_id": collection.id} for mid in memo_ids],
+        )
+    await db.commit()
+
+    if data.download and download_ids:
+        background_tasks.add_task(download_playlist_task, collection.id, download_ids)
+    elif new_ids:
+        background_tasks.add_task(cache_playlist_thumbs_task, new_ids)
+
+    return {
+        "collection_id": collection.id,
+        "title": collection.name,
+        "total": len(memo_ids),
+        "status": "processing" if data.download else "saved",
+    }
+
+
 async def cache_playlist_thumbs_task(memo_ids: list[str]):
     """Background: cache remote track thumbnails locally (no media download)."""
     for memo_id in memo_ids:
@@ -683,13 +940,82 @@ async def transcript_memo_task(memo_id: str):
         await process_memo(memo_id)
 
 
+async def _localize_spotify_track(memo_id: str, url: str, ws: str):
+    """Background: resolve a Spotify track to lossless FLAC (SpotiFLAC) and
+    re-home it as a local music memo. Status is already 'processing' on entry;
+    this writes done | error. Never raises into the caller."""
+    import asyncio
+
+    from backend.config import settings as cfg
+    from backend.core.app_settings import get_settings
+    from backend.core.spotiflac import download_spotify_track, SpotiFlacError
+
+    quality = str(get_settings().get("music_quality", "16"))
+    dest_dir = Path(cfg.FILES_DIR) / ws
+
+    async with AsyncSessionLocal() as db:
+        memo = await db.get(Memo, memo_id)
+        # Pass known title/artist so the resolver can skip the embed lookup.
+        title = memo.title if memo else None
+        artist = memo.audio_artist if memo else None
+
+    try:
+        result = await asyncio.to_thread(
+            download_spotify_track, url, dest_dir, quality, title, artist
+        )
+    except SpotiFlacError as e:
+        print(f"SpotiFLAC failed for {memo_id}: {e}")
+        async with AsyncSessionLocal() as db:
+            memo = await db.get(Memo, memo_id)
+            if memo:
+                memo.localize_status = "error"
+                memo.localize_error = str(e)[:300]
+                memo.updated_at = datetime.utcnow()
+                await db.commit()
+        return
+    except Exception as e:
+        print(f"SpotiFLAC crashed for {memo_id}: {e}")
+        async with AsyncSessionLocal() as db:
+            memo = await db.get(Memo, memo_id)
+            if memo:
+                memo.localize_status = "error"
+                memo.localize_error = str(e)[:300]
+                memo.updated_at = datetime.utcnow()
+                await db.commit()
+        return
+
+    async with AsyncSessionLocal() as db:
+        memo = await db.get(Memo, memo_id)
+        if not memo:
+            return
+        memo.file_path = result["path"]
+        memo.type = "audio"
+        memo.audio_kind = "music"
+        if result.get("artist") and not memo.audio_artist:
+            memo.audio_artist = result["artist"][:200]
+        # Keep the Spotify cover as the thumbnail when none is set yet; the
+        # caller schedules cache_thumbnail to re-home it locally.
+        if result.get("cover") and not memo.thumbnail_path:
+            memo.thumbnail_path = result["cover"]
+        memo.localize_status = "done"
+        memo.localize_error = None
+        memo.updated_at = datetime.utcnow()
+        await db.commit()
+
+
 async def localize_memo_task(memo_id: str, mode: str, quality: int = 1080):
     """Background: download a memo's remote source via yt-dlp and re-home it as a
     local video/audio memo. `mode='audio'` is an explicit video→audio conversion.
     `quality` caps the video height (720/1080/1440/2160, OPNMMO-0022).
     Status flows pending → processing → done | error on memo.localize_status.
+
+    Spotify track sources take a different route entirely (no yt-dlp): the
+    SpotiFLAC integration resolves a lossless FLAC. Dispatching here means
+    every entry point — the per-track chip, a playlist's "download all", and
+    the playlist auto-download pass — handles Spotify with zero extra wiring.
     """
     from backend.core.localize_media import localize_media, LocalizeError
+    from backend.core.spotiflac import is_spotify_track_url
 
     async with AsyncSessionLocal() as db:
         memo = await db.get(Memo, memo_id)
@@ -700,6 +1026,10 @@ async def localize_memo_task(memo_id: str, mode: str, quality: int = 1080):
         memo.localize_status = "processing"
         memo.localize_error = None  # clear any stale failure from a prior attempt
         await db.commit()
+
+    if is_spotify_track_url(url):
+        await _localize_spotify_track(memo_id, url, ws)
+        return
 
     try:
         result = await localize_media(url, ws, mode, quality)
