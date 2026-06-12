@@ -1012,9 +1012,11 @@ input, textarea { font: inherit; color: inherit; }
   opacity: 0; transition: opacity .2s, background .15s;
 }
 .om-card:hover .om-card-edit { opacity: 1; }
-/* Minimal notes stack their actions in a column on the right — the pen keeps
-   its old top-left spot there instead of colliding with that column. */
-[data-card="minimal"] .om-card-edit { top: 10px; left: 10px; right: auto; }
+/* Minimal cards offset their actions to 12px — the pen tracks the ✕ there
+   too. Note cards stack the column (open · pin · ✕ = 3 × 20 + 2 × 4 gaps
+   ending at 80), so the pen slots in right below the stack. */
+[data-card="minimal"] .om-card-edit { top: 36px; right: 12px; }
+[data-card="minimal"] .om-card-note .om-card-edit { top: 84px; }
 
 /* Hero / image / video frames */
 .om-card-hero, .om-image-frame, .om-video-frame, .om-doc-frame {
