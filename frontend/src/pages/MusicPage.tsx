@@ -95,11 +95,12 @@ function PlaylistCard({ p, onOpen, onPlay }: { p: MusicPlaylist; onOpen: () => v
         </button>
       </div>
       <div className="om-pl-card-body">
-        <span className="om-pl-card-name">{p.name}</span>
+        {/* Meta rides above the name — eyebrow style, like the page headers. */}
         <span className="om-pl-card-meta mono">
           {meta}
           {p.progress.error > 0 && <span className="om-pl-card-err"> · {p.progress.error} failed</span>}
         </span>
+        <span className="om-pl-card-name">{p.name}</span>
         {downloading && (
           <span className="om-pl-card-bar"><span style={{ width: `${pct}%` }} /></span>
         )}
