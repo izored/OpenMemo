@@ -744,8 +744,14 @@ async def download_playlist_task(collection_id: str, memo_ids: list[str]):
     the existing localize pipeline (status pending → processing → done|error on
     the memo), then its remote thumbnail is cached locally. One dead track
     never aborts the rest; failures stay retryable per memo via Make-it-local.
+
+    Tracks that end the pass in `error` get one more pass after a cooldown —
+    the shared Qobuz community endpoint rate-limits bursts (429), so on bigger
+    albums a few tracks routinely fail the first time and succeed minutes later.
     """
-    for memo_id in memo_ids:
+    import asyncio
+
+    async def _download_one(memo_id: str):
         try:
             await localize_memo_task(memo_id, "audio")
         except Exception as e:
@@ -754,6 +760,21 @@ async def download_playlist_task(collection_id: str, memo_ids: list[str]):
             await cache_thumbnail(memo_id)
         except Exception as e:
             print(f"Playlist thumbnail cache failed for {memo_id}: {e}")
+
+    for memo_id in memo_ids:
+        await _download_one(memo_id)
+
+    async with AsyncSessionLocal() as db:
+        rows = await db.execute(
+            select(Memo.id).where(Memo.id.in_(memo_ids), Memo.localize_status == "error")
+        )
+        failed = [r[0] for r in rows]
+    if failed:
+        print(f"Playlist {collection_id}: retrying {len(failed)} failed track(s) after cooldown")
+        await asyncio.sleep(90)
+        for memo_id in failed:
+            await _download_one(memo_id)
+
     print(f"Playlist {collection_id}: download pass finished ({len(memo_ids)} track(s))")
 
 
