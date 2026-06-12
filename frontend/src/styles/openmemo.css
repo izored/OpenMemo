@@ -1622,6 +1622,51 @@ input, textarea { font: inherit; color: inherit; }
 .om-url-input input { flex: 1; background: none; border: 0; outline: none; font-size: 14px; }
 .om-paste-btn { font-size: 11px; color: var(--text-3); padding: 4px 8px; border-radius: 6px; background: var(--surface-3); }
 
+/* ── Music add-panel (Music page "+", SpotiFLAC) ───────────────────────────
+   Reuses the New-Memo glass panel (.om-add-panel) so the slide-in gesture is
+   identical; a touch wider to fit the Spotify preview + quality controls. */
+/* Fixed height sized for the tallest state (link tab + Spotify preview), so
+   the panel never grows/shrinks as the preview appears or tabs switch; the
+   settings drawer overflows into the body's own scroll instead. */
+.om-add-panel.om-mm-panel { width: 320px; height: min(404px, calc(100vh - 32px)); }
+.om-mm-panel .om-add-body { flex: 1 1 auto; }
+.om-mm-panel .om-add-tabs { grid-template-columns: repeat(3, 1fr); }
+.om-mm-head-actions { display: flex; align-items: center; gap: 2px; }
+.om-add-x.is-on { background: var(--accent-soft); color: var(--accent); }
+
+.om-mm-hint { font-size: 11px; color: var(--text-4); line-height: 1.5; margin: 2px 0 0; }
+
+.om-mm-spotify { display: flex; flex-direction: column; gap: 9px; margin-top: 10px; padding: 11px; background: rgba(0,0,0,0.16); border: 0.5px solid var(--border); border-radius: 12px; }
+[data-theme="light"] .om-mm-spotify { background: rgba(255,255,255,0.4); }
+.om-mm-badge {
+  align-self: flex-start; display: inline-flex; align-items: center; gap: 5px;
+  font-size: 10px; font-weight: 600; letter-spacing: .02em; padding: 3px 8px;
+  border-radius: 999px; color: #1DB954; background: color-mix(in oklab, #1DB954 16%, transparent);
+}
+.om-mm-preview { display: flex; gap: 10px; align-items: center; }
+.om-mm-preview img { width: 46px; height: 46px; border-radius: 7px; object-fit: cover; flex-shrink: 0; }
+.om-mm-preview-body { display: flex; flex-direction: column; gap: 1px; min-width: 0; }
+.om-mm-preview-body b { font-size: 12.5px; font-weight: 600; color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.om-mm-preview-body small { font-size: 10.5px; color: var(--text-3); text-transform: capitalize; }
+.om-mm-saved { color: var(--accent) !important; text-transform: none !important; }
+
+.om-mm-check { display: flex; align-items: center; gap: 8px; font-size: 11.5px; color: var(--text-2); cursor: pointer; }
+.om-mm-check input { accent-color: var(--accent); width: 14px; height: 14px; }
+
+/* Settings drawer */
+.om-mm-settings { display: flex; flex-direction: column; gap: 11px; padding: 12px; margin-bottom: 12px; background: rgba(0,0,0,0.16); border: 0.5px solid var(--border); border-radius: 12px; }
+[data-theme="light"] .om-mm-settings { background: rgba(255,255,255,0.4); }
+.om-mm-set-row { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.om-mm-set-hint { margin: 2px 0 0; font-size: 10px; color: var(--text-4); }
+.om-mm-seg { display: flex; gap: 4px; padding: 3px; background: var(--surface-3); border-radius: 9px; }
+.om-mm-seg-btn { flex: 1; padding: 6px 8px; border-radius: 7px; font-size: 10.5px; font-weight: 600; color: var(--text-3); cursor: pointer; white-space: nowrap; transition: background .15s, color .15s; }
+.om-mm-seg-btn.active { background: var(--elev); color: var(--text); box-shadow: 0 1px 2px rgba(0,0,0,0.12); }
+.om-mm-toggle { position: relative; width: 36px; height: 21px; border-radius: 999px; background: var(--surface-3); border: 1px solid var(--border); cursor: pointer; flex-shrink: 0; transition: background .15s; }
+.om-mm-toggle span { position: absolute; top: 2px; left: 2px; width: 15px; height: 15px; border-radius: 50%; background: var(--text-3); transition: transform .18s, background .15s; }
+.om-mm-toggle.on { background: var(--accent); border-color: var(--accent); }
+.om-mm-toggle.on span { transform: translateX(15px); background: #fff; }
+.om-mm-provider { display: flex; align-items: center; gap: 6px; font-size: 10px; color: var(--text-4); margin: 0; }
+
 .om-preview { display: grid; grid-template-columns: 96px 1fr; gap: 14px; padding: 14px; background: var(--surface); border: 1px solid var(--border); border-radius: 14px; }
 .om-preview-hero { width: 96px; aspect-ratio: 1; border-radius: 10px; position: relative; overflow: hidden; }
 .om-preview-body { display: flex; flex-direction: column; gap: 4px; min-width: 0; }

@@ -38,6 +38,8 @@ class SettingsPatch(BaseModel):
     avatar_data_url: Optional[str] = None
     mailing_list_consent: Optional[bool] = None
     auto_download_audio: Optional[bool] = None
+    music_quality: Optional[str] = None
+    music_provider: Optional[str] = None
     chat_model: Optional[str] = None
 
 

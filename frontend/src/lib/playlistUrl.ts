@@ -49,3 +49,13 @@ export function playlistShape(raw: string): PlaylistShape {
 export function isPlaylistUrl(raw: string): boolean {
   return playlistShape(raw).isPlaylist;
 }
+
+// Spotify link detection (SpotiFLAC integration). Mirrors
+// backend/core/spotiflac.py `parse_spotify_url` — keep the two in sync.
+const SPOTIFY_RE = /(?:open\.spotify\.com\/(?:intl-[a-z]{2}\/)?|spotify:)(track|album|playlist)[:/]([A-Za-z0-9]+)/i;
+
+/** Returns the Spotify entity kind for a link, or null if it isn't one. */
+export function spotifyKind(raw: string): 'track' | 'album' | 'playlist' | null {
+  const m = SPOTIFY_RE.exec((raw || '').trim());
+  return m ? (m[1].toLowerCase() as 'track' | 'album' | 'playlist') : null;
+}

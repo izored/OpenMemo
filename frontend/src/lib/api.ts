@@ -103,6 +103,38 @@ export const ingestApi = {
       '/ingest/playlist',
       { method: 'POST', body: JSON.stringify({ url, title: opts?.title, download: opts?.download ?? true }) },
     ),
+  // Preview a Spotify track / album / playlist link (no download). The Music
+  // add-modal shows a real title + track count and flags an already-saved one.
+  probeSpotify: (url: string) =>
+    fetchJSON<{
+      kind: 'track' | 'album' | 'playlist';
+      title: string;
+      artist?: string | null;
+      cover?: string | null;
+      count: number;
+      entries?: { title: string; artist?: string | null }[];
+      already_saved?: { id: string; name: string } | null;
+    }>('/ingest/spotify/probe', { method: 'POST', body: JSON.stringify({ url }) }),
+  // Ingest a Spotify link as lossless music (SpotiFLAC). A track → one music
+  // memo; an album/playlist → a playlist collection + one memo per track.
+  // quality: '16' (CD) | '24' (hi-res). download=false saves remote, pull later.
+  spotify: (
+    url: string,
+    opts?: { download?: boolean; quality?: '16' | '24'; title?: string; collection_id?: string },
+  ) =>
+    fetchJSON<{
+      id?: string; collection_id?: string; title: string; type?: string;
+      total?: number; status: string;
+    }>('/ingest/spotify', {
+      method: 'POST',
+      body: JSON.stringify({
+        url,
+        download: opts?.download ?? true,
+        quality: opts?.quality,
+        title: opts?.title,
+        collection_id: opts?.collection_id,
+      }),
+    }),
   file: async (
     file: File,
     collection_id?: string,
@@ -232,6 +264,10 @@ export interface AppSettings {
   avatar_data_url: string;
   mailing_list_consent: boolean;
   auto_download_audio: boolean;
+  // Spotify → FLAC lossless quality: '16' (CD) | '24' (hi-res). SpotiFLAC.
+  music_quality: '16' | '24';
+  // Preferred lossless source — only 'qobuz' is wired today.
+  music_provider: string;
   // Default Ollama chat model for AI features, server-side so every client
   // and the backend's own calls (summaries) agree. '' = backend env default.
   chat_model: string;
