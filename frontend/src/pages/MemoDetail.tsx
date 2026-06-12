@@ -314,6 +314,7 @@ function MusicDetailPlayer({ memo }: { memo: Memo }) {
     else play({
       memoId: memo.id, title: memo.title, src,
       subtitle: memo.audio_artist || memo.source_domain || undefined,
+      album: memo.audio_album || undefined,
       kind: audioKind(memo), cover, pinned: memo.pinned, liked: memo.liked,
     });
   };

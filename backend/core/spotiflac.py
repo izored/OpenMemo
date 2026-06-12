@@ -263,8 +263,13 @@ def _qobuz_call(client: httpx.Client, path: str, params: dict[str, str]) -> dict
     return r.json()
 
 
-def _qobuz_track_id(client: httpx.Client, isrc: str | None, title: str, artist: str | None) -> str | None:
-    """Find a Qobuz track id by ISRC first, then by 'title artist' text search."""
+def _qobuz_track_match(client: httpx.Client, isrc: str | None, title: str, artist: str | None) -> tuple[str, str | None] | None:
+    """Find a Qobuz track by ISRC first, then by 'title artist' text search.
+
+    Returns ``(track_id, album_title)`` — the album name rides along because
+    the search result already carries it and nothing else in the chain does
+    (the Spotify embed has no album field, the FLAC arrives untagged).
+    """
     queries = []
     if isrc:
         queries.append(isrc)
@@ -278,7 +283,8 @@ def _qobuz_track_id(client: httpx.Client, isrc: str | None, title: str, artist: 
             continue
         items = (data.get("tracks") or {}).get("items") or []
         if items:
-            return str(items[0]["id"])
+            album = ((items[0].get("album") or {}).get("title") or "").strip() or None
+            return str(items[0]["id"]), album
     return None
 
 
@@ -352,10 +358,10 @@ def resolve_flac_url(spotify_url: str, quality: str = DEFAULT_QUALITY,
             meta = spotify_track_meta(client, track_id)
             title, artist = meta["title"], meta["artist"]
         isrc = _resolve_isrc(client, spotify_url)
-        qobuz_id = _qobuz_track_id(client, isrc, title or "", artist)
-        if not qobuz_id:
+        match = _qobuz_track_match(client, isrc, title or "", artist)
+        if not match:
             raise SpotiFlacError("No matching lossless track found on Qobuz")
-        return _community_flac_url(client, qobuz_id, quality)
+        return _community_flac_url(client, match[0], quality)
 
 
 def download_spotify_track(
@@ -364,11 +370,12 @@ def download_spotify_track(
     quality: str = DEFAULT_QUALITY,
     title: str | None = None,
     artist: str | None = None,
+    cover: str | None = None,
 ) -> dict:
     """Download a Spotify track as FLAC into ``dest_dir``.
 
-    Returns ``{path, type, filename, title, artist, cover}``. Blocking — call
-    from a worker thread (see localize_spotify_task). Raises SpotiFlacError.
+    Returns ``{path, type, filename, title, artist, album, cover}``. Blocking —
+    call from a worker thread (see localize_spotify_task). Raises SpotiFlacError.
     """
     parsed = parse_spotify_url(spotify_url)
     if not parsed or parsed[0] != "track":
@@ -380,15 +387,15 @@ def download_spotify_track(
     file_id = str(uuid.uuid4())
 
     with httpx.Client(follow_redirects=True) as client:
-        cover = None
         if not title:
             meta = spotify_track_meta(client, track_id)
             title, artist, cover = meta["title"], meta["artist"], meta["cover"]
 
         isrc = _resolve_isrc(client, spotify_url)
-        qobuz_id = _qobuz_track_id(client, isrc, title or "", artist)
-        if not qobuz_id:
+        match = _qobuz_track_match(client, isrc, title or "", artist)
+        if not match:
             raise SpotiFlacError("No matching lossless track found on Qobuz")
+        qobuz_id, album = match
         stream_url = _community_flac_url(client, qobuz_id, quality)
 
         # Stream the FLAC to disk. The community URL points at a CDN; sniff the
@@ -410,11 +417,47 @@ def download_spotify_track(
             dest.unlink(missing_ok=True)
             raise SpotiFlacError("Empty FLAC stream from provider")
 
+        # The CDN serves the FLAC with zero tags and no art — write the
+        # metadata we resolved along the way, so the file keeps its identity
+        # outside openMemo (exports, other players). Never fatal: a tagging
+        # hiccup must not throw away a finished download.
+        _tag_flac(client, dest, title, artist, album, cover)
+
     return {
         "path": str(dest),
         "type": "audio",
         "filename": dest.name,
         "title": title,
         "artist": artist,
+        "album": album,
         "cover": cover,
     }
+
+
+def _tag_flac(client: httpx.Client, path: Path, title: str | None,
+              artist: str | None, album: str | None, cover_url: str | None) -> None:
+    """Write Vorbis tags + embedded cover art onto a freshly downloaded FLAC."""
+    try:
+        from mutagen.flac import FLAC, Picture
+
+        audio = FLAC(str(path))
+        if title:
+            audio["title"] = title
+        if artist:
+            audio["artist"] = artist
+        if album:
+            audio["album"] = album
+        if cover_url and cover_url.startswith("http"):
+            try:
+                r = client.get(cover_url, headers={"User-Agent": _BROWSER_UA}, timeout=30)
+                r.raise_for_status()
+                pic = Picture()
+                pic.type = 3  # front cover
+                pic.mime = r.headers.get("Content-Type", "image/jpeg").split(";")[0]
+                pic.data = r.content
+                audio.add_picture(pic)
+            except Exception:
+                pass  # art is a bonus; tags alone are still worth saving
+        audio.save()
+    except Exception as e:
+        print(f"FLAC tagging failed for {path.name}: {e}")

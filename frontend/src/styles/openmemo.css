@@ -2434,8 +2434,12 @@ input, textarea { font: inherit; color: inherit; }
 }
 .om-sb-player-big-title:hover .om-marquee-inner { text-decoration: underline; }
 .om-sb-player-big-sub {
-  text-align: left; font-size: 12px; color: rgba(255, 255, 255, 0.72); margin-top: -3px;
+  text-align: left; font-size: 10.5px; color: rgba(255, 255, 255, 0.72);
+  /* Hug the title above (body gap is 11px) and align under its text, which
+     starts after the 26px volume icon + 8px gap. */
+  margin-top: -8px; padding-left: 34px;
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%;
+  text-shadow: 0 1px 6px rgba(0, 0, 0, 0.5);
 }
 .om-sb-player-big .om-sb-player-scrub { padding: 0 2px; }
 

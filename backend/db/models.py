@@ -90,6 +90,10 @@ class Memo(Base):
     # Artist from an uploaded music file's tags (ID3/Vorbis), when present. NULL
     # otherwise — we never fall back to the source domain here (ADR-010).
     audio_artist = Column(String, nullable=True)
+    # Album the track belongs to (music only) — from the Qobuz match on
+    # SpotiFLAC downloads, or the source album's name at ingest. Player + tiles
+    # display it; NULL is fine (uploads, voice, pre-column rows).
+    audio_album = Column(String, nullable=True)
     # On-demand AI summaries, keyed by mode: {"timestamp": ..., "insights": ..., "essay": ...}.
     # Generated lazily when the user picks a mode; cached so reopening is instant.
     summaries = Column(JSON, nullable=True)
@@ -145,6 +149,10 @@ class Collection(Base):
     # For playlists: the source playlist URL it was ingested from (provenance +
     # future re-sync). NULL for standard collections.
     source_url = Column(String, nullable=True)
+    # For playlist-kind collections: what the source actually was — 'album' or
+    # 'playlist'. Albums render a single cover and an "Album" label instead of
+    # the 4-cover collage. NULL (legacy/standard rows) means 'playlist'.
+    music_kind = Column(String, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
     
     workspace = relationship("Workspace", back_populates="collections")

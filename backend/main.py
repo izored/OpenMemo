@@ -61,7 +61,7 @@ async def lifespan(app: FastAPI):
         async with AsyncSessionLocal() as db:
             cols = (await db.execute(_sql_text("PRAGMA table_info(memos)"))).fetchall()
             names = {c[1] for c in cols}
-            for col in ("transcript_status", "transcript_lang", "localize_status", "localize_error", "audio_kind", "audio_artist"):
+            for col in ("transcript_status", "transcript_lang", "localize_status", "localize_error", "audio_kind", "audio_artist", "audio_album"):
                 if col not in names:
                     await db.execute(_sql_text(f"ALTER TABLE memos ADD COLUMN {col} VARCHAR"))
             if "playlist_born" not in names:
@@ -94,11 +94,32 @@ async def lifespan(app: FastAPI):
             # API's default kind filter can use a plain equality.
             ccols = (await db.execute(_sql_text("PRAGMA table_info(collections)"))).fetchall()
             cnames = {c[1] for c in ccols}
-            for col in ("kind", "source_url"):
+            for col in ("kind", "source_url", "music_kind"):
                 if col not in cnames:
                     await db.execute(_sql_text(f"ALTER TABLE collections ADD COLUMN {col} VARCHAR"))
             await db.execute(_sql_text(
                 "UPDATE collections SET kind = 'standard' WHERE kind IS NULL"
+            ))
+            # Backfill music_kind for existing playlists from their source URL:
+            # Spotify /album/ links and YouTube OLAK5uy_ list ids are albums,
+            # everything else (incl. hand-made playlists) is a playlist.
+            await db.execute(_sql_text(
+                "UPDATE collections SET music_kind = "
+                "CASE WHEN source_url LIKE '%open.spotify.com/album/%' "
+                "OR source_url LIKE '%OLAK5uy%' THEN 'album' ELSE 'playlist' END "
+                "WHERE kind = 'playlist' AND music_kind IS NULL"
+            ))
+            # Tracks inside an album-kind playlist inherit that album's name —
+            # their files were downloaded before audio_album existed.
+            await db.execute(_sql_text(
+                "UPDATE memos SET audio_album = ("
+                "SELECT c.name FROM collections c "
+                "JOIN memo_collections mc ON mc.collection_id = c.id "
+                "WHERE mc.memo_id = memos.id AND c.music_kind = 'album' LIMIT 1) "
+                "WHERE audio_album IS NULL AND type = 'audio' AND id IN ("
+                "SELECT mc.memo_id FROM memo_collections mc "
+                "JOIN collections c ON c.id = mc.collection_id "
+                "WHERE c.music_kind = 'album')"
             ))
             await db.commit()
     except Exception as e:

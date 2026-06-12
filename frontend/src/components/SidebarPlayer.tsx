@@ -348,6 +348,11 @@ export function SidebarPlayer() {
               <Marquee text={track.title} auto />
             </button>
           </VolumeControl>
+          {(track.subtitle || track.album) && (
+            <span className="om-sb-player-big-sub mono">
+              {[track.subtitle, track.album].filter(Boolean).join(' — ')}
+            </span>
+          )}
         </div>
       </div>
     );
