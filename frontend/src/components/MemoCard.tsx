@@ -182,8 +182,10 @@ function Chrome({
         </div>
       )}
       {confirmOverlay}
-      {/* Pen under the delete ✕ (top-left on minimal/active-audio variants):
-          edit this card's thumbnail + title (any memo type).
+      {/* Pen on EVERY card: edit its thumbnail + title, whatever the memo
+          type. It always sits directly under the delete ✕ — the position
+          rules just track where that ✕ lives per variant (row, minimal
+          column, or the active music card whose actions move left).
           stopPropagation so it never triggers the card click / drag. */}
       <button
         className="om-action om-card-edit"
