@@ -2438,7 +2438,8 @@ input, textarea { font: inherit; color: inherit; }
   /* Hug the title above (body gap is 11px) and align under its text, which
      starts after the 26px volume icon + 8px gap. */
   margin-top: -8px; padding-left: 34px;
-  white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%;
+  /* Overflow is the inner Marquee's job (it slides like the title does). */
+  display: block; min-width: 0; max-width: 100%;
   text-shadow: 0 1px 6px rgba(0, 0, 0, 0.5);
 }
 .om-sb-player-big .om-sb-player-scrub { padding: 0 2px; }
