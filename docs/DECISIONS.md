@@ -7,6 +7,36 @@ the decision, and its consequences, so a future reader knows *why*, not just
 
 ---
 
+## ADR-017: Spotify links resolve to lossless FLAC through a no-account provider chain, and the Music page owns its own add surface
+
+**Date:** 2026-06-12 · **Status:** Shipped · **Builds on:** ADR-015 (playlists are collections, tracks are audio memos), ADR-005 (music is a first-class media experience), ADR-004 (one shared engine pulls remote media), ADR-001 (define shared things once)
+
+### Context
+
+Music V2 (ADR-015) ingests YouTube / YouTube Music / SoundCloud / Bandcamp through yt-dlp, which means lossy audio and, for Spotify, nothing at all: Spotify is not a yt-dlp source and exposes no download. People paste Spotify links anyway, and they want their music in lossless quality. [SpotiFLAC](https://github.com/spotbye/SpotiFLAC) (a Go/Wails desktop app, MIT) already does exactly this without any account — it reverse-engineers the Spotify web player for metadata and pulls the audio from lossless community providers.
+
+The temptation is to bolt a second, Spotify-specific download world onto the side: its own job runner, its own status, its own player wiring. ADR-015 already paid down that exact debt for playlists.
+
+### Decision
+
+**Port only the happy path into one Python service, and funnel Spotify through the pipeline that already exists.**
+
+- `backend/core/spotiflac.py` re-implements the auth-free chain: the public `open.spotify.com/embed` page (`__NEXT_DATA__`) gives title / artist / cover and album/playlist track lists with **no token and no TOTP**; song.link (Odesli) + Deezer resolve an ISRC; the signed Qobuz public API (embedded default app credentials, MD5 request signature) turns the ISRC into a Qobuz track id; the SpotiFLAC community endpoint (`/api/dl`) returns a **direct** FLAC stream URL, which we stream to `FILES_DIR`.
+- **Qobuz only, on purpose.** Its community provider hands back an undecrypted FLAC. Tidal and Amazon return encrypted DASH / MP4 (CENC) that would need an MP4 decryptor plus ffmpeg — out of scope for a first cut. The resolver is provider-shaped so they can slot in later; the `music_provider` setting exists already so adding them needs no migration.
+- **One dispatch point.** A Spotify track source is detected inside the shared `localize_memo_task`; it routes to the FLAC resolver instead of yt-dlp and writes the same `pending → processing → done | error` status. So the per-track download chip, a playlist's "Download all", and playlist auto-download **all** handle Spotify with zero extra wiring — exactly the ADR-015 win, reused.
+- `POST /api/ingest/spotify` (+ a `/probe` for the preview) mirrors the playlist ingest: a track becomes one music memo; an album or playlist becomes a playlist-kind collection plus one music memo per track, each track's `source_url` set to its canonical `open.spotify.com/track/<id>` so the dispatch above just works. Same dedupe + reuse rules as ADR-015.
+- The Music page gets its **own** bottom-right add panel (`MusicAddModal`), same slide-in gesture and glass as the New-Memo panel, with three tabs (link / upload / new playlist) and a settings drawer for lossless quality + auto-download. On `/music` the FAB opens this instead of the generic panel. The New-Memo panel keeps working for everything else.
+
+### Consequences
+
+- Every existing download affordance gained lossless Spotify for free, because they all pass through the one `localize_memo_task` seam.
+- The community endpoint is shared and rate-limited (HTTP 429); SpotiFLAC's retry-with-`Retry-After` backoff is ported, so a single resolve can take a few seconds under load. Sequential playlist downloads keep that polite.
+- The embed track list caps at roughly 50 entries for very large playlists — accepted as the cost of the no-account path, same spirit as ADR-015's 100-entry yt-dlp cap.
+- The provider endpoints and api key are AES-GCM-obfuscated in the upstream binary; the decrypted values are inlined as documented constants (they sit in a public binary, and they rarely rotate). No `cryptography` runtime dependency was added — the service is `httpx` + stdlib only. A rotation is a one-line edit, with the derivation noted in the source.
+- Availability is third-party: if the community endpoints disappear, Spotify ingest fails per track (status `error`, retryable) and nothing else in the app is affected. Lossless Spotify is a bonus capability, never load-bearing.
+
+---
+
 ## ADR-016: Every page renders one shared PageHeader, never its own header markup
 
 **Date:** 2026-06-12 · **Status:** Shipped · **Builds on:** ADR-001 (define shared things once), ADR-011 (Settings layout)

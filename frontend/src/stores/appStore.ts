@@ -95,6 +95,10 @@ interface AppState {
   addPanelOpen: boolean;
   setAddPanelOpen: (open: boolean) => void;
 
+  // Music add-modal (Music page + button — SpotiFLAC, uploads, playlists)
+  musicModalOpen: boolean;
+  setMusicModalOpen: (open: boolean) => void;
+
   // Appearance live-preview panel
   appearancePanelOpen: boolean;
   setAppearancePanelOpen: (open: boolean) => void;
@@ -197,6 +201,9 @@ export const useAppStore = create<AppState>((set) => ({
 
   addPanelOpen: false,
   setAddPanelOpen: (open) => set({ addPanelOpen: open }),
+
+  musicModalOpen: false,
+  setMusicModalOpen: (open) => set({ musicModalOpen: open }),
 
   appearancePanelOpen: false,
   setAppearancePanelOpen: (open) => set({ appearancePanelOpen: open }),

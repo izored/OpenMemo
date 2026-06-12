@@ -13,6 +13,7 @@ import Lenis from 'lenis';
 import 'lenis/dist/lenis.css';
 import { Sidebar } from './Sidebar';
 import { AddMemoPanel } from './AddMemoPanel';
+import { MusicAddModal } from './MusicAddModal';
 import { AppearancePanel } from './AppearancePanel';
 import { FullscreenWriter } from './FullscreenWriter';
 import { SearchOverlay } from './SearchOverlay';
@@ -47,6 +48,8 @@ export function Layout() {
   const tweaks = useAppStore((s) => s.tweaks);
   const addPanelOpen = useAppStore((s) => s.addPanelOpen);
   const setAddPanelOpen = useAppStore((s) => s.setAddPanelOpen);
+  const musicModalOpen = useAppStore((s) => s.musicModalOpen);
+  const setMusicModalOpen = useAppStore((s) => s.setMusicModalOpen);
   const setSearchOpen = useAppStore((s) => s.setSearchOpen);
   const setTweak = useAppStore((s) => s.setTweak);
   const location = useLocation();
@@ -172,6 +175,7 @@ export function Layout() {
       <Onboarding />
       <SearchOverlay />
       <AddMemoPanel />
+      <MusicAddModal />
       <AppearancePanel />
       <FullscreenWriter />
       <AddCollectionModal />
@@ -219,16 +223,25 @@ export function Layout() {
         )}
       </AnimatePresence>
 
-      <button
-        className={cn('om-fab', addPanelOpen && 'open')}
-        onClick={() => setAddPanelOpen(!addPanelOpen)}
-        title={addPanelOpen ? 'Close' : 'New Memo · N'}
-        aria-label="New Memo"
-      >
-        <span className="om-fab-icon">
-          <Icon name={addPanelOpen ? 'x' : 'plus'} size={18} />
-        </span>
-      </button>
+      {(() => {
+        // On the Music page the FAB opens the dedicated music modal (SpotiFLAC,
+        // uploads, playlists) instead of the generic New-Memo panel.
+        const onMusic = location.pathname.startsWith('/music');
+        const fabOpen = onMusic ? musicModalOpen : addPanelOpen;
+        const toggle = () => (onMusic ? setMusicModalOpen(!musicModalOpen) : setAddPanelOpen(!addPanelOpen));
+        return (
+          <button
+            className={cn('om-fab', fabOpen && 'open')}
+            onClick={toggle}
+            title={fabOpen ? 'Close' : onMusic ? 'Add music' : 'New Memo · N'}
+            aria-label={onMusic ? 'Add music' : 'New Memo'}
+          >
+            <span className="om-fab-icon">
+              <Icon name={fabOpen ? 'x' : 'plus'} size={18} />
+            </span>
+          </button>
+        );
+      })()}
 
       <Lightbox />
       <GuideHost />

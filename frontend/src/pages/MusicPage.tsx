@@ -223,7 +223,7 @@ export function MusicPage() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const { playlistId } = useParams();
-  const setAddPanelOpen = useAppStore((s) => s.setAddPanelOpen);
+  const setMusicModalOpen = useAppStore((s) => s.setMusicModalOpen);
   const openThumbEdit = useAppStore((s) => s.openThumbEdit);
   const { playQueue, toggle, isActive, playing } = useAudioPlayer();
 
@@ -579,9 +579,14 @@ export function MusicPage() {
   // ── Hub view (/music) ──
   return (
     <div className="om-music">
-      {/* Same header as every page — adding music goes through the global
-          FAB / New Memo panel, no extra chrome here. */}
-      <PageHeader eyebrow="Music library" title="Music" sub="Every song you saved, ready to play." />
+      {/* Same header as every page; the Music page's own add-modal (SpotiFLAC,
+          uploads, playlists) opens from this action and the FAB. */}
+      <PageHeader eyebrow="Music library" title="Music" sub="Every song you saved, ready to play.">
+        <button className="om-btn-primary" onClick={() => setMusicModalOpen(true)} title="Add music">
+          <Icon name="plus" size={13} />
+          <span>Add music</span>
+        </button>
+      </PageHeader>
 
       <section className="om-music-sect">
         <div className="om-section-head">
@@ -619,9 +624,9 @@ export function MusicPage() {
           <div className="om-pl-empty">
             <Icon name="listMusic" size={18} />
             <p>
-              No playlists yet. Create one here, or paste a YouTube Music playlist link into{' '}
-              <button className="om-add-link" onClick={() => setAddPanelOpen(true)}>New Memo</button>{' '}
-              and pick “whole playlist”.
+              No playlists yet. Create one here, or{' '}
+              <button className="om-add-link" onClick={() => setMusicModalOpen(true)}>Add music</button>{' '}
+              — paste a Spotify, YouTube, or SoundCloud playlist link.
             </p>
           </div>
         ) : (
