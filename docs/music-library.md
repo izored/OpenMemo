@@ -86,13 +86,17 @@ Artist comes from the flat entry's artist or uploader field, with YouTube's " - 
 
 ## The Music page
 
-`/music`, reached from the sidebar item right under Ask Memo.
+`/music`, reached from the sidebar item right under Collections.
 
-Three zones, in the visual language of the dashboard:
+The hub reads like a music app's home (ADR-018): a featured row up top, themed rails below it, the full library at the bottom. Every rail scrolls sideways.
 
-- **Header.** Eyebrow, title, sub. Same `om-header` skeleton as Today, plus an **Add music** action in the rail. On `/music` both that button and the global FAB open the music-specific add panel (see "Adding music" below), not the generic New Memo panel.
-- **Playlists.** A horizontal row of playlist cards. Each card is the artwork (a 2x2 collage of the first four track covers for playlists; albums show their one cover full-bleed), an eyebrow meta line above the name ("10 tracks · Album" / "5 tracks · Playlist"), a play button that queues the whole thing, and a progress bar while tracks are downloading. Cards accept memo-card drops, same as sidebar collections.
+- **Header.** Eyebrow, title, sub. Same shared `PageHeader` as every page, plus an **Add music** action in the rail. On `/music` both that button and the global FAB open the music-specific add panel (see "Adding music" above), not the generic New Memo panel.
+- **Hero rail.** Big full-bleed cards. First card is **Favourite Songs** — a brand-gradient heart card that queues every liked track in one tap (hover button shuffles instead). After it, the newest saves of any kind: artwork edge to edge, a gradient veil at the bottom carrying the kind eyebrow (Album / Playlist), the name, and the track count, with a play button on hover. Albums show their single cover; playlists stretch their 4-up collage.
+- **Albums.** A rail of album cards — single cover, "N tracks · Album" eyebrow, hover play, drop target, live download progress. The whole section hides when no albums exist.
+- **Playlists.** Same rail for playlist-kind collections, with the 2x2 collage art, the inline **New playlist** creation flow, and the empty state pointing at Add music. Cards accept memo-card drops, same as sidebar collections.
 - **Library.** The songs you saved one by one, in the standard masonry grid. Playlist-born tracks are not here; they live behind their playlist card. The header carries a debounced search box, a sort pill (Recent / Title / Artist), and Play all + Shuffle that queue exactly the filtered view. Music cards render full-bleed: square artwork edge to edge, title on a bottom gradient, no body bar.
+
+Scroll is split by axis (ADR-018): a vertical wheel over a rail scrolls the page smoothly like everywhere else, while sideways input — trackpad swipe or shift+wheel — slides the rail itself. A flick past a rail's edge never triggers the browser's back gesture.
 
 Click a playlist card and you get the playlist view (`/music/:id`): a boxed hero that names the playlist (artwork — collage for playlists, single cover for albums — an "Album · N tracks" / "Playlist · N tracks" eyebrow, play-all, shuffle, Download all, source link, delete), a "Back to Music" button above it, and the tracks as full-bleed cover tiles. Each tile carries its number, its title on a gradient, play on hover, a remove chip (pull the song out, nothing gets deleted), and a download / retry chip when the track is still remote or failed. Tiles reorder by drag; the order persists through the recency stagger. Click a ready tile to play; the queue picks up from that track. Deleting a playlist removes the collection, never the tracks: born tracks move back to the library.
 
@@ -154,4 +158,4 @@ The sidebar player shows previous / next / shuffle and the Up-next popover only 
 
 ## Decision record
 
-See ADR-015 in `docs/DECISIONS.md`: playlists are collections with a kind, never a parallel table. And ADR-017: Spotify links resolve to lossless FLAC through a no-account provider chain, dispatched from the same `localize_memo_task` seam, with the Music page owning its own add panel.
+See ADR-015 in `docs/DECISIONS.md`: playlists are collections with a kind, never a parallel table. ADR-017: Spotify links resolve to lossless FLAC through a no-account provider chain, dispatched from the same `localize_memo_task` seam, with the Music page owning its own add panel. And ADR-018: the hub is a rails-first surface (hero, albums, playlists, library) where every sideways rail owns the horizontal wheel axis and leaves the vertical one to the page.

@@ -7,6 +7,37 @@ the decision, and its consequences, so a future reader knows *why*, not just
 
 ---
 
+## ADR-018: The Music hub is a rails-first surface, and sideways rails own their wheel axis
+
+**Date:** 2026-06-12 · **Status:** Shipped · **Builds on:** ADR-015 (playlists are collections, music lives on its own page), ADR-016 (one shared PageHeader), ADR-001 (define shared things once)
+
+### Context
+
+The Music hub shipped as two flat zones: one playlists row, then the library grid. With albums classified (ADR-017 update) and liked tracks live, the flat row stopped pulling its weight — albums and playlists shared one rail, the newest saves had no stage, and liked songs had no entry point on the page at all. The reference picture is the music app everyone already knows: a tall featured row up top, themed rails below, everything scrolling sideways.
+
+The redesign surfaced a second, sneakier problem: sideways rails inside the Lenis smooth-scroll pane. The rails carried `data-lenis-prevent` (the attribute every vertical scroll pocket uses), and `lenis.css` puts `overscroll-behavior: contain` on every prevented zone. A rail has no vertical axis to give, and `contain` cuts the scroll chain — so a vertical wheel over a rail scrolled *nothing*. The page froze wherever a rail sat under the cursor. Dropping the attribute flips the failure: Lenis preventDefaults every wheel event it sees, so horizontal deltas (trackpad swipe, shift+wheel) die before the rail can use them.
+
+### Decision
+
+**The hub stacks four zones — hero rail, Albums rail, Playlists rail, library grid — and every rail handles the wheel itself: vertical deltas belong to the page, horizontal deltas belong to the rail.**
+
+- **Hero rail.** Big full-bleed cards (280px, 4:5): a synthetic **Favourite Songs** card first (brand-gradient + heart; tap plays every liked track, hover button shuffles), then the newest few saves of any kind. Art fills the card, a gradient veil carries the kind eyebrow, name, and track count bottom-left; play reveals on hover. Albums reuse their single cover, playlists their 4-up collage (`PlaylistCover` stretched full-bleed).
+- **Favourite Songs is client-side.** The list API has no `liked` filter; the card fetches the library (the same 200-track cap every queue uses) and keeps the liked ones. A dedicated filter can come later without touching the card.
+- **Albums and Playlists split into their own rails** of the existing `PlaylistCard` (drop targets, progress bars and all). The Albums rail hides when no albums exist; the Playlists rail keeps the inline create flow and empty state. Hero items reappear in their kind's rail — deliberate duplication, same as the reference apps.
+- **Rails drop `data-lenis-prevent`.** A vertical wheel over a rail goes to Lenis and page-scrolls smoothly, exactly like everywhere else on the page.
+- **A native non-passive wheel listener claims the horizontal axis.** Bound once per rail element (WeakSet-guarded ref callback): when `|deltaX| > |deltaY|` it preventDefaults, stops propagation before Lenis's wrapper listener, and applies `scrollLeft += deltaX`. React's synthetic `onWheel` cannot do this — React 17+ attaches wheel passively at the root, so `preventDefault` is a no-op there.
+- **`overscroll-behavior-x: contain`** on the rails, so a flick past the rail's edge never turns into the browser's back/forward gesture.
+
+### Consequences
+
+- Wheel behavior is uniform: vertical input always scrolls the page smoothly, no dead zones. Sideways input (trackpad swipe, shift+wheel — Chrome reports shift+wheel as `deltaX`) slides the rail under the cursor.
+- The playlist detail view is untouched; this is hub information architecture only.
+- The hero features the newest four saves regardless of kind. No pinning or curation — recency is the rule until someone needs more.
+- The liked card renders even with zero liked tracks (tapping it just queues nothing). Accepted: it doubles as the feature's discovery point.
+- Other horizontal rails that land inside a Lenis pane must copy this pattern (bind the listener, skip the prevent attribute) — `data-lenis-prevent` remains correct only for vertical scroll pockets like the sidebar and the up-next popover.
+
+---
+
 ## ADR-017: Spotify links resolve to lossless FLAC through a no-account provider chain, and the Music page owns its own add surface
 
 **Date:** 2026-06-12 · **Status:** Shipped · **Builds on:** ADR-015 (playlists are collections, tracks are audio memos), ADR-005 (music is a first-class media experience), ADR-004 (one shared engine pulls remote media), ADR-001 (define shared things once)
