@@ -104,6 +104,14 @@ Three refinements shipped after the first albums went through the chain:
 - **Albums are not playlists.** `collections.music_kind` (`'album' | 'playlist'`, NULL = playlist) records what the source was: Spotify `/album/` and YouTube `OLAK5uy_` list ids classify as albums, backfilled from `source_url` at startup. Albums render a single cover (one release, one artwork — the 4-up collage is for mixed-art playlists) and an "Album" label on cards, the hero, and the add-panel preview.
 - **The FLAC keeps its identity.** The community CDN serves files with zero tags and no art (verified with mutagen). Each download now gets Vorbis tags — title, artist, album — plus embedded cover art. The album name comes from the Qobuz search match, the only place in the chain that has it (the Spotify embed has no album field). It also lands on the memo (`memos.audio_album`, backfilled from album-kind collections) and surfaces in the big player ("album — artist" marquee under the title) and the OS media overlay.
 
+### Update (2026-06-13): quality is automatic — hi-res with a client-side CD fallback
+
+The original note assumed the community relay would "fall back to 16 server-side" when a release has no hi-res master. **It does not** — a 24-bit request for a CD-only track returns **HTTP 400**. Surfaced live: the 2014 *Captain America* soundtrack (no hi-res master) landed in `error` ("Qobuz community API returned 400") with `music_quality = 24` and never downloaded.
+
+- **The resolver downgrades, not the user.** `_community_flac_url` now always asks for 24-bit and, on the first non-200/non-429 response, drops to 16-bit **once** and retries before failing. So every track resolves to the best quality it actually has, with no error.
+- **The quality choice is removed from the UI.** The CD/Hi-Res toggle is gone from `MusicAddModal`; `music_quality` defaults to 24 and is no longer surfaced. Quality is picked per track in the background. This intentionally collapses a setting — per the "explicit defaults, fewer knobs" spirit — because the right answer ("best available") needs no input.
+- **Shared by both front-ends.** Because the fix is in the neutral `_community_flac_url`, Spotify and Apple Music (ADR-019) both get it for free.
+
 ---
 
 ## ADR-016: Every page renders one shared PageHeader, never its own header markup
