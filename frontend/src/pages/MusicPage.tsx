@@ -149,7 +149,7 @@ function MusicTile({ m, index, active, playing, onPlay, onDownload, onRemove, on
   const [confirm, setConfirm] = useState(false);
   return (
     <button
-      className={cn('om-mtile', active && 'is-active', fetching && 'is-pending', m.liked && 'is-liked')}
+      className={cn('om-mtile', active && 'is-active', fetching && 'is-pending', !ready && 'is-offline', m.liked && 'is-liked')}
       onClick={onPlay}
       disabled={fetching}
       title={ready ? `Play ${m.title}` : failed ? 'Download failed — tap the chip to retry' : fetching ? 'Downloading…' : 'Remote track — open it, or tap the chip to download'}
@@ -192,32 +192,38 @@ function MusicTile({ m, index, active, playing, onPlay, onDownload, onRemove, on
           </div>
         </div>
       )}
+      {/* Status label, bottom-corner: names the state in words. The cloud
+          badge below is the tap target; this is just the readout. */}
       {failed ? (
-        <span
-          className="om-mtile-state failed is-action"
-          role="button"
-          title="Retry download"
-          onClick={(e) => { e.stopPropagation(); onDownload(); }}
-        >
-          <Icon name="refresh" size={10} /> retry
-        </span>
+        <span className="om-mtile-state failed">failed</span>
       ) : fetching ? (
         <span className="om-mtile-state"><Icon name="refresh" size={10} className="om-spin" /> downloading</span>
       ) : remote ? (
-        <span
-          className="om-mtile-state is-action"
-          role="button"
-          title="Download this track"
-          onClick={(e) => { e.stopPropagation(); onDownload(); }}
-        >
-          <Icon name="download" size={10} /> download
-        </span>
+        <span className="om-mtile-state">not local</span>
       ) : null}
-      {ready && (
+      {ready ? (
         <span className="om-mtile-play" aria-hidden>
           <span className="om-mtile-play-badge">
             <Icon name={active && playing ? 'pause' : 'play'} size={16} stroke={0} style={{ fill: 'currentColor', marginLeft: active && playing ? 0 : 2 }} />
           </span>
+        </span>
+      ) : fetching ? (
+        // Mid-download: the cloud spins, no tap (the pass is already running).
+        <span className="om-mtile-cloud is-busy" aria-hidden>
+          <span className="om-mtile-cloud-badge"><Icon name="refresh" size={18} className="om-spin" /></span>
+        </span>
+      ) : (
+        // Remote / failed: tap the cloud to pull this track to the device.
+        <span
+          className={cn('om-mtile-cloud is-action', failed && 'is-failed')}
+          role="button"
+          tabIndex={0}
+          title={failed ? 'Download failed. Tap to retry.' : 'Not on this device. Tap to download.'}
+          aria-label={failed ? `Retry download of ${m.title}` : `Download ${m.title}`}
+          onClick={(e) => { e.stopPropagation(); onDownload(); }}
+          onKeyDown={(e) => { if (e.key === 'Enter') { e.stopPropagation(); onDownload(); } }}
+        >
+          <span className="om-mtile-cloud-badge"><Icon name="cloudDownload" size={18} /></span>
         </span>
       )}
       <span className="om-mtile-cap">
@@ -400,8 +406,11 @@ export function MusicPage() {
   // Tracks of the open playlist (playlist order = recency stagger, see ingest).
   const { data: plTracks, isLoading: tracksLoading } = useQuery({
     queryKey: ['memos', 'playlist-tracks', playlistId],
+    // audio_kind, not type: a still-remote or failed track is type='link'
+    // (type only flips to 'audio' once the file lands), so filtering by type
+    // would hide every track that isn't local yet. Music kind catches them all.
     queryFn: () =>
-      memoApi.list({ type: 'audio', collection_id: playlistId!, limit: 200 }),
+      memoApi.list({ audio_kind: 'music', collection_id: playlistId!, limit: 200 }),
     enabled: !!playlistId,
     refetchInterval: anyDownloading ? 2500 : false,
   });
@@ -479,7 +488,7 @@ export function MusicPage() {
   const playPlaylist = async (p: MusicPlaylist, opts?: { shuffle?: boolean }) => {
     const res = await queryClient.fetchQuery({
       queryKey: ['memos', 'playlist-tracks', p.id],
-      queryFn: () => memoApi.list({ type: 'audio', collection_id: p.id, limit: 200 }),
+      queryFn: () => memoApi.list({ audio_kind: 'music', collection_id: p.id, limit: 200 }),
       staleTime: 10 * 1000,
     });
     queueFrom(res.items as Memo[], undefined, { ...opts, sourcePlaylistId: p.id });
@@ -581,8 +590,14 @@ export function MusicPage() {
     const playlist = playlists.find((p) => p.id === playlistId);
     const trackTotal = playlist?.track_count ?? tracks.length;
     const downloading = (playlist?.progress.pending ?? 0) > 0;
-    // Any track still remote (not local, not actively downloading)?
-    const hasRemote = tracks.some((t) => !isReady(t) && t.localize_status !== 'pending' && t.localize_status !== 'processing');
+    // Tracks not on this device, split by why. `processingNow` = a download is
+    // actively running; while it is, the bulk button steps aside (one pass at a
+    // time). Otherwise any not-local track (remote, queued, or failed) can be
+    // (re)pulled — that is the playlist's re-download control.
+    const notLocal = tracks.filter((t) => !isReady(t));
+    const failedCount = notLocal.filter((t) => t.localize_status === 'error').length;
+    const processingNow = tracks.some((t) => t.localize_status === 'processing');
+    const canRedownload = notLocal.length > 0 && !processingNow;
     return (
       <div className="om-music">
         <button className="om-music-back" onClick={() => navigate('/music')} title="Back to Music">
@@ -630,10 +645,16 @@ export function MusicPage() {
                   <span>Play liked</span>
                 </button>
               )}
-              {playlist && hasRemote && !downloading && (
-                <button className="om-btn-secondary" onClick={() => downloadAll(playlist)} title="Download every remote track to this device">
-                  <Icon name="download" size={13} />
-                  <span>Download all</span>
+              {playlist && canRedownload && (
+                <button
+                  className="om-btn-secondary"
+                  onClick={() => downloadAll(playlist)}
+                  title={failedCount > 0
+                    ? 'Retry every track that is not on this device yet'
+                    : 'Download every remote track to this device'}
+                >
+                  <Icon name="cloudDownload" size={13} />
+                  <span>{failedCount > 0 ? `Re-download (${notLocal.length})` : 'Download all'}</span>
                 </button>
               )}
               {playlist?.source_url && (
