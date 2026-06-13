@@ -590,14 +590,14 @@ export function MusicPage() {
     const playlist = playlists.find((p) => p.id === playlistId);
     const trackTotal = playlist?.track_count ?? tracks.length;
     const downloading = (playlist?.progress.pending ?? 0) > 0;
-    // Tracks not on this device, split by why. `processingNow` = a download is
-    // actively running; while it is, the bulk button steps aside (one pass at a
-    // time). Otherwise any not-local track (remote, queued, or failed) can be
-    // (re)pulled — that is the playlist's re-download control.
+    // Tracks not on this device (remote, queued, or failed). Any of them can be
+    // (re)pulled, so the playlist keeps its re-download control.
     const notLocal = tracks.filter((t) => !isReady(t));
     const failedCount = notLocal.filter((t) => t.localize_status === 'error').length;
-    const processingNow = tracks.some((t) => t.localize_status === 'processing');
-    const canRedownload = notLocal.length > 0 && !processingNow;
+    // The bulk control stays put whenever any track is still off-device. A
+    // single-track download (one tile's cloud chip) must NOT steal the header
+    // button. Only that one tile shows its own spinner. So no processing gate.
+    const canRedownload = notLocal.length > 0;
     return (
       <div className="om-music">
         <button className="om-music-back" onClick={() => navigate('/music')} title="Back to Music">

@@ -4471,9 +4471,12 @@ button.om-add-link { background: none; border: 0; padding: 0; cursor: pointer; f
 .om-mtile.is-pending { cursor: default; }
 .om-mtile-img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
 /* Not-local tracks (remote / queued / downloading / failed) read as pending:
-   dimmed + desaturated art so a glance separates what's here from what isn't. */
+   dimmed + desaturated art so a glance separates what's here from what isn't.
+   Uses brightness, not opacity: opacity blends toward the surface, which in a
+   light theme washes the art brighter (the dim "inverts"). brightness darkens
+   the same way in every theme, so dim always reads as dim. */
 .om-mtile.is-pending .om-mtile-img,
-.om-mtile.is-offline .om-mtile-img { opacity: 0.45; filter: grayscale(0.4); }
+.om-mtile.is-offline .om-mtile-img { filter: grayscale(0.4) brightness(0.62); }
 .om-mtile.is-offline .om-mtile-glyph { opacity: 0.5; }
 .om-mtile-glyph { position: absolute; inset: 0; display: grid; place-items: center; color: var(--text-3); }
 .om-mtile-num {
@@ -4552,7 +4555,11 @@ button.om-add-link { background: none; border: 0; padding: 0; cursor: pointer; f
    touch heavier than a plain download. */
 .om-mtile-cloud-badge {
   width: 42px; height: 42px; border-radius: 50%; display: grid; place-items: center;
-  background: var(--accent); color: #fff;
+  /* Resting badge sits a touch deeper than the raw accent so a pale/green
+     accent doesn't glow. Icon uses the contrast-aware --accent-text (dark on
+     pale accents, white on dark ones) instead of a hardcoded white. */
+  background: color-mix(in oklab, var(--accent) 82%, var(--accent-deep));
+  color: var(--accent-text, #fff);
   box-shadow: 0 4px 14px rgba(0, 0, 0, 0.35);
   transition: transform .15s ease, background .15s ease;
 }
