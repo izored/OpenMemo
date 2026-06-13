@@ -83,7 +83,9 @@ function PlaylistCover({ covers, size = 'md', kind = 'playlist' }: { covers: str
   );
 }
 
-function PlaylistCard({ p, onOpen, onPlay }: { p: MusicPlaylist; onOpen: () => void; onPlay: () => void }) {
+function PlaylistCard({ p, onOpen, onPlay, isCurrent = false, playing = false }: {
+  p: MusicPlaylist; onOpen: () => void; onPlay: () => void; isCurrent?: boolean; playing?: boolean;
+}) {
   // Droppable under the same `col-` namespace the sidebar uses, so dragging a
   // track card from the library files it into the playlist — same gesture,
   // same MemoGrid handler, zero new wiring.
@@ -101,7 +103,7 @@ function PlaylistCard({ p, onOpen, onPlay }: { p: MusicPlaylist; onOpen: () => v
   return (
     <div
       ref={setNodeRef}
-      className={cn('om-pl-card', isOver && 'drop-over')}
+      className={cn('om-pl-card', isOver && 'drop-over', isCurrent && 'is-playing')}
       onClick={onOpen}
       role="button"
       tabIndex={0}
@@ -109,13 +111,20 @@ function PlaylistCard({ p, onOpen, onPlay }: { p: MusicPlaylist; onOpen: () => v
     >
       <div className="om-pl-card-art">
         <PlaylistCover covers={p.covers} kind={p.music_kind} />
+        {/* The currently-playing playlist keeps its badge pinned (not hover-only)
+            and toggles play/pause; any other card just starts this playlist. */}
         <button
           className="om-pl-card-play"
           onClick={(e) => { e.stopPropagation(); onPlay(); }}
-          title="Play playlist"
-          aria-label={`Play ${p.name}`}
+          title={isCurrent ? (playing ? 'Pause' : 'Resume') : 'Play playlist'}
+          aria-label={isCurrent ? (playing ? `Pause ${p.name}` : `Resume ${p.name}`) : `Play ${p.name}`}
         >
-          <Icon name="play" size={16} stroke={0} style={{ fill: 'currentColor', marginLeft: 2 }} />
+          <Icon
+            name={isCurrent && playing ? 'pause' : 'play'}
+            size={16}
+            stroke={0}
+            style={{ fill: 'currentColor', marginLeft: isCurrent && playing ? 0 : 2 }}
+          />
         </button>
       </div>
       <div className="om-pl-card-body">
@@ -241,12 +250,14 @@ function MusicTile({ m, index, active, playing, onPlay, onDownload, onRemove, on
 
 // Big hero card (Apple-Music-style top rail): full-bleed art, gradient veil,
 // kind eyebrow + name + track count pinned bottom-left, play on hover.
-function HeroCard({ p, onOpen, onPlay }: { p: MusicPlaylist; onOpen: () => void; onPlay: () => void }) {
+function HeroCard({ p, onOpen, onPlay, isCurrent = false, playing = false }: {
+  p: MusicPlaylist; onOpen: () => void; onPlay: () => void; isCurrent?: boolean; playing?: boolean;
+}) {
   const kindLabel = p.music_kind === 'album' ? 'Album' : 'Playlist';
   const collage = p.music_kind === 'playlist' && p.covers.length >= 4;
   return (
     <div
-      className="om-hero-card"
+      className={cn('om-hero-card', isCurrent && 'is-playing')}
       onClick={onOpen}
       role="button"
       tabIndex={0}
@@ -270,10 +281,15 @@ function HeroCard({ p, onOpen, onPlay }: { p: MusicPlaylist; onOpen: () => void;
       <button
         className="om-hero-play"
         onClick={(e) => { e.stopPropagation(); onPlay(); }}
-        title={`Play ${p.name}`}
-        aria-label={`Play ${p.name}`}
+        title={isCurrent ? (playing ? 'Pause' : 'Resume') : `Play ${p.name}`}
+        aria-label={isCurrent ? (playing ? `Pause ${p.name}` : `Resume ${p.name}`) : `Play ${p.name}`}
       >
-        <Icon name="play" size={17} stroke={0} style={{ fill: 'currentColor', marginLeft: 2 }} />
+        <Icon
+          name={isCurrent && playing ? 'pause' : 'play'}
+          size={17}
+          stroke={0}
+          style={{ fill: 'currentColor', marginLeft: isCurrent && playing ? 0 : 2 }}
+        />
       </button>
     </div>
   );
@@ -335,7 +351,11 @@ export function MusicPage() {
   const { playlistId } = useParams();
   const setMusicModalOpen = useAppStore((s) => s.setMusicModalOpen);
   const openThumbEdit = useAppStore((s) => s.openThumbEdit);
-  const { playQueue, toggle, isActive, playing } = useAudioPlayer();
+  const { playQueue, toggle, isActive, playing, queueSource } = useAudioPlayer();
+  // True when the live queue was started from this playlist/album card.
+  const isPlayingSource = (id: string) => queueSource?.kind === 'playlist' && queueSource.id === id;
+  // Tapping a card's badge: toggle if it's already the live source, else start it.
+  const playOrToggle = (p: MusicPlaylist) => (isPlayingSource(p.id) ? toggle() : playPlaylist(p));
 
   const { data: playlists = [] } = useQuery({
     queryKey: ['music-playlists'],
@@ -559,6 +579,16 @@ export function MusicPage() {
     queryClient.invalidateQueries({ queryKey: ['music-playlists'] });
   };
 
+  // Pause a running bulk pass. The in-flight track finishes; the rest reset to
+  // remote and the Download all button comes back to resume.
+  const pauseDownload = async (p: MusicPlaylist) => {
+    try {
+      await musicApi.pausePlaylistDownload(p.id);
+    } catch { /* surfaced by polling */ }
+    queryClient.invalidateQueries({ queryKey: ['memos', 'playlist-tracks'] });
+    queryClient.invalidateQueries({ queryKey: ['music-playlists'] });
+  };
+
   // Create an empty playlist right on the page — no URL, no memo needed.
   const [creatingPl, setCreatingPl] = useState(false);
   const [newPlName, setNewPlName] = useState('');
@@ -572,6 +602,26 @@ export function MusicPage() {
       queryClient.invalidateQueries({ queryKey: ['music-playlists'] });
       navigate(`/music/${created.id}`);
     } catch { /* keep the input so the name survives a retry */ }
+  };
+
+  // Edit a playlist's name + description, inline in the hero. Description seeds
+  // from the source link on import; the user can rewrite it here either way.
+  const [editingPl, setEditingPl] = useState(false);
+  const [editName, setEditName] = useState('');
+  const [editDesc, setEditDesc] = useState('');
+  const startEditPlaylist = (p: MusicPlaylist) => {
+    setEditName(p.name);
+    setEditDesc(p.description ?? '');
+    setEditingPl(true);
+  };
+  const savePlaylistMeta = async (p: MusicPlaylist) => {
+    const name = editName.trim();
+    if (!name) return;
+    try {
+      await collectionApi.update(p.id, { name, description: editDesc.trim() || null });
+    } catch { /* surfaced by refetch */ }
+    setEditingPl(false);
+    queryClient.invalidateQueries({ queryKey: ['music-playlists'] });
   };
 
   const deletePlaylist = async (p: MusicPlaylist) => {
@@ -590,14 +640,18 @@ export function MusicPage() {
     const playlist = playlists.find((p) => p.id === playlistId);
     const trackTotal = playlist?.track_count ?? tracks.length;
     const downloading = (playlist?.progress.pending ?? 0) > 0;
-    // Tracks not on this device, split by why. `processingNow` = a download is
-    // actively running; while it is, the bulk button steps aside (one pass at a
-    // time). Otherwise any not-local track (remote, queued, or failed) can be
-    // (re)pulled — that is the playlist's re-download control.
+    // A bulk "Download all" pass is in flight (the backend says so). Only this
+    // swaps the header to a Pause button. A single tile's download goes pending
+    // too, but it is not a bulk pass, so the header keeps Download all.
+    const bulkActive = !!playlist?.progress.active;
+    // Tracks not on this device (remote, queued, or failed). Any of them can be
+    // (re)pulled, so the playlist keeps its re-download control.
     const notLocal = tracks.filter((t) => !isReady(t));
     const failedCount = notLocal.filter((t) => t.localize_status === 'error').length;
-    const processingNow = tracks.some((t) => t.localize_status === 'processing');
-    const canRedownload = notLocal.length > 0 && !processingNow;
+    // The bulk control stays put whenever any track is still off-device. A
+    // single-track download (one tile's cloud chip) must NOT steal the header
+    // button. Only that one tile shows its own spinner. So no processing gate.
+    const canRedownload = notLocal.length > 0;
     return (
       <div className="om-music">
         <button className="om-music-back" onClick={() => navigate('/music')} title="Back to Music">
@@ -616,7 +670,56 @@ export function MusicPage() {
               {playlist?.music_kind === 'album' ? 'Album' : 'Playlist'} · {trackTotal} track{trackTotal === 1 ? '' : 's'}
               {downloading && playlist && ` · ${playlist.progress.done}/${playlist.progress.total} downloaded`}
             </span>
-            <h1 className="om-greet-title">{playlist?.name ?? 'Playlist'}</h1>
+            {editingPl && playlist ? (
+              <div className="om-pl-edit">
+                <input
+                  className="om-pl-edit-name"
+                  value={editName}
+                  onChange={(e) => setEditName(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') savePlaylistMeta(playlist);
+                    if (e.key === 'Escape') setEditingPl(false);
+                  }}
+                  placeholder="Playlist name"
+                  maxLength={200}
+                  autoFocus
+                  aria-label="Playlist name"
+                />
+                <textarea
+                  className="om-pl-edit-desc"
+                  value={editDesc}
+                  onChange={(e) => setEditDesc(e.target.value)}
+                  placeholder="Add a description (pulled from the link on import, or write your own)"
+                  maxLength={1000}
+                  rows={3}
+                  aria-label="Playlist description"
+                />
+                <div className="om-pl-edit-actions">
+                  <button className="om-btn-primary" onClick={() => savePlaylistMeta(playlist)} disabled={!editName.trim()}>
+                    <Icon name="check" size={13} />
+                    <span>Save</span>
+                  </button>
+                  <button className="om-btn-secondary" onClick={() => setEditingPl(false)}>Cancel</button>
+                </div>
+              </div>
+            ) : (
+              <>
+                <div className="om-pl-title-row">
+                  <h1 className="om-greet-title">{playlist?.name ?? 'Playlist'}</h1>
+                  {playlist && (
+                    <button
+                      className="om-pl-edit-btn"
+                      onClick={() => startEditPlaylist(playlist)}
+                      title="Edit name & description"
+                      aria-label="Edit playlist"
+                    >
+                      <Icon name="edit" size={14} />
+                    </button>
+                  )}
+                </div>
+                {playlist?.description && <p className="om-pl-hero-desc">{playlist.description}</p>}
+              </>
+            )}
             <div className="om-pl-hero-actions">
               <button
                 className="om-btn-primary om-pl-playall"
@@ -645,7 +748,16 @@ export function MusicPage() {
                   <span>Play liked</span>
                 </button>
               )}
-              {playlist && canRedownload && (
+              {playlist && bulkActive ? (
+                <button
+                  className="om-btn-secondary"
+                  onClick={() => pauseDownload(playlist)}
+                  title="Pause the download. The current track finishes; the rest stop and can be resumed."
+                >
+                  <Icon name="pause" size={13} stroke={0} style={{ fill: 'currentColor' }} />
+                  <span>Pause download</span>
+                </button>
+              ) : playlist && canRedownload ? (
                 <button
                   className="om-btn-secondary"
                   onClick={() => downloadAll(playlist)}
@@ -656,7 +768,7 @@ export function MusicPage() {
                   <Icon name="cloudDownload" size={13} />
                   <span>{failedCount > 0 ? `Re-download (${notLocal.length})` : 'Download all'}</span>
                 </button>
-              )}
+              ) : null}
               {playlist?.source_url && (
                 <a className="om-btn-secondary" href={playlist.source_url} target="_blank" rel="noreferrer" title="Open the source playlist">
                   <Icon name="arrowUpRight" size={13} />
@@ -745,7 +857,9 @@ export function MusicPage() {
                 key={p.id}
                 p={p}
                 onOpen={() => navigate(`/music/${p.id}`)}
-                onPlay={() => playPlaylist(p)}
+                onPlay={() => playOrToggle(p)}
+                isCurrent={isPlayingSource(p.id)}
+                playing={playing}
               />
             ))}
           </div>
@@ -764,7 +878,9 @@ export function MusicPage() {
                 key={p.id}
                 p={p}
                 onOpen={() => navigate(`/music/${p.id}`)}
-                onPlay={() => playPlaylist(p)}
+                onPlay={() => playOrToggle(p)}
+                isCurrent={isPlayingSource(p.id)}
+                playing={playing}
               />
             ))}
           </div>
@@ -819,7 +935,9 @@ export function MusicPage() {
                 key={p.id}
                 p={p}
                 onOpen={() => navigate(`/music/${p.id}`)}
-                onPlay={() => playPlaylist(p)}
+                onPlay={() => playOrToggle(p)}
+                isCurrent={isPlayingSource(p.id)}
+                playing={playing}
               />
             ))}
           </div>

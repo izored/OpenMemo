@@ -185,6 +185,7 @@ def spotify_collection_meta(client: httpx.Client, kind: str, spotify_id: str) ->
         "id": spotify_id,
         "kind": kind,
         "title": (entity.get("title") or "").strip() or kind.title(),
+        "description": (entity.get("description") or "").strip()[:1000] or None,
         "cover": _cover_from_entity(entity),
         "tracks": tracks,
     }

@@ -144,6 +144,9 @@ def _probe_sync(url: str) -> dict:
     return {
         "title": (data.get("title") or "Playlist")[:200],
         "uploader": data.get("uploader") or data.get("channel"),
+        # Source-provided blurb (YouTube/SoundCloud playlists carry one). Seeds
+        # the playlist's description; the user can edit it later.
+        "description": (data.get("description") or "").strip()[:1000] or None,
         "count": len(entries),
         "truncated": int(source_total) > len(entries),
         "entries": entries,
