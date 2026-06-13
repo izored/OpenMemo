@@ -16,11 +16,11 @@ COPY requirements.txt /app/backend/
 RUN pip install --no-cache-dir -r /app/backend/requirements.txt
 
 # Headless Chromium for the local link scraper (backend/core/headless.py) — the
-# self-hosted replacement for Microlink. Renders pages behind Cloudflare / JS
-# antibot challenges (Dribbble, Behance, …) so og:image + content extract
-# correctly, with no third-party API. --with-deps pulls the OS libraries
-# Chromium needs on slim Debian.
-RUN python -m playwright install --with-deps chromium chromium-headless-shell
+# self-hosted replacement for Microlink. patchright is a patched Playwright fork
+# that removes CDP fingerprint markers in the Chromium binary itself so
+# Cloudflare Turnstile passes without a CAPTCHA service. --with-deps pulls the
+# OS libraries Chromium needs on slim Debian.
+RUN python -m patchright install --with-deps chromium
 
 # Copy all backend files into the backend package directory
 COPY . /app/backend/

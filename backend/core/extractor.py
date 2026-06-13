@@ -241,13 +241,46 @@ def _direct_media_memo(url: str, domain: str, ctype: str | None = None) -> dict 
     }
 
 
+# Cloudflare challenge page titles / body markers that indicate the plain-HTTP
+# response is an interstitial, not real content. When detected we escalate to
+# the headless browser path instead of returning the challenge page as a memo.
+_CF_TITLE_MARKERS = {
+    "human verification",
+    "just a moment",
+    "attention required",
+    "checking your browser",
+    "please wait",
+    "security check",
+    "ddos protection",
+    "one more step",
+}
+_CF_BODY_MARKERS = [
+    "__cf_chl_opt",
+    "cf-browser-verification",
+    "cdn-cgi/challenge-platform",
+    "cf-challenge-running",
+    "cf-wrapper",
+    "jschl-answer",
+]
+
+
+def _is_cf_challenge(parsed: dict | None, raw_html: str) -> bool:
+    """Return True if the parsed result or raw HTML looks like a CF challenge."""
+    if parsed is not None:
+        title_lower = (parsed.get("title") or "").lower().strip()
+        if title_lower in _CF_TITLE_MARKERS:
+            return True
+    return any(m in raw_html for m in _CF_BODY_MARKERS)
+
+
 async def extract_url(url: str) -> dict:
     """Extract content from a URL (article, page).
 
     Plain HTTP fetch first (fast, covers most sites). If the response is a
-    bot-challenge stub (non-200, e.g. Cloudflare 202) or a 200 that renders to
-    nothing (JS SPA / antibot wall), escalate to `_minimal_link`, which drives a
-    real headless browser past the challenge -- no Microlink, no paid API."""
+    bot-challenge stub (non-200, e.g. Cloudflare 202), a 200 that renders to
+    nothing (JS SPA / antibot wall), or a 200 that is a Cloudflare challenge
+    interstitial (title "Human Verification" etc.), escalate to `_minimal_link`
+    which drives a real headless browser past the challenge."""
     parsed_url = urlparse(url)
     domain = parsed_url.netloc.lstrip("www.")
 
@@ -281,11 +314,11 @@ async def extract_url(url: str) -> dict:
                 return direct
             # Only a real 200 carries real content; a 2xx-but-not-200 is a
             # challenge interstitial (Cloudflare managed challenge -> HTTP 202 +
-            # JS stub). Route anything non-200, or a 200 that renders to nothing,
-            # to the headless path in _minimal_link.
+            # JS stub). Route anything non-200, or a 200 that renders to nothing
+            # OR to a CF challenge page, to the headless path.
             if resp.status_code == 200:
                 parsed = _parse_html(resp.text, str(resp.url), url, domain)
-                if parsed is not None:
+                if parsed is not None and not _is_cf_challenge(parsed, resp.text):
                     return parsed
         except Exception:
             pass

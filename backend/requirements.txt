@@ -29,8 +29,11 @@ faster-whisper>=1.0.0
 mutagen>=1.47.0
 # Headless Chromium driver for the local link scraper (backend/core/headless.py),
 # the self-hosted replacement for Microlink. The browser binary itself is pulled
-# in the Dockerfile via `playwright install`, not by pip.
+# in the Dockerfile via `patchright install` (patchright is a patched Playwright
+# fork that removes CDP fingerprint markers Cloudflare Turnstile checks — same
+# API, drop-in replacement, but passes Turnstile without a CAPTCHA service).
 playwright>=1.49.0
+patchright>=1.49.0
 
 # Dev dependencies
 pytest==8.3.3
