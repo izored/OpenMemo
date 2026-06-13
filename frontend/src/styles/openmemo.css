@@ -4546,15 +4546,19 @@ button.om-add-link { background: none; border: 0; padding: 0; cursor: pointer; f
   color: #fff; background: rgba(0, 0, 0, 0.30);
 }
 .om-mtile-cloud.is-action { cursor: pointer; pointer-events: auto; }
+/* Badge wears the user's accent tint (Appearance panel), not a fixed colour.
+   The red "failed" word-label + tooltip carry the error signal; the badge
+   itself stays on-brand. Failed uses the deeper accent so it still reads a
+   touch heavier than a plain download. */
 .om-mtile-cloud-badge {
   width: 42px; height: 42px; border-radius: 50%; display: grid; place-items: center;
-  background: rgba(255, 255, 255, 0.92); color: #111;
+  background: var(--accent); color: #fff;
   box-shadow: 0 4px 14px rgba(0, 0, 0, 0.35);
   transition: transform .15s ease, background .15s ease;
 }
-.om-mtile-cloud.is-action:hover .om-mtile-cloud-badge { transform: scale(1.08); }
-.om-mtile-cloud.is-failed .om-mtile-cloud-badge { background: rgba(190, 40, 34, 0.92); color: #fff; }
-.om-mtile-cloud.is-busy .om-mtile-cloud-badge { background: rgba(255, 255, 255, 0.82); }
+.om-mtile-cloud.is-action:hover .om-mtile-cloud-badge { background: var(--accent-deep); transform: scale(1.08); }
+.om-mtile-cloud.is-failed .om-mtile-cloud-badge { background: var(--accent-deep); }
+.om-mtile-cloud.is-busy .om-mtile-cloud-badge { background: color-mix(in oklab, var(--accent) 70%, transparent); }
 .om-mtile-cap {
   position: absolute; left: 0; right: 0; bottom: 0; z-index: 1;
   padding: 26px 10px 9px; display: flex; flex-direction: column; gap: 1px;
