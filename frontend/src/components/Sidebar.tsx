@@ -7,6 +7,7 @@ import { Icon } from './Icon';
 import { SidebarPlayer } from './SidebarPlayer';
 import { collectionApi, memoApi, systemApi, settingsApi } from '@/lib/api';
 import { useAppStore } from '@/stores/appStore';
+import { useIsMobile } from '@/lib/useBreakpoint';
 import type { Collection } from '@/types';
 import { cn } from '@/lib/utils';
 
@@ -57,12 +58,14 @@ export function Sidebar() {
     setActiveCollection,
     sidebarCollapsed,
     toggleSidebarCollapsed,
+    setSidebarOpen,
     setCollectionModalOpen,
     setEditingCollection,
     setSearchOpen,
     tweaks,
     setTweak,
   } = useAppStore();
+  const isMobile = useIsMobile();
 
   // Two explicit themes only — the old "System" option is gone (dark mode is
   // manually toggled, never auto-applied; see CLAUDE.md).
@@ -154,19 +157,39 @@ export function Sidebar() {
       <div className="om-sidebar-head">
         <button
           className="om-brand"
-          onClick={toggleSidebarCollapsed}
-          title={sidebarCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+          onClick={() => {
+            // On mobile the drawer header logo goes home (ADR-009 #3); on
+            // desktop it keeps the collapse/expand toggle.
+            if (isMobile) {
+              navigate('/');
+              setSidebarOpen(false);
+            } else {
+              toggleSidebarCollapsed();
+            }
+          }}
+          title={isMobile ? 'Go home' : sidebarCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
         >
-          {sidebarCollapsed
+          {sidebarCollapsed && !isMobile
             ? <Icon name="menu" size={18} style={{ color: 'var(--text-3)' }} />
             : <span className="om-brand-name">openMemo</span>
           }
         </button>
+        {/* Desktop: collapse chevron. Hidden on mobile via CSS. */}
         {!sidebarCollapsed && (
-          <button className="om-icon-btn" onClick={toggleSidebarCollapsed} title="Collapse">
+          <button className="om-icon-btn om-collapse-chevron" onClick={toggleSidebarCollapsed} title="Collapse">
             <Icon name="chevronLeft" size={14} />
           </button>
         )}
+        {/* Mobile: prominent close button for the full-screen drawer. Hidden on
+            desktop via CSS. */}
+        <button
+          className="om-sidebar-mobile-close"
+          onClick={() => setSidebarOpen(false)}
+          aria-label="Close menu"
+          title="Close"
+        >
+          <Icon name="x" size={20} />
+        </button>
       </div>
 
       {/* Fixed controls — search + nav never scroll. */}

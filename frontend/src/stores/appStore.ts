@@ -49,9 +49,11 @@ const loadFilterOrder = (): string[] => {
 };
 
 interface AppState {
-  // Sidebar
+  // Mobile drawer (reuses the long-present sidebarOpen field — ADR-009).
+  // Off-canvas full-screen sidebar below the lg breakpoint; ignored on desktop.
   sidebarOpen: boolean;
   toggleSidebar: () => void;
+  setSidebarOpen: (open: boolean) => void;
 
   // Filter
   activeFilter: string;
@@ -163,6 +165,7 @@ const persist = (partial: { chatModel?: string }) => {
 export const useAppStore = create<AppState>((set) => ({
   sidebarOpen: false,
   toggleSidebar: () => set((s) => ({ sidebarOpen: !s.sidebarOpen })),
+  setSidebarOpen: (open) => set({ sidebarOpen: open }),
 
   activeFilter: 'all',
   setActiveFilter: (filter) => set({ activeFilter: filter }),

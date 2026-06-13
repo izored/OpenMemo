@@ -12,6 +12,7 @@ import { DndBusContext, type GridDragHandlers } from '@/lib/dndBus';
 import Lenis from 'lenis';
 import 'lenis/dist/lenis.css';
 import { Sidebar } from './Sidebar';
+import { MobileTopBar } from './MobileTopBar';
 import { AddMemoPanel } from './AddMemoPanel';
 import { MusicAddModal } from './MusicAddModal';
 import { AppearancePanel } from './AppearancePanel';
@@ -28,6 +29,7 @@ import { AudioPlayerProvider } from '@/lib/audioPlayer';
 import { Icon } from './Icon';
 import { useTransitionConfig, type TransitionConfig } from '@/lib/transitionConfig';
 import { useAppStore } from '@/stores/appStore';
+import { useIsMobile } from '@/lib/useBreakpoint';
 import { applyTweaks } from '@/lib/appearance';
 import { cn } from '@/lib/utils';
 
@@ -52,6 +54,9 @@ export function Layout() {
   const setMusicModalOpen = useAppStore((s) => s.setMusicModalOpen);
   const setSearchOpen = useAppStore((s) => s.setSearchOpen);
   const setTweak = useAppStore((s) => s.setTweak);
+  const drawerOpen = useAppStore((s) => s.sidebarOpen);
+  const setSidebarOpen = useAppStore((s) => s.setSidebarOpen);
+  const isMobile = useIsMobile();
   const location = useLocation();
 
   const [txConfig, setTxConfig, resetTxConfig] = useTransitionConfig();
@@ -135,13 +140,15 @@ export function Layout() {
   const dndBusRef = useRef<GridDragHandlers>({});
   const dndSensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 8 } }));
 
-  // Global shortcuts: ⌘K search, N new memo (when not typing).
+  // Global shortcuts: ⌘K search, N new memo (when not typing), Esc closes the
+  // mobile drawer.
   useEffect(() => {
     const h = (e: KeyboardEvent) => {
       if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') {
         e.preventDefault();
         setSearchOpen(true);
       }
+      if (e.key === 'Escape') setSidebarOpen(false);
       const tag = (e.target as HTMLElement)?.tagName;
       const typing = tag === 'INPUT' || tag === 'TEXTAREA' || (e.target as HTMLElement)?.isContentEditable;
       if (!typing && e.key.toLowerCase() === 'n' && !e.metaKey && !e.ctrlKey) {
@@ -150,10 +157,16 @@ export function Layout() {
     };
     window.addEventListener('keydown', h);
     return () => window.removeEventListener('keydown', h);
-  }, [setSearchOpen, setAddPanelOpen]);
+  }, [setSearchOpen, setAddPanelOpen, setSidebarOpen]);
+
+  // Close the off-canvas drawer whenever the route changes (tapping a nav item
+  // inside the drawer navigates, then this dismisses it).
+  useEffect(() => {
+    setSidebarOpen(false);
+  }, [location.pathname, setSidebarOpen]);
 
   return (
-    <div className={cn('om-app', sidebarCollapsed && 'sidebar-collapsed', colorTransition && 'theme-transitioning')}>
+    <div className={cn('om-app', sidebarCollapsed && 'sidebar-collapsed', colorTransition && 'theme-transitioning', isMobile && drawerOpen && 'drawer-open')}>
       <AudioPlayerProvider>
       <DndBusContext.Provider value={dndBusRef}>
       <DndContext
@@ -164,6 +177,10 @@ export function Layout() {
         onDragEnd={(e) => dndBusRef.current.onDragEnd?.(e)}
       >
       <div className="om-bg-veil" style={{ opacity: tweaks.bgFade ?? 0 }} aria-hidden />
+      <MobileTopBar />
+      {isMobile && drawerOpen && (
+        <div className="om-drawer-scrim" onClick={() => setSidebarOpen(false)} aria-hidden />
+      )}
       <Sidebar />
 
       <main className="om-main" key={location.pathname} ref={mainRef}>

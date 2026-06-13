@@ -7,6 +7,12 @@ All notable changes to OpenMemo are documented here.
 
 Three big pushes. The Settings page is rebuilt as a bento with the live appearance preview as its hero. Restricted videos stop being a dead end: when "Make it local" fails behind a sign-in (age-restricted or private), the panel walks you through the fix instead of a bare "Try again", and yt-dlp can authenticate with your own browser cookies. And the Music page learns to speak Spotify and Apple Music: paste a Spotify or Apple Music track, album, or playlist and get it back in lossless FLAC, through a brand-new add panel of its own.
 
+### Added
+
+- 📱 **The app opens up on a phone.** openMemo was built desktop-first and the sidebar rail used to eat two-thirds of a phone screen. Below a 1024px width the rail now leaves the page and becomes a full-screen drawer: tap the hamburger in the new slim top bar to slide it in, tap the logo to go home, tap the big close button (or the scrim, or Escape) to dismiss it. The drawer closes itself on every navigation. One shared breakpoint hook drives all of this, so the desktop layout is untouched. First step of the whole-app responsive pass (ADR-009).
+- 🎚️ **The big now-playing player is the default on mobile.** On a phone the sidebar player no longer shrinks to a thumbnail that clipped its buttons (the old "drop to 90% zoom" workaround). The full-cover big player is the default in the drawer, sized to the full width, with its controls always visible instead of auto-hiding. Desktop keeps your chosen Small or Big preference.
+- 🖥️ **Appearance editing tells you it is desktop-only.** The live-preview Appearance panel is a desktop side panel. On mobile the Settings hero now explains that accent, background, layout and columns are desktop-only, points you at the light/dark toggle you still have in the menu, and stops opening a cramped half-broken panel.
+
 ### Fixed
 
 - 🎵 **Failed and queued playlist tracks were invisible.** A playlist page only showed tracks that finished downloading. The track list filtered by `type='audio'`, but a track stays `type='link'` until its file lands, so every still-remote, queued, or failed track got dropped (a 10-track playlist with 3 local showed 3 tiles, the other 7 gone). The playlist view now lists tracks by `audio_kind='music'`, which catches them at every stage, and the memo list API returns `localize_status` so each tile knows whether it finished, is downloading, or failed. Tracks that are not local yet render dimmed and desaturated. The whole playlist shows now: what is here, and what is still coming.
