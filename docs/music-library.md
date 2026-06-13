@@ -44,7 +44,7 @@ The Music page has its own add surface, separate from the global New Memo panel 
 - **Upload.** Drop audio files straight into the library as music memos (`audio_kind=music`).
 - **Playlist.** Name an empty playlist and land on it, ready for drag-and-drop.
 
-A gear in the header opens a settings drawer: lossless quality (CD 16-bit / Hi-Res 24-bit) and the auto-download-linked-audio toggle, both persisted server-side (`music_quality`, `auto_download_audio`).
+A gear in the header opens a settings drawer with the auto-download-linked-audio toggle (`auto_download_audio`). Lossless quality is **not** a user choice: the chain always asks for hi-res (24-bit) and downgrades to 16-bit CD on its own when a release has no hi-res master (see "Quality is automatic" below). `music_quality` defaults to `24` and is no longer surfaced.
 
 ## Spotify → lossless FLAC
 
@@ -57,6 +57,10 @@ Spotify is not a yt-dlp source and has no public download, but people paste Spot
 5. **Tags are written after download.** The CDN serves the file with zero tags and no art, so openMemo writes Vorbis tags (title, artist, album) plus embedded cover art with mutagen. The album name comes from the Qobuz search match — the only link in the chain that has it. It also lands on the memo as `audio_album`.
 
 Only Qobuz is wired today, because its community provider returns an undecrypted FLAC. The Tidal and Amazon community providers return encrypted DASH / MP4 (CENC) that would need an MP4 decryptor plus ffmpeg; the resolver is provider-shaped and `music_provider` exists so they can be added without a migration.
+
+**Where the bytes come from.** The community relay (`qbz-foss.spotbye.qzz.io`, run by the SpotiFLAC project, not Qobuz) holds a real Qobuz account; it logs in and returns a **signed, time-limited URL on `streaming-qobuz-std.akamaized.net`** — Qobuz's own master FLAC on Akamai. The audio streams Qobuz CDN → disk; it never passes through the relay. It is a single hobbyist-run dependency, so lossless is treated as a bonus, never load-bearing — if it disappears, ingest fails per track (retryable) and nothing else breaks.
+
+**Quality is automatic (hi-res → CD).** The chain always asks for 24-bit. The relay does **not** fall back server-side — a hi-res request for a CD-only release returns HTTP 400 — so `_community_flac_url` catches that one case, drops to 16-bit, and retries. Result: every track gets the best quality it actually has, with no user setting and no error. The relay also rate-limits (429, `Retry-After`), handled by bounded backoff.
 
 Ingestion mirrors the yt-dlp playlist flow exactly (`POST /api/ingest/spotify`, with `/probe` for the preview):
 
