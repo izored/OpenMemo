@@ -216,6 +216,7 @@ def apple_collection_meta(client: httpx.Client, kind: str, url: str) -> dict:
         "id": (parse_apple_url(url) or (None, None, None))[1],
         "kind": kind,
         "title": title,
+        "description": (header.get("description") or "").strip()[:1000] or None,
         "cover": _artwork_url(header.get("artwork")),
         "tracks": tracks,
     }

@@ -78,6 +78,7 @@ async def list_playlists(db: AsyncSession = Depends(get_db)):
         {
             "id": p.id,
             "name": p.name,
+            "description": p.description,
             "source_url": p.source_url,
             # NULL predates the column (or a hand-made playlist) → playlist.
             "music_kind": p.music_kind or "playlist",
