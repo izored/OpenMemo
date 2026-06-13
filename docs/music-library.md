@@ -16,7 +16,9 @@ What we added on top:
 - **Progress you can watch.** The playlist card shows live download progress, computed from the database. Survives a server restart.
 - **Drag a track onto a playlist card** to file it, same gesture as sidebar collections.
 - **Not just YouTube.** SoundCloud sets and Bandcamp albums are playlists too. One detection helper, host-agnostic per ADR-001.
-- **Download is opt-in.** A playlist can be pulled as remote track memos only, like any music app: a download chip per tile, a Download all button on the playlist page. Or flip the toggle and it downloads everything up front.
+- **Download is opt-in, and pausable.** A playlist can be pulled as remote track memos only, like any music app: a download chip per tile, a Download all button on the playlist page. Or flip the toggle and it downloads everything up front. A bulk "Download all" pass can be paused: the header swaps to Pause download while the pass runs, the track in flight finishes (a download can't be cut mid-fetch), the rest reset to remote, and Download all comes back to resume.
+- **The playing playlist is visible.** On the hub, the playlist or album feeding the player wears an accent tint and keeps its corner badge pinned, showing a pause icon. Tapping it pauses or resumes without opening the playlist. Every other card still shows play and starts fresh. Albums get the same treatment, since they are the same card.
+- **Playlists carry a name and a description.** The playlist hero has an edit pencil: rename inline and add a description. The description seeds from the source link on import (YouTube, SoundCloud, Spotify, Apple Music, where the provider has one) and is editable either way.
 - **Every feed stays clean.** Tracks born from a playlist ingest live inside their playlist, full stop. They never flood All Memos, the type tabs, or the Music library. The library lists only the songs you saved one by one: a liked-songs shelf, not a dump of every playlist you ever pulled. And filing a library song into a playlist does not steal it from the library: it lives in both, like every music app you know.
 - **Playlists are editable, no drag required.** An "Add to playlist" popover lives on every music surface (card actions, memo detail, the sidebar player) with membership ticks and inline new-playlist creation. Tiles in the playlist view carry a remove chip and reorder by drag. Touch works everywhere.
 - **The player behaves like a player.** Shuffle (current track pinned, source order restorable), an Up-next popover showing the live queue (jump or drop tracks), and continue-listening: a reload restores track, queue and position, paused.
@@ -28,6 +30,7 @@ Playlists are collections. No new table, one new column.
 - `collections.kind` — `'standard'` (default) or `'playlist'`. Additive migration, NULL backfilled to `'standard'`.
 - `collections.source_url` — the playlist URL it was pulled from. Nullable. Kept for provenance and a future re-sync.
 - `collections.music_kind` — `'album'` or `'playlist'` (NULL reads as playlist). What the source actually was: Spotify `/album/` links and YouTube `OLAK5uy_` list ids are albums. Backfilled from `source_url` at startup. Albums show a single cover and an "Album" label; playlists keep the 4-cover collage.
+- `collections.description` — an optional blurb shown under the playlist title. The column already existed for standard collections; playlists now use it too. It seeds from the source link on import (where the provider carries one) and the user can rewrite or clear it. No migration.
 - `memos.audio_album` — the album a track belongs to (music only). Set at ingest for album sources, or from the Qobuz match when a Spotify download resolves. Shown in the big player and the OS media overlay.
 
 The collections API filters by kind server-side. `GET /api/collections` returns standard collections only, so the sidebar, the collections page, and every collection picker hide playlists with zero frontend changes. `?kind=playlist` returns playlists. `?kind=all` returns everything.
@@ -100,6 +103,8 @@ Paste it twice, get it once. The probe tells the panel when a playlist collectio
 
 Artist comes from the flat entry's artist or uploader field, with YouTube's " - Topic" suffix stripped. That is source metadata, not a domain fallback, so ADR-010 holds. Cookies (ADR-012) apply to private playlists for free.
 
+The playlist's description seeds the same way: the yt-dlp probe, the Spotify embed, and the Apple Music page each return the source's blurb (where it has one), and the three playlist-collection creators write it to `collections.description`. No source blurb means an empty field the user can fill from the hero edit pencil.
+
 ## The Music page
 
 `/music`, reached from the sidebar item right under Collections.
@@ -112,9 +117,11 @@ The hub reads like a music app's home (ADR-018): a featured row up top, themed r
 - **Playlists.** Same rail for playlist-kind collections, with the 2x2 collage art, the inline **New playlist** creation flow, and the empty state pointing at Add music. Cards accept memo-card drops, same as sidebar collections.
 - **Library.** The songs you saved one by one, in the standard masonry grid. Playlist-born tracks are not here; they live behind their playlist card. The header carries a debounced search box, a sort pill (Recent / Title / Artist), and Play all + Shuffle that queue exactly the filtered view. Music cards render full-bleed: square artwork edge to edge, title on a bottom gradient, no body bar.
 
+On the album and playlist rails, the card currently feeding the player is marked: an accent tint, a pinned corner badge, and a pause icon in place of play. Tapping that card toggles play/pause instead of restarting the queue; every other card starts fresh. Same for the hero rail.
+
 Scroll is split by axis (ADR-018): a vertical wheel over a rail scrolls the page smoothly like everywhere else, while sideways input — trackpad swipe or shift+wheel — slides the rail itself. A flick past a rail's edge never triggers the browser's back gesture.
 
-Click a playlist card and you get the playlist view (`/music/:id`): a boxed hero that names the playlist (artwork — collage for playlists, single cover for albums — an "Album · N tracks" / "Playlist · N tracks" eyebrow, play-all, shuffle, Download all, source link, delete), a "Back to Music" button above it, and the tracks as full-bleed cover tiles. Each tile carries its number, its title on a gradient, play on hover, a remove chip (pull the song out, nothing gets deleted), and a download / retry chip when the track is still remote or failed. Tiles reorder by drag; the order persists through the recency stagger. Click a ready tile to play; the queue picks up from that track. Deleting a playlist removes the collection, never the tracks: born tracks move back to the library.
+Click a playlist card and you get the playlist view (`/music/:id`): a boxed hero that names the playlist (artwork — collage for playlists, single cover for albums — an "Album · N tracks" / "Playlist · N tracks" eyebrow, play-all, shuffle, Download all, source link, delete), a "Back to Music" button above it, and the tracks as full-bleed cover tiles. The hero title carries an edit pencil (rename inline, write a description) and shows the description under the title, clamped to three lines so a long one never pushes the controls off-screen. While a bulk "Download all" pass is running, Download all becomes a Pause download button. Each tile carries its number, its title on a gradient, play on hover, a remove chip (pull the song out, nothing gets deleted), and a download / retry chip when the track is still remote or failed. Tiles reorder by drag; the order persists through the recency stagger. Click a ready tile to play; the queue picks up from that track. Deleting a playlist removes the collection, never the tracks: born tracks move back to the library.
 
 ## Visual design: playlist tiles
 
@@ -167,7 +174,7 @@ The sidebar player shows previous / next / shuffle and the Up-next popover only 
 
 ## Out of scope, on purpose
 
-- **A full playlist editor page.** Creation happens inline (the "New playlist" row in the Add-to-playlist popover) and editing happens in place (drag-reorder, remove chips). A dedicated edit screen is not planned.
+- **A full playlist editor page.** Creation happens inline (the "New playlist" row in the Add-to-playlist popover) and editing happens in place: drag-reorder, remove chips, and an edit pencil in the hero for the name and description. A dedicated edit screen is not planned.
 - **Video playlists.** A playlist ingests as music (audio-only download). Saving a whole playlist as video memos is a different feature.
 - **Re-sync.** `source_url` is stored so a future "pull new tracks" can exist. It does not exist yet.
 - **Duration column.** We do not store track duration; probing per row is waste. The active track shows time in the player.
