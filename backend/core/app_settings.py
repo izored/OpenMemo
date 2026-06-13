@@ -48,9 +48,10 @@ _DEFAULTS: dict[str, Any] = {
     # "Make it local" step. When False, the memo stays remote and the detail
     # page streams it via the platform's embed widget instead.
     "auto_download_audio": True,
-    # Spotify → FLAC (SpotiFLAC) lossless quality for the Music add-modal.
-    # "16" = CD lossless (16-bit/44.1k), "24" = hi-res when the release has it.
-    "music_quality": "16",
+    # Lossless quality for the SpotiFLAC chain (Spotify + Apple Music).
+    # Always request hi-res (24-bit); the resolver downgrades to 16-bit CD
+    # automatically when a release has no hi-res master (no user setting).
+    "music_quality": "24",
     # Preferred lossless source. Only "qobuz" (direct FLAC, no DRM) is wired
     # today; kept as a setting so Tidal/Amazon can be added without a migration.
     "music_provider": "qobuz",
