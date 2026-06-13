@@ -52,10 +52,12 @@ _BROWSER_UA = (
     "(KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36"
 )
 
-# Valid Qobuz community qualities. "16" = CD lossless, "24" = hi-res when the
-# release has it (falls back to 16 server-side otherwise).
+# Valid Qobuz community qualities. "16" = CD lossless, "24" = hi-res. We always
+# ask for 24 and downgrade to 16 in `_community_flac_url` when the release has no
+# hi-res master (the community relay 400s instead of falling back server-side).
 VALID_QUALITIES = {"16", "24"}
-DEFAULT_QUALITY = "16"
+DEFAULT_QUALITY = "24"
+_FALLBACK_QUALITY = "16"
 
 _COMMUNITY_MAX_RETRIES = 6
 _COMMUNITY_FALLBACK_WAIT = 30.0
@@ -294,18 +296,22 @@ def _qobuz_track_match(client: httpx.Client, isrc: str | None, title: str, artis
 def _community_flac_url(client: httpx.Client, qobuz_id: str, quality: str) -> str:
     """POST a Qobuz track id to the community endpoint → direct FLAC URL.
 
-    Mirrors SpotiFLAC's doCommunityRequest 429 handling (respect Retry-After,
-    bounded retries) since the endpoint is shared and rate-limited.
+    Always asks for hi-res (24-bit) and **downgrades to 16-bit CD on the fly**
+    when the release has no hi-res master: the community relay answers such a
+    request with a 400 rather than falling back server-side, so we drop to "16"
+    once and retry. Mirrors SpotiFLAC's doCommunityRequest 429 handling (respect
+    Retry-After, bounded retries) since the endpoint is shared and rate-limited.
     """
     quality = quality if quality in VALID_QUALITIES else DEFAULT_QUALITY
-    payload = {"id": str(qobuz_id), "quality": quality}
     headers = {
         "Content-Type": "application/json",
         "Accept": "application/json",
         "x-api-key": _COMMUNITY_API_KEY,
         "User-Agent": "SpotiFLAC",
     }
+    payload = {"id": str(qobuz_id), "quality": quality}
     last_status = None
+    downgraded = False
     for attempt in range(_COMMUNITY_MAX_RETRIES + 1):
         resp = client.post(_QOBUZ_COMMUNITY_URL, json=payload, headers=headers, timeout=60)
         last_status = resp.status_code
@@ -318,12 +324,19 @@ def _community_flac_url(client: httpx.Client, qobuz_id: str, quality: str) -> st
                 wait = float(ra) + 0.25
             time.sleep(min(wait, 60.0))
             continue
-        if resp.status_code != 200:
-            raise SpotiFlacError(f"Qobuz community API returned {resp.status_code}")
-        url = _extract_stream_url(resp.json())
-        if not url:
-            raise SpotiFlacError("No streamable URL in Qobuz community response")
-        return url
+        if resp.status_code == 200:
+            url = _extract_stream_url(resp.json())
+            if not url:
+                raise SpotiFlacError("No streamable URL in Qobuz community response")
+            return url
+        # Non-200, non-429: a hi-res ask for a CD-only release 400s here. Drop to
+        # 16-bit once and retry; anything else (or a repeat) is a real failure.
+        if quality == "24" and not downgraded:
+            quality = _FALLBACK_QUALITY
+            payload["quality"] = quality
+            downgraded = True
+            continue
+        raise SpotiFlacError(f"Qobuz community API returned {resp.status_code}")
     raise SpotiFlacError(f"Qobuz community API rate limited (last status {last_status})")
 
 
