@@ -133,6 +133,7 @@ async def list_memos(
             Memo.thumbnail_path, Memo.file_path, Memo.ai_summary, Memo.notes,
             Memo.sort_order, Memo.pinned, Memo.liked, Memo.hidden, Memo.audio_kind,
             Memo.audio_artist, Memo.audio_album, Memo.is_processed,
+            Memo.localize_status, Memo.localize_error,
             Memo.created_at, Memo.updated_at, Memo.recency_at,
         ),
         selectinload(Memo.collections),
@@ -221,6 +222,10 @@ async def list_memos(
                 "audio_artist": m.audio_artist,
                 "audio_album": m.audio_album,
                 "is_processed": m.is_processed,
+                # Playlist tiles read this to tell a finished track from one that
+                # is mid-download, queued, or failed (the dimmed pending cards).
+                "localize_status": m.localize_status,
+                "localize_error": m.localize_error,
                 "created_at": m.created_at.isoformat(),
                 "updated_at": m.updated_at.isoformat(),
                 "collections": [{"id": c.id, "name": c.name, "color": c.color} for c in m.collections],
