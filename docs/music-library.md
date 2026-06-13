@@ -1,8 +1,8 @@
 # Music Library
 
-openMemo already knows the difference between a voice note and a song (ADR-005). The Music library gives songs a home. One page for everything you collect by ear: playlists pulled straight from YouTube Music, tracks and playlists from Spotify in lossless FLAC, single tracks, uploads. All local, all yours.
+openMemo already knows the difference between a voice note and a song (ADR-005). The Music library gives songs a home. One page for everything you collect by ear: playlists pulled straight from YouTube Music, tracks and playlists from Spotify and Apple Music in lossless FLAC, single tracks, uploads. All local, all yours.
 
-This doc is the spec for Music Experience V2 (entry OPNMMO-0023). It covers the UX, the data model, the playlist ingestion flow, the Spotify → FLAC pipeline (ADR-017), and what we deliberately left out.
+This doc is the spec for Music Experience V2 (entry OPNMMO-0023). It covers the UX, the data model, the playlist ingestion flow, the Spotify and Apple Music → FLAC pipelines (ADR-017, ADR-019), and what we deliberately left out.
 
 ## The idea, improved
 
@@ -40,7 +40,7 @@ Playlist order rides on `recency_at`: track i gets `now - i` seconds at ingest, 
 
 The Music page has its own add surface, separate from the global New Memo panel — `MusicAddModal`, the same bottom-right glass panel and slide-in gesture, opened by the **Add music** button or the FAB on `/music`. It is fixed-height so it never jumps as content changes. Three tabs:
 
-- **Link.** Paste any track or playlist URL. A Spotify link previews its cover, title, and (for albums/playlists) track count, then resolves to lossless FLAC (below). A YouTube / SoundCloud / Bandcamp playlist link goes down the existing playlist flow; any other audio link saves like a normal audio memo.
+- **Link.** Paste any track or playlist URL. A Spotify *or Apple Music* link previews its cover, title, and (for albums/playlists) track count, then resolves to lossless FLAC (below). A YouTube / SoundCloud / Bandcamp playlist link goes down the existing playlist flow; any other audio link saves like a normal audio memo.
 - **Upload.** Drop audio files straight into the library as music memos (`audio_kind=music`).
 - **Playlist.** Name an empty playlist and land on it, ready for drag-and-drop.
 
@@ -66,6 +66,18 @@ Ingestion mirrors the yt-dlp playlist flow exactly (`POST /api/ingest/spotify`, 
 The crucial reuse: a Spotify track source is detected inside the shared `localize_memo_task`, which routes it to the FLAC resolver instead of yt-dlp. So the per-track download chip, the playlist's **Download all**, and playlist auto-download all handle Spotify with no extra wiring — the same single-seam win the rest of Music V2 is built on. Status rides the same `pending → processing → done | error`.
 
 The community endpoint is shared and rate-limited; the resolver ports SpotiFLAC's `Retry-After` backoff, and playlist downloads stay sequential. Even so, bigger albums can trip the 429 window — so the playlist downloader takes a second pass at every still-errored track after a 90-second cooldown, which empirically clears it. Stubborn tracks stay retryable per memo. The embed track list caps around 50 entries for very large playlists — the cost of the no-account path.
+
+## Apple Music → lossless FLAC
+
+Apple Music is a **second front-end onto the exact same chain** (ADR-019). The insight from ADR-017 is that only the first two steps are platform-specific: once a track has an ISRC, the Qobuz → community → FLAC → tag back half is platform-neutral. So `backend/core/apple_music.py` adds only the new half and imports the rest of `spotiflac.py` verbatim — **the audio still comes from Qobuz**, never Apple.
+
+1. **Metadata** comes from the public `music.apple.com` page — its `<script id="serialized-server-data">` JSON carries the playlist/album title, cover, and the full tracklist (title, artist, album, cover, canonical track URL). No MusicKit token. Apple prefers a flat `artistName`; on an album page the per-track items share the album's single header artwork, so a single-track save backfills album + cover from the header.
+2. **ISRC** resolves through the *same* `_resolve_isrc` — it feeds any URL (Apple included) to song.link, falling back to Deezer.
+3–5. **Qobuz id, FLAC URL, and tagging are identical** — the same imported helpers the Spotify path uses.
+
+Ingestion mirrors the Spotify endpoints exactly (`POST /api/ingest/apple` + `/probe`), reusing the same request bodies: a track → one music memo (`source_url` = the canonical Apple URL, which carries `?i=`); an album/playlist → a playlist collection + one memo per track. Apple track sources are detected beside Spotify ones in `localize_memo_task`, so every download affordance handles them with no extra wiring.
+
+Where Apple differs from Spotify: the no-auth page serializes far more of a long playlist — a 67-track test playlist came through **67 of 67** (Spotify's embed caps near 50). Very long lists may still truncate; pulling the full list of an arbitrarily long playlist would need Apple's authenticated amp-api (a MusicKit developer JWT), deliberately out of scope for the no-account path.
 
 ## Playlist ingestion
 
@@ -158,4 +170,4 @@ The sidebar player shows previous / next / shuffle and the Up-next popover only 
 
 ## Decision record
 
-See ADR-015 in `docs/DECISIONS.md`: playlists are collections with a kind, never a parallel table. ADR-017: Spotify links resolve to lossless FLAC through a no-account provider chain, dispatched from the same `localize_memo_task` seam, with the Music page owning its own add panel. And ADR-018: the hub is a rails-first surface (hero, albums, playlists, library) where every sideways rail owns the horizontal wheel axis and leaves the vertical one to the page.
+See ADR-015 in `docs/DECISIONS.md`: playlists are collections with a kind, never a parallel table. ADR-017: Spotify links resolve to lossless FLAC through a no-account provider chain, dispatched from the same `localize_memo_task` seam, with the Music page owning its own add panel. ADR-018: the hub is a rails-first surface (hero, albums, playlists, library) where every sideways rail owns the horizontal wheel axis and leaves the vertical one to the page. And ADR-019: Apple Music is a second SpotiFLAC front-end — a URL parser plus a metadata reader — that imports the neutral Qobuz back half verbatim, so the audio source never changes.

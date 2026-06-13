@@ -7,6 +7,36 @@ the decision, and its consequences, so a future reader knows *why*, not just
 
 ---
 
+## ADR-019: Apple Music is a second SpotiFLAC front-end; Qobuz stays the only audio source
+
+**Date:** 2026-06-13 · **Status:** Shipped · **Builds on:** ADR-017 (Spotify links resolve to lossless FLAC through a no-account chain), ADR-001 (define shared things once)
+
+### Context
+
+ADR-017 framed Spotify as a *metadata front-end*, not an audio source: the lossless FLAC comes from Qobuz, reached by an ISRC, and **everything from the ISRC step on is already platform-neutral** (`_resolve_isrc` feeds *any* URL to song.link; the param is named `spotify_url` but the logic never looks at the host). That framing left an obvious opening — a second front-end is just a URL parser plus a metadata reader; the entire back half is reused.
+
+Apple Music is the natural next one. People paste Apple links as often as Spotify, it is not a yt-dlp source either, and a probe proved the page is readable without any account: `music.apple.com` serializes the full tracklist server-side in a `<script id="serialized-server-data">` block, and an Apple track URL resolves through song.link → Deezer to an ISRC exactly like a Spotify one.
+
+The temptation, again, is a parallel Apple-specific download world. ADR-017 already refused that for Spotify.
+
+### Decision
+
+**Add `backend/core/apple_music.py` as a thin front-end and import SpotiFLAC's neutral back half verbatim — no audio code is rewritten, no second pipeline is created.**
+
+- `apple_music.py` owns only what is genuinely new: `parse_apple_url` (store-optional, `?i=`-aware so a track-on-album URL classifies as a track), an `{w}/{h}/{f}` artwork substituter, and two readers over `serialized-server-data` (`apple_track_meta`, `apple_collection_meta`). It imports `_resolve_isrc`, `_qobuz_track_match`, `_community_flac_url`, `_tag_flac` (and `_BROWSER_UA`) from `spotiflac.py`. **Qobuz stays the sole audio source.**
+- **One dispatch point, reused.** `is_apple_track_url` is checked beside `is_spotify_track_url` inside the shared `localize_memo_task`; an Apple track routes to `download_apple_track`, writing the same `pending → processing → done | error` status. The per-track chip, **Download all**, and playlist auto-download all handle Apple with zero extra wiring — the ADR-015/017 seam, paid for once.
+- `POST /api/ingest/apple` (+ `/probe`) is a verbatim sibling of the Spotify pair and **reuses the same `SpotifyProbe`/`SpotifyIngest` request bodies** (identical contract). A track becomes one music memo; an album/playlist becomes a playlist collection + one memo per track, each `source_url` set to its canonical Apple URL (which carries `?i=`) so the dispatch above just works. `source_domain = music.apple.com`.
+- **Frontend generalises, doesn't fork.** `appleKind` mirrors `parse_apple_url`; a `losslessLink(url)` helper returns `{ provider, kind }` for either platform, and `MusicAddModal` is rewritten around a single `provider` notion (badge, preview copy, probe call, ingest call all provider-aware) instead of hard-coding Spotify.
+
+### Consequences
+
+- A track that exists on Qobuz resolves identically whether it arrived from Spotify or Apple — same ISRC anchor, same FLAC. A track not on Qobuz fails the same way it does for Spotify (`error`, retryable); the chain falls back to a "title artist" Qobuz text search when the ISRC is missing, so most mainstream tracks still land.
+- **No serialize cap at playlist sizes that matter.** Spotify's embed truncates long playlists near ~50; Apple's server HTML serialized **67/67** tracks on a 67-track test playlist (footer agreed: "67 songs"). v1 accepts whatever the no-auth page serializes — same spirit as ADR-017's cap, but a much higher ceiling. Pulling an arbitrarily long list would need Apple's authenticated amp-api (a MusicKit developer JWT) — deliberately out of scope for the no-account path.
+- Apple's track items differ from Spotify's embed in two ways the reader handles: a flat `artistName` is preferred over joining `subtitleLinks`, and on an *album* page the per-track items carry no album name or art (the album shares one header artwork), so a single-track save backfills album + cover from the header section.
+- Availability is still third-party and still non-load-bearing: if Qobuz/community endpoints disappear, both Spotify and Apple ingest fail per track and nothing else in the app is touched. (Verified during build: the final FLAC fetch returned `503` from the shared community endpoint — and the existing Spotify path returned the same `503` at the same moment, confirming the Apple front-end reaches the chain identically.)
+
+---
+
 ## ADR-018: The Music hub is a rails-first surface, and sideways rails own their wheel axis
 
 **Date:** 2026-06-12 · **Status:** Shipped · **Builds on:** ADR-015 (playlists are collections, music lives on its own page), ADR-016 (one shared PageHeader), ADR-001 (define shared things once)
