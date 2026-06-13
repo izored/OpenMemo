@@ -736,6 +736,258 @@ async def ingest_spotify(
     }
 
 
+# --- Apple Music ingestion (second SpotiFLAC front-end, ADR-019) ---
+# Apple Music shares the Spotify path's request/response contract exactly (a
+# track/album/playlist URL in, the same preview + ingest shapes out), so it
+# reuses SpotifyProbe/SpotifyIngest and the same lossless settings — only the
+# metadata front-end differs. Audio still comes from Qobuz.
+_APPLE_DOMAIN = "music.apple.com"
+_APPLE_FAVICON = "https://www.google.com/s2/favicons?domain=music.apple.com&sz=32"
+
+
+@router.post("/apple/probe")
+async def probe_apple_url(data: SpotifyProbe, db: AsyncSession = Depends(get_db)):
+    """Preview an Apple Music track / album / playlist link without downloading.
+
+    Mirror of /spotify/probe; the Music add-modal calls it to show a real title
+    + track count and flag an already-saved playlist before the user commits.
+    """
+    import asyncio
+
+    import httpx as _httpx
+
+    from backend.core.apple_music import (
+        parse_apple_url, apple_track_meta, apple_collection_meta,
+    )
+
+    parsed = parse_apple_url(data.url)
+    if not parsed:
+        raise HTTPException(status_code=400, detail="Not an Apple Music link")
+    kind = parsed[0]
+    url = data.url.strip()
+
+    def _fetch():
+        with _httpx.Client(follow_redirects=True) as client:
+            if kind == "track":
+                return {"kind": "track", **apple_track_meta(client, url)}
+            return {"kind": kind, **apple_collection_meta(client, kind, url)}
+
+    try:
+        meta = await asyncio.to_thread(_fetch)
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"Could not read Apple Music link: {e}")
+
+    if meta["kind"] == "track":
+        return {
+            "kind": "track",
+            "title": meta["title"],
+            "artist": meta.get("artist"),
+            "cover": meta.get("cover"),
+            "count": 1,
+        }
+    # Apple URLs are already canonical; key the dedup check on the trimmed URL.
+    existing = await _find_saved_playlist(db, url)
+    return {
+        "kind": kind,
+        "title": meta["title"],
+        "cover": meta.get("cover"),
+        "count": len(meta["tracks"]),
+        "entries": [
+            {"title": t["title"], "artist": t.get("artist")} for t in meta["tracks"][:6]
+        ],
+        "already_saved": {"id": existing.id, "name": existing.name} if existing else None,
+    }
+
+
+@router.post("/apple")
+async def ingest_apple(
+    data: SpotifyIngest,
+    background_tasks: BackgroundTasks,
+    db: AsyncSession = Depends(get_db),
+):
+    """Ingest an Apple Music track / album / playlist as lossless music.
+
+    Verbatim sibling of /spotify: a track becomes one music memo; an
+    album/playlist becomes a playlist collection + one memo per track, each with
+    its canonical Apple URL as source_url so localize_memo_task dispatches it to
+    the FLAC resolver (download_apple_track).
+    """
+    import asyncio
+
+    import httpx as _httpx
+    from sqlalchemy import insert
+
+    from backend.core.app_settings import get_settings, update_settings
+    from backend.core.apple_music import (
+        parse_apple_url, apple_track_meta, apple_collection_meta,
+    )
+    from backend.core.spotiflac import VALID_QUALITIES
+
+    parsed = parse_apple_url(data.url)
+    if not parsed:
+        raise HTTPException(status_code=400, detail="Not an Apple Music link")
+    kind = parsed[0]
+    url = data.url.strip()
+    ws = sanitize_workspace_id(data.workspace_id)
+
+    if data.quality and data.quality in VALID_QUALITIES:
+        update_settings({"music_quality": data.quality})
+    elif data.quality:
+        raise HTTPException(status_code=400, detail="quality must be '16' or '24'")
+    _ = get_settings()
+
+    # --- Single track ---
+    if kind == "track":
+        def _meta():
+            with _httpx.Client(follow_redirects=True) as client:
+                return apple_track_meta(client, url)
+        try:
+            meta = await asyncio.to_thread(_meta)
+        except Exception as e:
+            raise HTTPException(status_code=400, detail=f"Could not read Apple Music track: {e}")
+
+        now = datetime.utcnow()
+        memo = Memo(
+            id=str(uuid.uuid4()),
+            workspace_id=ws,
+            type="audio",
+            audio_kind="music",
+            title=meta["title"],
+            audio_artist=meta.get("artist"),
+            # Apple's track meta already carries the album (header fallback),
+            # unlike the Spotify embed — set it now rather than wait for Qobuz.
+            audio_album=(meta.get("album") or None),
+            source_url=meta["apple_url"],
+            source_domain=_APPLE_DOMAIN,
+            source_favicon=_APPLE_FAVICON,
+            thumbnail_path=meta.get("cover"),
+            localize_status="pending" if data.download else None,
+            created_at=now,
+            updated_at=now,
+            recency_at=now,
+        )
+        db.add(memo)
+        await _attach_collection(db, memo, data.collection_id)
+        await db.commit()
+
+        if memo.thumbnail_path and memo.thumbnail_path.startswith("http"):
+            background_tasks.add_task(cache_thumbnail, memo.id)
+        if data.download:
+            background_tasks.add_task(localize_memo_task, memo.id, "audio")
+
+        return {"id": memo.id, "title": memo.title, "type": "audio",
+                "status": "processing" if data.download else "saved"}
+
+    # --- Album / playlist ---
+    canonical = url
+    existing = await _find_saved_playlist(db, canonical)
+    if existing:
+        return {"collection_id": existing.id, "title": existing.name,
+                "total": 0, "status": "exists"}
+
+    def _coll():
+        with _httpx.Client(follow_redirects=True) as client:
+            return apple_collection_meta(client, kind, url)
+    try:
+        probed = await asyncio.to_thread(_coll)
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"Could not read Apple Music {kind}: {e}")
+
+    if not probed["tracks"]:
+        raise HTTPException(status_code=400, detail="No tracks found in this Apple Music link")
+
+    collection = Collection(
+        id=str(uuid.uuid4()),
+        workspace_id=ws,
+        name=(data.title or probed["title"]).strip()[:200] or "Playlist",
+        emoji="🎵",
+        kind="playlist",
+        music_kind="album" if kind == "album" else "playlist",
+        source_url=canonical,
+    )
+    db.add(collection)
+
+    # Reuse a track we already hold (same Apple URL, audio, not deleted).
+    entry_urls = [t["apple_url"] for t in probed["tracks"] if t.get("apple_url")]
+    existing_memos = (
+        await db.execute(
+            select(Memo).where(
+                Memo.source_url.in_(entry_urls),
+                Memo.type == "audio",
+                (Memo.is_deleted == False) | (Memo.is_deleted == None),  # noqa: E712
+            )
+        )
+    ).scalars().all()
+    by_url = {m.source_url: m for m in existing_memos}
+
+    now = datetime.utcnow()
+    memo_ids: list[str] = []
+    download_ids: list[str] = []
+    new_ids: list[str] = []
+    seen: set[str] = set()
+    for i, track in enumerate(probed["tracks"]):
+        turl = track.get("apple_url")
+        if not turl:
+            continue
+        reused = by_url.get(turl)
+        if reused is not None:
+            if reused.id in seen:
+                continue
+            seen.add(reused.id)
+            reused.recency_at = now - timedelta(seconds=i)
+            memo_ids.append(reused.id)
+            if data.download and not reused.file_path and reused.localize_status not in ("processing", "done"):
+                reused.localize_status = "pending"
+                download_ids.append(reused.id)
+            continue
+        memo = Memo(
+            id=str(uuid.uuid4()),
+            workspace_id=ws,
+            type="audio",
+            audio_kind="music",
+            playlist_born=True,
+            title=track["title"],
+            audio_artist=track.get("artist"),
+            # Playlist track items already carry their own album; album pages
+            # share one, so fall back to the collection title there.
+            audio_album=(track.get("album") or (probed["title"][:200] if kind == "album" else None)),
+            source_url=turl,
+            source_domain=_APPLE_DOMAIN,
+            source_favicon=_APPLE_FAVICON,
+            thumbnail_path=track.get("cover") or probed.get("cover"),
+            localize_status="pending" if data.download else None,
+            created_at=now,
+            updated_at=now,
+            recency_at=now - timedelta(seconds=i),
+        )
+        db.add(memo)
+        seen.add(memo.id)
+        memo_ids.append(memo.id)
+        new_ids.append(memo.id)
+        if data.download:
+            download_ids.append(memo.id)
+
+    await db.flush()
+    if memo_ids:
+        await db.execute(
+            insert(memo_collections),
+            [{"memo_id": mid, "collection_id": collection.id} for mid in memo_ids],
+        )
+    await db.commit()
+
+    if data.download and download_ids:
+        background_tasks.add_task(download_playlist_task, collection.id, download_ids)
+    elif new_ids:
+        background_tasks.add_task(cache_playlist_thumbs_task, new_ids)
+
+    return {
+        "collection_id": collection.id,
+        "title": collection.name,
+        "total": len(memo_ids),
+        "status": "processing" if data.download else "saved",
+    }
+
+
 async def cache_playlist_thumbs_task(memo_ids: list[str]):
     """Background: cache remote track thumbnails locally (no media download)."""
     for memo_id in memo_ids:
@@ -1038,6 +1290,75 @@ async def _localize_spotify_track(memo_id: str, url: str, ws: str):
         await db.commit()
 
 
+async def _localize_apple_track(memo_id: str, url: str, ws: str):
+    """Background: resolve an Apple Music track to lossless FLAC and re-home it.
+
+    Verbatim sibling of _localize_spotify_track — only the resolver differs
+    (download_apple_track). Status is 'processing' on entry; writes done | error.
+    Never raises into the caller.
+    """
+    import asyncio
+
+    from backend.config import settings as cfg
+    from backend.core.app_settings import get_settings
+    from backend.core.apple_music import download_apple_track
+    from backend.core.spotiflac import SpotiFlacError
+
+    quality = str(get_settings().get("music_quality", "16"))
+    dest_dir = Path(cfg.FILES_DIR) / ws
+
+    async with AsyncSessionLocal() as db:
+        memo = await db.get(Memo, memo_id)
+        title = memo.title if memo else None
+        artist = memo.audio_artist if memo else None
+        cover = memo.thumbnail_path if memo else None
+        if cover and not cover.startswith("http"):
+            cover = None  # already cached locally — tagging wants the source URL
+
+    try:
+        result = await asyncio.to_thread(
+            download_apple_track, url, dest_dir, quality, title, artist, cover
+        )
+    except SpotiFlacError as e:
+        print(f"Apple Music FLAC failed for {memo_id}: {e}")
+        async with AsyncSessionLocal() as db:
+            memo = await db.get(Memo, memo_id)
+            if memo:
+                memo.localize_status = "error"
+                memo.localize_error = str(e)[:300]
+                memo.updated_at = datetime.utcnow()
+                await db.commit()
+        return
+    except Exception as e:
+        print(f"Apple Music FLAC crashed for {memo_id}: {e}")
+        async with AsyncSessionLocal() as db:
+            memo = await db.get(Memo, memo_id)
+            if memo:
+                memo.localize_status = "error"
+                memo.localize_error = str(e)[:300]
+                memo.updated_at = datetime.utcnow()
+                await db.commit()
+        return
+
+    async with AsyncSessionLocal() as db:
+        memo = await db.get(Memo, memo_id)
+        if not memo:
+            return
+        memo.file_path = result["path"]
+        memo.type = "audio"
+        memo.audio_kind = "music"
+        if result.get("artist") and not memo.audio_artist:
+            memo.audio_artist = result["artist"][:200]
+        if result.get("album") and not memo.audio_album:
+            memo.audio_album = result["album"][:200]
+        if result.get("cover") and not memo.thumbnail_path:
+            memo.thumbnail_path = result["cover"]
+        memo.localize_status = "done"
+        memo.localize_error = None
+        memo.updated_at = datetime.utcnow()
+        await db.commit()
+
+
 async def localize_memo_task(memo_id: str, mode: str, quality: int = 1080):
     """Background: download a memo's remote source via yt-dlp and re-home it as a
     local video/audio memo. `mode='audio'` is an explicit video→audio conversion.
@@ -1051,6 +1372,7 @@ async def localize_memo_task(memo_id: str, mode: str, quality: int = 1080):
     """
     from backend.core.localize_media import localize_media, LocalizeError
     from backend.core.spotiflac import is_spotify_track_url
+    from backend.core.apple_music import is_apple_track_url
 
     async with AsyncSessionLocal() as db:
         memo = await db.get(Memo, memo_id)
@@ -1064,6 +1386,10 @@ async def localize_memo_task(memo_id: str, mode: str, quality: int = 1080):
 
     if is_spotify_track_url(url):
         await _localize_spotify_track(memo_id, url, ws)
+        return
+
+    if is_apple_track_url(url):
+        await _localize_apple_track(memo_id, url, ws)
         return
 
     try:
