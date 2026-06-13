@@ -91,7 +91,7 @@ export interface MusicPlaylist {
   /** Download progress derived from per-track localize_status. `pending`
    *  counts tracks actively queued/downloading; remote tracks saved without
    *  downloading count in none of done/error/pending. */
-  progress: { total: number; done: number; error: number; pending: number };
+  progress: { total: number; done: number; error: number; pending: number; active?: boolean };
 }
 
 export interface ChatMessage {

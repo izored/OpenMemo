@@ -997,6 +997,32 @@ async def cache_playlist_thumbs_task(memo_ids: list[str]):
             print(f"Playlist thumbnail cache failed for {memo_id}: {e}")
 
 
+# ── Bulk playlist-download control (restart-safe, no job table) ──
+# Two module-level registries track the sequential downloader so the Music page
+# can show a Pause button only while a bulk pass is actually running:
+#   _ACTIVE  — collection_ids with a download pass in flight right now.
+#   _PAUSED  — collection_ids whose pass should stop at the next track boundary.
+# The downloader can't interrupt a track mid-fetch (the localize await blocks),
+# so pausing stops it from starting further tracks; the one in flight finishes.
+_ACTIVE_PLAYLIST_DOWNLOADS: set[str] = set()
+_PAUSED_PLAYLIST_DOWNLOADS: set[str] = set()
+
+
+def playlist_download_active(collection_id: str) -> bool:
+    """True while a bulk download pass is running for this playlist."""
+    return collection_id in _ACTIVE_PLAYLIST_DOWNLOADS
+
+
+def pause_playlist_download(collection_id: str) -> None:
+    """Ask the running bulk pass to stop after its current track."""
+    _PAUSED_PLAYLIST_DOWNLOADS.add(collection_id)
+
+
+def clear_playlist_pause(collection_id: str) -> None:
+    """Drop any pending pause — a fresh download (or resume) clears it."""
+    _PAUSED_PLAYLIST_DOWNLOADS.discard(collection_id)
+
+
 async def download_playlist_task(collection_id: str, memo_ids: list[str]):
     """Background: download a playlist's tracks one at a time.
 
@@ -1008,6 +1034,10 @@ async def download_playlist_task(collection_id: str, memo_ids: list[str]):
     Tracks that end the pass in `error` get one more pass after a cooldown —
     the shared Qobuz community endpoint rate-limits bursts (429), so on bigger
     albums a few tracks routinely fail the first time and succeed minutes later.
+
+    A pause request (Music page) stops the loop at the next track boundary; the
+    track in flight finishes, the rest are left for the pause endpoint to reset
+    back to remote so their cloud chips return.
     """
     import asyncio
 
@@ -1021,21 +1051,33 @@ async def download_playlist_task(collection_id: str, memo_ids: list[str]):
         except Exception as e:
             print(f"Playlist thumbnail cache failed for {memo_id}: {e}")
 
-    for memo_id in memo_ids:
-        await _download_one(memo_id)
-
-    async with AsyncSessionLocal() as db:
-        rows = await db.execute(
-            select(Memo.id).where(Memo.id.in_(memo_ids), Memo.localize_status == "error")
-        )
-        failed = [r[0] for r in rows]
-    if failed:
-        print(f"Playlist {collection_id}: retrying {len(failed)} failed track(s) after cooldown")
-        await asyncio.sleep(90)
-        for memo_id in failed:
+    _ACTIVE_PLAYLIST_DOWNLOADS.add(collection_id)
+    _PAUSED_PLAYLIST_DOWNLOADS.discard(collection_id)
+    try:
+        for memo_id in memo_ids:
+            if collection_id in _PAUSED_PLAYLIST_DOWNLOADS:
+                print(f"Playlist {collection_id}: download paused")
+                return
             await _download_one(memo_id)
 
-    print(f"Playlist {collection_id}: download pass finished ({len(memo_ids)} track(s))")
+        async with AsyncSessionLocal() as db:
+            rows = await db.execute(
+                select(Memo.id).where(Memo.id.in_(memo_ids), Memo.localize_status == "error")
+            )
+            failed = [r[0] for r in rows]
+        if failed and collection_id not in _PAUSED_PLAYLIST_DOWNLOADS:
+            print(f"Playlist {collection_id}: retrying {len(failed)} failed track(s) after cooldown")
+            await asyncio.sleep(90)
+            for memo_id in failed:
+                if collection_id in _PAUSED_PLAYLIST_DOWNLOADS:
+                    print(f"Playlist {collection_id}: download paused")
+                    return
+                await _download_one(memo_id)
+
+        print(f"Playlist {collection_id}: download pass finished ({len(memo_ids)} track(s))")
+    finally:
+        _ACTIVE_PLAYLIST_DOWNLOADS.discard(collection_id)
+        _PAUSED_PLAYLIST_DOWNLOADS.discard(collection_id)
 
 
 @router.post("/note")

@@ -234,6 +234,9 @@ export const musicApi = {
   // "Download all" — queue every still-remote track of a playlist.
   downloadPlaylist: (id: string) =>
     fetchJSON<{ id: string; queued: number; status: string }>(`/music/playlists/${id}/download`, { method: 'POST' }),
+  // Pause a running bulk pass — the in-flight track finishes, the rest reset.
+  pausePlaylistDownload: (id: string) =>
+    fetchJSON<{ id: string; reset: number; status: string }>(`/music/playlists/${id}/download/pause`, { method: 'POST' }),
 };
 
 // Chat
