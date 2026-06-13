@@ -31,7 +31,7 @@ const PROVIDER_LABEL: Record<'spotify' | 'apple', string> = {
  *     FLAC, while YouTube / SoundCloud / Bandcamp keep their existing yt-dlp path;
  *   · upload local audio straight into the library;
  *   · spin up an empty playlist.
- * A gear in the header reveals lossless quality + auto-download settings.
+ * A gear in the header reveals the auto-download-linked-audio setting.
  */
 export function MusicAddModal() {
   const open = useAppStore((s) => s.musicModalOpen);
@@ -63,9 +63,10 @@ export function MusicAddModal() {
   // Playlist tab
   const [plName, setPlName] = useState('');
 
-  // Settings — quality is also the value passed to a Spotify ingest.
+  // Settings drawer only toggles auto-download now. Lossless quality is no
+  // longer a user choice: the backend always asks for hi-res and downgrades to
+  // CD on its own when a release has no hi-res master.
   const { data: settings } = useQuery({ queryKey: ['settings'], queryFn: settingsApi.get });
-  const quality: '16' | '24' = settings?.music_quality === '24' ? '24' : '16';
 
   useEffect(() => {
     if (open) {
@@ -119,13 +120,6 @@ export function MusicAddModal() {
     setShowSettings(false);
   };
 
-  const setQuality = async (q: '16' | '24') => {
-    try {
-      await settingsApi.update({ music_quality: q });
-      queryClient.invalidateQueries({ queryKey: ['settings'] });
-    } catch { /* non-fatal — the ingest still passes the chosen value */ }
-  };
-
   const refreshMusic = () => {
     queryClient.invalidateQueries({ queryKey: ['memos'] });
     queryClient.invalidateQueries({ queryKey: ['music-playlists'] });
@@ -140,8 +134,8 @@ export function MusicAddModal() {
     try {
       if (provider) {
         const res = provider === 'apple'
-          ? await ingestApi.apple(link, { download, quality })
-          : await ingestApi.spotify(link, { download, quality });
+          ? await ingestApi.apple(link, { download })
+          : await ingestApi.spotify(link, { download });
         refreshMusic();
         close();
         if (res.collection_id) navigate(`/music/${res.collection_id}`);
@@ -256,20 +250,6 @@ export function MusicAddModal() {
           <div className="om-mm-settings">
             <div className="om-mm-set-row">
               <div>
-                <label className="om-field-label">Lossless quality</label>
-                <p className="om-mm-set-hint">FLAC pulled for Spotify &amp; Apple Music links</p>
-              </div>
-            </div>
-            <div className="om-mm-seg">
-              <button className={cn('om-mm-seg-btn', quality === '16' && 'active')} onClick={() => setQuality('16')}>
-                CD · 16-bit
-              </button>
-              <button className={cn('om-mm-seg-btn', quality === '24' && 'active')} onClick={() => setQuality('24')}>
-                Hi-Res · 24-bit
-              </button>
-            </div>
-            <div className="om-mm-set-row">
-              <div>
                 <label className="om-field-label">Auto-download linked audio</label>
                 <p className="om-mm-set-hint">SoundCloud / Bandcamp → local files</p>
               </div>
@@ -287,7 +267,7 @@ export function MusicAddModal() {
               </button>
             </div>
             <p className="om-mm-provider mono">
-              <Icon name="info" size={11} /> Lossless via Qobuz (SpotiFLAC).
+              <Icon name="info" size={11} /> Lossless via Qobuz — hi-res when available, CD otherwise.
             </p>
           </div>
         )}
@@ -350,7 +330,7 @@ export function MusicAddModal() {
                 )}
                 <label className="om-mm-check">
                   <input type="checkbox" checked={download} onChange={(e) => setDownload(e.target.checked)} />
-                  <span>Download {losslessKind === 'track' ? 'now' : 'all now'} ({quality === '24' ? 'Hi-Res' : 'CD'})</span>
+                  <span>Download {losslessKind === 'track' ? 'now' : 'all now'}</span>
                 </label>
               </div>
             ) : plShape.isPlaylist ? (

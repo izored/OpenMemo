@@ -1231,7 +1231,7 @@ async def _localize_spotify_track(memo_id: str, url: str, ws: str):
     from backend.core.app_settings import get_settings
     from backend.core.spotiflac import download_spotify_track, SpotiFlacError
 
-    quality = str(get_settings().get("music_quality", "16"))
+    quality = str(get_settings().get("music_quality", "24"))
     dest_dir = Path(cfg.FILES_DIR) / ws
 
     async with AsyncSessionLocal() as db:
@@ -1304,7 +1304,7 @@ async def _localize_apple_track(memo_id: str, url: str, ws: str):
     from backend.core.apple_music import download_apple_track
     from backend.core.spotiflac import SpotiFlacError
 
-    quality = str(get_settings().get("music_quality", "16"))
+    quality = str(get_settings().get("music_quality", "24"))
     dest_dir = Path(cfg.FILES_DIR) / ws
 
     async with AsyncSessionLocal() as db:
