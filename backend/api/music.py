@@ -69,6 +69,11 @@ async def list_playlists(db: AsyncSession = Depends(get_db)):
         if thumb and len(agg["covers"]) < 4:
             agg["covers"].append(thumb)
 
+    # A bulk "Download all" pass is in flight only when the downloader says so.
+    # A single track grabbed from its tile also goes pending/processing, but
+    # that is not a bulk pass — the Pause control keys off `active`, not pending.
+    from backend.api.ingest import playlist_download_active
+
     return [
         {
             "id": p.id,
@@ -84,6 +89,7 @@ async def list_playlists(db: AsyncSession = Depends(get_db)):
                 "done": by_playlist[p.id]["done"],
                 "error": by_playlist[p.id]["error"],
                 "pending": by_playlist[p.id]["pending"],
+                "active": playlist_download_active(p.id),
             },
         }
         for p in playlists
@@ -129,8 +135,48 @@ async def download_playlist(
     await db.commit()
 
     if queued:
-        from backend.api.ingest import download_playlist_task
+        from backend.api.ingest import clear_playlist_pause, download_playlist_task
 
+        # Starting (or resuming) a download wipes any stale pause request.
+        clear_playlist_pause(playlist_id)
         background_tasks.add_task(download_playlist_task, playlist_id, queued)
 
     return {"id": playlist_id, "queued": len(queued), "status": "processing" if queued else "nothing-to-do"}
+
+
+@router.post("/playlists/{playlist_id}/download/pause")
+async def pause_playlist(playlist_id: str, db: AsyncSession = Depends(get_db)):
+    """Pause a bulk "Download all" pass.
+
+    The sequential downloader stops at the next track boundary (it can't abort
+    the track mid-fetch), so the one in flight finishes. Every track still
+    queued (`pending`, not yet started) resets to remote so its count drops and
+    its cloud-download chip comes back. Resume by pressing Download all again.
+    """
+    playlist = await db.get(Collection, playlist_id)
+    if not playlist or (playlist.kind or "standard") != "playlist":
+        raise HTTPException(status_code=404, detail="Playlist not found")
+
+    from backend.api.ingest import pause_playlist_download
+
+    pause_playlist_download(playlist_id)
+
+    rows = (
+        await db.execute(
+            select(Memo)
+            .join(memo_collections, memo_collections.c.memo_id == Memo.id)
+            .where(memo_collections.c.collection_id == playlist_id)
+            .where(Memo.localize_status == "pending")
+            .where(Memo.file_path == None)  # noqa: E711
+        )
+    ).scalars().all()
+
+    reset = 0
+    for m in rows:
+        m.localize_status = None
+        m.localize_error = None
+        m.updated_at = datetime.utcnow()
+        reset += 1
+    await db.commit()
+
+    return {"id": playlist_id, "reset": reset, "status": "paused"}

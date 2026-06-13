@@ -4362,6 +4362,9 @@ input, textarea { font: inherit; color: inherit; }
 .om-hero-card:hover .om-hero-play, .om-hero-play:focus-visible { opacity: 1; transform: none; }
 .om-hero-play:hover { filter: brightness(1.06); }
 @media (hover: none) { .om-hero-play { opacity: 1; transform: none; } }
+/* Currently-playing hero card — accent stroke + pinned play/pause badge. */
+.om-hero-card.is-playing { outline: 2px solid var(--accent); outline-offset: -2px; }
+.om-hero-card.is-playing .om-hero-play { opacity: 1; transform: none; }
 /* Favourite Songs card — brand gradient + heart, no cover art. */
 .om-hero-liked-art {
   display: grid; place-items: center; color: rgba(255, 255, 255, 0.92);
@@ -4397,6 +4400,14 @@ input, textarea { font: inherit; color: inherit; }
 }
 .om-pl-card:hover .om-pl-card-play, .om-pl-card-play:focus-visible { opacity: 1; transform: none; }
 .om-pl-card-play:hover { filter: brightness(1.08); }
+/* The playlist/album currently feeding the player: an accent stroke marks it,
+   and its play/pause badge stays pinned (not hover-only) so you can pause the
+   playing one without hunting. The badge icon toggles to pause in the markup. */
+.om-pl-card.is-playing {
+  border-color: var(--accent);
+  background: color-mix(in oklab, var(--accent) 10%, transparent);
+}
+.om-pl-card.is-playing .om-pl-card-play { opacity: 1; transform: none; }
 .om-pl-card-body { display: flex; flex-direction: column; gap: 3px; padding: 0 2px; }
 .om-pl-card-name {
   font-size: 13px; font-weight: 650; color: var(--text); letter-spacing: -0.01em;
