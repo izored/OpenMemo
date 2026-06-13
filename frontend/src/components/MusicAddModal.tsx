@@ -4,12 +4,12 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Icon } from './Icon';
 import { useAppStore } from '@/stores/appStore';
 import { ingestApi, collectionApi, settingsApi } from '@/lib/api';
-import { spotifyKind, playlistShape } from '@/lib/playlistUrl';
+import { losslessLink, playlistShape } from '@/lib/playlistUrl';
 import { cn } from '@/lib/utils';
 
 type Tab = 'link' | 'upload' | 'playlist';
 
-type SpotifyProbe = {
+type LosslessProbe = {
   kind: 'track' | 'album' | 'playlist';
   title: string;
   artist?: string | null;
@@ -18,12 +18,17 @@ type SpotifyProbe = {
   alreadySaved?: { id: string; name: string } | null;
 };
 
+const PROVIDER_LABEL: Record<'spotify' | 'apple', string> = {
+  spotify: 'Spotify',
+  apple: 'Apple Music',
+};
+
 /**
  * Music page's dedicated "+" surface (SpotiFLAC integration). Same bottom-right
  * glass panel as the New-Memo panel, so the gesture/feel stays identical — only
  * the contents are music-specific:
- *   · paste any track/playlist link — Spotify resolves to lossless FLAC, while
- *     YouTube / SoundCloud / Bandcamp keep their existing yt-dlp path;
+ *   · paste any track/playlist link — Spotify / Apple Music resolve to lossless
+ *     FLAC, while YouTube / SoundCloud / Bandcamp keep their existing yt-dlp path;
  *   · upload local audio straight into the library;
  *   · spin up an empty playlist.
  * A gear in the header reveals lossless quality + auto-download settings.
@@ -42,10 +47,14 @@ export function MusicAddModal() {
   // Link tab
   const [url, setUrl] = useState('');
   const [download, setDownload] = useState(true);
-  const sk = spotifyKind(url);
+  // A Spotify OR Apple Music link is a lossless (FLAC) source; both share the
+  // same probe/ingest contract, only the provider differs.
+  const lossless = losslessLink(url);
+  const provider = lossless?.provider ?? null;
+  const losslessKind = lossless?.kind ?? null;
   const plShape = playlistShape(url);
-  const [spProbe, setSpProbe] = useState<SpotifyProbe | null>(null);
-  const [spProbing, setSpProbing] = useState(false);
+  const [llProbe, setLlProbe] = useState<LosslessProbe | null>(null);
+  const [llProbing, setLlProbing] = useState(false);
 
   // Upload tab
   const fileRef = useRef<HTMLInputElement>(null);
@@ -68,21 +77,23 @@ export function MusicAddModal() {
   // Single track → download now; a big collection → metadata-first.
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect -- derive sensible default from the link
-    setDownload(sk !== 'playlist');
-  }, [sk]);
+    setDownload(losslessKind !== 'playlist');
+  }, [losslessKind]);
 
-  // Debounced Spotify preview so paste/typing doesn't hammer the probe.
+  // Debounced lossless preview so paste/typing doesn't hammer the probe.
   useEffect(() => {
-    setSpProbe(null);
-    if (!sk || !open) {
-      setSpProbing(false);
+    setLlProbe(null);
+    if (!provider || !open) {
+      setLlProbing(false);
       return;
     }
-    setSpProbing(true);
+    setLlProbing(true);
     const t = setTimeout(async () => {
       try {
-        const res = await ingestApi.probeSpotify(url.trim());
-        setSpProbe({
+        const res = provider === 'apple'
+          ? await ingestApi.probeApple(url.trim())
+          : await ingestApi.probeSpotify(url.trim());
+        setLlProbe({
           kind: res.kind,
           title: res.title,
           artist: res.artist,
@@ -91,13 +102,13 @@ export function MusicAddModal() {
           alreadySaved: res.already_saved ?? null,
         });
       } catch {
-        setSpProbe(null);
+        setLlProbe(null);
       } finally {
-        setSpProbing(false);
+        setLlProbing(false);
       }
     }, 500);
     return () => clearTimeout(t);
-  }, [url, sk, open]);
+  }, [url, provider, open]);
 
   const close = () => {
     setOpen(false);
@@ -127,8 +138,10 @@ export function MusicAddModal() {
     setBusy(true);
     setError('');
     try {
-      if (sk) {
-        const res = await ingestApi.spotify(link, { download, quality });
+      if (provider) {
+        const res = provider === 'apple'
+          ? await ingestApi.apple(link, { download, quality })
+          : await ingestApi.spotify(link, { download, quality });
         refreshMusic();
         close();
         if (res.collection_id) navigate(`/music/${res.collection_id}`);
@@ -206,7 +219,7 @@ export function MusicAddModal() {
       ? (progress ? `Uploading ${progress.done}/${progress.total}…` : 'Choose files')
       : tab === 'playlist'
         ? 'Create playlist'
-        : spProbe?.alreadySaved ? 'Open playlist' : 'Save';
+        : llProbe?.alreadySaved ? 'Open playlist' : 'Save';
   const footAction = () => {
     if (tab === 'upload') fileRef.current?.click();
     else if (tab === 'playlist') createPlaylist();
@@ -244,7 +257,7 @@ export function MusicAddModal() {
             <div className="om-mm-set-row">
               <div>
                 <label className="om-field-label">Lossless quality</label>
-                <p className="om-mm-set-hint">FLAC pulled for Spotify links</p>
+                <p className="om-mm-set-hint">FLAC pulled for Spotify &amp; Apple Music links</p>
               </div>
             </div>
             <div className="om-mm-seg">
@@ -300,34 +313,34 @@ export function MusicAddModal() {
           <div className="om-add-tab-pane">
             <div className="om-add-sect mono">Track or playlist link</div>
             <div className="om-add-input">
-              <Icon name={sk ? 'sparkles' : 'globe'} size={13} />
+              <Icon name={provider ? 'sparkles' : 'globe'} size={13} />
               <input
                 autoFocus
                 value={url}
                 onChange={(e) => setUrl(e.target.value)}
-                placeholder="Spotify, YouTube, SoundCloud…"
+                placeholder="Spotify, Apple Music, YouTube…"
                 onKeyDown={(e) => e.key === 'Enter' && saveLink()}
               />
             </div>
 
-            {sk ? (
+            {provider ? (
               <div className="om-mm-spotify">
                 <span className="om-mm-badge">
-                  <Icon name="sparkles" size={11} /> Spotify → lossless FLAC
+                  <Icon name="sparkles" size={11} /> {PROVIDER_LABEL[provider]} → lossless FLAC
                 </span>
-                {spProbing && !spProbe ? (
-                  <p className="om-mm-hint mono">Reading Spotify link…</p>
-                ) : spProbe ? (
+                {llProbing && !llProbe ? (
+                  <p className="om-mm-hint mono">Reading {PROVIDER_LABEL[provider]} link…</p>
+                ) : llProbe ? (
                   <div className="om-mm-preview">
-                    {spProbe.cover && <img src={spProbe.cover} alt="" loading="lazy" />}
+                    {llProbe.cover && <img src={llProbe.cover} alt="" loading="lazy" />}
                     <div className="om-mm-preview-body">
-                      <b>{spProbe.title}</b>
+                      <b>{llProbe.title}</b>
                       <small className="mono">
-                        {spProbe.kind === 'track'
-                          ? spProbe.artist || 'Track'
-                          : `${spProbe.kind === 'album' ? 'Album' : 'Playlist'} · ${spProbe.count} track${spProbe.count === 1 ? '' : 's'}`}
+                        {llProbe.kind === 'track'
+                          ? llProbe.artist || 'Track'
+                          : `${llProbe.kind === 'album' ? 'Album' : 'Playlist'} · ${llProbe.count} track${llProbe.count === 1 ? '' : 's'}`}
                       </small>
-                      {spProbe.alreadySaved && (
+                      {llProbe.alreadySaved && (
                         <small className="om-mm-saved mono">Already saved.</small>
                       )}
                     </div>
@@ -337,7 +350,7 @@ export function MusicAddModal() {
                 )}
                 <label className="om-mm-check">
                   <input type="checkbox" checked={download} onChange={(e) => setDownload(e.target.checked)} />
-                  <span>Download {sk === 'track' ? 'now' : 'all now'} ({quality === '24' ? 'Hi-Res' : 'CD'})</span>
+                  <span>Download {losslessKind === 'track' ? 'now' : 'all now'} ({quality === '24' ? 'Hi-Res' : 'CD'})</span>
                 </label>
               </div>
             ) : plShape.isPlaylist ? (
@@ -350,7 +363,7 @@ export function MusicAddModal() {
               </>
             ) : (
               <p className="om-mm-hint mono">
-                Spotify links download as lossless FLAC. Other links save like any audio memo.
+                Spotify &amp; Apple Music links download as lossless FLAC. Other links save like any audio memo.
               </p>
             )}
           </div>

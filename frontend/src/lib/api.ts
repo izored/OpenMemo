@@ -135,6 +135,37 @@ export const ingestApi = {
         collection_id: opts?.collection_id,
       }),
     }),
+  // Preview an Apple Music link (no download). Same shapes as probeSpotify —
+  // Apple Music is the second lossless front-end (ADR-019).
+  probeApple: (url: string) =>
+    fetchJSON<{
+      kind: 'track' | 'album' | 'playlist';
+      title: string;
+      artist?: string | null;
+      cover?: string | null;
+      count: number;
+      entries?: { title: string; artist?: string | null }[];
+      already_saved?: { id: string; name: string } | null;
+    }>('/ingest/apple/probe', { method: 'POST', body: JSON.stringify({ url }) }),
+  // Ingest an Apple Music link as lossless music (Qobuz audio). Verbatim sibling
+  // of `spotify` — a track → one memo; an album/playlist → collection + tracks.
+  apple: (
+    url: string,
+    opts?: { download?: boolean; quality?: '16' | '24'; title?: string; collection_id?: string },
+  ) =>
+    fetchJSON<{
+      id?: string; collection_id?: string; title: string; type?: string;
+      total?: number; status: string;
+    }>('/ingest/apple', {
+      method: 'POST',
+      body: JSON.stringify({
+        url,
+        download: opts?.download ?? true,
+        quality: opts?.quality,
+        title: opts?.title,
+        collection_id: opts?.collection_id,
+      }),
+    }),
   file: async (
     file: File,
     collection_id?: string,

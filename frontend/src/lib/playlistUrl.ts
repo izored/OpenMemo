@@ -59,3 +59,31 @@ export function spotifyKind(raw: string): 'track' | 'album' | 'playlist' | null 
   const m = SPOTIFY_RE.exec((raw || '').trim());
   return m ? (m[1].toLowerCase() as 'track' | 'album' | 'playlist') : null;
 }
+
+// Apple Music link detection (second SpotiFLAC front-end, ADR-019). Mirrors
+// backend/core/apple_music.py `parse_apple_url` — keep the two in sync.
+const APPLE_RE = /music\.apple\.com\/(?:[a-z]{2}\/)?(song|album|playlist)\/[^/]+\/([A-Za-z0-9.\-]+)/i;
+
+/** Returns the Apple Music entity kind for a link, or null if it isn't one. */
+export function appleKind(raw: string): 'track' | 'album' | 'playlist' | null {
+  const s = (raw || '').trim();
+  const m = APPLE_RE.exec(s);
+  if (!m) return null;
+  // ?i=<id> = a track on an album page; /song/ = a track too.
+  if (/[?&]i=/.test(s) || m[1].toLowerCase() === 'song') return 'track';
+  return m[1].toLowerCase() as 'album' | 'playlist';
+}
+
+/** Provider that resolves to lossless FLAC via the SpotiFLAC chain. */
+export type LosslessProvider = 'spotify' | 'apple';
+
+/** Detect the lossless provider + entity kind for a link, if any. */
+export function losslessLink(
+  raw: string,
+): { provider: LosslessProvider; kind: 'track' | 'album' | 'playlist' } | null {
+  const sk = spotifyKind(raw);
+  if (sk) return { provider: 'spotify', kind: sk };
+  const ak = appleKind(raw);
+  if (ak) return { provider: 'apple', kind: ak };
+  return null;
+}
