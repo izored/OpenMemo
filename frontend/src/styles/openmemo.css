@@ -4404,7 +4404,6 @@ input, textarea { font: inherit; color: inherit; }
    and its play/pause badge stays pinned (not hover-only) so you can pause the
    playing one without hunting. The badge icon toggles to pause in the markup. */
 .om-pl-card.is-playing {
-  border-color: var(--accent);
   background: color-mix(in oklab, var(--accent) 10%, transparent);
 }
 .om-pl-card.is-playing .om-pl-card-play { opacity: 1; transform: none; }
@@ -4456,6 +4455,35 @@ button.om-add-link { background: none; border: 0; padding: 0; cursor: pointer; f
   border: 1px solid var(--border);
 }
 .om-pl-hero-body { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+/* Title + inline edit pencil. The pencil is quiet at rest, accents on hover. */
+.om-pl-title-row { display: flex; align-items: center; gap: 10px; min-width: 0; }
+.om-pl-edit-btn {
+  flex: 0 0 auto; width: 28px; height: 28px; border-radius: 8px; border: 0;
+  display: grid; place-items: center; cursor: pointer;
+  background: transparent; color: var(--text-4);
+  transition: background .15s ease, color .15s ease;
+}
+.om-pl-edit-btn:hover { background: color-mix(in oklab, var(--accent) 14%, transparent); color: var(--accent); }
+/* Source/user blurb under the title. Clamped so a long YouTube description
+   doesn't push the controls off-screen; the full text shows in the editor. */
+.om-pl-hero-desc {
+  margin: 0; font-size: 13px; line-height: 1.45; color: var(--text-3); max-width: 60ch;
+  display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden;
+}
+/* Inline editor — replaces the title/description while editing. */
+.om-pl-edit { display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+.om-pl-edit-name {
+  font-size: 22px; font-weight: 750; letter-spacing: -0.01em;
+  color: var(--text); background: var(--surface); border: 1px solid var(--border);
+  border-radius: 10px; padding: 6px 10px; width: 100%; max-width: 480px;
+}
+.om-pl-edit-desc {
+  font-size: 13px; line-height: 1.45; color: var(--text); background: var(--surface);
+  border: 1px solid var(--border); border-radius: 10px; padding: 8px 10px;
+  width: 100%; max-width: 560px; resize: vertical; font-family: inherit;
+}
+.om-pl-edit-name:focus, .om-pl-edit-desc:focus { outline: none; border-color: var(--accent); }
+.om-pl-edit-actions { display: flex; align-items: center; gap: 8px; }
 .om-pl-hero-actions { display: flex; align-items: center; gap: 8px; margin-top: 10px; }
 .om-pl-playall { display: inline-flex; align-items: center; gap: 7px; }
 .om-pl-playall:disabled { opacity: 0.5; cursor: default; }

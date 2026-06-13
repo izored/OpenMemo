@@ -388,6 +388,7 @@ async def ingest_playlist(
         workspace_id=ws,
         name=(data.title or probed["title"]).strip()[:200] or "Playlist",
         emoji="🎵",
+        description=probed.get("description"),
         kind="playlist",
         # YouTube album playlists carry the OLAK5uy_ list-id prefix; everything
         # else yt-dlp enumerates here is a regular playlist/mix.
@@ -647,6 +648,7 @@ async def ingest_spotify(
         workspace_id=ws,
         name=(data.title or probed["title"]).strip()[:200] or "Playlist",
         emoji="🎵",
+        description=probed.get("description"),
         kind="playlist",
         # parse_spotify_url told us exactly what this is.
         music_kind="album" if kind == "album" else "playlist",
@@ -901,6 +903,7 @@ async def ingest_apple(
         workspace_id=ws,
         name=(data.title or probed["title"]).strip()[:200] or "Playlist",
         emoji="🎵",
+        description=probed.get("description"),
         kind="playlist",
         music_kind="album" if kind == "album" else "playlist",
         source_url=canonical,

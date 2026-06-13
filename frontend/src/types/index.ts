@@ -80,6 +80,9 @@ export interface Collection {
 export interface MusicPlaylist {
   id: string;
   name: string;
+  /** Optional blurb shown under the title — pulled from the source link on
+   *  import (where the provider has one) or typed by the user. */
+  description?: string | null;
   source_url?: string | null;
   /** What the source was: an album shows a single cover + "Album" label,
    *  a playlist keeps the 4-cover collage. */

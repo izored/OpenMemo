@@ -604,6 +604,26 @@ export function MusicPage() {
     } catch { /* keep the input so the name survives a retry */ }
   };
 
+  // Edit a playlist's name + description, inline in the hero. Description seeds
+  // from the source link on import; the user can rewrite it here either way.
+  const [editingPl, setEditingPl] = useState(false);
+  const [editName, setEditName] = useState('');
+  const [editDesc, setEditDesc] = useState('');
+  const startEditPlaylist = (p: MusicPlaylist) => {
+    setEditName(p.name);
+    setEditDesc(p.description ?? '');
+    setEditingPl(true);
+  };
+  const savePlaylistMeta = async (p: MusicPlaylist) => {
+    const name = editName.trim();
+    if (!name) return;
+    try {
+      await collectionApi.update(p.id, { name, description: editDesc.trim() || null });
+    } catch { /* surfaced by refetch */ }
+    setEditingPl(false);
+    queryClient.invalidateQueries({ queryKey: ['music-playlists'] });
+  };
+
   const deletePlaylist = async (p: MusicPlaylist) => {
     const ok = window.confirm(
       `Delete the playlist "${p.name}"?\n\nIts ${p.track_count} track(s) move back to your music library. Only the playlist goes.`,
@@ -650,7 +670,56 @@ export function MusicPage() {
               {playlist?.music_kind === 'album' ? 'Album' : 'Playlist'} · {trackTotal} track{trackTotal === 1 ? '' : 's'}
               {downloading && playlist && ` · ${playlist.progress.done}/${playlist.progress.total} downloaded`}
             </span>
-            <h1 className="om-greet-title">{playlist?.name ?? 'Playlist'}</h1>
+            {editingPl && playlist ? (
+              <div className="om-pl-edit">
+                <input
+                  className="om-pl-edit-name"
+                  value={editName}
+                  onChange={(e) => setEditName(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') savePlaylistMeta(playlist);
+                    if (e.key === 'Escape') setEditingPl(false);
+                  }}
+                  placeholder="Playlist name"
+                  maxLength={200}
+                  autoFocus
+                  aria-label="Playlist name"
+                />
+                <textarea
+                  className="om-pl-edit-desc"
+                  value={editDesc}
+                  onChange={(e) => setEditDesc(e.target.value)}
+                  placeholder="Add a description (pulled from the link on import, or write your own)"
+                  maxLength={1000}
+                  rows={3}
+                  aria-label="Playlist description"
+                />
+                <div className="om-pl-edit-actions">
+                  <button className="om-btn-primary" onClick={() => savePlaylistMeta(playlist)} disabled={!editName.trim()}>
+                    <Icon name="check" size={13} />
+                    <span>Save</span>
+                  </button>
+                  <button className="om-btn-secondary" onClick={() => setEditingPl(false)}>Cancel</button>
+                </div>
+              </div>
+            ) : (
+              <>
+                <div className="om-pl-title-row">
+                  <h1 className="om-greet-title">{playlist?.name ?? 'Playlist'}</h1>
+                  {playlist && (
+                    <button
+                      className="om-pl-edit-btn"
+                      onClick={() => startEditPlaylist(playlist)}
+                      title="Edit name & description"
+                      aria-label="Edit playlist"
+                    >
+                      <Icon name="edit" size={14} />
+                    </button>
+                  )}
+                </div>
+                {playlist?.description && <p className="om-pl-hero-desc">{playlist.description}</p>}
+              </>
+            )}
             <div className="om-pl-hero-actions">
               <button
                 className="om-btn-primary om-pl-playall"
