@@ -4470,7 +4470,11 @@ button.om-add-link { background: none; border: 0; padding: 0; cursor: pointer; f
 .om-mtile.is-active { outline: 2px solid var(--accent); outline-offset: 1px; }
 .om-mtile.is-pending { cursor: default; }
 .om-mtile-img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
-.om-mtile.is-pending .om-mtile-img { opacity: 0.45; filter: grayscale(0.4); }
+/* Not-local tracks (remote / queued / downloading / failed) read as pending:
+   dimmed + desaturated art so a glance separates what's here from what isn't. */
+.om-mtile.is-pending .om-mtile-img,
+.om-mtile.is-offline .om-mtile-img { opacity: 0.45; filter: grayscale(0.4); }
+.om-mtile.is-offline .om-mtile-glyph { opacity: 0.5; }
 .om-mtile-glyph { position: absolute; inset: 0; display: grid; place-items: center; color: var(--text-3); }
 .om-mtile-num {
   position: absolute; top: 8px; left: 8px; z-index: 2;
@@ -4533,6 +4537,24 @@ button.om-add-link { background: none; border: 0; padding: 0; cursor: pointer; f
   background: rgba(255, 255, 255, 0.92); color: #111;
   box-shadow: 0 4px 14px rgba(0, 0, 0, 0.35);
 }
+
+/* Cloud-download badge — the tap target on a not-local tile (remote, queued,
+   or failed). Unlike the play badge it stays visible at rest: the track isn't
+   here, so the way to fetch it shouldn't hide behind a hover. */
+.om-mtile-cloud {
+  position: absolute; inset: 0; z-index: 1; display: grid; place-items: center;
+  color: #fff; background: rgba(0, 0, 0, 0.30);
+}
+.om-mtile-cloud.is-action { cursor: pointer; pointer-events: auto; }
+.om-mtile-cloud-badge {
+  width: 42px; height: 42px; border-radius: 50%; display: grid; place-items: center;
+  background: rgba(255, 255, 255, 0.92); color: #111;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.35);
+  transition: transform .15s ease, background .15s ease;
+}
+.om-mtile-cloud.is-action:hover .om-mtile-cloud-badge { transform: scale(1.08); }
+.om-mtile-cloud.is-failed .om-mtile-cloud-badge { background: rgba(190, 40, 34, 0.92); color: #fff; }
+.om-mtile-cloud.is-busy .om-mtile-cloud-badge { background: rgba(255, 255, 255, 0.82); }
 .om-mtile-cap {
   position: absolute; left: 0; right: 0; bottom: 0; z-index: 1;
   padding: 26px 10px 9px; display: flex; flex-direction: column; gap: 1px;

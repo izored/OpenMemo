@@ -144,6 +144,24 @@ async def lifespan(app: FastAPI):
     except Exception as e:
         print(f"Index creation warning (non-critical): {e}")
 
+    # Orphaned downloads (no job table — see music.py). A track left in
+    # 'pending'/'processing' when the server stopped has no background task to
+    # resume it, so it would spin "downloading" forever. Mark each as error on
+    # boot: the tile then shows its cloud/retry control and the playlist's
+    # re-download button reappears. Local tracks (file_path set) are untouched.
+    try:
+        from sqlalchemy import text as _sql_text
+
+        async with AsyncSessionLocal() as db:
+            await db.execute(_sql_text(
+                "UPDATE memos SET localize_status = 'error', "
+                "localize_error = 'Download interrupted (app restarted). Tap to retry.' "
+                "WHERE localize_status IN ('pending', 'processing') AND file_path IS NULL"
+            ))
+            await db.commit()
+    except Exception as e:
+        print(f"Orphaned-download recovery warning (non-critical): {e}")
+
     # Create default user and workspace if not exist
     async with AsyncSessionLocal() as db:
         from sqlalchemy import select
