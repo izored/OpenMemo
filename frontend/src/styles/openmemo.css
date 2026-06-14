@@ -4861,7 +4861,12 @@ button.om-add-link { background: none; border: 0; padding: 0; cursor: pointer; f
   .om-sidebar {
     position: fixed; inset: 0; z-index: 60;
     /* !important: framer-motion writes an inline width (260/76px) on the aside. */
-    width: 100vw !important; max-width: 100vw; height: 100dvh;
+    width: 100vw !important; max-width: 100vw;
+    /* height auto, NOT 100dvh: with inset:0 a fixed element with top+bottom+height
+       all set lets `height` win and ignores `bottom`, so a 100dvh that doesn't
+       match the browser's visible viewport (Comet's URL bar) left a gap below the
+       foot. Letting top:0/bottom:0 govern fills the visible viewport exactly. */
+    height: auto;
     border-right: 0;
     padding: 0 16px;
     padding-top: max(12px, env(safe-area-inset-top));
