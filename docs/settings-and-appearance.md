@@ -86,6 +86,32 @@ written to the persisted `tweaks` in the app store and applied to `<html>`.
 Controls: Theme, Accent (with two custom slots), Card style, Layout, Player size,
 Grid columns, Background, Animation speed.
 
+### Background
+
+Two modes: **Random** (an accent-derived gradient wash) and **Image**.
+
+Image mode opens a gallery of the built-in wallpapers shipped in
+`frontend/src/assets/bg/`, plus an **upload-your-own** tile at the end. Each
+built-in is named with its intent baked in:
+
+```
+<Color> - <Theme> - <Name> - <NN>.<ext>
+e.g.  Blue - Dark - Syntone - 24.jpg
+```
+
+Picking one applies all three at once — the wallpaper, the matching **accent**,
+and the matching **light/dark theme** — so the UI always suits its background.
+`bgPresets.ts` reads the convention: the color word maps to an accent hex
+(blue/green/orange/yellow reuse the standard accents; purple → `#B79CED`,
+rose → `#E8889C`), the theme word maps to light/dark. Drop a correctly-named
+image into `assets/bg/` and it shows up in the gallery — no code change.
+
+What persists is `tweaks.bgPreset`, the **filename stem** (a stable id), not the
+hashed bundle URL. `applyTweaks` resolves the current URL from that id, so a
+rebuild's new asset hash can't break a saved pick. An uploaded image instead
+stores its server URL in `bgImage` with `bgPreset` empty; **Remove** clears
+either.
+
 ### Creator preferences
 
 The options the creator runs openMemo with carry a small accent asterisk:
@@ -123,6 +149,8 @@ with no backend change and nothing to keep in sync.
 | `frontend/src/pages/SettingsPage.tsx` | The bento page, stat strip, cards, model picker, built-with marquee |
 | `frontend/src/components/AppearancePanel.tsx` | The live-preview panel, creator-pref asterisks, live badge |
 | `frontend/src/lib/appearance.ts` | Theme / accent / background math applied to `<html>` |
+| `frontend/src/lib/bgPresets.ts` | Bundles `assets/bg/` wallpapers, parses the `Color - Theme - Name` filename into accent + theme |
+| `frontend/src/assets/bg/` | The built-in background wallpapers, named by the convention above |
 | `frontend/src/styles/openmemo.css` | All of the above styling (search `om-ap-hero`, `om-settings-masonry`, `om-stat-`, `om-model-select`) |
 
 ---
