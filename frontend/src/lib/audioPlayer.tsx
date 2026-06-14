@@ -494,40 +494,58 @@ export function AudioPlayerProvider({ children }: { children: React.ReactNode })
     } catch { /* ignore */ }
   }, []);
 
-  // Media Session — lets the OS media keys (the keyboard play/pause key) and the
-  // lock-screen / notification transport drive our player (ADR-005). Handlers are
-  // bound once; they read the live <audio> via the ref.
+  // Media Session — lets the OS media keys and the lock-screen / notification
+  // transport drive our player (ADR-005). The handler SET depends on whether a
+  // queue is live: iOS only shows the rich prev/next-track buttons when
+  // nexttrack/previoustrack are registered AND the ±seek handlers are NOT — if
+  // both are set it falls back to the bare ±10s skip controls (the bug this
+  // fixes). So a multi-track queue gets prev/next; a lone track keeps ±10s seek
+  // (sensible for a single long recording). seekto + setPositionState always on,
+  // so the lock screen gets a real, scrubbable progress bar either way.
   useEffect(() => {
     if (!('mediaSession' in navigator)) return;
     const ms = navigator.mediaSession;
     const a = () => audioRef.current;
-    try {
-      // Resume a suspended AudioContext before play — a lock-screen / notif
-      // "play" tap must revive the graph (when one exists), not stay silent.
-      ms.setActionHandler('play', () => {
-        audioCtxRef.current?.resume?.().catch(() => {});
-        a()?.play().catch(() => {});
-      });
-      ms.setActionHandler('pause', () => a()?.pause());
-      ms.setActionHandler('seekbackward', (d) => { const el = a(); if (el) el.currentTime = Math.max(0, el.currentTime - (d.seekOffset || 10)); });
-      ms.setActionHandler('seekforward', (d) => { const el = a(); if (el) el.currentTime = el.currentTime + (d.seekOffset || 10); });
-      ms.setActionHandler('seekto', (d) => { const el = a(); if (el && d.seekTime != null) el.currentTime = d.seekTime; });
-      // Queue transport (ADR-015) — OS next/prev keys step the play queue.
-      ms.setActionHandler('nexttrack', () => stepQueue(1));
-      ms.setActionHandler('previoustrack', () => stepQueue(-1));
-    } catch {
-      /* some actions are unsupported on some browsers — ignore */
-    }
+    const hasQueue = queue.length > 1;
+    const set = (action: MediaSessionAction, handler: MediaSessionActionHandler | null) => {
+      try { ms.setActionHandler(action, handler); } catch { /* unsupported action */ }
+    };
+    set('play', () => {
+      audioCtxRef.current?.resume?.().catch(() => {});
+      a()?.play().catch(() => {});
+    });
+    set('pause', () => a()?.pause());
+    set('seekto', (d) => { const el = a(); if (el && d.seekTime != null) el.currentTime = d.seekTime; });
+    // Queue → prev/next track; single track → ±seek. Null out the other set so
+    // iOS shows exactly one transport style.
+    set('nexttrack', hasQueue ? () => stepQueue(1) : null);
+    set('previoustrack', hasQueue ? () => stepQueue(-1) : null);
+    set('seekbackward', hasQueue ? null : (d) => { const el = a(); if (el) el.currentTime = Math.max(0, el.currentTime - (d.seekOffset || 10)); });
+    set('seekforward', hasQueue ? null : (d) => { const el = a(); if (el) el.currentTime = el.currentTime + (d.seekOffset || 10); });
     return () => {
-      try {
-        for (const action of ['play', 'pause', 'seekbackward', 'seekforward', 'seekto', 'nexttrack', 'previoustrack'] as const) {
-          ms.setActionHandler(action, null);
-        }
-      } catch {
-        /* ignore */
+      for (const action of ['play', 'pause', 'seekbackward', 'seekforward', 'seekto', 'nexttrack', 'previoustrack'] as const) {
+        set(action, null);
       }
     };
-  }, [stepQueue]);
+  }, [stepQueue, queue.length]);
+
+  // Feed the OS a real timeline so the lock screen renders a scrubbable progress
+  // bar (and accurate elapsed/remaining). Refreshes as the clock ticks; iOS also
+  // interpolates between pushes using playbackRate. setPositionState is cheap.
+  useEffect(() => {
+    if (!('mediaSession' in navigator) || !('setPositionState' in navigator.mediaSession)) return;
+    const audio = audioRef.current;
+    if (!track || !audio) return;
+    const dur = audio.duration;
+    if (!Number.isFinite(dur) || dur <= 0) return;
+    try {
+      navigator.mediaSession.setPositionState({
+        duration: dur,
+        position: Math.min(audio.currentTime, dur),
+        playbackRate: audio.playbackRate || 1,
+      });
+    } catch { /* invalid state (e.g. position > duration mid-seek) — ignore */ }
+  }, [track, duration, playing, currentTime]);
 
   // OS media-overlay metadata (title / artist / artwork) per track.
   useEffect(() => {
@@ -537,11 +555,19 @@ export function AudioPlayerProvider({ children }: { children: React.ReactNode })
       return;
     }
     try {
+      // Absolute URL — the OS overlay fetches artwork out of page context, so a
+      // relative /api/... path would never resolve. Offer several sizes (iOS
+      // picks) and omit `type` so a JPEG cover isn't rejected by a png claim.
+      let art: MediaImage[] = [];
+      if (track.cover) {
+        const abs = (() => { try { return new URL(track.cover!, window.location.origin).href; } catch { return track.cover!; } })();
+        art = ['96x96', '192x192', '512x512'].map((sizes) => ({ src: abs, sizes }));
+      }
       navigator.mediaSession.metadata = new MediaMetadata({
         title: track.title,
         artist: track.subtitle || '',
         album: track.album || '',
-        artwork: track.cover ? [{ src: track.cover, sizes: '512x512', type: 'image/png' }] : [],
+        artwork: art,
       });
     } catch {
       /* MediaMetadata unsupported — ignore */
