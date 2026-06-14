@@ -59,6 +59,30 @@ function hslToHex(h: number, s: number, l: number): string {
   return '#' + to(f(0)) + to(f(8)) + to(f(4));
 }
 
+// Contrast-safe accent for use as a FOREGROUND on the page surface (waveform
+// bars, accent text/icons on a card). `--accent-text` already handles text laid
+// ON the accent; this is the opposite case — the accent painted on a light or
+// dark surface, where a pale green/yellow vanishes on white and a near-black
+// accent vanishes on the inky dark. We nudge lightness in HSL (hue + saturation
+// kept) only when the accent falls outside a legible band for the active theme,
+// so well-chosen mid accents are left untouched.
+export function accentInk(accent: string, dark: boolean): string {
+  const [h, s, l] = hexToHsl(accent);
+  const lum = luminance(accent);
+  if (dark) {
+    // Inky surface — lift only genuinely dark accents up to a readable band.
+    if (lum >= 0.3) return accent;
+    const targetL = Math.min(80, Math.max(l, 58 + (0.3 - lum) * 30));
+    return hslToHex(h, s, targetL);
+  }
+  // Near-white surface — deepen pale/bright accents so the bars read. The paler
+  // the accent, the more we darken (and bump saturation a touch so it stays the
+  // same hue, not a muddy grey).
+  if (lum <= 0.55) return accent;
+  const targetL = Math.max(30, Math.min(l, 46 - (lum - 0.55) * 18));
+  return hslToHex(h, Math.min(92, s + 6), targetL);
+}
+
 // Three colors that harmonize with the accent — analogous trio with jitter.
 export function accentHarmony(accent: string): [string, string, string] {
   const [h, s, l] = hexToHsl(accent);
@@ -137,6 +161,10 @@ export function applyTweaks(t: Tweaks) {
   // Contrast-aware text color for anything painted on the accent (buttons,
   // chips). Pale accents get dark text so they don't disappear into white.
   root.style.setProperty('--accent-text', luminance(t.accent) > 0.62 ? '#1A1A1C' : '#FFFFFF');
+  // Contrast-safe accent for foreground use on the page surface (waveform bars,
+  // accent-on-card). Theme-aware so a pale accent reads on light and a dark one
+  // reads on dark — see accentInk().
+  root.style.setProperty('--accent-ink', accentInk(t.accent, resolveTheme(t.theme) !== 'light'));
   // A built-in preset resolves to its current bundle URL from the persisted id;
   // otherwise fall back to the (upload) URL stored directly in bgImage.
   const bgUrl = (t.bgPreset && presetById(t.bgPreset)?.url) || t.bgImage;

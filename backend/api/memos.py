@@ -118,6 +118,7 @@ async def list_memos(
     collection_id: Optional[str] = None,
     search: Optional[str] = None,
     hidden: Optional[bool] = None,
+    liked: Optional[bool] = None,
     sort: str = "recent",
     offset: int = 0,
     limit: int = 50,
@@ -158,7 +159,11 @@ async def list_memos(
     # library spot — Spotify model. Both conditions matter: delete the playlist
     # and a born track loses its membership, so it surfaces in the library
     # instead of vanishing forever.
-    if not collection_id:
+    # The liked queue (Favourite Songs, OPNMMO-0041) spans EVERY liked track,
+    # Spotify-style — including songs that live inside a playlist. So the
+    # playlist-born exclusion is skipped when `liked` is set, otherwise a song
+    # liked from inside a playlist would never reach the Favourite Songs queue.
+    if not collection_id and not liked:
         playlist_members = (
             select(memo_collections.c.memo_id)
             .join(Collection, Collection.id == memo_collections.c.collection_id)
@@ -169,6 +174,8 @@ async def list_memos(
         query = query.where(
             ~((func.coalesce(Memo.playlist_born, False) == True) & Memo.id.in_(playlist_members))  # noqa: E712
         )
+    if liked:
+        query = query.where(Memo.liked == True)  # noqa: E712
     if type and type != "all":
         # `type` may be a comma-separated group (e.g. the Files tab maps to
         # document,file,code,audio) so one tab can cover several memo types.
