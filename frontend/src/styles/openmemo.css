@@ -4866,11 +4866,20 @@ button.om-add-link { background: none; border: 0; padding: 0; cursor: pointer; f
     transition: transform .3s cubic-bezier(.2, .8, .2, 1);
   }
   .om-app.drawer-open .om-sidebar { transform: none; }
+  /* The whole drawer is one scroll. Stop flex from compressing children — a
+     flex column shrinks items by default, which squashed the big player's
+     square cover into a strip. Pin every child to its natural height and let
+     the column scroll instead. */
+  .om-sidebar > * { flex-shrink: 0; }
   /* In the drawer the collections list is part of the single scroll, not its
      own pinned-bottom scroll zone. */
   .om-sidebar-scroll { flex: 0 0 auto; overflow: visible; min-height: 0; }
   /* Bottom zone (player + foot) flows after the list instead of pinning. */
   .om-sidebar-foot { margin-top: 14px; }
+
+  /* Search matches the 44px nav rows below it (was a tighter 36px, read as
+     squished against them on a full-width drawer). */
+  .om-sidebar-search { height: 44px; padding: 0 14px; gap: 12px; margin-bottom: 14px; }
 
   .om-sidebar-head { padding: 4px 0 14px; align-items: center; }
   /* Collapse chevron is meaningless in a full-screen drawer; swap for a close. */
