@@ -4852,6 +4852,9 @@ button.om-add-link { background: none; border: 0; padding: 0; cursor: pointer; f
      beats the [data-density] padding rules. */
   .om-main { padding: calc(52px + env(safe-area-inset-top)) 14px 88px !important; }
   .om-main:has(.om-detail-page) { padding: calc(52px + env(safe-area-inset-top)) 0 0 !important; }
+  /* No accidental sideways scroll on vertical pages. Child rails keep their own
+     overflow-x:auto, so carousels still scroll — the page itself does not. */
+  .om-main { overflow-x: hidden; }
 
   /* Sidebar → full-screen off-canvas drawer (mobile only). The whole column
      scrolls so the big player, collections and foot stack freely. */
@@ -4868,11 +4871,14 @@ button.om-add-link { background: none; border: 0; padding: 0; cursor: pointer; f
     transition: transform .3s cubic-bezier(.2, .8, .2, 1);
   }
   .om-app.drawer-open .om-sidebar { transform: none; }
-  /* Anchor the bottom zone (player + foot) to the bottom of the drawer; the
-     collections list is the flexible middle that scrolls. flex-shrink:0 on the
-     fixed children stops the column from compressing the big player's cover. */
+  /* The PLAYER is the flexible element: it grows to fill whatever space is left
+     between the (natural-height) collections list and the pinned foot, instead
+     of leaving a dead gap. The collections list keeps its natural height but can
+     shrink + scroll when expanded. flex-shrink:0 default keeps the fixed chrome
+     (search/nav/foot) from compressing. */
   .om-sidebar > * { flex-shrink: 0; }
-  .om-sidebar-scroll { flex: 1 1 auto; overflow-y: auto; min-height: 0; }
+  .om-sidebar-scroll { flex: 0 1 auto; overflow-y: auto; min-height: 0; }
+  .om-sb-player { flex: 1 1 auto; min-height: 0; }
   /* The FAB is a page action; hide it while the full-screen drawer is open so
      it doesn't float in the drawer's bottom space. */
   .om-app.drawer-open .om-fab { display: none; }
@@ -4929,17 +4935,18 @@ button.om-add-link { background: none; border: 0; padding: 0; cursor: pointer; f
   }
   .om-coll-more:active { background: var(--surface-2); color: var(--text-2); }
 
-  /* Big player stays the rich layout but compact — a full-width square cover
-     dwarfed the rest of the drawer. Cap the cover height instead. */
-  .om-sb-player-big-cover { aspect-ratio: auto; height: min(46vw, 220px); }
+  /* Big player fills the flexible space: the cover grows to take whatever height
+     the player got, with a floor so it never collapses; the body (title +
+     scrubber + controls) keeps its natural height below. */
+  .om-sb-player-big { min-height: 0; }
+  .om-sb-player-big-cover { aspect-ratio: auto; flex: 1 1 auto; height: auto; min-height: 150px; }
 
-  /* Music rails bleed to the screen edge: negative margin cancels the 14px page
-     padding, the inner padding keeps the first card aligned with the heading,
-     and cards now scroll all the way to the edge (next card peeks) instead of
-     stopping 14px short. */
+  /* Music rails are true full-bleed: negative margin cancels the 14px page
+     padding and the inner side padding is dropped, so the cards sit right at
+     the screen edges and scroll edge to edge (these rails own their horizontal
+     scroll). Headings above keep the normal 14px content inset. */
   .om-hero-row, .om-pl-row {
     margin-left: -14px; margin-right: -14px;
-    padding-left: 14px; padding-right: 14px;
-    scroll-padding-left: 14px;
+    padding-left: 0; padding-right: 0;
   }
 }
