@@ -341,8 +341,9 @@ export function Sidebar() {
 
       <div className="om-sidebar-foot">
         {/* Theme selector — Light / Dark (System removed on purpose).
-            Collapsed sidebar: one toggle that flips to the other theme. */}
-        {sidebarCollapsed ? (
+            Collapsed sidebar AND mobile drawer: one compact toggle that flips
+            to the other theme, so the whole foot fits on a single row. */}
+        {sidebarCollapsed || isMobile ? (
           <div className="om-theme-row">
             <button
               className="om-theme-btn"

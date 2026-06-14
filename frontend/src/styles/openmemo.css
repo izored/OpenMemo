@@ -4874,8 +4874,19 @@ button.om-add-link { background: none; border: 0; padding: 0; cursor: pointer; f
   /* In the drawer the collections list is part of the single scroll, not its
      own pinned-bottom scroll zone. */
   .om-sidebar-scroll { flex: 0 0 auto; overflow: visible; min-height: 0; }
-  /* Bottom zone (player + foot) flows after the list instead of pinning. */
-  .om-sidebar-foot { margin-top: 14px; }
+  /* Bottom zone flows after the list. The foot collapses to ONE row below the
+     player — profile/settings (flexes) + a single theme toggle — so the old
+     full-width theme row no longer steals space from the player. */
+  .om-sidebar-foot {
+    flex-direction: row; align-items: center; gap: 8px;
+    margin-top: 12px; padding: 10px 0 4px;
+  }
+  .om-sidebar-foot .om-foot-btn { order: 1; flex: 1 1 auto; min-width: 0; }
+  .om-sidebar-foot .om-theme-row { order: 2; flex: 0 0 auto; padding: 0; }
+  .om-sidebar-foot .om-theme-btn {
+    flex: 0 0 auto; width: 44px; height: 44px;
+    background: var(--surface-2); color: var(--text-2);
+  }
 
   /* Search matches the 44px nav rows below it (was a tighter 36px, read as
      squished against them on a full-width drawer). */
