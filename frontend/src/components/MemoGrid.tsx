@@ -40,7 +40,8 @@ function useViewportColumns(userCols: number): number {
   useEffect(() => {
     const calc = () => {
       const w = window.innerWidth;
-      if (w < 900) setCap(2);
+      if (w <= 640) setCap(1);          // phone: a single readable column
+      else if (w < 900) setCap(2);
       else if (w < 1280) setCap(3);
       else if (w < 1500) setCap(4);
       else setCap(5);
@@ -172,6 +173,7 @@ export function MemoGrid({ memos: serverMemos }: MemoGridProps) {
     1500: Math.min(columns, 4),
     1280: Math.min(columns, 3),
     900: 2,
+    640: 1,
   };
 
   return (

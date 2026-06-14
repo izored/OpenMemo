@@ -87,6 +87,9 @@ export function Layout() {
   // inner scroll — so we skip Lenis entirely on /memo/* routes.
   useEffect(() => {
     if (location.pathname.startsWith('/memo/')) return;
+    // Below lg (phones/tablets) let native momentum scroll own touch — Lenis
+    // hijacks it and feels wrong on a touchscreen (ADR-009 #8).
+    if (isMobile) return;
     const wrapper = mainRef.current;
     if (!wrapper) return;
     const lenis = new Lenis({
@@ -108,7 +111,7 @@ export function Layout() {
       cancelAnimationFrame(raf);
       lenis.destroy();
     };
-  }, [location.pathname]);
+  }, [location.pathname, isMobile]);
 
   // Drive theme / accent / background CSS vars from persisted tweaks.
   useEffect(() => {

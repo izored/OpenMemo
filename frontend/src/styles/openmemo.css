@@ -4949,4 +4949,10 @@ button.om-add-link { background: none; border: 0; padding: 0; cursor: pointer; f
     margin-left: -14px; margin-right: -14px;
     padding-left: 0; padding-right: 0;
   }
+
+  /* iOS Safari jolt-zooms when a focused field is < 16px. Floor text fields at
+     16px on touch so focusing search / inputs / notes never zooms the page. */
+  input[type="text"], input[type="search"], input[type="email"], input[type="url"],
+  input[type="number"], input[type="password"], input[type="tel"], input:not([type]),
+  textarea, select { font-size: 16px; }
 }
