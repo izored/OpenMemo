@@ -26,6 +26,8 @@ from __future__ import annotations
 
 import hashlib
 import json
+import logging
+import random
 import re
 import time
 import uuid
@@ -33,6 +35,11 @@ from pathlib import Path
 from urllib.parse import quote
 
 import httpx
+
+# Structured music-pipeline logger. Propagates to uvicorn's root handler, so
+# every resolve step + community-relay status shows up in the server log under
+# "openmemo.music" — that is the "what happened" trail when a pull fails.
+log = logging.getLogger("openmemo.music")
 
 # --- SpotiFLAC community provider (decrypted from the upstream binary) ---
 # Source: spotbye/SpotiFLAC backend/community_endpoints.go + community_apikey.go.
@@ -61,6 +68,12 @@ _FALLBACK_QUALITY = "16"
 
 _COMMUNITY_MAX_RETRIES = 6
 _COMMUNITY_FALLBACK_WAIT = 30.0
+# The relay is a shared SPOF and returns 429 (rate limit) or 5xx (overloaded)
+# under load, both with a Retry-After. Retry those, but never block a download
+# worker longer than this — a multi-minute cool-down is surfaced to the user
+# instead, so a 100-track playlist fails fast with a reason rather than hanging.
+_COMMUNITY_TRANSIENT_STATUSES = frozenset({429, 502, 503, 504})
+_COMMUNITY_MAX_TRANSIENT_WAIT = 90.0
 
 _SPOTIFY_URL_RE = re.compile(
     r"(?:open\.spotify\.com/(?:intl-[a-z]{2}/)?|spotify:)"
@@ -294,14 +307,42 @@ def _qobuz_track_match(client: httpx.Client, isrc: str | None, title: str, artis
 # --------------------------------------------------------------------------- #
 #  Community endpoint → direct FLAC URL
 # --------------------------------------------------------------------------- #
+def _relay_message(resp: httpx.Response) -> str | None:
+    """The relay's own human-readable error (e.g. the overload 'try again in N
+    minutes' notice), if the body carries one. This text is already user-facing,
+    so it makes the best failure reason to surface."""
+    try:
+        body = resp.json()
+    except Exception:
+        return None
+    for candidate in (body.get("error"), (body.get("data") or {}).get("error"), body.get("message")):
+        if isinstance(candidate, str) and candidate.strip():
+            return candidate.strip()
+    return None
+
+
+def _retry_after_seconds(resp: httpx.Response) -> float | None:
+    ra = resp.headers.get("Retry-After")
+    if ra and ra.strip().isdigit():
+        return float(ra.strip())
+    return None
+
+
 def _community_flac_url(client: httpx.Client, qobuz_id: str, quality: str) -> str:
     """POST a Qobuz track id to the community endpoint → direct FLAC URL.
 
     Always asks for hi-res (24-bit) and **downgrades to 16-bit CD on the fly**
-    when the release has no hi-res master: the community relay answers such a
-    request with a 400 rather than falling back server-side, so we drop to "16"
-    once and retry. Mirrors SpotiFLAC's doCommunityRequest 429 handling (respect
-    Retry-After, bounded retries) since the endpoint is shared and rate-limited.
+    when the release has no hi-res master: the relay answers such a request with
+    a 400, so we drop to "16" once and retry.
+
+    The relay is a shared single point of failure. It returns 429 (rate limit)
+    or 5xx (overloaded) under load — both *transient* and both carrying a
+    Retry-After. We retry those with backoff, but cap the wait: a multi-minute
+    cool-down is raised to the caller (with the relay's own message) so a track
+    fails fast with a real reason instead of hanging a playlist download. Only a
+    genuine 400/404 client error triggers the CD downgrade; previously *any*
+    non-200 (including 503) wrongly burned the downgrade and then gave up, which
+    is why a transient overload looked like a permanent failure.
     """
     quality = quality if quality in VALID_QUALITIES else DEFAULT_QUALITY
     headers = {
@@ -311,34 +352,52 @@ def _community_flac_url(client: httpx.Client, qobuz_id: str, quality: str) -> st
         "User-Agent": "SpotiFLAC",
     }
     payload = {"id": str(qobuz_id), "quality": quality}
-    last_status = None
     downgraded = False
     for attempt in range(_COMMUNITY_MAX_RETRIES + 1):
         resp = client.post(_QOBUZ_COMMUNITY_URL, json=payload, headers=headers, timeout=60)
-        last_status = resp.status_code
-        if resp.status_code == 429:
-            if attempt == _COMMUNITY_MAX_RETRIES:
-                break
-            ra = resp.headers.get("Retry-After")
-            wait = _COMMUNITY_FALLBACK_WAIT
-            if ra and ra.isdigit():
-                wait = float(ra) + 0.25
-            time.sleep(min(wait, 60.0))
-            continue
-        if resp.status_code == 200:
+        status = resp.status_code
+
+        if status == 200:
             url = _extract_stream_url(resp.json())
             if not url:
                 raise SpotiFlacError("No streamable URL in Qobuz community response")
+            log.info("qobuz id=%s quality=%s resolved", qobuz_id, quality)
             return url
-        # Non-200, non-429: a hi-res ask for a CD-only release 400s here. Drop to
-        # 16-bit once and retry; anything else (or a repeat) is a real failure.
-        if quality == "24" and not downgraded:
+
+        # Transient: rate-limited or overloaded relay. Respect Retry-After.
+        if status in _COMMUNITY_TRANSIENT_STATUSES:
+            relay_msg = _relay_message(resp)
+            wait = _retry_after_seconds(resp)
+            log.warning(
+                "qobuz id=%s transient %s attempt=%s/%s retry-after=%s msg=%s",
+                qobuz_id, status, attempt, _COMMUNITY_MAX_RETRIES, wait, relay_msg,
+            )
+            # Long cool-down or out of attempts → surface, don't block the worker.
+            too_long = wait is not None and wait > _COMMUNITY_MAX_TRANSIENT_WAIT
+            if too_long or attempt == _COMMUNITY_MAX_RETRIES:
+                raise SpotiFlacError(
+                    relay_msg
+                    or f"Lossless music service is busy right now (HTTP {status}). Try again shortly."
+                )
+            sleep_for = (wait if wait is not None else _COMMUNITY_FALLBACK_WAIT)
+            time.sleep(min(sleep_for, _COMMUNITY_MAX_TRANSIENT_WAIT) + random.uniform(0.0, 1.5))
+            continue
+
+        # Genuine client error: a hi-res ask for a CD-only release 400s here (404
+        # = the relay can't source this id). Drop to 16-bit once and retry.
+        if status in (400, 404) and quality == "24" and not downgraded:
             quality = _FALLBACK_QUALITY
             payload["quality"] = quality
             downgraded = True
+            log.info("qobuz id=%s no hi-res (%s) — retrying at CD/16-bit", qobuz_id, status)
             continue
-        raise SpotiFlacError(f"Qobuz community API returned {resp.status_code}")
-    raise SpotiFlacError(f"Qobuz community API rate limited (last status {last_status})")
+
+        relay_msg = _relay_message(resp)
+        log.warning("qobuz id=%s failed status=%s msg=%s", qobuz_id, status, relay_msg)
+        raise SpotiFlacError(relay_msg or f"Qobuz community API returned {status}")
+
+    # Loop exhausted without returning (all attempts transient).
+    raise SpotiFlacError("Lossless music service is busy right now. Try again shortly.")
 
 
 def _extract_stream_url(body: dict) -> str | None:
@@ -408,8 +467,10 @@ def download_spotify_track(
         isrc = _resolve_isrc(client, spotify_url)
         match = _qobuz_track_match(client, isrc, title or "", artist)
         if not match:
+            log.warning("no Qobuz match title=%r artist=%r isrc=%s", title, artist, isrc)
             raise SpotiFlacError("No matching lossless track found on Qobuz")
         qobuz_id, album = match
+        log.info("resolving title=%r artist=%r isrc=%s qobuz=%s q=%s", title, artist, isrc, qobuz_id, quality)
         stream_url = _community_flac_url(client, qobuz_id, quality)
 
         # Stream the FLAC to disk. The community URL points at a CDN; sniff the
