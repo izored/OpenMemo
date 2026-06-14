@@ -1,4 +1,4 @@
-import { useRef, useEffect, useState } from 'react';
+import { useRef, useEffect, useState, type SyntheticEvent } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useQuery, useInfiniteQuery, useQueryClient } from '@tanstack/react-query';
 import { useDroppable } from '@dnd-kit/core';
@@ -156,6 +156,11 @@ function MusicTile({ m, index, active, playing, onPlay, onDownload, onRemove, on
   const fetching = m.localize_status === 'pending' || m.localize_status === 'processing';
   const remote = !ready && !failed && !fetching;
   const [confirm, setConfirm] = useState(false);
+  const showNotice = useAppStore((s) => s.showNotice);
+  const showWhy = (e: SyntheticEvent) => {
+    e.stopPropagation();
+    showNotice(m.localize_error || 'This track failed to download. Tap the cloud icon to retry.', 'error');
+  };
   return (
     <button
       className={cn('om-mtile', active && 'is-active', fetching && 'is-pending', !ready && 'is-offline', m.liked && 'is-liked')}
@@ -204,7 +209,14 @@ function MusicTile({ m, index, active, playing, onPlay, onDownload, onRemove, on
       {/* Status label, bottom-corner: names the state in words. The cloud
           badge below is the tap target; this is just the readout. */}
       {failed ? (
-        <span className="om-mtile-state failed">failed</span>
+        <span
+          className="om-mtile-state failed"
+          role="button"
+          tabIndex={0}
+          title={m.localize_error || 'Download failed — tap for details'}
+          onClick={showWhy}
+          onKeyDown={(e) => { if (e.key === 'Enter') showWhy(e); }}
+        >failed · why?</span>
       ) : fetching ? (
         <span className="om-mtile-state"><Icon name="refresh" size={10} className="om-spin" /> downloading</span>
       ) : remote ? (
@@ -351,6 +363,7 @@ export function MusicPage() {
   const { playlistId } = useParams();
   const setMusicModalOpen = useAppStore((s) => s.setMusicModalOpen);
   const openThumbEdit = useAppStore((s) => s.openThumbEdit);
+  const showNotice = useAppStore((s) => s.showNotice);
   const { playQueue, toggle, isActive, playing, queueSource } = useAudioPlayer();
   // True when the live queue was started from this playlist/album card.
   const isPlayingSource = (id: string) => queueSource?.kind === 'playlist' && queueSource.id === id;
@@ -647,7 +660,18 @@ export function MusicPage() {
     // Tracks not on this device (remote, queued, or failed). Any of them can be
     // (re)pulled, so the playlist keeps its re-download control.
     const notLocal = tracks.filter((t) => !isReady(t));
-    const failedCount = notLocal.filter((t) => t.localize_status === 'error').length;
+    const failedTracks = notLocal.filter((t) => t.localize_status === 'error');
+    const failedCount = failedTracks.length;
+    // The most common failure reason across failed tracks — surfaced as the
+    // playlist-level "why?" so the user sees the overall cause in one tap.
+    const failReason = (() => {
+      const counts = new Map<string, number>();
+      for (const t of failedTracks) {
+        if (t.localize_error) counts.set(t.localize_error, (counts.get(t.localize_error) ?? 0) + 1);
+      }
+      const top = [...counts.entries()].sort((a, b) => b[1] - a[1])[0];
+      return top ? top[0] : null;
+    })();
     // The bulk control stays put whenever any track is still off-device. A
     // single-track download (one tile's cloud chip) must NOT steal the header
     // button. Only that one tile shows its own spinner. So no processing gate.
@@ -769,6 +793,15 @@ export function MusicPage() {
                   <span>{failedCount > 0 ? `Re-download (${notLocal.length})` : 'Download all'}</span>
                 </button>
               ) : null}
+              {failedCount > 0 && failReason && (
+                <button
+                  className="om-btn-secondary"
+                  onClick={() => showNotice(`${failedCount} track${failedCount > 1 ? 's' : ''} failed: ${failReason}`, 'error')}
+                  title="Why did tracks fail to download?"
+                >
+                  <span>Why?</span>
+                </button>
+              )}
               {playlist?.source_url && (
                 <a className="om-btn-secondary" href={playlist.source_url} target="_blank" rel="noreferrer" title="Open the source playlist">
                   <Icon name="arrowUpRight" size={13} />

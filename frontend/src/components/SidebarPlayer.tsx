@@ -5,6 +5,7 @@ import { Icon } from './Icon';
 import { cn } from '@/lib/utils';
 import { memoApi } from '@/lib/api';
 import { useAppStore } from '@/stores/appStore';
+import { useIsMobile } from '@/lib/useBreakpoint';
 import { useAudioPlayer, formatTime } from '@/lib/audioPlayer';
 import { useCoverMood } from '@/lib/coverMood';
 import { Marquee } from './Marquee';
@@ -22,6 +23,7 @@ export function SidebarPlayer() {
   const queryClient = useQueryClient();
   const collapsed = useAppStore((s) => s.sidebarCollapsed);
   const playerSize = useAppStore((s) => s.tweaks.playerSize);
+  const isMobile = useIsMobile();
   const { track, playing, currentTime, duration, repeat, toggleRepeat, toggle, seek, close, next, prev, queueLength, queueIndex, shuffled, toggleShuffle, queueSource } = useAudioPlayer();
   // Up-next popover (ADR-015) — the queue, inspectable and editable in place.
   const [upNextOpen, setUpNextOpen] = useState(false);
@@ -42,12 +44,14 @@ export function SidebarPlayer() {
   }, []);
   /* eslint-disable react-hooks/set-state-in-effect -- syncing the fade timer to playback state is exactly an external-system subscription; the setState arms/disarms a timeout */
   useEffect(() => {
-    if (playing) pokeControls();
+    // On touch/mobile the big player is the main now-playing surface — keep its
+    // controls always visible rather than auto-hiding them.
+    if (playing && !isMobile) pokeControls();
     else showControls();
     return () => {
       if (hideTimerRef.current) window.clearTimeout(hideTimerRef.current);
     };
-  }, [playing, pokeControls, showControls]);
+  }, [playing, isMobile, pokeControls, showControls]);
   /* eslint-enable react-hooks/set-state-in-effect */
 
   // Pin state seeded from the playing track, toggled optimistically here. Reset
@@ -246,7 +250,9 @@ export function SidebarPlayer() {
   ) : null;
 
   // ── Collapsed sidebar: cover + progress ring, tap to play/pause ──
-  if (collapsed) {
+  // Collapse is a desktop-only concept; in the full-screen mobile drawer we skip
+  // the mini and always show the full player.
+  if (collapsed && !isMobile) {
     const R = 18;
     const C = 2 * Math.PI * R;
     return (
@@ -280,7 +286,7 @@ export function SidebarPlayer() {
   // ── Big: full cover, corner transport cluster, scrubber + volume below
   //    (ADR-010). Play hugs the top-right corner; pin + repeat are satellites;
   //    the close X moves to the top-LEFT so it never collides with the cluster. ──
-  if (playerSize === 'big' && hasCover) {
+  if ((playerSize === 'big' || isMobile) && hasCover) {
     return (
       <div
         className={cn('om-sb-player', 'om-sb-player-big', mood && 'is-tinted', !controlsOn && 'controls-off')}

@@ -7,6 +7,7 @@ import { PageHeader } from '@/components/PageHeader';
 import { ChangelogModal, cmpVersion } from '@/components/ChangelogModal';
 import { ONBOARDING_KEY } from '@/lib/onboarding';
 import { useAppStore } from '@/stores/appStore';
+import { useIsMobile } from '@/lib/useBreakpoint';
 import { CookiesUpload } from '@/components/CookiesUpload';
 import { systemApi, maintenanceApi, backupApi, settingsApi, memoApi, type AppSettings } from '@/lib/api';
 import type { OllamaModel } from '@/types';
@@ -303,10 +304,22 @@ export function SettingsPage() {
   const t = useAppStore((s) => s.tweaks);
   const setAppearancePanelOpen = useAppStore((s) => s.setAppearancePanelOpen);
   const openGuide = useAppStore((s) => s.openGuide);
+  const showNotice = useAppStore((s) => s.showNotice);
   const navigate = useNavigate();
   const queryClient = useQueryClient();
+  const isMobile = useIsMobile();
 
   const openAppearance = () => {
+    // The live-preview panel is a desktop side panel. On mobile, point the user
+    // to what they CAN do here (switch theme from the menu) and to the desktop
+    // app for the rest, rather than opening a cramped, half-broken panel.
+    if (isMobile) {
+      showNotice(
+        'Appearance editing — accent, background, layout, columns — is desktop only. On mobile you can still switch light/dark from the menu. Open openMemo on a larger screen to customize the rest.',
+        'info',
+      );
+      return;
+    }
     navigate('/');
     setTimeout(() => setAppearancePanelOpen(true), 280);
   };
@@ -497,7 +510,7 @@ export function SettingsPage() {
             </p>
             <div className="om-ap-hero-actions">
               <span className="om-ap-hero-cta">
-                Open live preview <Icon name="arrowUpRight" size={15} />
+                {isMobile ? 'Desktop only — tap for details' : 'Open live preview'} <Icon name="arrowUpRight" size={15} />
               </span>
               <button
                 type="button"
