@@ -4955,4 +4955,28 @@ button.om-add-link { background: none; border: 0; padding: 0; cursor: pointer; f
   input[type="text"], input[type="search"], input[type="email"], input[type="url"],
   input[type="number"], input[type="password"], input[type="tel"], input:not([type]),
   textarea, select { font-size: 16px; }
+
+  /* Single-column page reflows (ADR-009 #6). Settings' bento stacks here — its
+     old 1100px rule set flex-direction on a grid (a no-op), so it stayed 2-up
+     and cramped; force one column. Collections list one card per row. Ask tones
+     down its desktop hero padding/size. */
+  .om-settings-grid { grid-template-columns: 1fr; }
+  .om-colls-grid { grid-template-columns: 1fr; gap: 14px; }
+  .om-ask { padding: 12px 0 120px; gap: 22px; }
+  .om-ask-title { font-size: 30px; }
+  .om-ask-shell { height: calc(100dvh - 96px); }
+
+  /* Add-memo / music-add panels become near-full-width bottom sheets that slide
+     up from the bottom (ADR-009 #7), instead of a 296px corner card. Appearance
+     is desktop-only, so it never opens here. */
+  .om-add-panel {
+    left: 8px; right: 8px; bottom: 0; width: auto; max-width: none;
+    max-height: 86dvh;
+    border-radius: 18px 18px 0 0;
+    transform-origin: bottom center;
+    transform: translateY(110%); opacity: 1;
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+  .om-add-panel.open { transform: translateY(0); }
+  .om-add-panel.om-mm-panel { width: auto; height: auto; max-height: 86dvh; }
 }
