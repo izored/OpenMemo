@@ -4949,4 +4949,52 @@ button.om-add-link { background: none; border: 0; padding: 0; cursor: pointer; f
     margin-left: -14px; margin-right: -14px;
     padding-left: 0; padding-right: 0;
   }
+
+  /* iOS Safari jolt-zooms when a focused field is < 16px. Floor text fields at
+     16px on touch so focusing search / inputs / notes never zooms the page. */
+  input[type="text"], input[type="search"], input[type="email"], input[type="url"],
+  input[type="number"], input[type="password"], input[type="tel"], input:not([type]),
+  textarea, select { font-size: 16px; }
+
+  /* Single-column page reflows (ADR-009 #6). Settings' bento stacks here — its
+     old 1100px rule set flex-direction on a grid (a no-op), so it stayed 2-up
+     and cramped; force one column. Collections list one card per row. Ask tones
+     down its desktop hero padding/size. */
+  .om-settings-grid { grid-template-columns: 1fr; }
+  .om-colls-grid { grid-template-columns: 1fr; gap: 14px; }
+  .om-ask { padding: 12px 0 120px; gap: 22px; }
+  .om-ask-title { font-size: 30px; }
+  .om-ask-shell { height: calc(100dvh - 96px); }
+
+  /* Add-memo / music-add panels become near-full-width bottom sheets that slide
+     up from the bottom (ADR-009 #7), instead of a 296px corner card. Appearance
+     is desktop-only, so it never opens here. */
+  .om-add-panel {
+    left: 8px; right: 8px; bottom: 0; width: auto; max-width: none;
+    max-height: 86dvh;
+    border-radius: 18px 18px 0 0;
+    transform-origin: bottom center;
+    transform: translateY(110%); opacity: 1;
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+  .om-add-panel.open { transform: translateY(0); }
+  .om-add-panel.om-mm-panel { width: auto; height: auto; max-height: 86dvh; }
+
+  /* MemoDetail chat: a bottom sheet over the full-width content (ADR-009 #6),
+     not a 384px side pane that squeezes the article. The detail header stays
+     visible above for the same toggle; the scrim also dismisses it. */
+  .om-detail-chat {
+    position: fixed; left: 0; right: 0; bottom: 0; z-index: 70;
+    width: auto; height: 86dvh; max-height: 86dvh;
+    border-left: 0; border-top: 1px solid var(--border);
+    border-radius: 18px 18px 0 0;
+    box-shadow: 0 -12px 40px rgba(0, 0, 0, 0.5);
+    overflow: hidden; padding-bottom: env(safe-area-inset-bottom);
+    animation: omSheetUp .28s cubic-bezier(.2, .8, .2, 1);
+  }
+  @keyframes omSheetUp { from { transform: translateY(100%); } to { transform: none; } }
+  .om-detail-chat-scrim {
+    position: fixed; inset: 0; z-index: 69; background: rgba(0, 0, 0, 0.45);
+    animation: omScrimIn .2s ease;
+  }
 }
