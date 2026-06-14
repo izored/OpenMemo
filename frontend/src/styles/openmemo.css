@@ -4979,4 +4979,22 @@ button.om-add-link { background: none; border: 0; padding: 0; cursor: pointer; f
   }
   .om-add-panel.open { transform: translateY(0); }
   .om-add-panel.om-mm-panel { width: auto; height: auto; max-height: 86dvh; }
+
+  /* MemoDetail chat: a bottom sheet over the full-width content (ADR-009 #6),
+     not a 384px side pane that squeezes the article. The detail header stays
+     visible above for the same toggle; the scrim also dismisses it. */
+  .om-detail-chat {
+    position: fixed; left: 0; right: 0; bottom: 0; z-index: 70;
+    width: auto; height: 86dvh; max-height: 86dvh;
+    border-left: 0; border-top: 1px solid var(--border);
+    border-radius: 18px 18px 0 0;
+    box-shadow: 0 -12px 40px rgba(0, 0, 0, 0.5);
+    overflow: hidden; padding-bottom: env(safe-area-inset-bottom);
+    animation: omSheetUp .28s cubic-bezier(.2, .8, .2, 1);
+  }
+  @keyframes omSheetUp { from { transform: translateY(100%); } to { transform: none; } }
+  .om-detail-chat-scrim {
+    position: fixed; inset: 0; z-index: 69; background: rgba(0, 0, 0, 0.45);
+    animation: omScrimIn .2s ease;
+  }
 }

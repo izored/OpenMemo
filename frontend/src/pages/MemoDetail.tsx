@@ -38,6 +38,7 @@ import { BackButton } from '@/components/BackButton';
 import { MarkdownEditor } from '@/components/MarkdownEditor';
 import { memoApi, collectionApi } from '@/lib/api';
 import { AskMemoPanel } from '@/components/AskMemoPanel';
+import { useIsMobile } from '@/lib/useBreakpoint';
 import { audioEmbed, audioPlatformMeta, canMakeLocal, canTranscript, canSummarize, audioKind } from '@/lib/media';
 import { videoEmbedUrl, embedAspectRatio, platformMeta } from '@/lib/platforms';
 import { useAppStore } from '@/stores/appStore';
@@ -895,6 +896,7 @@ export function MemoDetail() {
   const queryClient = useQueryClient();
   const openThumbEdit = useAppStore((s) => s.openThumbEdit);
   const [chatOpen, setChatOpen] = useState(false);
+  const isMobile = useIsMobile();
   const [isEditing, setIsEditing] = useState(false);
   const [noteContent, setNoteContent] = useState('');
   const [showExtracted, setShowExtracted] = useState(false);
@@ -1570,7 +1572,11 @@ export function MemoDetail() {
         </div>
       </div>
 
-      {/* Chat pane */}
+      {/* Chat pane — a 384px side pane on desktop; a bottom sheet (with a
+          tap-to-dismiss scrim) on mobile, opened by the same toggle. */}
+      {chatOpen && isMobile && (
+        <div className="om-detail-chat-scrim" onClick={() => setChatOpen(false)} aria-hidden />
+      )}
       {chatOpen && (
         <div className="om-detail-chat">
           <AskMemoPanel memoId={id!} />
