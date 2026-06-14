@@ -4847,8 +4847,10 @@ button.om-add-link { background: none; border: 0; padding: 0; cursor: pointer; f
   .om-mtb-brand { padding: 0 6px; }
   .om-mtb-brand .om-brand-name { font-size: 18px; color: var(--text); }
 
-  /* Page content clears the fixed top bar. */
-  .om-main { padding-top: calc(52px + env(safe-area-inset-top)) !important; }
+  /* Page content clears the fixed top bar and drops the wide desktop side
+     padding (48–64px) for a tight 14px so cards use the screen. !important
+     beats the [data-density] padding rules. */
+  .om-main { padding: calc(52px + env(safe-area-inset-top)) 14px 88px !important; }
   .om-main:has(.om-detail-page) { padding: calc(52px + env(safe-area-inset-top)) 0 0 !important; }
 
   /* Sidebar → full-screen off-canvas drawer (mobile only). The whole column
@@ -4861,19 +4863,19 @@ button.om-add-link { background: none; border: 0; padding: 0; cursor: pointer; f
     padding: 0 16px;
     padding-top: max(12px, env(safe-area-inset-top));
     padding-bottom: max(16px, env(safe-area-inset-bottom));
-    overflow-y: auto; overflow-x: hidden;
+    overflow: hidden;
     transform: translateX(-100%);
     transition: transform .3s cubic-bezier(.2, .8, .2, 1);
   }
   .om-app.drawer-open .om-sidebar { transform: none; }
-  /* The whole drawer is one scroll. Stop flex from compressing children — a
-     flex column shrinks items by default, which squashed the big player's
-     square cover into a strip. Pin every child to its natural height and let
-     the column scroll instead. */
+  /* Anchor the bottom zone (player + foot) to the bottom of the drawer; the
+     collections list is the flexible middle that scrolls. flex-shrink:0 on the
+     fixed children stops the column from compressing the big player's cover. */
   .om-sidebar > * { flex-shrink: 0; }
-  /* In the drawer the collections list is part of the single scroll, not its
-     own pinned-bottom scroll zone. */
-  .om-sidebar-scroll { flex: 0 0 auto; overflow: visible; min-height: 0; }
+  .om-sidebar-scroll { flex: 1 1 auto; overflow-y: auto; min-height: 0; }
+  /* The FAB is a page action; hide it while the full-screen drawer is open so
+     it doesn't float in the drawer's bottom space. */
+  .om-app.drawer-open .om-fab { display: none; }
   /* Bottom zone flows after the list. The foot collapses to ONE row below the
      player — profile/settings (flexes) + a single theme toggle — so the old
      full-width theme row no longer steals space from the player. */
@@ -4930,4 +4932,14 @@ button.om-add-link { background: none; border: 0; padding: 0; cursor: pointer; f
   /* Big player stays the rich layout but compact — a full-width square cover
      dwarfed the rest of the drawer. Cap the cover height instead. */
   .om-sb-player-big-cover { aspect-ratio: auto; height: min(46vw, 220px); }
+
+  /* Music rails bleed to the screen edge: negative margin cancels the 14px page
+     padding, the inner padding keeps the first card aligned with the heading,
+     and cards now scroll all the way to the edge (next card peeks) instead of
+     stopping 14px short. */
+  .om-hero-row, .om-pl-row {
+    margin-left: -14px; margin-right: -14px;
+    padding-left: 14px; padding-right: 14px;
+    scroll-padding-left: 14px;
+  }
 }
