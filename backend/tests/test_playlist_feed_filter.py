@@ -112,3 +112,24 @@ def test_standard_collection_does_not_hide_memos(client):
 
     ids = _listed_ids(client, type="audio", audio_kind="music", limit=200)
     assert memo in ids
+
+
+def test_liked_filter_reaches_playlist_born_tracks(client):
+    # Favourite Songs (OPNMMO-0041): a song liked from INSIDE a playlist must
+    # still reach the liked queue. liked=true bypasses the playlist-born feed
+    # exclusion; without it the same track stays out of the library.
+    liked_born = _create_music_memo(client, "liked playlist track", born=True)
+    liked_lib = _create_music_memo(client, "liked library track")
+    unliked = _create_music_memo(client, "plain library track")
+    playlist_id = _create_collection(client, "liked source playlist", "playlist")
+    _add_to_collection(client, playlist_id, liked_born)
+    _db_exec("UPDATE memos SET liked = 1 WHERE id = ?", liked_born)
+    _db_exec("UPDATE memos SET liked = 1 WHERE id = ?", liked_lib)
+
+    liked_ids = _listed_ids(client, type="audio", audio_kind="music", liked="true", limit=200)
+    assert liked_born in liked_ids   # playlist-born but liked → included
+    assert liked_lib in liked_ids
+    assert unliked not in liked_ids  # not liked → excluded
+
+    # Without the liked filter, the born track is still hidden from the library.
+    assert liked_born not in _listed_ids(client, type="audio", audio_kind="music", limit=200)

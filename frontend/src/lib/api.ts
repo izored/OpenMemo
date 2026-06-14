@@ -15,7 +15,7 @@ async function fetchJSON<T>(url: string, options?: RequestInit): Promise<T> {
 
 // Memos
 export const memoApi = {
-  list: (params?: { type?: string; audio_kind?: 'voice' | 'music'; collection_id?: string; search?: string; hidden?: boolean; sort?: 'recent' | 'title' | 'artist'; offset?: number; limit?: number }) => {
+  list: (params?: { type?: string; audio_kind?: 'voice' | 'music'; collection_id?: string; search?: string; hidden?: boolean; liked?: boolean; sort?: 'recent' | 'title' | 'artist'; offset?: number; limit?: number }) => {
     const search = new URLSearchParams();
     if (params?.type && params.type !== 'all') search.set('type', params.type);
     if (params?.audio_kind) search.set('audio_kind', params.audio_kind);
@@ -24,6 +24,9 @@ export const memoApi = {
     // hidden=true lists ONLY hidden memos (the passcode-gated hidden section).
     // Omitted = dashboard behavior (hidden memos excluded server-side).
     if (params?.hidden) search.set('hidden', 'true');
+    // liked=true: every liked track, INCLUDING playlist-born ones (Favourite
+    // Songs queue, OPNMMO-0041). Bypasses the playlist-born feed exclusion.
+    if (params?.liked) search.set('liked', 'true');
     if (params?.sort && params.sort !== 'recent') search.set('sort', params.sort);
     if (params?.offset) search.set('offset', String(params.offset));
     if (params?.limit) search.set('limit', String(params.limit));
