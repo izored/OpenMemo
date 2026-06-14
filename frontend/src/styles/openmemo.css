@@ -4882,8 +4882,12 @@ button.om-add-link { background: none; border: 0; padding: 0; cursor: pointer; f
      shrink + scroll when expanded. flex-shrink:0 default keeps the fixed chrome
      (search/nav/foot) from compressing. */
   .om-sidebar > * { flex-shrink: 0; }
-  .om-sidebar-scroll { flex: 0 1 auto; overflow-y: auto; min-height: 0; }
-  .om-sb-player { flex: 1 1 auto; min-height: 0; }
+  /* The plain collections list is the flex-grow filler — it reliably pushes the
+     player + foot to the true bottom of the drawer (the nested flex+aspect of
+     the big player did NOT grow predictably in some mobile browsers, leaving a
+     gap UNDER the foot). The player keeps a predictable capped size below. */
+  .om-sidebar-scroll { flex: 1 1 auto; overflow-y: auto; min-height: 0; }
+  .om-sb-player { flex: 0 0 auto; min-height: 0; }
   /* The FAB is a page action; hide it while the full-screen drawer is open so
      it doesn't float in the drawer's bottom space. */
   .om-app.drawer-open .om-fab { display: none; }
@@ -4940,11 +4944,10 @@ button.om-add-link { background: none; border: 0; padding: 0; cursor: pointer; f
   }
   .om-coll-more:active { background: var(--surface-2); color: var(--text-2); }
 
-  /* Big player fills the flexible space: the cover grows to take whatever height
-     the player got, with a floor so it never collapses; the body (title +
-     scrubber + controls) keeps its natural height below. */
+  /* Big player keeps a predictable cover height (not flex-grown) so it renders
+     consistently and the foot stays pinned at the bottom by the scroll filler. */
   .om-sb-player-big { min-height: 0; }
-  .om-sb-player-big-cover { aspect-ratio: auto; flex: 1 1 auto; height: auto; min-height: 150px; }
+  .om-sb-player-big-cover { aspect-ratio: auto; flex: none; height: clamp(150px, 30vh, 260px); }
 
   /* Music rails are true full-bleed: negative margin cancels the 14px page
      padding and the inner side padding is dropped, so the cards sit right at
@@ -4984,6 +4987,11 @@ button.om-add-link { background: none; border: 0; padding: 0; cursor: pointer; f
   }
   .om-add-panel.open { transform: translateY(0); }
   .om-add-panel.om-mm-panel { width: auto; height: auto; max-height: 86dvh; }
+  /* Appearance panel is desktop-only and never opens on mobile. It is always in
+     the DOM (hidden by transform/opacity on desktop), but its own .om-ap-panel
+     transform outranks the bottom-sheet rule above and the opacity:1 unhid it —
+     so it ghosted into the page. Hide it outright here. */
+  .om-add-panel.om-ap-panel { display: none !important; }
 
   /* MemoDetail chat: a bottom sheet over the full-width content (ADR-009 #6),
      not a 384px side pane that squeezes the article. The detail header stays
