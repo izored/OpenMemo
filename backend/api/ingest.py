@@ -1,8 +1,13 @@
 """Content ingestion API - handles URL saving, file uploads, and processing."""
+import logging
 import uuid
 from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Optional
+
+# Shares the "openmemo.music" logger with the resolver so a track's whole
+# journey (resolve → community relay status → store/fail) reads as one trail.
+log = logging.getLogger("openmemo.music")
 
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form, BackgroundTasks
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -1294,7 +1299,7 @@ async def _localize_spotify_track(memo_id: str, url: str, ws: str):
             download_spotify_track, url, dest_dir, quality, title, artist, cover
         )
     except SpotiFlacError as e:
-        print(f"SpotiFLAC failed for {memo_id}: {e}")
+        log.warning("spotify localize failed memo=%s: %s", memo_id, e)
         async with AsyncSessionLocal() as db:
             memo = await db.get(Memo, memo_id)
             if memo:
@@ -1304,7 +1309,7 @@ async def _localize_spotify_track(memo_id: str, url: str, ws: str):
                 await db.commit()
         return
     except Exception as e:
-        print(f"SpotiFLAC crashed for {memo_id}: {e}")
+        log.exception("spotify localize crashed memo=%s: %s", memo_id, e)
         async with AsyncSessionLocal() as db:
             memo = await db.get(Memo, memo_id)
             if memo:
@@ -1365,7 +1370,7 @@ async def _localize_apple_track(memo_id: str, url: str, ws: str):
             download_apple_track, url, dest_dir, quality, title, artist, cover
         )
     except SpotiFlacError as e:
-        print(f"Apple Music FLAC failed for {memo_id}: {e}")
+        log.warning("apple localize failed memo=%s: %s", memo_id, e)
         async with AsyncSessionLocal() as db:
             memo = await db.get(Memo, memo_id)
             if memo:
@@ -1375,7 +1380,7 @@ async def _localize_apple_track(memo_id: str, url: str, ws: str):
                 await db.commit()
         return
     except Exception as e:
-        print(f"Apple Music FLAC crashed for {memo_id}: {e}")
+        log.exception("apple localize crashed memo=%s: %s", memo_id, e)
         async with AsyncSessionLocal() as db:
             memo = await db.get(Memo, memo_id)
             if memo:

@@ -7,6 +7,7 @@ import { Icon } from './Icon';
 import { SidebarPlayer } from './SidebarPlayer';
 import { collectionApi, memoApi, systemApi, settingsApi } from '@/lib/api';
 import { useAppStore } from '@/stores/appStore';
+import { useIsMobile } from '@/lib/useBreakpoint';
 import type { Collection } from '@/types';
 import { cn } from '@/lib/utils';
 
@@ -57,12 +58,14 @@ export function Sidebar() {
     setActiveCollection,
     sidebarCollapsed,
     toggleSidebarCollapsed,
+    setSidebarOpen,
     setCollectionModalOpen,
     setEditingCollection,
     setSearchOpen,
     tweaks,
     setTweak,
   } = useAppStore();
+  const isMobile = useIsMobile();
 
   // Two explicit themes only — the old "System" option is gone (dark mode is
   // manually toggled, never auto-applied; see CLAUDE.md).
@@ -73,6 +76,10 @@ export function Sidebar() {
   // collection) for 1.5s and a "hidden" link fades in between the Collections
   // label and the "+". It stays while the pointer remains on the head row.
   const [hiddenRevealed, setHiddenRevealed] = React.useState(false);
+  // Mobile drawer: collections collapse to the first 3 behind a chevron, and
+  // creating a collection is desktop-only — so the header "+" becomes the
+  // expand/collapse toggle on mobile.
+  const [collExpanded, setCollExpanded] = React.useState(false);
   const revealTimer = React.useRef<number | null>(null);
   const cancelReveal = React.useCallback(() => {
     if (revealTimer.current !== null) {
@@ -125,6 +132,8 @@ export function Sidebar() {
 
   const pinned = collections.filter((c: Collection) => c.pinned);
   const others = collections.filter((c: Collection) => !c.pinned);
+  // Mobile drawer shows the first 3 collections until the chevron expands them.
+  const visibleOthers = isMobile && !collExpanded ? others.slice(0, 3) : others;
 
   const goRoute = (path: string) => {
     setActiveCollection(null);
@@ -154,19 +163,39 @@ export function Sidebar() {
       <div className="om-sidebar-head">
         <button
           className="om-brand"
-          onClick={toggleSidebarCollapsed}
-          title={sidebarCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+          onClick={() => {
+            // On mobile the drawer header logo goes home (ADR-009 #3); on
+            // desktop it keeps the collapse/expand toggle.
+            if (isMobile) {
+              navigate('/');
+              setSidebarOpen(false);
+            } else {
+              toggleSidebarCollapsed();
+            }
+          }}
+          title={isMobile ? 'Go home' : sidebarCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
         >
-          {sidebarCollapsed
+          {sidebarCollapsed && !isMobile
             ? <Icon name="menu" size={18} style={{ color: 'var(--text-3)' }} />
             : <span className="om-brand-name">openMemo</span>
           }
         </button>
+        {/* Desktop: collapse chevron. Hidden on mobile via CSS. */}
         {!sidebarCollapsed && (
-          <button className="om-icon-btn" onClick={toggleSidebarCollapsed} title="Collapse">
+          <button className="om-icon-btn om-collapse-chevron" onClick={toggleSidebarCollapsed} title="Collapse">
             <Icon name="chevronLeft" size={14} />
           </button>
         )}
+        {/* Mobile: prominent close button for the full-screen drawer. Hidden on
+            desktop via CSS. */}
+        <button
+          className="om-sidebar-mobile-close"
+          onClick={() => setSidebarOpen(false)}
+          aria-label="Close menu"
+          title="Close"
+        >
+          <Icon name="x" size={20} />
+        </button>
       </div>
 
       {/* Fixed controls — search + nav never scroll. */}
@@ -250,18 +279,34 @@ export function Sidebar() {
                 hidden
               </button>
             )}
-            <button
-              className="om-icon-btn sm"
-              title="New collection"
-              onMouseEnter={startReveal}
-              onMouseLeave={cancelReveal}
-              onClick={() => {
-                setEditingCollection(null);
-                setCollectionModalOpen(true);
-              }}
-            >
-              <Icon name="plus" size={11} />
-            </button>
+            {isMobile ? (
+              // Mobile: creating a collection is desktop-only; the header control
+              // is a chevron that expands/collapses the (3-by-default) list.
+              others.length > 3 && (
+                <button
+                  className={cn('om-icon-btn sm om-coll-toggle', collExpanded && 'is-open')}
+                  onClick={() => setCollExpanded((v) => !v)}
+                  title={collExpanded ? 'Show fewer' : `Show all ${others.length}`}
+                  aria-expanded={collExpanded}
+                  aria-label={collExpanded ? 'Show fewer collections' : 'Show all collections'}
+                >
+                  <Icon name="chevronDown" size={14} />
+                </button>
+              )
+            ) : (
+              <button
+                className="om-icon-btn sm"
+                title="New collection"
+                onMouseEnter={startReveal}
+                onMouseLeave={cancelReveal}
+                onClick={() => {
+                  setEditingCollection(null);
+                  setCollectionModalOpen(true);
+                }}
+              >
+                <Icon name="plus" size={11} />
+              </button>
+            )}
           </div>
         </div>
       )}
@@ -271,7 +316,7 @@ export function Sidebar() {
       <div className="om-sidebar-scroll" data-lenis-prevent>
         {!sidebarCollapsed && (
           <div className="om-collection-list">
-            {others.map((c: Collection) => (
+            {visibleOthers.map((c: Collection) => (
               <CollectionRow
                 key={c.id}
                 col={c}
@@ -281,6 +326,11 @@ export function Sidebar() {
                 onEdit={(e) => editCollection(e, c)}
               />
             ))}
+            {isMobile && !collExpanded && others.length > 3 && (
+              <button className="om-coll-more mono" onClick={() => setCollExpanded(true)}>
+                Show {others.length - 3} more
+              </button>
+            )}
           </div>
         )}
       </div>
@@ -291,8 +341,9 @@ export function Sidebar() {
 
       <div className="om-sidebar-foot">
         {/* Theme selector — Light / Dark (System removed on purpose).
-            Collapsed sidebar: one toggle that flips to the other theme. */}
-        {sidebarCollapsed ? (
+            Collapsed sidebar AND mobile drawer: one compact toggle that flips
+            to the other theme, so the whole foot fits on a single row. */}
+        {sidebarCollapsed || isMobile ? (
           <div className="om-theme-row">
             <button
               className="om-theme-btn"
