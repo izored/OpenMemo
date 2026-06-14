@@ -112,14 +112,14 @@ The playlist's description seeds the same way: the yt-dlp probe, the Spotify emb
 The hub reads like a music app's home (ADR-018): a featured row up top, themed rails below it, the full library at the bottom. Every rail scrolls sideways.
 
 - **Header.** Eyebrow, title, sub. Same shared `PageHeader` as every page, plus an **Add music** action in the rail. On `/music` both that button and the global FAB open the music-specific add panel (see "Adding music" above), not the generic New Memo panel.
-- **Hero rail.** Big full-bleed cards. First card is **Favourite Songs** — a brand-gradient heart card that queues every liked track in one tap (hover button shuffles instead). After it, the newest saves of any kind: artwork edge to edge, a gradient veil at the bottom carrying the kind eyebrow (Album / Playlist), the name, and the track count, with a play button on hover. Albums show their single cover; playlists stretch their 4-up collage.
+- **Hero rail.** Big full-bleed cards. First card is **Favourite Songs** — a brand-gradient heart card that queues every liked track in one tap (hover button shuffles instead). "Every liked track" means the whole library, *including* songs you liked from inside a playlist: the liked queue hits the server's `liked` filter, which bypasses the playlist-born feed exclusion (OPNMMO-0041), so a like made on a playlist track still lands here. After it, the newest saves of any kind: artwork edge to edge, a gradient veil at the bottom carrying the kind eyebrow (Album / Playlist), the name, and the track count, with a play button on hover. Albums show their single cover; playlists stretch their 4-up collage.
 - **Albums.** A rail of album cards — single cover, "N tracks · Album" eyebrow, hover play, drop target, live download progress. The whole section hides when no albums exist.
 - **Playlists.** Same rail for playlist-kind collections, with the 2x2 collage art, the inline **New playlist** creation flow, and the empty state pointing at Add music. Cards accept memo-card drops, same as sidebar collections.
-- **Library.** The songs you saved one by one, in the standard masonry grid. Playlist-born tracks are not here; they live behind their playlist card. The header carries a debounced search box, a sort pill (Recent / Title / Artist), and Play all + Shuffle that queue exactly the filtered view. Music cards render full-bleed: square artwork edge to edge, title on a bottom gradient, no body bar.
+- **Library.** The songs you saved one by one, in the standard masonry grid. Playlist-born tracks are not here; they live behind their playlist card. The header carries a debounced search box, a **branded sort dropdown** (Recent / Title / Artist — a custom `LibrarySort` popover, not a native `<select>`: caret spacing, themed menu, active tick, close on Escape or outside-click), and Play all + Shuffle that queue exactly the filtered view. Music cards render full-bleed: square artwork edge to edge, title on a bottom gradient, no body bar.
 
 On the album and playlist rails, the card currently feeding the player is marked: an accent tint, a pinned corner badge, and a pause icon in place of play. Tapping that card toggles play/pause instead of restarting the queue; every other card starts fresh. Same for the hero rail.
 
-Scroll is split by axis (ADR-018): a vertical wheel over a rail scrolls the page smoothly like everywhere else, while sideways input — trackpad swipe or shift+wheel — slides the rail itself. A flick past a rail's edge never triggers the browser's back gesture.
+Scroll is split by axis (ADR-018): a vertical wheel over a rail scrolls the page smoothly like everywhere else, while sideways input — trackpad swipe or shift+wheel — slides the rail itself. A flick past a rail's edge never triggers the browser's back gesture. The sideways scrollbar that shows on a smaller desktop screen is branded with the accent (contrast-corrected via `--accent-ink`, in both Firefox and Chromium), and the rails carry enough padding that a card's hover lift and drop shadow are not clipped by the scroll container (OPNMMO-0032 / OPNMMO-0041).
 
 Click a playlist card and you get the playlist view (`/music/:id`): a boxed hero that names the playlist (artwork — collage for playlists, single cover for albums — an "Album · N tracks" / "Playlist · N tracks" eyebrow, play-all, shuffle, Download all, source link, delete), a "Back to Music" button above it, and the tracks as full-bleed cover tiles. The hero title carries an edit pencil (rename inline, write a description) and shows the description under the title, clamped to three lines so a long one never pushes the controls off-screen. While a bulk "Download all" pass is running, Download all becomes a Pause download button. Each tile carries its number, its title on a gradient, play on hover, a remove chip (pull the song out, nothing gets deleted), and a download / retry chip when the track is still remote or failed. Tiles reorder by drag; the order persists through the recency stagger. Click a ready tile to play; the queue picks up from that track. Deleting a playlist removes the collection, never the tracks: born tracks move back to the library.
 
@@ -150,6 +150,10 @@ Rationale for scrubber placement: the scrubber is not a navigation control (that
 
 The Add-to-playlist popover anchors inside the player (overlaying the artwork) because the big layout uses `overflow: hidden` to round its corners, which clips any above-the-player popover. Z-index 65 (menu) + 64 (backdrop) stacks above all player controls while keeping backdrop-tap-to-dismiss working.
 
+## Visual design: small player
+
+The small player (the default on desktop) is the cover-thumbnail row with a scrubber and a transport that can pack up to seven controls into the ~236px rail. It used to lay out in fixed pixels and run off the edge with a full queue (the old "drop to 90% zoom" workaround). It is now a **size container** (`container: sbplayer / inline-size`): as the rail narrows, two `@container` steps tighten the gaps and control sizes and, below ~200px, drop the trailing track-length label so the scrubber keeps a usable bar; the transport wraps as a last resort. Scoped to the small layout (`:not(.om-sb-player-big)`), so the big player is untouched (OPNMMO-0037, ADR-009 #5).
+
 ## Dashboard filter
 
 The old Audio tab lumped voice notes and music together. It splits into two:
@@ -157,7 +161,7 @@ The old Audio tab lumped voice notes and music together. It splits into two:
 - **Music** → `type=audio` + `audio_kind=music`
 - **Voice** → `type=audio` + `audio_kind=voice`
 
-`GET /api/memos` grows an `audio_kind` param. Saved tab order reconciles automatically (removed ids drop, new ids append).
+`GET /api/memos` grows an `audio_kind` param. Saved tab order reconciles automatically (removed ids drop, new ids append). It also takes a `liked=true` param (Favourite Songs) that returns every liked track and **skips** the playlist-born exclusion, so a song liked inside a playlist is still reachable (OPNMMO-0041).
 
 ## Play queue
 
