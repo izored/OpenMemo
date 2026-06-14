@@ -1,5 +1,6 @@
 // Appearance helpers ported from the OpenMemo design bundle (app.jsx).
 // Drive theme / accent / background CSS variables on <html>.
+import { presetById } from './bgPresets';
 
 // Perceived luminance (0..1) for choosing a readable text color on an accent.
 export function luminance(hex: string): number {
@@ -92,6 +93,10 @@ export interface Tweaks {
   gridColumns: number;
   bgMode: 'none' | 'random' | 'image';
   bgImage: string;
+  // Id of a built-in background preset (filename stem) when one is selected;
+  // '' when the image is a user upload or there is none. The live URL is
+  // resolved from this id at apply time so a rebuild's new hash can't stale it.
+  bgPreset: string;
   bgFade: number;
   bgBlur: number;
   bgPalette: string[];
@@ -132,7 +137,10 @@ export function applyTweaks(t: Tweaks) {
   // Contrast-aware text color for anything painted on the accent (buttons,
   // chips). Pale accents get dark text so they don't disappear into white.
   root.style.setProperty('--accent-text', luminance(t.accent) > 0.62 ? '#1A1A1C' : '#FFFFFF');
-  root.style.setProperty('--bg-image', t.bgImage ? `url(${t.bgImage})` : 'none');
+  // A built-in preset resolves to its current bundle URL from the persisted id;
+  // otherwise fall back to the (upload) URL stored directly in bgImage.
+  const bgUrl = (t.bgPreset && presetById(t.bgPreset)?.url) || t.bgImage;
+  root.style.setProperty('--bg-image', bgUrl ? `url(${bgUrl})` : 'none');
   const pal = Array.isArray(t.bgPalette) && t.bgPalette.length ? t.bgPalette : accentHarmony(t.accent);
   root.style.setProperty('--bg-c1', pal[0] || t.accent);
   root.style.setProperty('--bg-c2', pal[1] || shade(t.accent, 18));
@@ -169,6 +177,7 @@ export const DEFAULT_TWEAKS: Tweaks = {
   gridColumns: 4,
   bgMode: 'random',
   bgImage: '',
+  bgPreset: '',
   bgFade: 0,
   bgBlur: 64,
   bgPalette: ['#F4825A', '#E8C087', '#C76E4A'],
