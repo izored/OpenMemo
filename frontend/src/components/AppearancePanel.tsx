@@ -3,6 +3,7 @@ import { Icon } from './Icon';
 import { useAppStore } from '@/stores/appStore';
 import { cn } from '@/lib/utils';
 import { ACCENT_OPTIONS, accentHarmony, randomBlobPositions } from '@/lib/appearance';
+import { BG_PRESETS, type BgPreset } from '@/lib/bgPresets';
 import { settingsApi } from '@/lib/api';
 
 export function AppearancePanel() {
@@ -20,6 +21,23 @@ export function AppearancePanel() {
     });
   }, [t.accent, setTweak]);
 
+  // Selecting a built-in preset drives the wallpaper, accent, and theme at once
+  // (all three are encoded in the filename), so the UI always matches its image.
+  const pickPreset = useCallback(
+    (p: BgPreset) => {
+      setTweak({
+        bgMode: 'image',
+        bgPreset: p.id,
+        bgImage: p.url,
+        accent: p.accent,
+        theme: p.theme,
+        bgPalette: accentHarmony(p.accent),
+        bgPositions: randomBlobPositions(),
+      });
+    },
+    [setTweak],
+  );
+
   const onPickImage = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const f = e.target.files?.[0];
     e.target.value = '';
@@ -32,8 +50,9 @@ export function AppearancePanel() {
       // Store the original full-quality image server-side (a localStorage data
       // URL can't hold a real photo). We keep only its URL in tweaks, cache-busted
       // so a replace shows at once. Rendering is unchanged: --bg-image: url(...).
+      // bgPreset is cleared — this is now a user upload, not a built-in.
       await settingsApi.uploadBackground(f);
-      setTweak({ bgImage: `/api/settings/background?t=${Date.now()}`, bgMode: 'image' });
+      setTweak({ bgImage: `/api/settings/background?t=${Date.now()}`, bgPreset: '', bgMode: 'image' });
     } catch (err) {
       alert((err as Error).message || 'Could not set background.');
     }
@@ -41,8 +60,11 @@ export function AppearancePanel() {
 
   const removeBg = () => {
     settingsApi.deleteBackground().catch(() => {});
-    setTweak({ bgImage: '', bgMode: 'none' });
+    setTweak({ bgImage: '', bgPreset: '', bgMode: 'none' });
   };
+
+  // True when the active image is a user upload (not one of the built-ins).
+  const hasUpload = !!t.bgImage && !t.bgPreset;
 
   const customAccents = t.customAccents?.length === 2 ? t.customAccents : (['', ''] as [string, string]);
 
@@ -286,27 +308,51 @@ export function AppearancePanel() {
             {t.bgMode === 'image' ? (
               <div className="om-ap-bg-image">
                 <input ref={fileRef} type="file" accept="image/*" onChange={onPickImage} hidden />
-                <button
-                  className="om-ap-bg-drop"
-                  onClick={() => fileRef.current?.click()}
-                  style={t.bgImage ? { backgroundImage: `url(${t.bgImage})` } : undefined}
-                >
-                  {!t.bgImage && (
-                    <>
-                      <Icon name="image" size={16} />
-                      <span>Upload image</span>
-                      <span className="mono">JPG · PNG · WEBP · full quality</span>
-                    </>
-                  )}
-                  {t.bgImage && <span className="om-ap-bg-replace mono">Replace</span>}
-                </button>
-                {t.bgImage && (
+                <div className="om-ap-bg-gallery">
+                  {BG_PRESETS.map((p) => (
+                    <button
+                      key={p.id}
+                      className={cn('om-ap-bg-tile', t.bgPreset === p.id && 'active')}
+                      style={{ backgroundImage: `url(${p.url})` }}
+                      onClick={() => pickPreset(p)}
+                      title={`${p.name} · ${p.color} · ${p.theme}`}
+                      aria-label={`${p.name} background — ${p.color}, ${p.theme}`}
+                    >
+                      {t.bgPreset === p.id && (
+                        <span className="om-ap-bg-tile-check">
+                          <Icon name="check" size={10} />
+                        </span>
+                      )}
+                      <span className="om-ap-bg-tile-name mono">{p.name}</span>
+                    </button>
+                  ))}
+                  {/* Upload-your-own tile. Shows the active upload as its preview. */}
                   <button
-                    className="om-ap-bg-clear"
-                    onClick={removeBg}
+                    className={cn('om-ap-bg-tile upload', hasUpload && 'active')}
+                    onClick={() => fileRef.current?.click()}
+                    style={hasUpload ? { backgroundImage: `url(${t.bgImage})` } : undefined}
+                    title="Upload your own"
+                    aria-label="Upload your own background"
                   >
+                    {hasUpload ? (
+                      <>
+                        <span className="om-ap-bg-tile-check">
+                          <Icon name="check" size={10} />
+                        </span>
+                        <span className="om-ap-bg-tile-name mono">Yours · replace</span>
+                      </>
+                    ) : (
+                      <>
+                        <Icon name="plus" size={15} />
+                        <span className="om-ap-bg-tile-name mono">Upload</span>
+                      </>
+                    )}
+                  </button>
+                </div>
+                {(t.bgImage || t.bgPreset) && (
+                  <button className="om-ap-bg-clear" onClick={removeBg}>
                     <Icon name="x" size={11} />
-                    <span>Remove</span>
+                    <span>Remove background</span>
                   </button>
                 )}
                 <div className="om-ap-blur-row">
