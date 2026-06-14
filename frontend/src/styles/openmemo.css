@@ -3376,33 +3376,55 @@ input, textarea { font: inherit; color: inherit; }
 .om-add-segment.two { grid-template-columns: repeat(2, 1fr); }
 
 .om-ap-bg { display: flex; flex-direction: column; gap: 8px; }
-.om-ap-bg-image { display: flex; flex-direction: column; gap: 6px; }
-.om-ap-bg-drop {
-  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px;
-  min-height: 92px; padding: 14px;
-  border-radius: 8px;
-  border: 1px dashed rgba(255,255,255,0.18);
-  background: rgba(255,255,255,0.04);
-  background-size: cover; background-position: center;
-  color: var(--text-3);
+.om-ap-bg-image { display: flex; flex-direction: column; gap: 8px; }
+
+/* Built-in background gallery — pick a wallpaper that also sets accent + theme. */
+.om-ap-bg-gallery {
+  display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px;
+}
+.om-ap-bg-tile {
   position: relative; overflow: hidden;
-  transition: border-color .15s, background-color .15s, color .15s;
+  aspect-ratio: 16 / 10;
+  border-radius: 8px;
+  border: 1px solid rgba(255,255,255,0.12);
+  background-size: cover; background-position: center;
+  background-color: rgba(255,255,255,0.04);
+  cursor: pointer;
+  transition: border-color .15s, transform .12s, box-shadow .15s;
 }
-.om-ap-bg-drop:hover { border-color: var(--accent); color: var(--text); }
-.om-ap-bg-drop span:nth-of-type(1) { font-size: 11.5px; color: var(--text-2); }
-.om-ap-bg-drop span.mono { font-size: 9.5px; color: var(--text-4); }
-.om-ap-bg-drop[style*="background-image"] { border-style: solid; border-color: rgba(255,255,255,0.12); min-height: 92px; }
-.om-ap-bg-drop[style*="background-image"]::after {
+.om-ap-bg-tile:hover { transform: translateY(-1px); border-color: rgba(255,255,255,0.28); }
+.om-ap-bg-tile.active {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 1.5px var(--accent), 0 4px 14px -6px rgba(0,0,0,0.5);
+}
+.om-ap-bg-tile::after {
   content: ""; position: absolute; inset: 0;
-  background: linear-gradient(180deg, rgba(0,0,0,0) 50%, rgba(0,0,0,0.45) 100%);
+  background: linear-gradient(180deg, rgba(0,0,0,0) 45%, rgba(0,0,0,0.5) 100%);
+  pointer-events: none;
 }
-.om-ap-bg-replace {
-  position: relative; z-index: 1;
-  align-self: flex-end; margin-top: auto;
-  font-size: 9.5px; letter-spacing: 0.04em; text-transform: uppercase;
-  padding: 3px 8px; border-radius: 999px;
-  background: rgba(0,0,0,0.55); color: #fff;
+.om-ap-bg-tile-name {
+  position: absolute; left: 6px; right: 6px; bottom: 4px; z-index: 1;
+  font-size: 8.5px; letter-spacing: 0.02em; color: rgba(255,255,255,0.92);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  text-shadow: 0 1px 2px rgba(0,0,0,0.6);
 }
+.om-ap-bg-tile-check {
+  position: absolute; top: 4px; right: 4px; z-index: 2;
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 16px; height: 16px; border-radius: 999px;
+  background: var(--accent); color: var(--accent-text);
+}
+.om-ap-bg-tile.upload {
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px;
+  border-style: dashed; border-color: rgba(255,255,255,0.2);
+  color: var(--text-3);
+}
+.om-ap-bg-tile.upload:hover { border-color: var(--accent); color: var(--text); }
+.om-ap-bg-tile.upload:not(.active)::after { display: none; }
+.om-ap-bg-tile.upload .om-ap-bg-tile-name { position: static; text-align: center; text-shadow: none; color: inherit; }
+.om-ap-bg-tile.upload.active .om-ap-bg-tile-name { position: absolute; color: rgba(255,255,255,0.92); text-shadow: 0 1px 2px rgba(0,0,0,0.6); }
+[data-theme="light"] .om-ap-bg-tile { border-color: rgba(0,0,0,0.1); background-color: rgba(0,0,0,0.04); }
+[data-theme="light"] .om-ap-bg-tile.upload { border-color: rgba(0,0,0,0.18); }
 .om-ap-bg-clear {
   align-self: flex-start;
   display: inline-flex; align-items: center; gap: 4px;
@@ -3412,8 +3434,6 @@ input, textarea { font: inherit; color: inherit; }
 .om-ap-bg-clear:hover { color: var(--text); background: rgba(255,255,255,0.06); }
 .om-ap-blur-row { display: flex; flex-direction: column; gap: 4px; }
 .om-ap-blur-label { font-size: 10px; color: var(--text-3); }
-[data-theme="light"] .om-ap-bg-drop { background: rgba(255,255,255,0.6); border-color: rgba(0,0,0,0.12); }
-[data-theme="light"] .om-ap-bg-drop:hover { border-color: var(--accent); }
 [data-theme="light"] .om-ap-bg-clear:hover { background: rgba(0,0,0,0.05); }
 
 .om-ap-bg-random { display: flex; flex-direction: column; gap: 8px; }
