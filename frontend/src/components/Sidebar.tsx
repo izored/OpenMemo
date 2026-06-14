@@ -76,6 +76,10 @@ export function Sidebar() {
   // collection) for 1.5s and a "hidden" link fades in between the Collections
   // label and the "+". It stays while the pointer remains on the head row.
   const [hiddenRevealed, setHiddenRevealed] = React.useState(false);
+  // Mobile drawer: collections collapse to the first 3 behind a chevron, and
+  // creating a collection is desktop-only — so the header "+" becomes the
+  // expand/collapse toggle on mobile.
+  const [collExpanded, setCollExpanded] = React.useState(false);
   const revealTimer = React.useRef<number | null>(null);
   const cancelReveal = React.useCallback(() => {
     if (revealTimer.current !== null) {
@@ -128,6 +132,8 @@ export function Sidebar() {
 
   const pinned = collections.filter((c: Collection) => c.pinned);
   const others = collections.filter((c: Collection) => !c.pinned);
+  // Mobile drawer shows the first 3 collections until the chevron expands them.
+  const visibleOthers = isMobile && !collExpanded ? others.slice(0, 3) : others;
 
   const goRoute = (path: string) => {
     setActiveCollection(null);
@@ -273,18 +279,34 @@ export function Sidebar() {
                 hidden
               </button>
             )}
-            <button
-              className="om-icon-btn sm"
-              title="New collection"
-              onMouseEnter={startReveal}
-              onMouseLeave={cancelReveal}
-              onClick={() => {
-                setEditingCollection(null);
-                setCollectionModalOpen(true);
-              }}
-            >
-              <Icon name="plus" size={11} />
-            </button>
+            {isMobile ? (
+              // Mobile: creating a collection is desktop-only; the header control
+              // is a chevron that expands/collapses the (3-by-default) list.
+              others.length > 3 && (
+                <button
+                  className={cn('om-icon-btn sm om-coll-toggle', collExpanded && 'is-open')}
+                  onClick={() => setCollExpanded((v) => !v)}
+                  title={collExpanded ? 'Show fewer' : `Show all ${others.length}`}
+                  aria-expanded={collExpanded}
+                  aria-label={collExpanded ? 'Show fewer collections' : 'Show all collections'}
+                >
+                  <Icon name="chevronDown" size={14} />
+                </button>
+              )
+            ) : (
+              <button
+                className="om-icon-btn sm"
+                title="New collection"
+                onMouseEnter={startReveal}
+                onMouseLeave={cancelReveal}
+                onClick={() => {
+                  setEditingCollection(null);
+                  setCollectionModalOpen(true);
+                }}
+              >
+                <Icon name="plus" size={11} />
+              </button>
+            )}
           </div>
         </div>
       )}
@@ -294,7 +316,7 @@ export function Sidebar() {
       <div className="om-sidebar-scroll" data-lenis-prevent>
         {!sidebarCollapsed && (
           <div className="om-collection-list">
-            {others.map((c: Collection) => (
+            {visibleOthers.map((c: Collection) => (
               <CollectionRow
                 key={c.id}
                 col={c}
@@ -304,6 +326,11 @@ export function Sidebar() {
                 onEdit={(e) => editCollection(e, c)}
               />
             ))}
+            {isMobile && !collExpanded && others.length > 3 && (
+              <button className="om-coll-more mono" onClick={() => setCollExpanded(true)}>
+                Show {others.length - 3} more
+              </button>
+            )}
           </div>
         )}
       </div>
