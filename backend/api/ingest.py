@@ -284,6 +284,7 @@ async def ingest_url(
     # step. Gated by the auto_download_audio setting; when off, the memo stays
     # remote and the detail page streams it via the platform embed widget.
     from backend.core.app_settings import get_settings
+    from backend.core.extractor import has_embed_player
 
     auto_localize_audio = (
         memo.type == "audio"
@@ -291,7 +292,18 @@ async def ingest_url(
         and not memo.file_path
         and bool(get_settings().get("auto_download_audio", True))
     )
-    if auto_localize_audio:
+    # Auto-download a video that has NO inline embed player (Threads, Reddit,
+    # unknown host). The sniff/yt-dlp helper makes it a local, playable memo with
+    # no manual "Make it local" step — embeddable hosts (YouTube/Vimeo/…) stay
+    # remote so we don't fill the disk. Gated by auto_download_video.
+    auto_localize_video = (
+        memo.type == "video"
+        and bool(memo.source_url)
+        and not memo.file_path
+        and not has_embed_player(memo.source_url)
+        and bool(get_settings().get("auto_download_video", True))
+    )
+    if auto_localize_audio or auto_localize_video:
         memo.localize_status = "pending"
 
     db.add(memo)
@@ -305,6 +317,8 @@ async def ingest_url(
     background_tasks.add_task(_localize_memo_task, memo.id)
     if auto_localize_audio:
         background_tasks.add_task(localize_memo_task, memo.id, "audio")
+    elif auto_localize_video:
+        background_tasks.add_task(localize_memo_task, memo.id, "video")
 
     return {"id": memo.id, "title": memo.title, "type": memo.type, "status": "processing"}
 
@@ -1723,44 +1737,80 @@ async def ingest_from_extension(
     background_tasks: BackgroundTasks,
     db: AsyncSession = Depends(get_db),
 ):
-    """Save content from the browser extension."""
+    """Save content from the browser extension.
+
+    Converges with the WebUI `/url` path so the SAME source produces the SAME
+    memo regardless of entry point: `www.` is stripped from the domain, and a
+    video-platform URL is enriched through `extract_video` (yt-dlp metadata +
+    thumbnail) exactly like `/url` instead of relying on the DOM scrape. Without
+    this the two paths diverged (raw `www.` domain, DOM thumbnail, no auto-DL)."""
     from urllib.parse import urlparse
-    
+    from backend.core.extractor import detect_url_type, extract_video, extract_url, has_embed_player
+    from backend.core.app_settings import get_settings
+
     domain = ""
     if data.url:
         parsed = urlparse(data.url)
         domain = parsed.netloc
+        if domain.startswith("www."):
+            domain = domain[4:]
 
-    # The extension extracts from the live rendered DOM (works on SPA /
-    # bot-walled sites). Server fetch is only a fallback for the bits the
-    # extension couldn't supply.
+    # A video-platform URL goes through the same extractor the WebUI uses, so the
+    # result matches; otherwise the DOM scrape is primary and a server fetch fills
+    # only what the extension couldn't supply.
     extracted = {}
-    need_fallback = not data.content_text or not data.thumbnail
-    if data.url and need_fallback and data.type in ("article", "link"):
-        from backend.core.extractor import extract_url
+    is_video_url = bool(data.url) and detect_url_type(data.url) == "video"
+    if is_video_url:
+        try:
+            extracted = await extract_video(data.url)
+        except Exception:
+            extracted = {}
+    elif data.url and (not data.content_text or not data.thumbnail) and data.type in ("article", "link"):
         try:
             extracted = await extract_url(data.url)
         except Exception:
             extracted = {}
 
+    # For a video URL the extractor result wins (parity with /url); otherwise the
+    # extension's live DOM scrape wins and the fetch only backfills gaps.
+    if is_video_url and extracted:
+        pick = lambda ex, dom: extracted.get(ex) or dom
+    else:
+        pick = lambda ex, dom: dom or extracted.get(ex)
+
     memo = Memo(
         id=str(uuid.uuid4()),
         workspace_id=sanitize_workspace_id(data.workspace_id),
-        type=data.type or extracted.get("type", "link"),
-        title=data.title or extracted.get("title") or data.url,
-        description=data.description or extracted.get("description"),
-        content_text=data.content_text or extracted.get("content_text"),
-        content_raw=data.html or extracted.get("content_raw"),
+        type=(extracted.get("type") if is_video_url else None) or data.type or extracted.get("type", "link"),
+        title=pick("title", data.title) or data.url,
+        description=pick("description", data.description),
+        content_text=pick("content_text", data.content_text),
+        content_raw=pick("content_raw", data.html),
+        video_description=extracted.get("video_description"),
         source_url=data.url,
-        source_domain=domain,
+        source_domain=extracted.get("source_domain") or domain,
         source_favicon=data.favicon or extracted.get("source_favicon") or (f"https://www.google.com/s2/favicons?domain={domain}&sz=32" if domain else None),
-        thumbnail_path=data.thumbnail or extracted.get("thumbnail_path"),
+        thumbnail_path=pick("thumbnail_path", data.thumbnail),
         created_at=datetime.utcnow(),
         updated_at=datetime.utcnow(),
     )
     # Canonical type — the extension's DOM scrape may mislabel (e.g. "article").
     memo.type = derive_memo_type(memo)
     memo.audio_kind = derive_audio_kind(memo)
+
+    # Same auto-localize rules as /url: audio always (when enabled), and a video
+    # with no inline embed player (Threads, Reddit, …) so it lands playable.
+    auto_localize_audio = (
+        memo.type == "audio" and bool(memo.source_url) and not memo.file_path
+        and bool(get_settings().get("auto_download_audio", True))
+    )
+    auto_localize_video = (
+        memo.type == "video" and bool(memo.source_url) and not memo.file_path
+        and not has_embed_player(memo.source_url)
+        and bool(get_settings().get("auto_download_video", True))
+    )
+    if auto_localize_audio or auto_localize_video:
+        memo.localize_status = "pending"
 
     db.add(memo)
     await _attach_collection(db, memo, data.collection_id)
@@ -1770,5 +1820,9 @@ async def ingest_from_extension(
     if memo.thumbnail_path and memo.thumbnail_path.startswith("http"):
         background_tasks.add_task(cache_thumbnail, memo.id)
     background_tasks.add_task(_localize_memo_task, memo.id)
+    if auto_localize_audio:
+        background_tasks.add_task(localize_memo_task, memo.id, "audio")
+    elif auto_localize_video:
+        background_tasks.add_task(localize_memo_task, memo.id, "video")
 
     return {"id": memo.id, "title": memo.title, "status": "saved"}
