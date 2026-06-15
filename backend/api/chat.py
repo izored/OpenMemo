@@ -11,7 +11,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from pydantic import BaseModel
 
 from backend.db.database import get_db
-from backend.db.models import ChatSession, Message
+from backend.db.models import ChatSession, Message, Memo
 from backend.core.security import sanitize_workspace_id
 
 router = APIRouter(prefix="/api/chat", tags=["chat"])
@@ -89,7 +89,31 @@ async def chat_stream(data: ChatRequest, db: AsyncSession = Depends(get_db)):
         msgs = result.scalars().all()
         msgs = list(reversed(msgs))
         history = [{"role": m.role, "content": m.content} for m in msgs]
-    
+
+    # Single-memo chat: feed the whole memo (description + transcript/extracted)
+    # rather than a few retrieved chunks, so Ask sees everything the page shows
+    # (OPNMMO-0042). Falls back to normal RAG when there's no memo or no content.
+    memo_context = None
+    memo_source = None
+    if use_rag and data.memo_id:
+        from backend.core.rag import build_memo_context
+        memo = await db.get(Memo, data.memo_id)
+        if memo:
+            memo_context = build_memo_context(
+                description=memo.video_description or memo.description,
+                content_text=memo.content_text,
+                content_raw=memo.content_raw,
+                transcript_done=memo.transcript_status == "done",
+            )
+            if memo_context:
+                memo_source = {
+                    "memo_id": memo.id,
+                    "title": memo.title or "This memo",
+                    "domain": memo.source_domain or "",
+                    "snippet": memo_context[:200],
+                    "distance": 0,
+                }
+
     async def event_stream():
         full_response = ""
         sources_data = None
@@ -103,6 +127,8 @@ async def chat_stream(data: ChatRequest, db: AsyncSession = Depends(get_db)):
                 model=data.model,
                 history=history,
                 use_rag=use_rag,
+                memo_context=memo_context,
+                memo_source=memo_source,
             ):
                 if chunk["type"] == "sources":
                     sources_data = chunk["data"]

@@ -36,8 +36,33 @@ def build_context_prompt(sources: list[dict]) -> str:
         if domain:
             source_info += f" ({domain})"
         context_parts.append(f"{source_info}\n{source['document']}\n")
-    
+
     return "---\nCONTEXT FROM USER'S MEMOS:\n\n" + "\n".join(context_parts) + "\n---"
+
+
+# Cap for a single-memo chat fed whole (description + transcript/extracted). Big
+# enough for a long talk's transcript while staying inside a local model's window.
+_MEMO_CONTEXT_CAP = 24000
+
+
+def build_memo_context(
+    description: str | None,
+    content_text: str | None,
+    content_raw: str | None,
+    transcript_done: bool,
+) -> str:
+    """Whole-memo context for a single-memo "Ask this memo" chat: description +
+    transcript/extracted content together (OPNMMO-0042). For media, content_text
+    holds the description until a transcript is pulled, then the transcript — so
+    dedupe when they're identical. Capped to fit the model's context window."""
+    desc = (description or "").strip()
+    body = (content_text or content_raw or "").strip()
+    parts: list[str] = []
+    if desc and desc != body:
+        parts.append("DESCRIPTION:\n" + desc)
+    if body:
+        parts.append((("TRANSCRIPT:\n" if transcript_done else "CONTENT:\n")) + body)
+    return "\n\n".join(parts)[:_MEMO_CONTEXT_CAP]
 
 
 async def rag_chat(
@@ -48,13 +73,29 @@ async def rag_chat(
     model: str | None = None,
     history: list[dict] | None = None,
     use_rag: bool = True,
+    memo_context: str | None = None,
+    memo_source: dict | None = None,
 ) -> AsyncGenerator[dict, None]:
     """RAG chat pipeline with streaming response.
-    
+
     Yields dicts: {"type": "sources", "data": [...]} then {"type": "token", "data": "..."}
     """
     sources = []
-    
+
+    # Single-memo chat (OPNMMO-0042): feed the WHOLE memo — description plus
+    # transcript/extracted content — instead of a few retrieved chunks, so the
+    # answer sees everything the page shows (not just whatever was last embedded).
+    if use_rag and memo_context:
+        yield {"type": "sources", "data": [memo_source] if memo_source else []}
+        context = "---\nCONTEXT FROM THIS MEMO:\n\n" + memo_context + "\n---"
+        messages = [{"role": "system", "content": SYSTEM_PROMPT}]
+        if history:
+            messages.extend(history[-6:])
+        messages.append({"role": "user", "content": f"{context}\n\nQuestion: {query}"})
+        async for token in ollama_client.chat(messages=messages, model=model, stream=True):
+            yield {"type": "token", "data": token}
+        return
+
     if use_rag:
         # Retrieve relevant chunks
         sources = await search_similar(

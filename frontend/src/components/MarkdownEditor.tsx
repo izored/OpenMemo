@@ -28,6 +28,37 @@ import remarkGfm from 'remark-gfm';
 import { cn } from '@/lib/utils';
 import '@mdxeditor/editor/style.css';
 
+// CommonMark collapses a lone newline into a space, so single line breaks in
+// notes/lyrics/poems vanish on render even though the editor shows them. Turn a
+// soft break between two plain paragraph lines into a markdown hard break (two
+// trailing spaces) so what you typed is what you see (OPNMMO-0042). Block
+// constructs (headings, lists, quotes, tables, fences, rules) are left untouched,
+// and fenced code is skipped wholesale.
+function preserveLineBreaks(md: string): string {
+  if (!md) return md;
+  const isBlock = (s?: string) =>
+    !s || /^\s*$/.test(s) || /^\s{0,3}(#{1,6}\s|[-*+]\s|\d+[.)]\s|>|\||`{3,}|~{3,}|-{3,}|\*{3,}|_{3,})/.test(s);
+  return md
+    // Normalize CRLF/CR → LF first; a stray \r before the hard-break spaces
+    // would otherwise split each line into its own paragraph.
+    .replace(/\r\n?/g, '\n')
+    .split(/(```[\s\S]*?```|~~~[\s\S]*?~~~)/g)
+    .map((seg, i) => {
+      if (i % 2 === 1) return seg; // fenced code block — leave as-is
+      const lines = seg.split('\n');
+      return lines
+        .map((line, idx) => {
+          const next = lines[idx + 1];
+          if (line && next && !isBlock(line) && !isBlock(next) && !/ {2}$/.test(line)) {
+            return line + '  ';
+          }
+          return line;
+        })
+        .join('\n');
+    })
+    .join('');
+}
+
 interface MarkdownEditorProps {
   value: string;
   onSave?: (value: string) => void;
@@ -180,7 +211,7 @@ export function MarkdownEditor({
       <div className={cn('relative', className)} onClick={handleViewClick}>
         {value ? (
           <div className="om-prose max-w-none cursor-text">
-            <ReactMarkdown remarkPlugins={[remarkGfm]}>{value}</ReactMarkdown>
+            <ReactMarkdown remarkPlugins={[remarkGfm]}>{preserveLineBreaks(value)}</ReactMarkdown>
           </div>
         ) : (
           <p className="text-[var(--text-4)] italic cursor-text px-1 py-2">{placeholder}</p>
