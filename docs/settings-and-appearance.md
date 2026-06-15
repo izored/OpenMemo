@@ -156,6 +156,16 @@ default chat model. It writes the persisted `chatModel` in the app store, which
 every Ask and chat surface already reads, so it is the single app-wide default
 with no backend change and nothing to keep in sync.
 
+## Context window
+
+Below the model picker, a **Context window** field sets Ollama's `num_ctx` (the
+tokens per AI call) for every chat and summary. Type a number to override the
+backend default; leave it `0` to use `OLLAMA_NUM_CTX` (8192). It is persisted
+server-side (`app_settings.json` → `num_ctx`) and read at call time by
+`OllamaClient`, so the backend's own summary calls use the same value with no
+restart. The server clamps it to 512–131072. Raise it for long transcripts if
+your RAM allows; lower it on a small box.
+
 ---
 
 ## Where it lives

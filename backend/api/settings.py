@@ -41,6 +41,7 @@ class SettingsPatch(BaseModel):
     music_quality: Optional[str] = None
     music_provider: Optional[str] = None
     chat_model: Optional[str] = None
+    num_ctx: Optional[int] = None
 
 
 @router.get("")

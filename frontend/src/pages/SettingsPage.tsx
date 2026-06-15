@@ -368,7 +368,7 @@ export function SettingsPage() {
       })
       .catch(() => {
         setMaxUploadMb(5120);
-        setProfile({ max_upload_mb: 5120, display_name: '', email: '', avatar_data_url: '', mailing_list_consent: false, auto_download_audio: true, music_quality: '16', music_provider: 'qobuz', chat_model: '', yt_cookies_present: false, bg_image_ext: '', hidden_passcode_set: false });
+        setProfile({ max_upload_mb: 5120, display_name: '', email: '', avatar_data_url: '', mailing_list_consent: false, auto_download_audio: true, music_quality: '16', music_provider: 'qobuz', chat_model: '', num_ctx: 0, yt_cookies_present: false, bg_image_ext: '', hidden_passcode_set: false });
       });
   }, []);
 
@@ -697,6 +697,31 @@ export function SettingsPage() {
                 <span className="mono">Used across chat and Ask</span>
               </div>
               {ollamaModels === null ? <span className="om-skel ctrl" /> : <ModelSelect models={ollamaModels} />}
+            </div>
+            <div className="om-setting-row">
+              <div className="om-setting-row-text">
+                <p>Context window</p>
+                <span className="mono">Tokens per AI call (num_ctx). 0 = default (8192). Raise for long transcripts if your RAM allows.</span>
+              </div>
+              {profile === null ? (
+                <span className="om-skel ctrl" style={{ width: 160 }} />
+              ) : (
+                <div className="om-inline-control">
+                  <input
+                    type="number"
+                    min={0}
+                    max={131072}
+                    step={1024}
+                    value={profile.num_ctx || ''}
+                    placeholder="8192"
+                    onChange={(e) => setProfile({ ...profile, num_ctx: e.target.value === '' ? 0 : Number(e.target.value) })}
+                    onBlur={() => saveProfile({ num_ctx: profile.num_ctx })}
+                    className="om-input"
+                    style={{ width: 96, textAlign: 'right' }}
+                  />
+                  <span className="mono om-setting-val">tokens</span>
+                </div>
+              )}
             </div>
             <div className="om-setting-row">
               <div className="om-setting-row-text">
