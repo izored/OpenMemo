@@ -45,7 +45,7 @@ export const memoApi = {
   restore: (id: string) => fetchJSON<any>(`/memos/${id}/restore`, { method: 'POST' }),
   listDeleted: () => fetchJSON<{ id: string; type: string; title: string; deleted_at: string | null }[]>('/memos/deleted/list'),
   summary: (id: string, mode: 'timestamp' | 'insights' | 'essay' = 'insights', model?: string) =>
-    fetchJSON<{ id: string; mode: string; summary: string }>(`/memos/${id}/summary`, {
+    fetchJSON<{ id: string; mode: string; summary: string | null; status?: 'transcript_pending' }>(`/memos/${id}/summary`, {
       method: 'POST',
       body: JSON.stringify({ mode, model: model || undefined }),
     }),
