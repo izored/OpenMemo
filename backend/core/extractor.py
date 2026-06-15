@@ -410,7 +410,7 @@ _VIDEO_DOMAINS = (
     "instagram.com",
     "tiktok.com",
     "twitter.com", "x.com",
-    "threads.net",
+    "threads.net", "threads.com",
     "reddit.com",
     "rumble.com",
     "odysee.com",
