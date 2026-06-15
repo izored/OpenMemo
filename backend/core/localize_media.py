@@ -327,12 +327,17 @@ async def localize_media(url: str, workspace_id: str, mode: str, quality: int = 
 
     try:
         return await asyncio.to_thread(_localize_sync, url, workspace_id, mode, quality)
-    except LocalizeError:
+    except LocalizeError as ytdlp_err:
         # Universal fallback: yt-dlp can't pull it (no extractor / blocked) and we
         # didn't already sniff — try the network sniffer once before giving up.
         if mode == "video" and not sniff_first:
             try:
                 return await _localize_via_sniff(url, workspace_id)
-            except LocalizeError as e:
-                print(f"[localize] sniff fallback failed for {url}: {e}")
+            except LocalizeError as sniff_err:
+                print(f"[localize] sniff fallback failed for {url}: {sniff_err}")
+                # The download helper was the LAST attempt, so surface BOTH
+                # reasons — the modal must not blame yt-dlp for a sniff failure.
+                raise LocalizeError(
+                    f"yt-dlp: {ytdlp_err} | download helper: {sniff_err}"
+                ) from sniff_err
         raise

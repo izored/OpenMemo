@@ -368,7 +368,7 @@ export function SettingsPage() {
       })
       .catch(() => {
         setMaxUploadMb(5120);
-        setProfile({ max_upload_mb: 5120, display_name: '', email: '', avatar_data_url: '', mailing_list_consent: false, auto_download_audio: true, music_quality: '16', music_provider: 'qobuz', chat_model: '', num_ctx: 0, yt_cookies_present: false, bg_image_ext: '', hidden_passcode_set: false });
+        setProfile({ max_upload_mb: 5120, display_name: '', email: '', avatar_data_url: '', mailing_list_consent: false, auto_download_audio: true, auto_download_video: true, music_quality: '16', music_provider: 'qobuz', chat_model: '', num_ctx: 0, yt_cookies_present: false, bg_image_ext: '', hidden_passcode_set: false });
       });
   }, []);
 
@@ -817,6 +817,24 @@ export function SettingsPage() {
                 aria-pressed={profile?.auto_download_audio ?? true}
               >
                 <span className={'om-add-toggle-switch' + ((profile?.auto_download_audio ?? true) ? ' on' : '')}>
+                  <span className="om-add-toggle-knob" />
+                </span>
+              </button>
+            </div>
+            <div className="om-setting-row" style={{ borderTop: '1px solid var(--border)', marginTop: 8, paddingTop: 8 }}>
+              <div className="om-setting-row-text">
+                <p>Auto-download embed-less video</p>
+                <span className="mono">
+                  Download video that has no inline player (Threads, Reddit, unknown hosts) on save so it plays locally and survives takedown. Embeddable hosts (YouTube, Vimeo, …) stay remote so this won't fill the disk.
+                </span>
+              </div>
+              <button
+                type="button"
+                className="om-add-toggle"
+                onClick={() => profile && saveProfile({ auto_download_video: !profile.auto_download_video })}
+                aria-pressed={profile?.auto_download_video ?? true}
+              >
+                <span className={'om-add-toggle-switch' + ((profile?.auto_download_video ?? true) ? ' on' : '')}>
                   <span className="om-add-toggle-knob" />
                 </span>
               </button>
