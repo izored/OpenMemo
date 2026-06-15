@@ -47,6 +47,8 @@ nomic embed models get their required task prefixes (`search_document:` / `searc
 
 Ollama defaults to a 4096-token window and silently cuts anything longer. openMemo requests 8192 (`OLLAMA_NUM_CTX`) so long transcripts and full RAG contexts survive. Raise it if your model and RAM allow more.
 
+You can also set it from the app: **Settings → Local AI → Context window**. Type a token count to override the default for every chat and summary call, no env edit and no restart. Leave it at `0` to use the `OLLAMA_NUM_CTX` default. The value is clamped to 512–131072 so a typo can't wedge Ollama. The Settings override wins when set; otherwise the env default applies.
+
 ## Configuration reference
 
 All optional, set in `backend/.env` (dev) or `docker-compose.yml` (Docker):
