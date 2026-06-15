@@ -458,6 +458,37 @@ def detect_url_type(url: str) -> str:
     return "article"
 
 
+# Video hosts that have a reliable inline iframe player on the frontend (mirrors
+# lib/platforms.ts). A video from one of these plays remotely in the embed, so we
+# do NOT auto-download it (saves disk on big platforms like YouTube). A video
+# WITHOUT an embed — Threads, Reddit, an unknown host — has no remote player, so
+# it is auto-localized on save (sniff/yt-dlp) to become playable and survive the
+# source being deleted. Single source of truth for the "should we auto-localize a
+# video?" decision (ADR-001 — no per-host code at the call sites).
+_EMBED_VIDEO_HOSTS = (
+    "youtube.com", "youtu.be", "youtube-nocookie.com",
+    "vimeo.com",
+    "instagram.com",
+    "tiktok.com",
+    "twitter.com", "x.com",
+    "facebook.com", "fb.com", "fb.watch",
+    "dailymotion.com", "dai.ly",
+    "streamable.com",
+    "twitch.tv",
+)
+
+
+def has_embed_player(url: str) -> bool:
+    """True when the URL's host has a reliable inline iframe player (YouTube,
+    Vimeo, …). Mirrors the frontend platform registry. A video without an embed
+    (Threads, Reddit, unknown host) is auto-localized on save instead."""
+    try:
+        host = urlparse(url).netloc.lower()
+    except Exception:
+        return False
+    return any(h in host for h in _EMBED_VIDEO_HOSTS)
+
+
 # Paths that unambiguously mean "still photo" on an otherwise video-capable host.
 # Lets a photo post (FB photo, TikTok photo mode, X/Twitter photo) be filed as an
 # image instead of a video. Deliberately conservative — ambiguous paths (e.g.
