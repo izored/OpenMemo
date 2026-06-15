@@ -416,11 +416,12 @@ input, textarea { font: inherit; color: inherit; }
    so dropping its own max-width alone changes nothing — break it out to the
    full scroll-pane width via container units, keeping the text column at 720.
    100cqw = .om-detail-scroll width; 96px = its 48px side paddings. */
-.om-media-preview.theater {
-  max-width: none;
-  width: calc(100cqw - 96px);
-  margin-left: calc((100% - (100cqw - 96px)) / 2);
-}
+/* Theater (OPNMMO-0042): the media area already spans full width via the page
+   grid, so the frame just fills it — no container-unit breakout. Drop the height
+   cap so the player stays flush to the video's own ratio (no letterbox bars). */
+.om-media-preview.theater { max-width: none; width: 100%; margin-left: 0; }
+.om-media-preview.theater video,
+.om-media-preview.theater img { max-height: none; }
 .om-media-preview img,
 .om-media-preview video {
   display: block; width: 100%; height: auto; max-height: 70vh; object-fit: contain;
@@ -1273,7 +1274,9 @@ input, textarea { font: inherit; color: inherit; }
 .om-detail-content.has-rail {
   display: grid;
   grid-template-columns: minmax(0, 720px) 600px;
-  grid-template-areas: "head head" "main rail";
+  grid-template-areas:
+    "head    head"
+    "colmain rail";
   justify-content: center;
   align-items: start;
   column-gap: 32px;
@@ -1281,20 +1284,47 @@ input, textarea { font: inherit; color: inherit; }
 }
 .om-detail-head-block { grid-area: head; }
 .om-detail-content.has-rail .om-detail-head-block { max-width: 720px; justify-self: start; }
-.om-detail-content.has-rail .om-detail-main { grid-area: main; min-width: 0; }
+/* Left column groups media + notes so the rail is a fully independent column —
+   opening a rail card grows the rail only, never shifting the notes (point 1). */
+.om-detail-content.has-rail .om-detail-col-main { grid-area: colmain; min-width: 0; display: flex; flex-direction: column; }
 .om-detail-content.has-rail .om-detail-rail { grid-area: rail; }
+/* Notes sits right under the media — drop the big top separator so there's no
+   dead gap between the video and the notes card. */
+.om-detail-content.has-rail .om-detail-notes-area .om-notes-section { margin-top: 0; }
 .om-detail-main     { min-width: 0; }
 .om-detail-rail     { position: sticky; top: 0; display: flex; flex-direction: column; gap: 16px; }
 /* The panels carry their own inline margin-bottom for the single-column flow;
    in the rail, the flex gap owns spacing. */
 .om-detail-rail > * { margin-bottom: 0 !important; }
+
+/* Theater (OPNMMO-0042): the video spans full width, and below it two columns —
+   notes on the left, rail on the right. The left column dissolves
+   (display:contents) so media + notes place independently as grid items. */
+.om-detail-content.has-rail.is-theater {
+  grid-template-columns: minmax(0, 1fr) minmax(0, 600px);
+  grid-template-areas:
+    "head  head"
+    "media media"
+    "notes rail";
+}
+.om-detail-content.has-rail.is-theater .om-detail-head-block { max-width: none; }
+.om-detail-content.has-rail.is-theater .om-detail-col-main { display: contents; }
+.om-detail-content.has-rail.is-theater .om-detail-main { grid-area: media; }
+.om-detail-content.has-rail.is-theater .om-detail-notes-area { grid-area: notes; }
+.om-detail-content.has-rail.is-theater .om-detail-rail { position: static; }
+
 @container (max-width: 1100px) {
-  .om-detail-content.has-rail {
+  .om-detail-content.has-rail,
+  .om-detail-content.has-rail.is-theater {
     grid-template-columns: minmax(0, 1fr);
-    grid-template-areas: "head" "main" "rail";
+    grid-template-areas: "head" "colmain" "rail";
     max-width: 720px;
   }
   .om-detail-content.has-rail .om-detail-head-block { max-width: none; }
+  /* Stacked theater: regroup the left column so media + notes stay together. */
+  .om-detail-content.has-rail.is-theater .om-detail-col-main { display: flex; flex-direction: column; }
+  .om-detail-content.has-rail.is-theater .om-detail-main,
+  .om-detail-content.has-rail.is-theater .om-detail-notes-area { grid-area: auto; }
   .om-detail-rail { position: static; }
 }
 
@@ -1341,12 +1371,36 @@ input, textarea { font: inherit; color: inherit; }
 .om-coll-chip.active { background: var(--text); color: var(--bg); border-color: var(--text); }
 
 /* AI summary box */
-.om-ai-summary      { padding: 18px 20px; border-radius: var(--r-lg);
-                      border: 1px solid color-mix(in oklab, var(--accent) 30%, transparent);
-                      background: color-mix(in oklab, var(--accent) 8%, var(--surface));
-                      display: flex; flex-direction: column; gap: 10px; }
-.om-ai-summary-head { display: flex; align-items: center; gap: 8px; }
-.om-ai-summary-label { font-size: 13px; font-weight: 600; color: var(--text); }
+/* Shared rail-tool card shell (OPNMMO-0042): AI Summary, Make it local and Ask
+   this memo stay separate cards but feel like one family — same surface, border,
+   radius, padding, and header rhythm. */
+.om-ai-summary, .om-localize, .om-ask-rail, .om-rail-card {
+  padding: 18px 20px; border-radius: var(--r-lg);
+  background: var(--surface-2); border: 1px solid var(--border);
+}
+.om-ai-summary { display: flex; flex-direction: column; gap: 10px; }
+.om-ask-rail, .om-rail-card { display: flex; flex-direction: column; }
+.om-ai-summary-head, .om-rail-head { display: flex; align-items: center; gap: 8px; }
+.om-rail-head  { width: 100%; text-align: left; }
+.om-ai-summary-label, .om-rail-title { font-size: 13px; font-weight: 600; color: var(--text); }
+.om-rail-head-chev { margin-left: auto; color: var(--text-4); display: inline-flex; }
+/* Green status check when a card's job is done (description present, transcript
+   pulled, etc.). Pushed flush-right before the chevron. */
+.om-rail-check { color: var(--om-ok, #3fb950); margin-left: auto; }
+.om-rail-check + .om-rail-head-chev { margin-left: 8px; }
+.om-rail-card-body { margin-top: 12px; min-width: 0; }
+/* Long content (transcript) scrolls within its card so the rail stays tidy. */
+.om-rail-scroll { max-height: 360px; overflow-y: auto; }
+
+/* Mobile (no rail): the same tool cards stack inline under the media. */
+.om-rail-inline { display: flex; flex-direction: column; gap: 16px; margin-bottom: 24px; }
+.om-rail-inline > * { margin-bottom: 0 !important; }
+
+/* Ask this memo embedded as a rail card (not the old full-height side pane). */
+.om-rail-card .om-ask-panel        { height: auto; background: transparent; }
+.om-rail-card .om-ask-panel-head   { display: none; }
+.om-rail-card .om-ask-panel-thread { max-height: 360px; padding: 0; }
+.om-rail-card .om-ask-panel-composer { padding: 12px 0 0; border-top: 0; }
 .om-accent-icon     { color: var(--accent); }
 
 /* Report card for file-backed memos (document / code / generic file) */
@@ -1398,6 +1452,19 @@ input, textarea { font: inherit; color: inherit; }
   text-decoration: none; transition: color var(--transition-fast);
 }
 .om-ts-link:hover { color: var(--om-ts-strong, #79a8ff); text-decoration: underline; }
+/* Description URLs: look like links, but inert (not clickable) for safety — the
+   text is selectable to copy, and hovering shows the full URL in a tooltip. */
+.om-desc-link { position: relative; color: var(--om-ts, #4f8cff); text-decoration: underline; cursor: text; word-break: break-all; }
+.om-desc-link:hover::after {
+  content: "Not clickable for safety — select the URL and paste it into your browser.";
+  position: absolute; left: 0; bottom: calc(100% + 6px); z-index: 40;
+  max-width: 280px; width: max-content; white-space: normal; word-break: normal;
+  padding: 7px 10px; border-radius: 8px;
+  background: var(--surface-3, #1c1c20); color: var(--text); border: 1px solid var(--border);
+  box-shadow: var(--shadow-card, 0 8px 24px rgba(0,0,0,0.3));
+  font-size: 11.5px; line-height: 1.45; font-weight: 400; text-decoration: none;
+  pointer-events: none;
+}
 /* Source/lang chips that now sit inline at the top of the transcript body. */
 .om-transcript-tags { display: flex; gap: 6px; margin: 0 0 10px; }
 
@@ -2981,10 +3048,7 @@ input, textarea { font: inherit; color: inherit; }
 [data-card="minimal"] .om-card-audio .om-meta { display: none; }
 
 /* Make it local — download panel on the memo detail page */
-.om-localize {
-  padding: 16px; border-radius: 16px;
-  background: var(--surface-2); border: 1px solid var(--border);
-}
+/* .om-localize card shell now comes from the shared rail-tool rule (OPNMMO-0042). */
 .om-localize-modes { display: flex; flex-wrap: wrap; gap: 8px; }
 .om-localize-mode {
   display: inline-flex; align-items: center; gap: 7px;

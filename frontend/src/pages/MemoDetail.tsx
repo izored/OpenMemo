@@ -112,8 +112,12 @@ function SummaryMarkdown({ text, onSeek }: { text: string; onSeek?: (sec: number
  *   - Fullscreen (top-right): browser-native fullscreen API
  *   - Lightbox (click image only): modal overlay, Esc/click closes
  */
-function MediaPreview({ src, alt, kind, poster, seek }: { src: string; alt: string; kind: 'image' | 'video'; poster?: string | null; seek?: SeekSignal | null }) {
-  const [theater, setTheater] = useState(false);
+function MediaPreview({ src, alt, kind, poster, seek, theater: theaterProp, onTheaterChange }: { src: string; alt: string; kind: 'image' | 'video'; poster?: string | null; seek?: SeekSignal | null; theater?: boolean; onTheaterChange?: (v: boolean) => void }) {
+  // Theater can be controlled by the page (so the layout reflows around it) or
+  // self-managed when used standalone.
+  const [theaterLocal, setTheaterLocal] = useState(false);
+  const theater = theaterProp ?? theaterLocal;
+  const setTheater = (v: boolean) => (onTheaterChange ? onTheaterChange(v) : setTheaterLocal(v));
   const [lightbox, setLightbox] = useState(false);
   const mediaRef = useRef<HTMLImageElement | HTMLVideoElement | null>(null);
 
@@ -174,7 +178,7 @@ function MediaPreview({ src, alt, kind, poster, seek }: { src: string; alt: stri
           <button
             type="button"
             className="om-media-btn"
-            onClick={() => setTheater((v) => !v)}
+            onClick={() => setTheater(!theater)}
             title={theater ? 'Exit theater (compact)' : 'Theater (full width)'}
             aria-label={theater ? 'Exit theater mode' : 'Theater mode'}
           >
@@ -755,7 +759,7 @@ function AudioStreamEmbed({ memo, reference = false }: { memo: Memo; reference?:
 // "Make it local" — download a remote video/audio source via yt-dlp so the memo
 // survives the original being deleted/privated. Offers three modes; polls
 // localize_status (driven by the page's refetchInterval) and shows progress.
-function MakeItLocalPanel({ memo }: { memo: Memo }) {
+function MakeItLocalPanel({ memo, open, onToggle }: { memo: Memo; open?: boolean; onToggle?: () => void }) {
   const queryClient = useQueryClient();
   // Audio-only sources (SoundCloud, Bandcamp, etc.) have no video track — only
   // offer the audio download. Video sources keep both options.
@@ -801,14 +805,8 @@ function MakeItLocalPanel({ memo }: { memo: Memo }) {
     { value: 2160, label: '4K', hint: 'Source max — very large file' },
   ];
 
-  return (
-    <div className="om-localize" style={{ marginBottom: '24px' }}>
-      <div className="om-notes-label" style={{ marginBottom: '10px' }}>
-        <HardDriveDownload size={16} className="om-section-icon" />
-        <h3 className="om-section-h">Make it local</h3>
-        {status === 'done' && <span className="om-tag" style={{ color: 'var(--accent)' }}>Saved locally</span>}
-      </div>
-
+  const body = (
+    <>
       {busy ? (
         <p className="om-detail-desc">
           <Loader2 size={14} className="om-spin" style={{ verticalAlign: -2, marginRight: 6 }} />
@@ -882,6 +880,35 @@ function MakeItLocalPanel({ memo }: { memo: Memo }) {
           </button>
         </>
       )}
+    </>
+  );
+
+  // In the rail: part of the accordion (one card open at a time). Internal state
+  // changes (picking quality, a download in flight) live in the body and never
+  // toggle the card; opening another tool closes this one.
+  if (onToggle) {
+    return (
+      <RailCard
+        icon={<HardDriveDownload size={16} className="om-accent-icon" />}
+        title="Make it local"
+        done={status === 'done'}
+        open={open}
+        onToggle={onToggle}
+      >
+        {body}
+      </RailCard>
+    );
+  }
+
+  // Standalone (e.g. inline in the audio block): full self-contained card.
+  return (
+    <div className="om-localize" style={{ marginBottom: '24px' }}>
+      <div className="om-ai-summary-head" style={{ marginBottom: '10px' }}>
+        <HardDriveDownload size={16} className="om-accent-icon" />
+        <h3 className="om-rail-title">Make it local</h3>
+        {status === 'done' && <span className="om-tag" style={{ color: 'var(--accent)' }}>Saved locally</span>}
+      </div>
+      {body}
     </div>
   );
 }
@@ -899,15 +926,13 @@ const SUMMARY_OPTIONS: { id: SummaryMode; label: string; icon: React.ElementType
 function SummaryPanel({
   memo,
   onSeek,
-  onAfterGenerate,
-  underContentOpen,
-  onToggleUnderContent,
+  open,
+  onToggle,
 }: {
   memo: Memo;
   onSeek?: (sec: number) => void;
-  onAfterGenerate?: () => void;
-  underContentOpen?: boolean;
-  onToggleUnderContent?: () => void;
+  open: boolean;
+  onToggle: () => void;
 }) {
   const queryClient = useQueryClient();
   const chatModel = useAppStore((s) => s.chatModel);
@@ -940,8 +965,6 @@ function SummaryPanel({
       }
       setWaitingTranscript(false);
       queryClient.invalidateQueries({ queryKey: ['memo', memo.id] });
-      // Fresh summary → reveal the toggle copy under the content (OPNMMO-0042).
-      onAfterGenerate?.();
     } catch (e) {
       // The backend sends human-readable details (model missing, Ollama down,
       // timeout) — show them instead of failing silently into the console.
@@ -950,7 +973,7 @@ function SummaryPanel({
     } finally {
       setBusy(false);
     }
-  }, [memo.id, mode, chatModel, queryClient, onAfterGenerate]);
+  }, [memo.id, mode, chatModel, queryClient]);
 
   // While waiting on a background transcript, retry the summary exactly once the
   // memo poll reports the transcript settled. 'done' → summarize desc+transcript;
@@ -964,119 +987,247 @@ function SummaryPanel({
     }
   }, [waitingTranscript, memo.transcript_status, generate]);
 
+  const hasSummary = !!memo.ai_summary || Object.values(memo.summaries || {}).some(Boolean);
+
   return (
-    <div className="om-ai-summary" style={{ marginBottom: '24px' }}>
-      <div className="om-ai-summary-head">
+    <section className="om-rail-card">
+      <button className="om-rail-head" onClick={onToggle} aria-expanded={open}>
         <Sparkles size={16} className="om-accent-icon" />
-        <span className="om-ai-summary-label">AI Summary</span>
-      </div>
-      <div className="om-localize-modes" style={{ marginTop: 10, marginBottom: 12 }}>
-        {options.map((o) => (
-          <button
-            key={o.id}
-            className={cn('om-localize-mode', mode === o.id && 'active')}
-            onClick={() => setMode(o.id)}
-          >
-            <o.icon size={15} />
-            <span>{o.label}</span>
-            {mode === o.id && <Check size={13} className="om-localize-check" />}
-          </button>
-        ))}
-      </div>
-      {error && !busy && (
-        <p className="om-detail-desc" role="alert" style={{ color: 'var(--om-danger, #e5484d)', marginBottom: 10 }}>
-          {error}
-        </p>
-      )}
-      {busy ? (
-        <p className="om-detail-desc">
-          <Loader2 size={14} className="om-spin" style={{ verticalAlign: -2, marginRight: 6 }} />
-          Generating {label} summary with Ollama…
-        </p>
-      ) : waitingTranscript ? (
-        <p className="om-detail-desc">
-          <Loader2 size={14} className="om-spin" style={{ verticalAlign: -2, marginRight: 6 }} />
-          Fetching the transcript first — it runs locally and may take a moment. The {label} summary follows automatically.
-        </p>
-      ) : current ? (
-        <>
-          <div className="om-prose" style={{ whiteSpace: mode === 'timestamp' ? 'pre-wrap' : undefined }}>
-            <SummaryMarkdown text={current} onSeek={onSeek} />
-          </div>
-          <div style={{ display: 'flex', gap: 8, marginTop: 12, flexWrap: 'wrap' }}>
-            {onToggleUnderContent && (
-              <button className="om-btn-ghost om-btn-pill" onClick={onToggleUnderContent}>
-                {underContentOpen ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
-                {underContentOpen ? 'Hide under content' : 'Show under content'}
+        <span className="om-rail-title">AI Summary</span>
+        {hasSummary && <Check size={14} className="om-rail-check" />}
+        <span className="om-rail-head-chev">{open ? <ChevronUp size={16} /> : <ChevronDown size={16} />}</span>
+      </button>
+      {open && (
+        <div className="om-rail-card-body">
+          <div className="om-localize-modes" style={{ marginBottom: 12 }}>
+            {options.map((o) => (
+              <button
+                key={o.id}
+                className={cn('om-localize-mode', mode === o.id && 'active')}
+                onClick={() => setMode(o.id)}
+              >
+                <o.icon size={15} />
+                <span>{o.label}</span>
+                {mode === o.id && <Check size={13} className="om-localize-check" />}
               </button>
-            )}
-            <button className="om-btn-ghost om-btn-pill" onClick={generate}>
-              <Sparkles size={14} /> Regenerate
-            </button>
+            ))}
           </div>
-        </>
-      ) : (
-        <button className="om-btn-primary om-btn-pill" onClick={generate}>
-          <Sparkles size={14} /> Generate {label}
-        </button>
+          {error && !busy && (
+            <p className="om-detail-desc" role="alert" style={{ color: 'var(--om-danger, #e5484d)', marginBottom: 10 }}>
+              {error}
+            </p>
+          )}
+          {busy ? (
+            <p className="om-detail-desc">
+              <Loader2 size={14} className="om-spin" style={{ verticalAlign: -2, marginRight: 6 }} />
+              Generating {label} summary with Ollama…
+            </p>
+          ) : waitingTranscript ? (
+            <p className="om-detail-desc">
+              <Loader2 size={14} className="om-spin" style={{ verticalAlign: -2, marginRight: 6 }} />
+              Fetching the transcript first — it runs locally and may take a moment. The {label} summary follows automatically.
+            </p>
+          ) : current ? (
+            <>
+              <div className="om-prose" style={{ whiteSpace: mode === 'timestamp' ? 'pre-wrap' : undefined }}>
+                <SummaryMarkdown text={current} onSeek={onSeek} />
+              </div>
+              <button className="om-btn-ghost om-btn-pill" onClick={generate} style={{ marginTop: 12 }}>
+                <Sparkles size={14} /> Regenerate
+              </button>
+            </>
+          ) : (
+            <button className="om-btn-primary om-btn-pill" onClick={generate}>
+              <Sparkles size={14} /> Generate {label}
+            </button>
+          )}
+        </div>
       )}
-    </div>
+    </section>
   );
 }
 
-// The "both places" copy of the summary (OPNMMO-0042): a collapsible section
-// under the content, beside Video description / Transcript. Shows only once a
-// summary exists; sub-tabs switch between generated modes. The rail's "Show
-// under content" button drives `open`.
-function SummarySection({
-  memo,
-  open,
+// Plain description text with URLs rendered as blue, underlined, NON-clickable
+// spans (OPNMMO-0042 point 4). Links are inert by design — hover shows the full
+// URL to copy, but nothing navigates (safer for untrusted source blurbs).
+function DescriptionText({ text, onSeek }: { text: string; onSeek?: (sec: number) => void }) {
+  // Split on URLs (inert) and chapter timestamps (clickable seek). URLs win when
+  // they overlap, since the URL pattern is greedy and consumes any digits/colons
+  // inside a link path (OPNMMO-0042).
+  const parts = text.split(/(https?:\/\/[^\s]+|\b\d{1,2}:[0-5]\d(?::[0-5]\d)?\b)/g);
+  return (
+    <p className="om-detail-desc" style={{ whiteSpace: 'pre-wrap' }}>
+      {parts.map((p, i) => {
+        if (/^https?:\/\//.test(p)) {
+          return (
+            <span key={i} className="om-desc-link" aria-label="Not clickable for safety. Select the URL and paste it into your browser.">{p}</span>
+          );
+        }
+        const sec = /^\d{1,2}:[0-5]\d(?::[0-5]\d)?$/.test(p) ? tsToSeconds(p) : null;
+        if (sec != null && onSeek) {
+          return (
+            <button key={i} type="button" className="om-ts-link" onClick={(e) => { e.preventDefault(); onSeek(sec); }}>{p}</button>
+          );
+        }
+        return <React.Fragment key={i}>{p}</React.Fragment>;
+      })}
+    </p>
+  );
+}
+
+// Generic collapsible rail card — shared shell + a green status check when the
+// thing it holds has been achieved (OPNMMO-0042). All rail tools feel the same.
+// `open`/`onToggle` make a card part of the rail accordion (one open at a time).
+// Omit them and the card self-manages (independent of the accordion) — used by
+// Make it local, whose own states must not hide or be hidden by siblings.
+function RailCard({
+  icon,
+  title,
+  done = false,
+  badge,
+  defaultOpen = false,
+  open: openProp,
   onToggle,
-  onSeek,
+  children,
 }: {
-  memo: Memo;
-  open: boolean;
-  onToggle: () => void;
-  onSeek?: (sec: number) => void;
+  icon: React.ReactNode;
+  title: string;
+  done?: boolean;
+  badge?: React.ReactNode;
+  defaultOpen?: boolean;
+  open?: boolean;
+  onToggle?: () => void;
+  children: React.ReactNode;
 }) {
-  const summaries = memo.summaries || {};
-  const textFor = (id: SummaryMode) =>
-    id === 'insights' ? (summaries.insights ?? memo.ai_summary ?? '') : (summaries[id] ?? '');
-  const avail = SUMMARY_OPTIONS.filter((o) => textFor(o.id));
-  const [view, setView] = useState<SummaryMode>(avail[0]?.id ?? 'insights');
-  if (!avail.length) return null;
-  const activeView = avail.some((o) => o.id === view) ? view : avail[0].id;
-  const text = textFor(activeView);
+  const [openLocal, setOpenLocal] = useState(defaultOpen);
+  const controlled = onToggle !== undefined;
+  const open = controlled ? !!openProp : openLocal;
+  const toggle = () => (controlled ? onToggle!() : setOpenLocal((o) => !o));
+  return (
+    <section className="om-rail-card">
+      <button className="om-rail-head" onClick={toggle} aria-expanded={open}>
+        {icon}
+        <span className="om-rail-title">{title}</span>
+        {done && <Check size={14} className="om-rail-check" />}
+        {badge}
+        <span className="om-rail-head-chev">{open ? <ChevronUp size={16} /> : <ChevronDown size={16} />}</span>
+      </button>
+      {open && <div className="om-rail-card-body">{children}</div>}
+    </section>
+  );
+}
+
+// Source description as a rail card (video_description / source blurb). Links
+// render as inert blue text (OPNMMO-0042 point 4).
+function DescriptionCard({ memo, open, onToggle, onSeek }: { memo: Memo; open: boolean; onToggle: () => void; onSeek?: (sec: number) => void }) {
+  const text = (memo.video_description || memo.description || '').trim();
+  return (
+    <RailCard
+      icon={<AlignLeft size={16} className="om-accent-icon" />}
+      title="Description"
+      done={!!text}
+      open={open}
+      onToggle={onToggle}
+    >
+      {text ? (
+        <DescriptionText text={text} onSeek={onSeek} />
+      ) : (
+        <p className="om-detail-desc" style={{ fontStyle: 'italic' }}>No description available.</p>
+      )}
+    </RailCard>
+  );
+}
+
+// Transcript as a rail card: pulls captions/STT on demand, shows source/lang
+// tags inline, scrolls within the card, and times stamps stay clickable.
+function TranscriptCard({ memo, onSeek, open, onToggle }: { memo: Memo; onSeek?: (sec: number) => void; open: boolean; onToggle: () => void }) {
+  const queryClient = useQueryClient();
+  const [starting, setStarting] = useState(false);
+  const status = memo.transcript_status;
+  const pending = status === 'pending' || status === 'processing' || starting;
+  const done = status === 'done' && !!memo.content_text;
+  const srcLabel = memo.transcript_source === 'captions' ? 'CC' : memo.transcript_source === 'stt' ? 'STT' : null;
+
+  const startTranscribe = async () => {
+    setStarting(true);
+    try {
+      await memoApi.transcribe(memo.id);
+      queryClient.invalidateQueries({ queryKey: ['memo', memo.id] });
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setStarting(false);
+    }
+  };
 
   return (
-    <div className="om-summary-under" style={{ marginBottom: '24px' }}>
-      <button className="om-extracted-toggle" onClick={onToggle} aria-expanded={open}>
-        {open ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
-        <Sparkles size={14} className="om-accent-icon" />
-        AI Summary
-      </button>
-      {open && (
-        <div style={{ marginTop: 10 }}>
-          {avail.length > 1 && (
-            <div style={{ display: 'flex', gap: 4, marginBottom: 10, flexWrap: 'wrap' }}>
-              {avail.map((o) => (
-                <button
-                  key={o.id}
-                  className={cn('om-tab-btn', activeView === o.id && 'active')}
-                  onClick={() => setView(o.id)}
-                >
-                  <o.icon size={13} />
-                  {o.label}
-                </button>
-              ))}
-            </div>
+    <RailCard
+      icon={<FileText size={16} className="om-accent-icon" />}
+      title="Transcript"
+      done={done}
+      badge={pending ? <Loader2 size={12} className="om-spin" style={{ marginLeft: 4 }} /> : null}
+      open={open}
+      onToggle={onToggle}
+    >
+      {pending ? (
+        <p className="om-detail-desc">
+          <Loader2 size={14} className="om-spin" style={{ verticalAlign: -2, marginRight: 6 }} />
+          Pulling captions or transcribing… runs locally and may take a moment.
+        </p>
+      ) : done ? (
+        <div className="om-prose om-rail-scroll" style={{ whiteSpace: 'pre-wrap' }}>
+          {(srcLabel || memo.transcript_lang) && (
+            <p className="om-transcript-tags" style={{ whiteSpace: 'normal' }}>
+              {srcLabel && (
+                <span className="om-tag" title={memo.transcript_source === 'captions' ? 'From source captions' : 'Whisper speech-to-text'}>{srcLabel}</span>
+              )}
+              {memo.transcript_lang && (
+                <span className="om-tag" style={{ textTransform: 'uppercase' }}>{memo.transcript_lang}</span>
+              )}
+            </p>
           )}
-          <div className="om-prose" style={{ whiteSpace: activeView === 'timestamp' ? 'pre-wrap' : undefined }}>
-            <SummaryMarkdown text={text} onSeek={onSeek} />
-          </div>
+          <SummaryMarkdown text={memo.content_text!} onSeek={onSeek} />
         </div>
+      ) : status === 'error' ? (
+        <div>
+          <p className="om-detail-desc" style={{ marginBottom: 10 }}>
+            Couldn’t get a transcript. The source may have no captions and no downloadable audio, or be private/region-locked.
+          </p>
+          {canTranscript(memo) && (
+            <button className="om-btn-ghost om-btn-pill" onClick={startTranscribe} disabled={starting}>
+              <Captions size={14} /> Try again
+            </button>
+          )}
+        </div>
+      ) : canTranscript(memo) ? (
+        <div>
+          <p className="om-detail-desc" style={{ marginBottom: 10 }}>
+            No transcript yet. Pull the source’s captions (or transcribe with Whisper) — the video stays put.
+          </p>
+          <button className="om-btn-primary om-btn-pill" onClick={startTranscribe} disabled={starting}>
+            {starting ? <Loader2 size={14} className="om-spin" /> : <Captions size={14} />}
+            Get transcript
+          </button>
+        </div>
+      ) : (
+        <p className="om-detail-desc">No transcript available for this memo.</p>
       )}
-    </div>
+    </RailCard>
+  );
+}
+
+// "Ask this memo" as a rail card (OPNMMO-0042): a collapsed toggle that opens
+// into the chat (input + thread), part of the rail accordion like the others.
+function AskRailTool({ memoId, open, onToggle }: { memoId: string; open: boolean; onToggle: () => void }) {
+  return (
+    <RailCard
+      icon={<MessageSquare size={16} className="om-accent-icon" />}
+      title="Ask this memo"
+      open={open}
+      onToggle={onToggle}
+    >
+      <AskMemoPanel memoId={memoId} />
+    </RailCard>
   );
 }
 
@@ -1085,7 +1236,6 @@ export function MemoDetail() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const openThumbEdit = useAppStore((s) => s.openThumbEdit);
-  const [chatOpen, setChatOpen] = useState(false);
   const isMobile = useIsMobile();
   const [isEditing, setIsEditing] = useState(false);
   const [noteContent, setNoteContent] = useState('');
@@ -1094,8 +1244,13 @@ export function MemoDetail() {
   const [confirmDelete, setConfirmDelete] = useState(false);
   // "Add to playlist" popover (music memos only).
   const [plMenuOpen, setPlMenuOpen] = useState(false);
-  // Under-content AI summary toggle + player seek bus (OPNMMO-0042).
-  const [summaryOpen, setSummaryOpen] = useState(false);
+  // Theater is lifted so the page grid reflows: video full-width, rail drops
+  // below it beside the notes (OPNMMO-0042).
+  const [theater, setTheater] = useState(false);
+  // Rail accordion: which info card is open (one at a time). Make it local is
+  // independent and not tracked here (point 5).
+  const [openCard, setOpenCard] = useState<string>('summary');
+  const toggleCard = (cardId: string) => setOpenCard((c) => (c === cardId ? '' : cardId));
   const [videoSeek, setVideoSeek] = useState<{ sec: number; nonce: number } | null>(null);
   const seekVideo = useCallback((sec: number) => {
     setVideoSeek((v) => ({ sec, nonce: (v?.nonce ?? 0) + 1 }));
@@ -1276,7 +1431,27 @@ export function MemoDetail() {
   // generated summary, which drops inline above the notes. Edit mode shows neither.
   const showSummary = !isEditing && canSummarize(memo);
   const showMakeLocal = !isEditing && canMakeLocal(memo) && memo.type === 'video';
-  const showRail = !isMobile && (showSummary || showMakeLocal);
+  // Ask-this-memo is a universal rail tool, so the rail is present on every
+  // desktop memo (not just summarizable / localizable ones) — OPNMMO-0042.
+  const showRail = !isMobile && !isEditing;
+
+  // Every tool now lives in the rail as a homogeneous card (OPNMMO-0042): AI
+  // Summary, Description, Transcript, Make it local, Ask. Notes stays out, in
+  // the content column. On mobile (no rail) these render inline under the media.
+  const isMusicAudio = memo.type === 'audio' && audioKind(memo) === 'music';
+  const showDescription = !isEditing && (memo.type === 'video' || isMusicAudio);
+  const showTranscript = !isEditing
+    && (memo.type === 'video' || (memo.type === 'audio' && !isMusicAudio))
+    && (canTranscript(memo) || !!memo.transcript_status || !!memo.content_text);
+  // Order: Description, AI Summary, Transcript, Make it local, Ask — all one
+  // accordion (one card open at a time). A card's internal state (Make it local's
+  // quality picks, a transcript in flight) lives in its body and never toggles it.
+  const railTools: React.ReactNode[] = [];
+  if (showDescription) railTools.push(<DescriptionCard key="desc" memo={memo} open={openCard === 'description'} onToggle={() => toggleCard('description')} onSeek={seekVideo} />);
+  if (showSummary) railTools.push(<SummaryPanel key="summary" memo={memo} onSeek={seekVideo} open={openCard === 'summary'} onToggle={() => toggleCard('summary')} />);
+  if (showTranscript) railTools.push(<TranscriptCard key="transcript" memo={memo} onSeek={seekVideo} open={openCard === 'transcript'} onToggle={() => toggleCard('transcript')} />);
+  if (showMakeLocal) railTools.push(<MakeItLocalPanel key="makelocal" memo={memo} open={openCard === 'makelocal'} onToggle={() => toggleCard('makelocal')} />);
+  if (!isEditing) railTools.push(<AskRailTool key="ask" memoId={id!} open={openCard === 'ask'} onToggle={() => toggleCard('ask')} />);
 
   return (
     <div className="om-detail-page">
@@ -1372,27 +1547,19 @@ export function MemoDetail() {
                 Open Original
               </a>
             )}
-            <button
-              onClick={() => setChatOpen(!chatOpen)}
-              className={`om-icon-btn${chatOpen ? ' active' : ''}`}
-            >
-              <MessageSquare size={16} />
-            </button>
+            {/* Ask this memo now lives as a rail/inline card on every memo, so
+                the header chat toggle is gone (OPNMMO-0042). */}
           </div>
         </header>
 
         {/* Content */}
         <div className="om-detail-scroll">
-          <div className={cn('om-detail-content', showRail && 'has-rail')}>
+          <div className={cn('om-detail-content', showRail && 'has-rail', theater && 'is-theater')}>
           {/* Header spans full width above the columns so the rail's top edge
               lines up with the bottom of the title block (OPNMMO-0042). */}
           <div className="om-detail-head-block">
             {/* Memo type */}
-            <div style={{ marginBottom: '12px' }}>
-              <span className="om-section-h">{memo.type}</span>
-            </div>
-
-            {/* Title */}
+            {/* Title (memo type moved into the meta row below) */}
             {isEditing ? (
               <input
                 value={editTitle}
@@ -1416,6 +1583,9 @@ export function MemoDetail() {
 
             {/* Meta */}
             <div className="om-detail-meta" style={{ marginBottom: '24px' }}>
+              {/* Memo type leads the metadata line (OPNMMO-0042). */}
+              <span className="om-section-h">{memo.type}</span>
+              <span style={{ color: 'var(--text-4)' }}>•</span>
               <span className="mono" style={{ fontSize: '11px', color: 'var(--text-4)' }}>
                 {new Date(memo.created_at).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })}
               </span>
@@ -1453,10 +1623,10 @@ export function MemoDetail() {
                         className="om-meta-action"
                         href={`/api/memos/${memo.id}/file?download=1`}
                         download
-                        title="Download the saved file to this computer"
+                        title="Export this memo to your device"
                       >
                         <Download size={13} />
-                        <span>Download to device</span>
+                        <span>Export this memo</span>
                       </a>
                     </>
                   )}
@@ -1535,6 +1705,11 @@ export function MemoDetail() {
 
           </div>{/* /.om-detail-head-block */}
 
+          {/* Left column = media + notes, kept together so the rail is its own
+              independent column: opening a rail card never shifts the notes
+              (OPNMMO-0042 point 1). In theater this becomes display:contents so
+              the media can span full width with notes below. */}
+          <div className="om-detail-col-main">
           <div className="om-detail-main">
             {/* AI Summary lives in the tool rail (desktop) and as a toggle
                 section under the content (OPNMMO-0042). */}
@@ -1556,12 +1731,14 @@ export function MemoDetail() {
                 src={memo.file_path ? `/api/memos/${memo.id}/file` : memo.thumbnail_path || ''}
                 alt={memo.title}
                 kind="image"
+                theater={theater}
+                onTheaterChange={setTheater}
               />
             )}
 
             {/* Local video preview — with theater + fullscreen */}
             {memo.type === 'video' && memo.file_path && !isEditing && (
-              <MediaPreview src={`/api/memos/${memo.id}/file`} alt={memo.title} kind="video" poster={memo.thumbnail_path} seek={videoSeek} />
+              <MediaPreview src={`/api/memos/${memo.id}/file`} alt={memo.title} kind="video" poster={memo.thumbnail_path} seek={videoSeek} theater={theater} onTheaterChange={setTheater} />
             )}
 
             {/* Audio memo (ADR-005) — never a dead end. A local/pulled file plays
@@ -1577,11 +1754,8 @@ export function MemoDetail() {
                   ) : (
                     <AudioMemoPlayer memo={memo} />
                   )}
-                  {/* Music transcript = lyrics, which need a dedicated provider —
-                      hidden until that lands. Voice (spoken word) keeps it. */}
-                  {audioKind(memo) !== 'music' && <AudioTranscript memo={memo} />}
-                  {/* Music keeps the original source description (≠ transcript). */}
-                  {audioKind(memo) === 'music' && <MusicDescription memo={memo} />}
+                  {/* Transcript (voice) and Description (music) now live in the
+                      tool rail as cards (OPNMMO-0042). */}
                   {/* Keep the source reachable as a live reference even after pull. */}
                   {memo.source_url && audioEmbed(memo) && <AudioStreamEmbed memo={memo} reference />}
                 </>
@@ -1626,20 +1800,8 @@ export function MemoDetail() {
 
             {/* (Audio remote handling moved into the unified audio block above.) */}
 
-            {/* Make it local (remote video) moved to the tool rail (OPNMMO-0042).
-                The audio in-flight variant still renders inline in the audio block
-                above; this standalone video one now lives beside the content. */}
-
-            {/* Video description + transcript tabs for YouTube/social video memos */}
-            {!isEditing && memo.type === 'video' && memo.source_url && (
-              <VideoContentPanel memo={memo} />
-            )}
-
-            {/* Transcript for locally uploaded video files (no source URL) */}
-            {!isEditing && memo.type === 'video' && !memo.source_url && memo.file_path &&
-              (memo.transcript_status || memo.content_text) && (
-              <AudioTranscript memo={memo} />
-            )}
+            {/* Make it local, Video description and Transcript all moved to the
+                tool rail as homogeneous cards (OPNMMO-0042). */}
 
             {/* Rich Web Preview for article/link */}
             {isWebType && !isEditing && (
@@ -1733,40 +1895,11 @@ export function MemoDetail() {
               </div>
             )}
 
-            {/* AI Summary "under content" copy — the toggle section beside
-                Video description / Transcript. Shows on both desktop and mobile
-                once a summary exists; the rail's button drives it (OPNMMO-0042). */}
-            {!isEditing && showSummary && (
-              <SummarySection
-                memo={memo}
-                open={summaryOpen}
-                onToggle={() => setSummaryOpen((v) => !v)}
-                onSeek={seekVideo}
-              />
+            {/* Mobile (no rail): the tool cards render inline under the media,
+                since the rail is desktop-only (OPNMMO-0042). */}
+            {!showRail && railTools.length > 0 && (
+              <div className="om-rail-inline">{railTools}</div>
             )}
-
-            {/* Notes section */}
-            <div className="om-notes-section">
-              <div className="om-notes-head">
-                <div className="om-notes-label">
-                  <Pencil size={16} className="om-section-icon" />
-                  <h3 className="om-section-h">My Notes</h3>
-                </div>
-                {notesSaving && <Loader2 size={14} className="om-section-icon om-spin" />}
-              </div>
-              <MarkdownEditor
-                viewFirst={!isEditing}
-                value={isEditing ? editNotes : notesDraft}
-                onChange={isEditing ? (val) => setEditNotes(val) : (val) => setNotesDraft(val)}
-                onSave={(val) => {
-                  if (isEditing) return;
-                  memoApi.update(memo.id, { notes: val }).then(() => {
-                    queryClient.invalidateQueries({ queryKey: ['memo', id] });
-                  });
-                }}
-                placeholder="Click to add your thoughts, annotations, or highlights..."
-              />
-            </div>
 
             {/* Related memos — hidden for now (revisit the UX). */}
             {false && !isEditing && related.length > 0 && (
@@ -1788,35 +1921,39 @@ export function MemoDetail() {
             )}
           </div>{/* /.om-detail-main */}
 
-          {/* Tool rail — desktop only; AI Summary + Make-it-local, room to grow. */}
-          {showRail && (
-            <aside className="om-detail-rail">
-              {showSummary && (
-                <SummaryPanel
-                  memo={memo}
-                  onSeek={seekVideo}
-                  onAfterGenerate={() => setSummaryOpen(true)}
-                  underContentOpen={summaryOpen}
-                  onToggleUnderContent={() => setSummaryOpen((v) => !v)}
-                />
-              )}
-              {showMakeLocal && <MakeItLocalPanel memo={memo} />}
-            </aside>
-          )}
+          {/* Notes — under the media in the same left column, so it stays put
+              regardless of which rail card is open. */}
+          <div className="om-detail-notes-area">
+            <div className="om-notes-section">
+              <div className="om-notes-head">
+                <div className="om-notes-label">
+                  <Pencil size={16} className="om-section-icon" />
+                  <h3 className="om-section-h">My Notes</h3>
+                </div>
+                {notesSaving && <Loader2 size={14} className="om-section-icon om-spin" />}
+              </div>
+              <MarkdownEditor
+                viewFirst={!isEditing}
+                value={isEditing ? editNotes : notesDraft}
+                onChange={isEditing ? (val) => setEditNotes(val) : (val) => setNotesDraft(val)}
+                onSave={(val) => {
+                  if (isEditing) return;
+                  memoApi.update(memo.id, { notes: val }).then(() => {
+                    queryClient.invalidateQueries({ queryKey: ['memo', id] });
+                  });
+                }}
+                placeholder="Click to add your thoughts, annotations, or highlights..."
+              />
+            </div>
+          </div>
+          </div>{/* /.om-detail-col-main */}
+
+          {/* Tool rail (desktop) — its own independent column: AI Summary,
+              Description, Transcript, Make it local, Ask this memo (OPNMMO-0042). */}
+          {showRail && <aside className="om-detail-rail">{railTools}</aside>}
           </div>{/* /.om-detail-content */}
         </div>
       </div>
-
-      {/* Chat pane — a 384px side pane on desktop; a bottom sheet (with a
-          tap-to-dismiss scrim) on mobile, opened by the same toggle. */}
-      {chatOpen && isMobile && (
-        <div className="om-detail-chat-scrim" onClick={() => setChatOpen(false)} aria-hidden />
-      )}
-      {chatOpen && (
-        <div className="om-detail-chat">
-          <AskMemoPanel memoId={id!} />
-        </div>
-      )}
     </div>
   );
 }
