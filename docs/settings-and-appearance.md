@@ -86,6 +86,18 @@ written to the persisted `tweaks` in the app store and applied to `<html>`.
 Controls: Theme, Accent (with two custom slots), Card style, Layout, Player size,
 Grid columns, Background, Animation speed.
 
+### Accent contrast (`--accent-ink`)
+
+Any accent can be set, including a pale lime or yellow that looks fine as a fill
+(white text rides on it via `--accent-text`) but disappears when the accent is
+used as a *foreground* on a surface — e.g. the audio-card waveform bars on a
+light tile. `applyTweaks()` derives a contrast-safe `--accent-ink` per theme
+(`accentInk()` in `lib/appearance.ts`): it deepens a too-pale accent on light
+backgrounds and lifts a too-dark one on dark, keeping hue and saturation, and
+leaves well-balanced mid accents untouched. Foreground accent uses (the waveform,
+the branded rail scrollbar) read from `--accent-ink` so they stay legible on any
+accent (OPNMMO-0040). It is a reusable token for future accent-on-surface needs.
+
 ### Background
 
 Two modes: **Random** (an accent-derived gradient wash) and **Image**.
@@ -114,7 +126,11 @@ either.
 
 ### Creator preferences
 
-The options the creator runs openMemo with carry a small accent asterisk:
+The options the creator runs openMemo with carry a small **fixed-red** asterisk
+(`.om-ap-star`, `#FF4D4D`). It is deliberately *not* the accent color: an accent
+asterisk vanished into the accent-filled active segment and shifted with every
+theme, so it now stays the same readable red on any segment, theme, or accent
+(OPNMMO-0039).
 
 | Setting | Marked pick |
 |---|---|

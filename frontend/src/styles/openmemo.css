@@ -6,6 +6,9 @@
   --accent: #F4825A;
   --accent-deep: #B14A32;
   --accent-soft: #F4825A20;
+  /* Contrast-safe accent for FOREGROUND use on a surface (waveform bars, accent
+     text/icons). Set live by applyTweaks() per theme; this is the boot value. */
+  --accent-ink: #F4825A;
 
   --font-ui: 'Satoshi', ui-sans-serif, system-ui, -apple-system, sans-serif;
   --font-display: 'Satoshi', ui-sans-serif, system-ui, -apple-system, sans-serif;
@@ -2013,8 +2016,10 @@ input, textarea { font: inherit; color: inherit; }
   60%      { box-shadow: 0 0 0 5px color-mix(in oklab, var(--accent) 0%, transparent); opacity: .55; }
 }
 @media (prefers-reduced-motion: reduce) { .om-ap-live::before { animation: none; } }
-/* Creator-preference asterisks + footer key. */
-.om-ap-star { color: var(--accent); font-weight: 700; }
+/* Creator-preference asterisks + footer key. The star stays a fixed red, never
+   the accent — so it reads on an accent-filled active segment and never blends
+   into the chosen accent/theme (OPNMMO-0039). */
+.om-ap-star { color: #FF4D4D; font-weight: 700; }
 .om-ap-foot-note { display: flex; flex-direction: column; gap: 3px; min-width: 0; flex: 1; }
 .om-ap-star-note { font-size: 10px; line-height: 1.4; color: var(--text-3); text-wrap: pretty; }
 .om-storage-legend i.a { background: var(--accent); }
@@ -2490,9 +2495,12 @@ input, textarea { font: inherit; color: inherit; }
   border-radius: var(--r-lg, 14px);
   background: color-mix(in oklab, var(--surface-2) 70%, transparent);
   border: 1px solid var(--border);
-  display: flex; flex-direction: column; gap: 10px;
+  display: flex; flex-direction: column; gap: 10px; min-width: 0;
   /* Anchor for the Up-next popover (absolute, floats above the player). */
   position: relative;
+  /* Size container so the small layout can adapt to the actual rail width
+     instead of clipping at narrow rails / desktop zoom (OPNMMO-0037). */
+  container: sbplayer / inline-size;
   animation: omSbPlayerIn .3s cubic-bezier(0.16, 0.84, 0.34, 1);
 }
 @keyframes omSbPlayerIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
@@ -2647,6 +2655,25 @@ input, textarea { font: inherit; color: inherit; }
 .om-sb-player-play:hover { filter: brightness(1.08); transform: scale(1.05); }
 .om-sb-player-play:active { transform: scale(0.96); }
 
+/* Narrow rail / desktop zoom (OPNMMO-0037): the small player's transport packs
+   up to 7 controls into the ~236px rail. Instead of clipping (the old "drop to
+   90% zoom" workaround), it tightens the gaps and control sizes as the player
+   gets narrower, and below ~200px the trailing duration label drops so the
+   scrubber keeps a usable track. The transport already wraps as a last resort.
+   Scoped to the small layout — the big player owns the full cover. */
+@container sbplayer (max-width: 232px) {
+  .om-sb-player:not(.om-sb-player-big) .om-sb-player-transport { gap: 9px; }
+  .om-sb-player:not(.om-sb-player-big) .om-sb-player-btn { width: 27px; height: 27px; }
+  .om-sb-player:not(.om-sb-player-big) .om-sb-player-play { width: 36px; height: 36px; }
+}
+@container sbplayer (max-width: 200px) {
+  .om-sb-player:not(.om-sb-player-big) .om-sb-player-transport { gap: 6px; }
+  .om-sb-player:not(.om-sb-player-big) .om-sb-player-btn { width: 25px; height: 25px; }
+  .om-sb-player:not(.om-sb-player-big) .om-sb-player-play { width: 34px; height: 34px; }
+  /* Elapsed-only — the trailing duration label leaves so the track stays wide. */
+  .om-sb-player:not(.om-sb-player-big) .om-sb-player-scrub .om-sb-player-time:last-child { display: none; }
+}
+
 /* Collapsed sidebar: cover wrapped in a progress ring, tap to play/pause. */
 .om-sb-player-mini {
   position: relative; width: 48px; height: 48px; margin: 0 auto 6px;
@@ -2678,8 +2705,10 @@ input, textarea { font: inherit; color: inherit; }
 }
 .om-wave-canvas {
   position: absolute; inset: 0; width: 100%; height: 100%;
-  /* Accent at rest (calm), full accent when active — same hue both states. */
-  color: color-mix(in oklab, var(--accent) 60%, transparent);
+  /* Contrast-safe accent at rest (calm), full when active — same hue both
+     states. Uses --accent-ink so a pale/green accent still reads on the light
+     waveform tile (OPNMMO-0040). */
+  color: color-mix(in oklab, var(--accent-ink, var(--accent)) 60%, transparent);
   pointer-events: none;
   transition: color .25s ease;
 }
@@ -2687,7 +2716,7 @@ input, textarea { font: inherit; color: inherit; }
   background-color: color-mix(in oklab, var(--accent) 30%, var(--audio-frame-bg));
 }
 .om-card-audio.is-active .om-wave-canvas {
-  color: var(--accent);
+  color: var(--accent-ink, var(--accent));
 }
 /* Play/pause button reuses the shared `.om-play` token (identical to video
    cards) for shape/size/shadow. But video's fixed white fill sits over a dark
@@ -4424,13 +4453,40 @@ input, textarea { font: inherit; color: inherit; }
   background: transparent; color: var(--text-4);
 }
 .om-lib-search-x:hover { color: var(--text); background: var(--surface-3); }
-.om-lib-sort {
-  padding: 3px 8px; border: 1px solid var(--border); border-radius: 999px;
+/* Branded sort dropdown (OPNMMO-0031) — custom trigger + popover, no native
+   <select>. The trigger arrow keeps a proper gap from the edge and the menu is
+   themed instead of the OS popup. */
+.om-lib-sort { position: relative; display: inline-flex; }
+.om-lib-sort-btn {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 3px 8px 3px 10px; border: 1px solid var(--border); border-radius: 999px;
   background: transparent; color: var(--text-3); cursor: pointer;
   font-size: 10.5px; outline: none;
+  transition: color .15s ease, border-color .15s ease, background .15s ease;
 }
-.om-lib-sort:hover, .om-lib-sort:focus { border-color: var(--border-2); color: var(--text); }
-.om-lib-sort option { background: var(--surface-2); color: var(--text); }
+.om-lib-sort-btn:hover, .om-lib-sort-btn:focus-visible,
+.om-lib-sort-btn[aria-expanded="true"] { border-color: var(--border-2); color: var(--text); }
+.om-lib-sort-caret { color: var(--text-4); transition: transform .18s ease, color .15s ease; }
+.om-lib-sort-btn:hover .om-lib-sort-caret { color: var(--text-3); }
+.om-lib-sort-caret.open { transform: rotate(180deg); }
+.om-lib-sort-menu {
+  position: absolute; top: calc(100% + 6px); right: 0; z-index: 40;
+  min-width: 132px; padding: 4px; border-radius: 12px;
+  background: var(--elev); border: 1px solid var(--border-2);
+  box-shadow: var(--shadow-elev);
+  display: flex; flex-direction: column; gap: 2px;
+  animation: omLibSortIn .14s ease;
+}
+@keyframes omLibSortIn { from { opacity: 0; transform: translateY(-4px); } to { opacity: 1; transform: none; } }
+.om-lib-sort-opt {
+  display: flex; align-items: center; justify-content: space-between; gap: 10px;
+  padding: 6px 9px; border: 0; border-radius: 8px; cursor: pointer;
+  background: transparent; color: var(--text-2); font-size: 11px; text-align: left;
+  transition: background .12s ease, color .12s ease;
+}
+.om-lib-sort-opt:hover { background: var(--surface-2); color: var(--text); }
+.om-lib-sort-opt.active { color: var(--accent-ink, var(--accent)); }
+.om-lib-sort-opt.active:hover { background: var(--accent-soft); }
 
 .om-music-back {
   align-self: flex-start; display: inline-flex; align-items: center; gap: 4px;
@@ -4445,7 +4501,11 @@ input, textarea { font: inherit; color: inherit; }
    overscroll-x contain: a flick past the rail edge must not turn into the
    browser's back/forward swipe. Vertical wheel stays with the page (Lenis). */
 .om-pl-row {
-  display: flex; gap: 16px; overflow-x: auto; padding: 2px 2px 10px;
+  display: flex; gap: 16px; overflow-x: auto;
+  /* Pad so a card's hover lift + shadow isn't clipped (overflow-x:auto forces
+     overflow-y to clip too). Negative inline margin keeps the first card
+     edge-aligned with the section heading (OPNMMO-0041). */
+  padding: 10px 14px 26px; margin-inline: -14px;
   scrollbar-width: thin;
   overscroll-behavior-x: contain;
 }
@@ -4453,10 +4513,29 @@ input, textarea { font: inherit; color: inherit; }
 /* Hero rail (Apple-Music-style top row) — big full-bleed cards, sideways
    scroll. Art fills the card, gradient veil, eyebrow + name bottom-left. */
 .om-hero-row {
-  display: flex; gap: 16px; overflow-x: auto; padding: 2px 2px 12px;
+  display: flex; gap: 16px; overflow-x: auto;
+  /* Room for the hover lift + drop shadow, edges realigned — see .om-pl-row. */
+  padding: 10px 14px 28px; margin-inline: -14px;
   scrollbar-width: thin;
   overscroll-behavior-x: contain;
 }
+/* Branded rail scrollbar (OPNMMO-0032): the sideways slider that appears on a
+   smaller desktop screen is accent-tinted, not the default browser grey. Uses
+   --accent-ink so a pale accent's thumb still reads. Firefox via scrollbar-color,
+   Chromium via ::-webkit-scrollbar. */
+.om-hero-row, .om-pl-row {
+  scrollbar-color: color-mix(in oklab, var(--accent-ink, var(--accent)) 55%, var(--border-2)) transparent;
+}
+.om-hero-row::-webkit-scrollbar, .om-pl-row::-webkit-scrollbar { height: 8px; }
+.om-hero-row::-webkit-scrollbar-track, .om-pl-row::-webkit-scrollbar-track { background: transparent; }
+.om-hero-row::-webkit-scrollbar-thumb, .om-pl-row::-webkit-scrollbar-thumb {
+  background: color-mix(in oklab, var(--accent-ink, var(--accent)) 55%, var(--border-2));
+  border-radius: 999px; border: 2px solid transparent; background-clip: content-box;
+}
+.om-hero-row:hover::-webkit-scrollbar-thumb, .om-pl-row:hover::-webkit-scrollbar-thumb {
+  background: var(--accent-ink, var(--accent)); background-clip: content-box; border: 2px solid transparent;
+}
+
 .om-hero-card {
   position: relative; flex: 0 0 280px; aspect-ratio: 4 / 5;
   border-radius: var(--r-xl, 18px); overflow: hidden; cursor: pointer;

@@ -341,6 +341,67 @@ function HeroLikedCard({ onPlay, onShuffle }: { onPlay: () => void; onShuffle: (
   );
 }
 
+// Branded library sort dropdown (OPNMMO-0031) — replaces the native <select>
+// so the trigger arrow keeps its spacing and the open menu matches the app
+// instead of the OS popup. Closes on outside-click or Escape.
+const LIB_SORT_OPTS = [
+  { v: 'recent', l: 'Recent' },
+  { v: 'title', l: 'Title A–Z' },
+  { v: 'artist', l: 'Artist A–Z' },
+] as const;
+type LibSort = (typeof LIB_SORT_OPTS)[number]['v'];
+
+function LibrarySort({ value, onChange }: { value: LibSort; onChange: (v: LibSort) => void }) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!open) return;
+    const onDoc = (e: MouseEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+    };
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') setOpen(false); };
+    document.addEventListener('mousedown', onDoc);
+    document.addEventListener('keydown', onKey);
+    return () => {
+      document.removeEventListener('mousedown', onDoc);
+      document.removeEventListener('keydown', onKey);
+    };
+  }, [open]);
+  const current = LIB_SORT_OPTS.find((o) => o.v === value) ?? LIB_SORT_OPTS[0];
+  return (
+    <div className="om-lib-sort" ref={ref}>
+      <button
+        type="button"
+        className="om-lib-sort-btn mono"
+        onClick={() => setOpen((v) => !v)}
+        aria-haspopup="listbox"
+        aria-expanded={open}
+        title="Sort the library"
+      >
+        <span>{current.l}</span>
+        <Icon name="chevronDown" size={12} className={cn('om-lib-sort-caret', open && 'open')} />
+      </button>
+      {open && (
+        <div className="om-lib-sort-menu" role="listbox" aria-label="Sort the library">
+          {LIB_SORT_OPTS.map((o) => (
+            <button
+              key={o.v}
+              type="button"
+              role="option"
+              aria-selected={o.v === value}
+              className={cn('om-lib-sort-opt mono', o.v === value && 'active')}
+              onClick={() => { onChange(o.v); setOpen(false); }}
+            >
+              <span>{o.l}</span>
+              {o.v === value && <Icon name="check" size={13} />}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 // Sortable wrapper for a playlist tile — same app-level DndContext the cards
 // use (distance: 8 keeps clicks working; see CLAUDE.md).
 function SortableTile({ id, children }: { id: string; children: React.ReactNode }) {
@@ -545,15 +606,16 @@ export function MusicPage() {
     queueFrom(res.items as Memo[], undefined, opts);
   };
 
-  // Liked queue — no liked filter on the list API, so fetch the library
-  // (same 200-track cap as everything else) and keep the liked ones.
+  // Liked queue — server-side liked filter (OPNMMO-0041) so songs liked from
+  // INSIDE a playlist still reach Favourite Songs (the library list excludes
+  // playlist-born tracks; liked=true bypasses that). Same 200-track cap.
   const playLiked = async (opts?: { shuffle?: boolean }) => {
     const res = await queryClient.fetchQuery({
       queryKey: ['memos', 'music-liked-queue'],
-      queryFn: () => memoApi.list({ type: 'audio', audio_kind: 'music', limit: 200 }),
+      queryFn: () => memoApi.list({ type: 'audio', audio_kind: 'music', liked: true, limit: 200 }),
       staleTime: 10 * 1000,
     });
-    queueFrom((res.items as Memo[]).filter((m) => m.liked), undefined, opts);
+    queueFrom(res.items as Memo[], undefined, opts);
   };
 
   const deleteMemo = async (m: Memo) => {
@@ -995,17 +1057,7 @@ export function MusicPage() {
                 </button>
               )}
             </span>
-            <select
-              className="om-lib-sort mono"
-              value={libSort}
-              onChange={(e) => setLibSort(e.target.value as 'recent' | 'title' | 'artist')}
-              title="Sort the library"
-              aria-label="Sort the library"
-            >
-              <option value="recent">Recent</option>
-              <option value="title">Title A–Z</option>
-              <option value="artist">Artist A–Z</option>
-            </select>
+            <LibrarySort value={libSort} onChange={setLibSort} />
             <button
               className="om-lib-act"
               onClick={() => playLibrary()}
