@@ -162,6 +162,12 @@ class OllamaClient:
                 return name
         raise OllamaModelMissing(settings.DEFAULT_CHAT_MODEL)
 
+    @staticmethod
+    def _num_ctx() -> int:
+        """Context window for chat calls — runtime Settings override, else env."""
+        from backend.core.app_settings import get_num_ctx
+        return get_num_ctx()
+
     def _is_endpoint_not_found(self, resp: httpx.Response) -> bool:
         """True only when the route itself is missing, not when the model is missing."""
         if resp.status_code != 404:
@@ -235,8 +241,9 @@ class OllamaClient:
                     "stream": stream,
                     # Ollama defaults num_ctx to 4096 and SILENTLY truncates longer
                     # prompts — a full RAG context or a long transcript loses its
-                    # tail without any error. Raise the window explicitly.
-                    "options": {"num_ctx": settings.OLLAMA_NUM_CTX},
+                    # tail without any error. Raise the window explicitly (user
+                    # override from Settings, else the env default).
+                    "options": {"num_ctx": self._num_ctx()},
                 },
             ) as resp:
                 if resp.status_code == 404:
@@ -265,7 +272,7 @@ class OllamaClient:
                     "model": model,
                     "messages": messages,
                     "stream": False,
-                    "options": {"num_ctx": settings.OLLAMA_NUM_CTX},
+                    "options": {"num_ctx": self._num_ctx()},
                 },
             )
             if resp.status_code == 404:

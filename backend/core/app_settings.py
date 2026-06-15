@@ -62,6 +62,11 @@ _DEFAULTS: dict[str, Any] = {
     # fall through to the env default, then to any installed model — see
     # OllamaClient.resolve_chat_model for the full resolution order.
     "chat_model": "",
+    # Ollama context window (num_ctx) for chat/summary calls. 0 = use the env
+    # default (OLLAMA_NUM_CTX). A user with more RAM can raise it from Settings
+    # so long transcripts / full RAG contexts aren't silently truncated; a user
+    # on a small box can lower it. Resolved + clamped by get_num_ctx().
+    "num_ctx": 0,
 }
 
 _UNCAPPED_SENTINEL = 0
@@ -230,3 +235,27 @@ def get_max_upload_bytes() -> int:
         return _HARD_CEILING_MB * 1024 * 1024
     mb = max(1, min(mb, _HARD_CEILING_MB))
     return mb * 1024 * 1024
+
+
+# num_ctx bounds: below the floor Ollama truncates almost everything; above the
+# ceiling a typo could exhaust RAM / OOM the model. 128k is the top of current
+# local context windows.
+_NUM_CTX_FLOOR = 512
+_NUM_CTX_CEILING = 131072
+
+
+def get_num_ctx() -> int:
+    """Resolve the Ollama context window (num_ctx) for chat/summary calls.
+
+    A positive runtime override (Settings) wins; otherwise fall back to the
+    env/static default (OLLAMA_NUM_CTX). Always clamped to [512, 131072] so a
+    bad value in the JSON can't wedge Ollama.
+    """
+    raw = _read().get("num_ctx", 0)
+    try:
+        n = int(raw)
+    except (TypeError, ValueError):
+        n = 0
+    if n <= 0:
+        n = settings.OLLAMA_NUM_CTX
+    return max(_NUM_CTX_FLOOR, min(n, _NUM_CTX_CEILING))

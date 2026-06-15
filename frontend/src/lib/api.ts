@@ -308,6 +308,9 @@ export interface AppSettings {
   // Default Ollama chat model for AI features, server-side so every client
   // and the backend's own calls (summaries) agree. '' = backend env default.
   chat_model: string;
+  // Ollama context window (num_ctx) for chat/summary calls. 0 = backend env
+  // default (8192); a positive value overrides it (clamped 512–131072 server-side).
+  num_ctx: number;
   // Read-only flag: whether a yt-dlp cookie jar is on the server. The jar
   // itself is never sent over the API (it's account credentials).
   yt_cookies_present: boolean;
