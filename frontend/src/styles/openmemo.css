@@ -1264,6 +1264,40 @@ input, textarea { font: inherit; color: inherit; }
                       container-type: inline-size; }
 .om-detail-content  { max-width: 720px; margin: 0 auto; }
 
+/* Tool rail (OPNMMO-0042): AI Summary + Make-it-local hug the content column as
+   a "tools" section that can grow later. Default (no rail) keeps the plain
+   centered 720 column so the media theater breakout math is untouched. With a
+   rail, a centered grid: the title block spans the full top row, so the rail's
+   top edge lines up with the bottom of the title (= top of the media). The rail
+   collapses below the content when the pane narrows (container query). */
+.om-detail-content.has-rail {
+  display: grid;
+  grid-template-columns: minmax(0, 720px) 600px;
+  grid-template-areas: "head head" "main rail";
+  justify-content: center;
+  align-items: start;
+  column-gap: 32px;
+  max-width: 1352px;
+}
+.om-detail-head-block { grid-area: head; }
+.om-detail-content.has-rail .om-detail-head-block { max-width: 720px; justify-self: start; }
+.om-detail-content.has-rail .om-detail-main { grid-area: main; min-width: 0; }
+.om-detail-content.has-rail .om-detail-rail { grid-area: rail; }
+.om-detail-main     { min-width: 0; }
+.om-detail-rail     { position: sticky; top: 0; display: flex; flex-direction: column; gap: 16px; }
+/* The panels carry their own inline margin-bottom for the single-column flow;
+   in the rail, the flex gap owns spacing. */
+.om-detail-rail > * { margin-bottom: 0 !important; }
+@container (max-width: 1100px) {
+  .om-detail-content.has-rail {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-areas: "head" "main" "rail";
+    max-width: 720px;
+  }
+  .om-detail-content.has-rail .om-detail-head-block { max-width: none; }
+  .om-detail-rail { position: static; }
+}
+
 /* Loading / spinner */
 .om-detail-loading  { display: flex; align-items: center; justify-content: center; min-height: 80vh; }
 .om-detail-spinner  { width: 28px; height: 28px; border: 2px solid var(--border-2);
@@ -1346,10 +1380,26 @@ input, textarea { font: inherit; color: inherit; }
 .om-section-icon    { color: var(--text-4); display: inline-flex; align-items: center; }
 .om-field-label-block { font-size: 10.5px; letter-spacing: .08em; text-transform: uppercase;
                         color: var(--text-4); display: block; margin-bottom: 8px; }
-.om-notes-section   { padding-top: 24px; border-top: 1px solid var(--border);
-                      margin-top: 32px; display: flex; flex-direction: column; gap: 12px; }
+/* Notes section as its own card (OPNMMO-0042): same boxed treatment as the AI
+   Summary panel so "your space" reads as a distinct section, but a neutral
+   surface tint (not the accent) keeps it visually apart from the AI box. */
+.om-notes-section   { margin-top: 32px; padding: 18px 20px; border-radius: var(--r-lg);
+                      border: 1px solid var(--border);
+                      background: color-mix(in oklab, var(--text) 4%, var(--surface));
+                      display: flex; flex-direction: column; gap: 12px; }
 .om-notes-head      { display: flex; align-items: center; justify-content: space-between; }
 .om-notes-label     { display: flex; align-items: center; gap: 8px; }
+
+/* Clickable summary/transcript timestamps (OPNMMO-0042): blue, seek the player. */
+.om-ts-link {
+  color: var(--om-ts, #4f8cff);
+  font-weight: 600; font-variant-numeric: tabular-nums;
+  background: none; border: 0; padding: 0; cursor: pointer;
+  text-decoration: none; transition: color var(--transition-fast);
+}
+.om-ts-link:hover { color: var(--om-ts-strong, #79a8ff); text-decoration: underline; }
+/* Source/lang chips that now sit inline at the top of the transcript body. */
+.om-transcript-tags { display: flex; gap: 6px; margin: 0 0 10px; }
 
 /* Media frames */
 .om-image-memo      { border-radius: var(--r-xl); overflow: hidden; border: 1px solid var(--border); }

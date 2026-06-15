@@ -52,16 +52,82 @@ import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import type { Memo, Collection, SummaryMode } from '@/types';
 
+// A signal to seek the open player (embed iframe or local <video>). The nonce
+// lets the same timestamp fire repeated seeks (OPNMMO-0042).
+type SeekSignal = { sec: number; nonce: number };
+
+/** "1:02:03" / "12:34" / "1:23" → seconds. Null when it isn't a timestamp. */
+function tsToSeconds(ts: string): number | null {
+  const parts = ts.split(':').map((p) => Number(p));
+  if (parts.some((n) => Number.isNaN(n))) return null;
+  if (parts.length === 3) return parts[0] * 3600 + parts[1] * 60 + parts[2];
+  if (parts.length === 2) return parts[0] * 60 + parts[1];
+  return null;
+}
+
+// Wrap mm:ss / h:mm:ss tokens in markdown links to #t=SECONDS so the custom <a>
+// renderer below can turn them into clickable seek controls. Two-digit seconds
+// required, so aspect ratios like "16:9" are left alone.
+function linkifyTimestamps(md: string): string {
+  return md.replace(/\b(\d{1,2}:[0-5]\d(?::[0-5]\d)?)\b/g, (m) => {
+    const s = tsToSeconds(m);
+    return s == null ? m : `[${m}](#t=${s})`;
+  });
+}
+
+// Renders an AI summary as markdown (headings / bullets / bold all honored —
+// OPNMMO-0042 point 5). When onSeek is given, leading timestamps become blue
+// clickable controls that seek the player (point 2).
+function SummaryMarkdown({ text, onSeek }: { text: string; onSeek?: (sec: number) => void }) {
+  const md = onSeek ? linkifyTimestamps(text) : text;
+  return (
+    <ReactMarkdown
+      remarkPlugins={[remarkGfm]}
+      components={{
+        a: ({ href, children, ...props }) => {
+          if (href && href.startsWith('#t=') && onSeek) {
+            const sec = Number(href.slice(3));
+            return (
+              <button
+                type="button"
+                className="om-ts-link"
+                onClick={(e) => { e.preventDefault(); onSeek(sec); }}
+              >
+                {children}
+              </button>
+            );
+          }
+          return <a href={href} target="_blank" rel="noopener noreferrer" {...props}>{children}</a>;
+        },
+      }}
+    >
+      {md}
+    </ReactMarkdown>
+  );
+}
+
 /**
  * Wraps an image or local video preview with three affordances:
  *   - Theater toggle (top-right): expands preview to full content width
  *   - Fullscreen (top-right): browser-native fullscreen API
  *   - Lightbox (click image only): modal overlay, Esc/click closes
  */
-function MediaPreview({ src, alt, kind }: { src: string; alt: string; kind: 'image' | 'video' }) {
+function MediaPreview({ src, alt, kind, poster, seek }: { src: string; alt: string; kind: 'image' | 'video'; poster?: string | null; seek?: SeekSignal | null }) {
   const [theater, setTheater] = useState(false);
   const [lightbox, setLightbox] = useState(false);
   const mediaRef = useRef<HTMLImageElement | HTMLVideoElement | null>(null);
+
+  // A clickable transcript/summary timestamp asks the local video to jump.
+  useEffect(() => {
+    if (!seek || kind !== 'video') return;
+    const el = mediaRef.current as HTMLVideoElement | null;
+    if (!el) return;
+    try {
+      el.currentTime = seek.sec;
+      el.play?.().catch(() => {});
+      el.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    } catch { /* seek best-effort */ }
+  }, [seek, kind]);
 
   const goFullscreen = () => {
     const el = mediaRef.current;
@@ -90,6 +156,7 @@ function MediaPreview({ src, alt, kind }: { src: string; alt: string; kind: 'ima
           <video
             ref={(el) => { mediaRef.current = el; }}
             src={src}
+            poster={poster || undefined}
             controls
             playsInline
             preload="metadata"
@@ -502,7 +569,10 @@ function MusicDescription({ memo }: { memo: Memo }) {
 // Fixes the bug where content_text (YouTube description) was mislabeled "Transcript".
 function VideoContentPanel({ memo }: { memo: Memo }) {
   const queryClient = useQueryClient();
-  const [tab, setTab] = useState<'description' | 'transcript'>('description');
+  // Collapsed by default (null): the two buttons are toggles, so a long video
+  // page no longer dumps the whole description + transcript inline on load.
+  // Clicking a tab opens it; clicking the open tab again closes it (OPNMMO-0042).
+  const [tab, setTab] = useState<'description' | 'transcript' | null>(null);
   const [starting, setStarting] = useState(false);
   const status = memo.transcript_status;
   const pending = status === 'pending' || status === 'processing' || starting;
@@ -529,24 +599,22 @@ function VideoContentPanel({ memo }: { memo: Memo }) {
       <div style={{ display: 'flex', gap: '4px', marginBottom: '12px' }}>
         <button
           className={cn('om-tab-btn', tab === 'description' && 'active')}
-          onClick={() => setTab('description')}
+          onClick={() => setTab((t) => (t === 'description' ? null : 'description'))}
+          aria-expanded={tab === 'description'}
         >
+          {tab === 'description' ? <ChevronUp size={13} /> : <ChevronDown size={13} />}
           <AlignLeft size={13} />
           Video description
         </button>
         <button
           className={cn('om-tab-btn', tab === 'transcript' && 'active')}
-          onClick={() => setTab('transcript')}
+          onClick={() => setTab((t) => (t === 'transcript' ? null : 'transcript'))}
+          aria-expanded={tab === 'transcript'}
         >
+          {tab === 'transcript' ? <ChevronUp size={13} /> : <ChevronDown size={13} />}
           <FileText size={13} />
           Transcript
           {pending && <Loader2 size={12} className="om-spin" style={{ marginLeft: 4 }} />}
-          {status === 'done' && srcLabel && (
-            <span className="om-tag" style={{ marginLeft: 4 }} title={memo.transcript_source === 'captions' ? 'From source captions' : 'Whisper speech-to-text'}>{srcLabel}</span>
-          )}
-          {status === 'done' && memo.transcript_lang && (
-            <span className="om-tag" style={{ textTransform: 'uppercase', marginLeft: 4 }}>{memo.transcript_lang}</span>
-          )}
         </button>
       </div>
 
@@ -566,6 +634,18 @@ function VideoContentPanel({ memo }: { memo: Memo }) {
           </p>
         ) : status === 'done' && memo.content_text ? (
           <div className="om-prose" style={{ whiteSpace: 'pre-wrap' }}>
+            {/* Source/lang tags live inline at the head of the transcript, not
+                as chips on the toggle button (OPNMMO-0042). */}
+            {(srcLabel || memo.transcript_lang) && (
+              <p className="om-transcript-tags" style={{ whiteSpace: 'normal' }}>
+                {srcLabel && (
+                  <span className="om-tag" title={memo.transcript_source === 'captions' ? 'From source captions' : 'Whisper speech-to-text'}>{srcLabel}</span>
+                )}
+                {memo.transcript_lang && (
+                  <span className="om-tag" style={{ textTransform: 'uppercase' }}>{memo.transcript_lang}</span>
+                )}
+              </p>
+            )}
             <ReactMarkdown remarkPlugins={[remarkGfm]}>{memo.content_text}</ReactMarkdown>
           </div>
         ) : status === 'error' ? (
@@ -816,7 +896,19 @@ const SUMMARY_OPTIONS: { id: SummaryMode; label: string; icon: React.ElementType
   { id: 'essay', label: 'Essay', icon: AlignLeft },
 ];
 
-function SummaryPanel({ memo }: { memo: Memo }) {
+function SummaryPanel({
+  memo,
+  onSeek,
+  onAfterGenerate,
+  underContentOpen,
+  onToggleUnderContent,
+}: {
+  memo: Memo;
+  onSeek?: (sec: number) => void;
+  onAfterGenerate?: () => void;
+  underContentOpen?: boolean;
+  onToggleUnderContent?: () => void;
+}) {
   const queryClient = useQueryClient();
   const chatModel = useAppStore((s) => s.chatModel);
   const isMedia = memo.type === 'video' || memo.type === 'audio';
@@ -824,24 +916,53 @@ function SummaryPanel({ memo }: { memo: Memo }) {
   const [mode, setMode] = useState<SummaryMode>('insights');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // Backend may answer "I started pulling the transcript first" (OPNMMO-0042).
+  // We then wait on the memo poll and auto-retry once the transcript settles.
+  const [waitingTranscript, setWaitingTranscript] = useState(false);
+  const autoRetried = useRef(false);
   const summaries = memo.summaries || {};
   const current = summaries[mode] ?? (mode === 'insights' ? memo.ai_summary : undefined);
   const label = (options.find((o) => o.id === mode)?.label || 'summary').toLowerCase();
 
-  const generate = async () => {
+  const generate = useCallback(async () => {
     setBusy(true);
     setError(null);
     try {
-      await memoApi.summary(memo.id, mode, chatModel || undefined);
+      const res = await memoApi.summary(memo.id, mode, chatModel || undefined);
+      // No transcript yet for a video/audio memo: the backend kicked one off in
+      // the background. Park in a waiting state; the auto-retry effect fires the
+      // real summary once transcript_status flips to done (or error → desc-only).
+      if (res?.status === 'transcript_pending') {
+        autoRetried.current = false;
+        setWaitingTranscript(true);
+        queryClient.invalidateQueries({ queryKey: ['memo', memo.id] });
+        return;
+      }
+      setWaitingTranscript(false);
       queryClient.invalidateQueries({ queryKey: ['memo', memo.id] });
+      // Fresh summary → reveal the toggle copy under the content (OPNMMO-0042).
+      onAfterGenerate?.();
     } catch (e) {
       // The backend sends human-readable details (model missing, Ollama down,
       // timeout) — show them instead of failing silently into the console.
+      setWaitingTranscript(false);
       setError(e instanceof Error ? e.message : 'Summary generation failed');
     } finally {
       setBusy(false);
     }
-  };
+  }, [memo.id, mode, chatModel, queryClient, onAfterGenerate]);
+
+  // While waiting on a background transcript, retry the summary exactly once the
+  // memo poll reports the transcript settled. 'done' → summarize desc+transcript;
+  // 'error' → backend falls back to the description alone (no transcript loop).
+  useEffect(() => {
+    if (!waitingTranscript || autoRetried.current) return;
+    const st = memo.transcript_status;
+    if (st === 'done' || st === 'error') {
+      autoRetried.current = true;
+      generate();
+    }
+  }, [waitingTranscript, memo.transcript_status, generate]);
 
   return (
     <div className="om-ai-summary" style={{ marginBottom: '24px' }}>
@@ -872,19 +993,88 @@ function SummaryPanel({ memo }: { memo: Memo }) {
           <Loader2 size={14} className="om-spin" style={{ verticalAlign: -2, marginRight: 6 }} />
           Generating {label} summary with Ollama…
         </p>
+      ) : waitingTranscript ? (
+        <p className="om-detail-desc">
+          <Loader2 size={14} className="om-spin" style={{ verticalAlign: -2, marginRight: 6 }} />
+          Fetching the transcript first — it runs locally and may take a moment. The {label} summary follows automatically.
+        </p>
       ) : current ? (
         <>
           <div className="om-prose" style={{ whiteSpace: mode === 'timestamp' ? 'pre-wrap' : undefined }}>
-            <ReactMarkdown remarkPlugins={[remarkGfm]}>{current}</ReactMarkdown>
+            <SummaryMarkdown text={current} onSeek={onSeek} />
           </div>
-          <button className="om-btn-ghost om-btn-pill" onClick={generate} style={{ marginTop: 12 }}>
-            <Sparkles size={14} /> Regenerate
-          </button>
+          <div style={{ display: 'flex', gap: 8, marginTop: 12, flexWrap: 'wrap' }}>
+            {onToggleUnderContent && (
+              <button className="om-btn-ghost om-btn-pill" onClick={onToggleUnderContent}>
+                {underContentOpen ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
+                {underContentOpen ? 'Hide under content' : 'Show under content'}
+              </button>
+            )}
+            <button className="om-btn-ghost om-btn-pill" onClick={generate}>
+              <Sparkles size={14} /> Regenerate
+            </button>
+          </div>
         </>
       ) : (
         <button className="om-btn-primary om-btn-pill" onClick={generate}>
           <Sparkles size={14} /> Generate {label}
         </button>
+      )}
+    </div>
+  );
+}
+
+// The "both places" copy of the summary (OPNMMO-0042): a collapsible section
+// under the content, beside Video description / Transcript. Shows only once a
+// summary exists; sub-tabs switch between generated modes. The rail's "Show
+// under content" button drives `open`.
+function SummarySection({
+  memo,
+  open,
+  onToggle,
+  onSeek,
+}: {
+  memo: Memo;
+  open: boolean;
+  onToggle: () => void;
+  onSeek?: (sec: number) => void;
+}) {
+  const summaries = memo.summaries || {};
+  const textFor = (id: SummaryMode) =>
+    id === 'insights' ? (summaries.insights ?? memo.ai_summary ?? '') : (summaries[id] ?? '');
+  const avail = SUMMARY_OPTIONS.filter((o) => textFor(o.id));
+  const [view, setView] = useState<SummaryMode>(avail[0]?.id ?? 'insights');
+  if (!avail.length) return null;
+  const activeView = avail.some((o) => o.id === view) ? view : avail[0].id;
+  const text = textFor(activeView);
+
+  return (
+    <div className="om-summary-under" style={{ marginBottom: '24px' }}>
+      <button className="om-extracted-toggle" onClick={onToggle} aria-expanded={open}>
+        {open ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
+        <Sparkles size={14} className="om-accent-icon" />
+        AI Summary
+      </button>
+      {open && (
+        <div style={{ marginTop: 10 }}>
+          {avail.length > 1 && (
+            <div style={{ display: 'flex', gap: 4, marginBottom: 10, flexWrap: 'wrap' }}>
+              {avail.map((o) => (
+                <button
+                  key={o.id}
+                  className={cn('om-tab-btn', activeView === o.id && 'active')}
+                  onClick={() => setView(o.id)}
+                >
+                  <o.icon size={13} />
+                  {o.label}
+                </button>
+              ))}
+            </div>
+          )}
+          <div className="om-prose" style={{ whiteSpace: activeView === 'timestamp' ? 'pre-wrap' : undefined }}>
+            <SummaryMarkdown text={text} onSeek={onSeek} />
+          </div>
+        </div>
       )}
     </div>
   );
@@ -904,6 +1094,12 @@ export function MemoDetail() {
   const [confirmDelete, setConfirmDelete] = useState(false);
   // "Add to playlist" popover (music memos only).
   const [plMenuOpen, setPlMenuOpen] = useState(false);
+  // Under-content AI summary toggle + player seek bus (OPNMMO-0042).
+  const [summaryOpen, setSummaryOpen] = useState(false);
+  const [videoSeek, setVideoSeek] = useState<{ sec: number; nonce: number } | null>(null);
+  const seekVideo = useCallback((sec: number) => {
+    setVideoSeek((v) => ({ sec, nonce: (v?.nonce ?? 0) + 1 }));
+  }, []);
 
   // Edit form state
   const [editTitle, setEditTitle] = useState('');
@@ -1075,6 +1271,13 @@ export function MemoDetail() {
   const videoEmbedRatio = videoEmbed ? embedAspectRatio(memo) : '16/9';
   const isWebType = memo.type === 'article' || memo.type === 'link';
 
+  // Tool rail (OPNMMO-0042): AI Summary + Make-it-local + future tools hug the
+  // content column on desktop. On mobile the rail is hidden — except an already
+  // generated summary, which drops inline above the notes. Edit mode shows neither.
+  const showSummary = !isEditing && canSummarize(memo);
+  const showMakeLocal = !isEditing && canMakeLocal(memo) && memo.type === 'video';
+  const showRail = !isMobile && (showSummary || showMakeLocal);
+
   return (
     <div className="om-detail-page">
       {/* Content pane */}
@@ -1180,7 +1383,10 @@ export function MemoDetail() {
 
         {/* Content */}
         <div className="om-detail-scroll">
-          <div className="om-detail-content">
+          <div className={cn('om-detail-content', showRail && 'has-rail')}>
+          {/* Header spans full width above the columns so the rail's top edge
+              lines up with the bottom of the title block (OPNMMO-0042). */}
+          <div className="om-detail-head-block">
             {/* Memo type */}
             <div style={{ marginBottom: '12px' }}>
               <span className="om-section-h">{memo.type}</span>
@@ -1327,10 +1533,11 @@ export function MemoDetail() {
               </div>
             )}
 
-            {/* AI Summary — three on-demand modes, fed the full content/transcript.
-                Gated by canSummarize (ADR-007): excludes music (a song isn't
-                summarizable) and any non-summarizable type. */}
-            {!isEditing && canSummarize(memo) && <SummaryPanel memo={memo} />}
+          </div>{/* /.om-detail-head-block */}
+
+          <div className="om-detail-main">
+            {/* AI Summary lives in the tool rail (desktop) and as a toggle
+                section under the content (OPNMMO-0042). */}
 
             {/* Report card for file-backed memos (doc / code / generic file) */}
             {!isEditing && (memo.type === 'document' || memo.type === 'code' || memo.type === 'file') && (
@@ -1354,7 +1561,7 @@ export function MemoDetail() {
 
             {/* Local video preview — with theater + fullscreen */}
             {memo.type === 'video' && memo.file_path && !isEditing && (
-              <MediaPreview src={`/api/memos/${memo.id}/file`} alt={memo.title} kind="video" />
+              <MediaPreview src={`/api/memos/${memo.id}/file`} alt={memo.title} kind="video" poster={memo.thumbnail_path} seek={videoSeek} />
             )}
 
             {/* Audio memo (ADR-005) — never a dead end. A local/pulled file plays
@@ -1396,8 +1603,11 @@ export function MemoDetail() {
                 className={`om-video-embed${videoEmbedRatio === '9/16' ? ' om-video-embed--portrait' : ''}`}
                 style={{ marginBottom: '24px', aspectRatio: videoEmbedRatio }}
               >
+                {/* A clicked transcript/summary timestamp appends ?start= and
+                    reloads the iframe (keyed by nonce) to seek + autoplay. */}
                 <iframe
-                  src={videoEmbed}
+                  key={videoSeek?.nonce ?? 'base'}
+                  src={videoSeek ? videoEmbed + (videoEmbed.includes('?') ? '&' : '?') + `start=${videoSeek.sec}&autoplay=1` : videoEmbed}
                   allow="autoplay; encrypted-media; picture-in-picture; fullscreen"
                   allowFullScreen
                   scrolling="no"
@@ -1416,13 +1626,9 @@ export function MemoDetail() {
 
             {/* (Audio remote handling moved into the unified audio block above.) */}
 
-            {/* Make it local — remote video with no local file yet
-                (YouTube, Vimeo, Instagram, TikTok, Vimeo, etc.).
-                canMakeLocal() ensures this NEVER shows for article, link, image,
-                note, document, code, or file memo types. */}
-            {!isEditing && canMakeLocal(memo) && memo.type === 'video' && (
-              <MakeItLocalPanel memo={memo} />
-            )}
+            {/* Make it local (remote video) moved to the tool rail (OPNMMO-0042).
+                The audio in-flight variant still renders inline in the audio block
+                above; this standalone video one now lives beside the content. */}
 
             {/* Video description + transcript tabs for YouTube/social video memos */}
             {!isEditing && memo.type === 'video' && memo.source_url && (
@@ -1527,6 +1733,18 @@ export function MemoDetail() {
               </div>
             )}
 
+            {/* AI Summary "under content" copy — the toggle section beside
+                Video description / Transcript. Shows on both desktop and mobile
+                once a summary exists; the rail's button drives it (OPNMMO-0042). */}
+            {!isEditing && showSummary && (
+              <SummarySection
+                memo={memo}
+                open={summaryOpen}
+                onToggle={() => setSummaryOpen((v) => !v)}
+                onSeek={seekVideo}
+              />
+            )}
+
             {/* Notes section */}
             <div className="om-notes-section">
               <div className="om-notes-head">
@@ -1568,7 +1786,24 @@ export function MemoDetail() {
                 </div>
               </div>
             )}
-          </div>
+          </div>{/* /.om-detail-main */}
+
+          {/* Tool rail — desktop only; AI Summary + Make-it-local, room to grow. */}
+          {showRail && (
+            <aside className="om-detail-rail">
+              {showSummary && (
+                <SummaryPanel
+                  memo={memo}
+                  onSeek={seekVideo}
+                  onAfterGenerate={() => setSummaryOpen(true)}
+                  underContentOpen={summaryOpen}
+                  onToggleUnderContent={() => setSummaryOpen((v) => !v)}
+                />
+              )}
+              {showMakeLocal && <MakeItLocalPanel memo={memo} />}
+            </aside>
+          )}
+          </div>{/* /.om-detail-content */}
         </div>
       </div>
 

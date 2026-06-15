@@ -785,9 +785,32 @@ class SummaryRequest(BaseModel):
     model: str | None = None  # per-request Ollama model override
 
 
+def _summary_source(memo: Memo) -> str:
+    """Best available text to summarize (OPNMMO-0042).
+
+    For video/audio we want BOTH the source description AND the transcript:
+      • Before a transcript exists, content_text == video_description (the
+        extractor seeds it), so the description is all we have.
+      • Once transcribed, content_text holds the transcript while
+        video_description still holds the original blurb — combine them so the
+        model has the spoken content plus the author's framing.
+    For everything else (article/link/doc/note), content_text is the extracted
+    body already; fall back to the description if it's empty.
+    """
+    desc = (memo.video_description or "").strip()
+    text = (memo.content_text or "").strip()
+    if memo.type in ("video", "audio"):
+        transcript_done = memo.transcript_status == "done"
+        if transcript_done and text and text != desc:
+            return f"{desc}\n\n--- TRANSCRIPT ---\n{text}" if desc else text
+        return desc or text
+    return text or desc
+
+
 @router.post("/{memo_id}/summary")
 async def generate_memo_summary(
     memo_id: str,
+    background_tasks: BackgroundTasks,
     body: SummaryRequest = Body(default_factory=SummaryRequest),
     db: AsyncSession = Depends(get_db),
 ):
@@ -813,9 +836,31 @@ async def generate_memo_summary(
     if not can_summarize(memo):
         raise HTTPException(status_code=400, detail="This memo can't be summarized")
 
+    # A good video/audio summary needs the transcript, not just the blurb
+    # (OPNMMO-0042). If one was never attempted, kick off the caption-first /
+    # STT pull in the background and tell the client to wait — it polls the memo
+    # and re-requests the summary once transcript_status settles. 'error' falls
+    # through to summarizing the description alone (never a dead end).
+    if memo.type in ("video", "audio") and memo.transcript_status != "done" and (memo.file_path or memo.source_url):
+        if not memo.transcript_status:
+            memo.transcript_status = "pending"
+            memo.updated_at = datetime.utcnow()
+            await db.commit()
+            from backend.api.ingest import transcribe_memo_task, transcript_memo_task
+            if memo.file_path:
+                background_tasks.add_task(transcribe_memo_task, memo_id)
+            else:
+                background_tasks.add_task(transcript_memo_task, memo_id)
+        if memo.transcript_status in ("pending", "processing"):
+            return {"id": memo.id, "mode": body.mode, "summary": None, "status": "transcript_pending"}
+
+    source = _summary_source(memo)
+    if not source.strip():
+        raise HTTPException(status_code=400, detail="Nothing to summarize yet for this memo.")
+
     from backend.core.rag import generate_summary
     try:
-        summary = await generate_summary(memo.content_text, mode=body.mode, model=body.model)
+        summary = await generate_summary(source, mode=body.mode, model=body.model)
     except OllamaModelMissing as e:
         raise HTTPException(status_code=502, detail=str(e))
     except httpx.ConnectError:
