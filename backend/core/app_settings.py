@@ -48,6 +48,12 @@ _DEFAULTS: dict[str, Any] = {
     # "Make it local" step. When False, the memo stays remote and the detail
     # page streams it via the platform's embed widget instead.
     "auto_download_audio": True,
+    # Auto-download a video that has NO inline embed player (Threads, Reddit, an
+    # unknown host) on ingest, via the sniff/yt-dlp helper, so it becomes a local
+    # playable memo with no manual "Make it local" step. Embeddable hosts
+    # (YouTube, Vimeo, …) are left remote so this never fills the disk. When
+    # False, no video is auto-downloaded.
+    "auto_download_video": True,
     # Lossless quality for the SpotiFLAC chain (Spotify + Apple Music).
     # Always request hi-res (24-bit); the resolver downgrades to 16-bit CD
     # automatically when a release has no hi-res master (no user setting).
