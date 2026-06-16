@@ -114,7 +114,7 @@ export function AskMemoPanel({ memoId, collectionId }: AskMemoPanelProps) {
   };
 
   return (
-    <div className="om-ask-panel">
+    <div className={`om-ask-panel${messages.length > 0 ? ' is-chatting' : ''}`}>
       <div className="om-ask-panel-head">
         <h3 className="om-ask-panel-title">
           AskMemo {memoId ? '(this memo)' : collectionId ? '(collection)' : ''}
@@ -137,7 +137,7 @@ export function AskMemoPanel({ memoId, collectionId }: AskMemoPanelProps) {
             )}
             <div className={`om-panel-bubble ${msg.role === 'user' ? 'user' : 'assistant'}`}>
               {msg.role === 'assistant' ? (
-                <div className="prose prose-xs max-w-none">
+                <div className="om-prose om-prose-chat">
                   <ReactMarkdown components={{
                     code: ({ children, className }: { children?: React.ReactNode; className?: string }) => (
                       <code className={`om-code-inline ${className || ''}`}>{children}</code>

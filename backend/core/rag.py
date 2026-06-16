@@ -17,6 +17,12 @@ Rules:
 
 GENERAL_SYSTEM_PROMPT = """You are MemoAI, a helpful general-purpose assistant. Answer the user's question to the best of your ability."""
 
+# Used when a single-memo chat has only the memo's title + metadata (no
+# transcript or extracted text yet) — a freshly-saved song, an un-pulled link.
+# Here the model SHOULD lean on general knowledge to interpret what the title
+# points at, rather than refusing for lack of a body (OPNMMO-0045).
+THIN_MEMO_SYSTEM_PROMPT = """You are MemoAI, answering about one saved memo. The only details available are the memo's title and basic metadata below — there is no transcript or extracted text. Use the title and metadata together with your own general knowledge to give a helpful answer: identify what it likely refers to, give relevant background, and answer the question. Be honest about what is inferred from the title versus known fact, and keep it concise."""
+
 # Streamed verbatim (no LLM call) when retrieval finds nothing above the
 # relevance bar. Honest and instant beats a model hallucinating from an empty
 # context block.
@@ -65,6 +71,28 @@ def build_memo_context(
     return "\n\n".join(parts)[:_MEMO_CONTEXT_CAP]
 
 
+def build_memo_header(
+    title: str | None,
+    artist: str | None = None,
+    album: str | None = None,
+    domain: str | None = None,
+    mtype: str | None = None,
+) -> str:
+    """A few lines of memo metadata (title first) used as the minimum context for
+    a single-memo chat. When a memo has no transcript/extracted body, this is the
+    whole context so Ask can still reason from the title (OPNMMO-0045)."""
+    lines = [f"Title: {(title or 'Untitled').strip()}"]
+    if artist:
+        lines.append(f"Artist: {artist.strip()}")
+    if album:
+        lines.append(f"Album: {album.strip()}")
+    if domain:
+        lines.append(f"Source: {domain.strip()}")
+    if mtype:
+        lines.append(f"Type: {mtype.strip()}")
+    return "\n".join(lines)
+
+
 async def rag_chat(
     query: str,
     workspace_id: str | None = None,
@@ -75,6 +103,7 @@ async def rag_chat(
     use_rag: bool = True,
     memo_context: str | None = None,
     memo_source: dict | None = None,
+    memo_thin: bool = False,
 ) -> AsyncGenerator[dict, None]:
     """RAG chat pipeline with streaming response.
 
@@ -88,7 +117,11 @@ async def rag_chat(
     if use_rag and memo_context:
         yield {"type": "sources", "data": [memo_source] if memo_source else []}
         context = "---\nCONTEXT FROM THIS MEMO:\n\n" + memo_context + "\n---"
-        messages = [{"role": "system", "content": SYSTEM_PROMPT}]
+        # Title/metadata-only context gets the softer prompt that lets the model
+        # interpret the memo from its title; a full body keeps the strict
+        # answer-only-from-context prompt (OPNMMO-0045).
+        system = THIN_MEMO_SYSTEM_PROMPT if memo_thin else SYSTEM_PROMPT
+        messages = [{"role": "system", "content": system}]
         if history:
             messages.extend(history[-6:])
         messages.append({"role": "user", "content": f"{context}\n\nQuestion: {query}"})
