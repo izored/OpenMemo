@@ -52,6 +52,8 @@ export function AddMemoPanel() {
   const [tab, setTab] = useState<Tab>('link');
   const [mediaKind, setMediaKind] = useState<'image' | 'video' | 'audio' | 'file'>('image');
   const [url, setUrl] = useState('');
+  // "Don't pull": save the link as-is, no visual scrape (OPNMMO-0049).
+  const [noPull, setNoPull] = useState(false);
   const [note, setNote] = useState('');
   const [noteTitle, setNoteTitle] = useState('');
   const [tags, setTags] = useState<string[]>([]);
@@ -129,6 +131,7 @@ export function AddMemoPanel() {
 
   const reset = () => {
     setUrl('');
+    setNoPull(false);
     setNote('');
     setNoteTitle('');
     setTags([]);
@@ -160,7 +163,7 @@ export function AddMemoPanel() {
           navigate(`/music/${res.collection_id}`);
           return;
         }
-        await ingestApi.url(url.trim(), collection || undefined);
+        await ingestApi.url(url.trim(), collection || undefined, { noPull });
       } else if (tab === 'note') {
         if (!noteTitle.trim() && !note.trim()) return;
         await ingestApi.note(noteTitle.trim() || 'Untitled note', note, collection || undefined);
@@ -401,9 +404,21 @@ export function AddMemoPanel() {
                   )}
                 </div>
               ) : (
-                <p className="om-add-hint mono">
-                  Preview, metadata, and a screenshot will be captured automatically.
-                </p>
+                <>
+                  <label className="om-add-pl-dl">
+                    <input
+                      type="checkbox"
+                      checked={noPull}
+                      onChange={(e) => setNoPull(e.target.checked)}
+                    />
+                    <span>Don't pull content, just save the link</span>
+                  </label>
+                  <p className="om-add-hint mono">
+                    {noPull
+                      ? 'Saves the bookmark with its title and icon. No preview, no media scrape — for links that fail or that you only want to keep.'
+                      : 'Preview, metadata, and a screenshot will be captured automatically.'}
+                  </p>
+                </>
               )}
             </div>
           )}

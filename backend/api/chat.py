@@ -95,16 +95,30 @@ async def chat_stream(data: ChatRequest, db: AsyncSession = Depends(get_db)):
     # (OPNMMO-0042). Falls back to normal RAG when there's no memo or no content.
     memo_context = None
     memo_source = None
+    memo_thin = False
     if use_rag and data.memo_id:
-        from backend.core.rag import build_memo_context
+        from backend.core.rag import build_memo_context, build_memo_header
         memo = await db.get(Memo, data.memo_id)
         if memo:
-            memo_context = build_memo_context(
+            body = build_memo_context(
                 description=memo.video_description or memo.description,
                 content_text=memo.content_text,
                 content_raw=memo.content_raw,
                 transcript_done=memo.transcript_status == "done",
             )
+            # A memo with no transcript/extracted text (a freshly-saved song, a
+            # link we didn't pull) still has a title and basic metadata. Feed that
+            # as context so Ask can reason from it instead of dead-ending on "use
+            # @" (OPNMMO-0045). `thin` = title/metadata only, no real body.
+            header = build_memo_header(
+                title=memo.title,
+                artist=memo.audio_artist,
+                album=memo.audio_album,
+                domain=memo.source_domain,
+                mtype=memo.type,
+            )
+            memo_thin = not body.strip()
+            memo_context = (header + "\n\n" + body).strip() if body.strip() else header
             if memo_context:
                 memo_source = {
                     "memo_id": memo.id,
@@ -129,6 +143,7 @@ async def chat_stream(data: ChatRequest, db: AsyncSession = Depends(get_db)):
                 use_rag=use_rag,
                 memo_context=memo_context,
                 memo_source=memo_source,
+                memo_thin=memo_thin,
             ):
                 if chunk["type"] == "sources":
                     sources_data = chunk["data"]

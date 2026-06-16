@@ -212,10 +212,10 @@ function MediaPreview({ src, alt, kind, poster, seek, theater: theaterProp, onTh
   );
 }
 
-// Report card for file-backed memos (documents, code, generic files). These
-// often have little or no extracted text, so the detail page would otherwise
-// be a bare title. The card surfaces the key metadata at a glance.
-function DocReportCard({ memo }: { memo: Memo }) {
+// Metadata for a file-backed memo (document / code / generic file). Shared by
+// the rail's Details card. These memos often have little extracted text, so the
+// source file + key stats are what anchor the page.
+function fileStats(memo: Memo): { ext: string; typeLabel: string; stats: { label: string; value: string }[] } {
   const ext = memo.title.includes('.') ? memo.title.split('.').pop()!.toUpperCase() : '';
   const text = memo.content_text || memo.content_raw || '';
   const wordCount = text.trim() ? text.trim().split(/\s+/).length : 0;
@@ -223,7 +223,6 @@ function DocReportCard({ memo }: { memo: Memo }) {
   const added = new Date(memo.created_at).toLocaleDateString('en-US', {
     year: 'numeric', month: 'long', day: 'numeric',
   });
-
   const typeLabel =
     ({ document: 'Document', code: 'Source file', file: 'File' } as Record<string, string>)[memo.type] || 'File';
 
@@ -236,30 +235,41 @@ function DocReportCard({ memo }: { memo: Memo }) {
     label: 'Collections',
     value: memo.collections?.length ? memo.collections.map((c) => c.name).join(', ') : 'None',
   });
-  stats.push({
-    label: 'Tags',
-    value: memo.tags?.length ? memo.tags.join(', ') : 'None',
-  });
+  stats.push({ label: 'Tags', value: memo.tags?.length ? memo.tags.join(', ') : 'None' });
   stats.push({ label: 'AI summary', value: memo.ai_summary ? 'Generated' : 'Not yet' });
+  return { ext, typeLabel, stats };
+}
 
+// Source file + metadata as a rail card — the FIRST tool for a file-backed memo
+// (OPNMMO-0047). Moves the old top-of-page report block into the rail so the
+// content column is the file itself; stats stack one-per-row to fit the rail.
+function MetadataRailCard({ memo, open, onToggle }: { memo: Memo; open: boolean; onToggle: () => void }) {
+  const { ext, typeLabel, stats } = fileStats(memo);
   return (
-    <div className="om-doc-report">
-      <div className="om-doc-report-head">
-        <div className="om-doc-report-badge">{ext ? `.${ext.toLowerCase()}` : <FileText size={22} />}</div>
-        <div className="om-doc-report-headtext">
-          <span className="mono om-doc-report-eyebrow">{typeLabel}</span>
-          <h2 className="om-doc-report-title">{memo.title}</h2>
-        </div>
-      </div>
-      <div className="om-doc-report-grid">
-        {stats.map((s) => (
-          <div key={s.label} className="om-doc-report-stat">
-            <span className="mono om-doc-report-stat-label">{s.label}</span>
-            <span className="om-doc-report-stat-value">{s.value}</span>
+    <RailCard
+      icon={<FileText size={16} className="om-accent-icon" />}
+      title="Source file"
+      open={open}
+      onToggle={onToggle}
+    >
+      <div className="om-doc-meta">
+        <div className="om-doc-meta-head">
+          <div className="om-doc-report-badge">{ext ? `.${ext.toLowerCase()}` : <FileText size={20} />}</div>
+          <div className="om-doc-report-headtext">
+            <span className="mono om-doc-report-eyebrow">{typeLabel}</span>
+            <span className="om-doc-meta-title">{memo.title}</span>
           </div>
-        ))}
+        </div>
+        <dl className="om-doc-meta-list">
+          {stats.map((s) => (
+            <div key={s.label} className="om-doc-meta-row">
+              <dt className="mono om-doc-report-stat-label">{s.label}</dt>
+              <dd className="om-doc-report-stat-value">{s.value}</dd>
+            </div>
+          ))}
+        </dl>
       </div>
-    </div>
+    </RailCard>
   );
 }
 
@@ -1251,6 +1261,10 @@ export function MemoDetail() {
   // independent and not tracked here (point 5).
   const [openCard, setOpenCard] = useState<string>('summary');
   const toggleCard = (cardId: string) => setOpenCard((c) => (c === cardId ? '' : cardId));
+  // File-backed memos open with their Source file card instead of Summary, so
+  // the metadata leads the rail like the old report block did (OPNMMO-0047).
+  // Once per memo, and never fights a user toggle afterward.
+  const defaultedCard = useRef<string | null>(null);
   const [videoSeek, setVideoSeek] = useState<{ sec: number; nonce: number } | null>(null);
   const seekVideo = useCallback((sec: number) => {
     setVideoSeek((v) => ({ sec, nonce: (v?.nonce ?? 0) + 1 }));
@@ -1300,6 +1314,16 @@ export function MemoDetail() {
       setEditTags(memo.tags || []);
       setEditCollectionIds(memo.collections?.map((c: { id: string }) => c.id) || []);
       setNoteContent(memo.content_raw || memo.content_text || '');
+    }
+  }, [memo]);
+  /* eslint-enable react-hooks/set-state-in-effect */
+
+  /* eslint-disable react-hooks/set-state-in-effect */
+  useEffect(() => {
+    if (!memo || defaultedCard.current === memo.id) return;
+    defaultedCard.current = memo.id;
+    if (memo.type === 'document' || memo.type === 'code' || memo.type === 'file') {
+      setOpenCard('metadata');
     }
   }, [memo]);
   /* eslint-enable react-hooks/set-state-in-effect */
@@ -1446,7 +1470,11 @@ export function MemoDetail() {
   // Order: Description, AI Summary, Transcript, Make it local, Ask — all one
   // accordion (one card open at a time). A card's internal state (Make it local's
   // quality picks, a transcript in flight) lives in its body and never toggles it.
+  // File-backed memos (doc / code / file) lead the rail with their source +
+  // metadata card, then AI Summary, then Ask (OPNMMO-0047).
+  const showMetadata = !isEditing && (memo.type === 'document' || memo.type === 'code' || memo.type === 'file');
   const railTools: React.ReactNode[] = [];
+  if (showMetadata) railTools.push(<MetadataRailCard key="metadata" memo={memo} open={openCard === 'metadata'} onToggle={() => toggleCard('metadata')} />);
   if (showDescription) railTools.push(<DescriptionCard key="desc" memo={memo} open={openCard === 'description'} onToggle={() => toggleCard('description')} onSeek={seekVideo} />);
   if (showSummary) railTools.push(<SummaryPanel key="summary" memo={memo} onSeek={seekVideo} open={openCard === 'summary'} onToggle={() => toggleCard('summary')} />);
   if (showTranscript) railTools.push(<TranscriptCard key="transcript" memo={memo} onSeek={seekVideo} open={openCard === 'transcript'} onToggle={() => toggleCard('transcript')} />);
@@ -1714,10 +1742,8 @@ export function MemoDetail() {
             {/* AI Summary lives in the tool rail (desktop) and as a toggle
                 section under the content (OPNMMO-0042). */}
 
-            {/* Report card for file-backed memos (doc / code / generic file) */}
-            {!isEditing && (memo.type === 'document' || memo.type === 'code' || memo.type === 'file') && (
-              <DocReportCard memo={memo} />
-            )}
+            {/* Source + metadata for file-backed memos moved into the rail as
+                the first card (OPNMMO-0047), so the content column is the file. */}
 
             {/* Pin / Download moved into the meta row above (inline with date +
                 source), so no separate action row here. */}
@@ -1876,10 +1902,14 @@ export function MemoDetail() {
               </div>
             )}
 
-            {/* Document / code content */}
+            {/* Document / code content — on its own surface card so the file
+                content sits in a panel instead of floating on the page bg
+                (OPNMMO-0047). */}
             {(memo.type === 'document' || memo.type === 'code') && !isEditing && memo.content_text && (
-              <div className="om-prose">
-                <ReactMarkdown remarkPlugins={[remarkGfm]}>{memo.content_raw || memo.content_text}</ReactMarkdown>
+              <div className="om-file-content">
+                <div className="om-prose">
+                  <ReactMarkdown remarkPlugins={[remarkGfm]}>{memo.content_raw || memo.content_text}</ReactMarkdown>
+                </div>
               </div>
             )}
 

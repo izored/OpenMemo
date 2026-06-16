@@ -1403,6 +1403,9 @@ input, textarea { font: inherit; color: inherit; }
 .om-rail-card .om-ask-panel        { height: auto; background: transparent; }
 .om-rail-card .om-ask-panel-head   { display: none; }
 .om-rail-card .om-ask-panel-thread { max-height: 360px; padding: 0; }
+/* Once a conversation is going, give the thread room — roughly double the idle
+   height — so reading a real answer isn't a 5-line porthole (OPNMMO-0045). */
+.om-rail-card .om-ask-panel.is-chatting .om-ask-panel-thread { max-height: 680px; }
 .om-rail-card .om-ask-panel-composer { padding: 12px 0 0; border-top: 0; }
 .om-accent-icon     { color: var(--accent); }
 
@@ -1429,6 +1432,22 @@ input, textarea { font: inherit; color: inherit; }
                       color: var(--text-4); }
 .om-doc-report-stat-value { font-size: 13.5px; color: var(--text);
                       overflow: hidden; text-overflow: ellipsis; }
+/* Source-file metadata living inside a rail card (OPNMMO-0047): the same badge +
+   eyebrow as the old report block, but stats stack one-per-row to fit the rail. */
+.om-doc-meta        { display: flex; flex-direction: column; gap: 14px; }
+.om-doc-meta-head   { display: flex; align-items: center; gap: 12px; min-width: 0; }
+.om-doc-meta-title  { font-size: 14px; font-weight: 600; color: var(--text);
+                      overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.om-doc-meta-list   { display: flex; flex-direction: column; margin: 0; }
+.om-doc-meta-row    { display: flex; flex-direction: column; gap: 3px;
+                      padding: 9px 0; border-top: 1px solid var(--border); }
+.om-doc-meta-row:first-child { border-top: 0; padding-top: 0; }
+.om-doc-meta-row dd { margin: 0; }
+/* File content (document / code) on its own surface card so it sits in a panel
+   rather than floating directly on the page background (OPNMMO-0047). */
+.om-file-content    { background: var(--surface-2); border: 1px solid var(--border);
+                      border-radius: var(--r-lg); padding: 18px 22px; margin-bottom: 24px;
+                      overflow-x: auto; }
 @media (max-width: 720px) {
   .om-doc-report-grid { grid-template-columns: minmax(0, 1fr); }
 }
@@ -1437,12 +1456,12 @@ input, textarea { font: inherit; color: inherit; }
 .om-section-icon    { color: var(--text-4); display: inline-flex; align-items: center; }
 .om-field-label-block { font-size: 10.5px; letter-spacing: .08em; text-transform: uppercase;
                         color: var(--text-4); display: block; margin-bottom: 8px; }
-/* Notes section as its own card (OPNMMO-0042): same boxed treatment as the AI
-   Summary panel so "your space" reads as a distinct section, but a neutral
-   surface tint (not the accent) keeps it visually apart from the AI box. */
+/* Notes section as its own card (OPNMMO-0042): same boxed treatment AND the same
+   surface as the AI Summary panel / rail cards, so My Notes reads as a tool in
+   the same family. The section icon + header keep it differentiated. */
 .om-notes-section   { margin-top: 32px; padding: 18px 20px; border-radius: var(--r-lg);
                       border: 1px solid var(--border);
-                      background: color-mix(in oklab, var(--text) 4%, var(--surface));
+                      background: var(--surface-2);
                       display: flex; flex-direction: column; gap: 12px; }
 .om-notes-head      { display: flex; align-items: center; justify-content: space-between; }
 .om-notes-label     { display: flex; align-items: center; gap: 8px; }
@@ -1618,6 +1637,17 @@ input, textarea { font: inherit; color: inherit; }
                         border-radius: var(--r-lg) var(--r-lg) 4px var(--r-lg); }
 .om-panel-bubble.assistant { background: var(--surface-2); color: var(--text);
                               border-radius: var(--r-lg) var(--r-lg) var(--r-lg) 4px; }
+/* Markdown inside a chat bubble: token-aware (the old Tailwind `prose` painted
+   the body a fixed dark gray that vanished in dark mode), sized to the bubble,
+   and full-strength text so it reads on the surface-2 fill (OPNMMO-0045). */
+.om-prose.om-prose-chat       { color: var(--text); font-size: 13px; line-height: 1.55; }
+.om-prose.om-prose-chat p     { margin: 0 0 8px; }
+.om-prose.om-prose-chat ul,
+.om-prose.om-prose-chat ol    { padding-left: 18px; margin: 0 0 8px; }
+.om-prose.om-prose-chat h1,
+.om-prose.om-prose-chat h2,
+.om-prose.om-prose-chat h3,
+.om-prose.om-prose-chat h4    { font-size: 14px; margin: 10px 0 6px; }
 .om-citation-chip     { display: inline-flex; align-items: center; gap: 3px; padding: 2px 7px;
                         background: var(--surface-3); border: 1px solid var(--border);
                         border-radius: 999px; font-size: 10px; color: var(--text-3); }

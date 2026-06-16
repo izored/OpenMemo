@@ -73,10 +73,13 @@ export const memoApi = {
 
 // Ingestion
 export const ingestApi = {
-  url: (url: string, collection_id?: string) =>
+  // `no_pull` saves the URL as a plain link, skipping the heavy visual pull
+  // (yt-dlp / headless / media scrape) for pages that choke the pipeline or
+  // when the user just wants the bookmark (OPNMMO-0049).
+  url: (url: string, collection_id?: string, opts?: { noPull?: boolean }) =>
     fetchJSON<{ id: string; title: string }>('/ingest/url', {
       method: 'POST',
-      body: JSON.stringify({ url, collection_id }),
+      body: JSON.stringify({ url, collection_id, no_pull: opts?.noPull ?? false }),
     }),
   note: (title: string, content: string, collection_id?: string) =>
     fetchJSON<{ id: string }>('/ingest/note', {
