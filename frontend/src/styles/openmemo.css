@@ -1432,6 +1432,22 @@ input, textarea { font: inherit; color: inherit; }
                       color: var(--text-4); }
 .om-doc-report-stat-value { font-size: 13.5px; color: var(--text);
                       overflow: hidden; text-overflow: ellipsis; }
+/* Source-file metadata living inside a rail card (OPNMMO-0047): the same badge +
+   eyebrow as the old report block, but stats stack one-per-row to fit the rail. */
+.om-doc-meta        { display: flex; flex-direction: column; gap: 14px; }
+.om-doc-meta-head   { display: flex; align-items: center; gap: 12px; min-width: 0; }
+.om-doc-meta-title  { font-size: 14px; font-weight: 600; color: var(--text);
+                      overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.om-doc-meta-list   { display: flex; flex-direction: column; margin: 0; }
+.om-doc-meta-row    { display: flex; flex-direction: column; gap: 3px;
+                      padding: 9px 0; border-top: 1px solid var(--border); }
+.om-doc-meta-row:first-child { border-top: 0; padding-top: 0; }
+.om-doc-meta-row dd { margin: 0; }
+/* File content (document / code) on its own surface card so it sits in a panel
+   rather than floating directly on the page background (OPNMMO-0047). */
+.om-file-content    { background: var(--surface-2); border: 1px solid var(--border);
+                      border-radius: var(--r-lg); padding: 18px 22px; margin-bottom: 24px;
+                      overflow-x: auto; }
 @media (max-width: 720px) {
   .om-doc-report-grid { grid-template-columns: minmax(0, 1fr); }
 }
