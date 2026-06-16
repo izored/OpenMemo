@@ -50,6 +50,13 @@ class URLIngest(BaseModel):
     url: str
     workspace_id: Optional[str] = None
     collection_id: Optional[str] = None
+    # True = save the URL as a plain link, skipping the heavy visual pull
+    # (yt-dlp, headless render, media scrape). For pages that choke the pipeline
+    # (gif-heavy Threads posts, anything that errors) or when the user just wants
+    # the bookmark. A cheap OpenGraph fetch still fills title/favicon/thumbnail
+    # when the page offers them, and a total failure degrades to a bare link
+    # instead of erroring the save (OPNMMO-0049).
+    no_pull: bool = False
 
 
 class PlaylistProbe(BaseModel):
@@ -237,6 +244,33 @@ async def process_memo(memo_id: str):
 
 # --- Routes ---
 
+async def _light_link(url: str) -> dict:
+    """Minimal link resolver for the "don't pull" save (OPNMMO-0049).
+
+    One cheap OpenGraph fetch for a title/favicon/thumbnail, no yt-dlp, no
+    headless render, no media scrape. Always returns a usable dict — a page
+    that blocks metadata still yields a bare link (title = the URL) instead of
+    raising, so the save can never dead-end."""
+    from urllib.parse import urlparse
+    from backend.core.extractor import _fetch_og_meta
+
+    domain = (urlparse(url).netloc or "").lstrip("www.")
+    try:
+        meta = await _fetch_og_meta(url)
+    except Exception:
+        meta = {}
+    return {
+        "type": "link",
+        "title": meta.get("title") or url,
+        "description": meta.get("description") or "",
+        "content_text": meta.get("description") or url,
+        "source_url": url,
+        "source_domain": domain,
+        "source_favicon": f"https://www.google.com/s2/favicons?domain={domain}&sz=32" if domain else None,
+        "thumbnail_path": meta.get("thumbnail_path") or "",
+    }
+
+
 @router.post("/url")
 async def ingest_url(
     data: URLIngest,
@@ -248,15 +282,21 @@ async def ingest_url(
         extract_url, extract_video, detect_url_type,
     )
 
-    url_type = detect_url_type(data.url)
-
-    try:
-        if url_type == "video":
-            extracted = await extract_video(data.url)
-        else:
-            extracted = await extract_url(data.url)
-    except Exception as e:
-        raise HTTPException(status_code=400, detail=f"Failed to extract: {str(e)}")
+    if data.no_pull:
+        # "Don't pull" (OPNMMO-0049): no yt-dlp, no headless render, no media
+        # scrape — just a cheap OpenGraph fetch for title/favicon/thumbnail, and
+        # a bare link if even that fails. Never raises, so a page that breaks the
+        # full pipeline can still be saved as a bookmark.
+        extracted = await _light_link(data.url)
+    else:
+        url_type = detect_url_type(data.url)
+        try:
+            if url_type == "video":
+                extracted = await extract_video(data.url)
+            else:
+                extracted = await extract_url(data.url)
+        except Exception as e:
+            raise HTTPException(status_code=400, detail=f"Failed to extract: {str(e)}")
 
     memo = Memo(
         id=str(uuid.uuid4()),
@@ -274,10 +314,16 @@ async def ingest_url(
         created_at=datetime.utcnow(),
         updated_at=datetime.utcnow(),
     )
-    # Canonical type from URL signal (video aggregator / direct file / web page).
-    memo.type = derive_memo_type(memo)
-    # Linked audio (SoundCloud/Bandcamp/…) is always music (ADR-005).
-    memo.audio_kind = derive_audio_kind(memo)
+    # "Don't pull" stays a plain link: skip the domain-based type forcing (so a
+    # Threads/Reddit URL isn't reclassified video) and the audio kind, and never
+    # auto-localize below (OPNMMO-0049).
+    if data.no_pull:
+        memo.type = "link"
+    else:
+        # Canonical type from URL signal (video aggregator / direct file / web page).
+        memo.type = derive_memo_type(memo)
+        # Linked audio (SoundCloud/Bandcamp/…) is always music (ADR-005).
+        memo.audio_kind = derive_audio_kind(memo)
 
     # Auto-download audio pulled from yt-dlp platforms (SoundCloud, Bandcamp,
     # etc.) so it lands as a local, playable memo with no manual "Make it local"
@@ -287,7 +333,8 @@ async def ingest_url(
     from backend.core.extractor import has_embed_player
 
     auto_localize_audio = (
-        memo.type == "audio"
+        not data.no_pull
+        and memo.type == "audio"
         and bool(memo.source_url)
         and not memo.file_path
         and bool(get_settings().get("auto_download_audio", True))
@@ -297,7 +344,8 @@ async def ingest_url(
     # no manual "Make it local" step — embeddable hosts (YouTube/Vimeo/…) stay
     # remote so we don't fill the disk. Gated by auto_download_video.
     auto_localize_video = (
-        memo.type == "video"
+        not data.no_pull
+        and memo.type == "video"
         and bool(memo.source_url)
         and not memo.file_path
         and not has_embed_player(memo.source_url)
