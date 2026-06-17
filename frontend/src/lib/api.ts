@@ -15,8 +15,11 @@ async function fetchJSON<T>(url: string, options?: RequestInit): Promise<T> {
 
 // Memos
 export const memoApi = {
-  list: (params?: { type?: string; audio_kind?: 'voice' | 'music'; collection_id?: string; search?: string; hidden?: boolean; liked?: boolean; sort?: 'recent' | 'title' | 'artist'; offset?: number; limit?: number }) => {
+  list: (params?: { type?: string; audio_kind?: 'voice' | 'music'; collection_id?: string; search?: string; hidden?: boolean; liked?: boolean; sort?: 'recent' | 'title' | 'artist'; offset?: number; limit?: number; workspace_id?: string }) => {
     const search = new URLSearchParams();
+    // Spaces isolation (ADR-020): pass a Space's workspace_id to scope to it;
+    // omit it and the server returns the main library only.
+    if (params?.workspace_id) search.set('workspace_id', params.workspace_id);
     if (params?.type && params.type !== 'all') search.set('type', params.type);
     if (params?.audio_kind) search.set('audio_kind', params.audio_kind);
     if (params?.collection_id) search.set('collection_id', params.collection_id);
@@ -40,7 +43,7 @@ export const memoApi = {
   pin: (id: string, pinned: boolean) => fetchJSON<{ id: string; pinned: boolean }>(`/memos/${id}/pin`, { method: 'PUT', body: JSON.stringify({ pinned }) }),
   like: (id: string, liked: boolean) => fetchJSON<{ id: string; liked: boolean }>(`/memos/${id}/like`, { method: 'PUT', body: JSON.stringify({ liked }) }),
   hide: (id: string, hidden: boolean) => fetchJSON<{ id: string; hidden: boolean }>(`/memos/${id}/hide`, { method: 'PUT', body: JSON.stringify({ hidden }) }),
-  listPinned: () => fetchJSON<{ id: string; type: string; title: string; thumbnail_path?: string; source_domain?: string; source_favicon?: string; pinned: boolean }[]>('/memos/pinned/list'),
+  listPinned: (workspace_id?: string) => fetchJSON<{ id: string; type: string; title: string; thumbnail_path?: string; source_domain?: string; source_favicon?: string; pinned: boolean }[]>(`/memos/pinned/list${workspace_id ? `?workspace_id=${encodeURIComponent(workspace_id)}` : ''}`),
   delete: (id: string) => fetchJSON<any>(`/memos/${id}`, { method: 'DELETE' }),
   restore: (id: string) => fetchJSON<any>(`/memos/${id}/restore`, { method: 'POST' }),
   listDeleted: () => fetchJSON<{ id: string; type: string; title: string; deleted_at: string | null }[]>('/memos/deleted/list'),
@@ -76,15 +79,15 @@ export const ingestApi = {
   // `no_pull` saves the URL as a plain link, skipping the heavy visual pull
   // (yt-dlp / headless / media scrape) for pages that choke the pipeline or
   // when the user just wants the bookmark (OPNMMO-0049).
-  url: (url: string, collection_id?: string, opts?: { noPull?: boolean }) =>
+  url: (url: string, collection_id?: string, opts?: { noPull?: boolean; workspace_id?: string }) =>
     fetchJSON<{ id: string; title: string }>('/ingest/url', {
       method: 'POST',
-      body: JSON.stringify({ url, collection_id, no_pull: opts?.noPull ?? false }),
+      body: JSON.stringify({ url, collection_id, no_pull: opts?.noPull ?? false, workspace_id: opts?.workspace_id }),
     }),
-  note: (title: string, content: string, collection_id?: string) =>
+  note: (title: string, content: string, collection_id?: string, workspace_id?: string) =>
     fetchJSON<{ id: string }>('/ingest/note', {
       method: 'POST',
-      body: JSON.stringify({ title, content, collection_id }),
+      body: JSON.stringify({ title, content, collection_id, workspace_id }),
     }),
   // Enumerate a playlist URL (flat, no downloads) so the panel can ask
   // "whole playlist or just this one?" with a real title + count (ADR-015).
@@ -221,8 +224,11 @@ export const ingestApi = {
 
 // Collections
 export const collectionApi = {
-  list: () => fetchJSON<any[]>('/collections'),
-  create: (data: { name: string; emoji?: string; description?: string; color?: string; kind?: 'standard' | 'playlist' }) =>
+  // Spaces isolation (ADR-020): omit workspace_id for the main library; pass a
+  // Space's id to list only its collections.
+  list: (workspace_id?: string) =>
+    fetchJSON<any[]>(`/collections${workspace_id ? `?workspace_id=${encodeURIComponent(workspace_id)}` : ''}`),
+  create: (data: { name: string; emoji?: string; description?: string; color?: string; kind?: 'standard' | 'playlist'; workspace_id?: string }) =>
     fetchJSON<{ id: string }>('/collections', { method: 'POST', body: JSON.stringify(data) }),
   update: (id: string, data: any) =>
     fetchJSON<any>(`/collections/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
@@ -397,12 +403,64 @@ export const systemApi = {
   // Storage sizes are an expensive server-side filesystem walk — only request
   // them where they're shown (Settings). The sidebar omits the flag so its
   // per-page memo-count fetch stays instant.
-  stats: (includeStorage = false) => fetchJSON<{
-    total_memos: number;
-    total_collections: number;
-    total_tags: number;
-    memos_this_week: number;
-    by_type: Record<string, number>;
-    storage?: { db_bytes: number; files_bytes: number; cache_bytes: number; total_bytes: number };
-  }>(`/stats${includeStorage ? '?include_storage=true' : ''}`),
+  stats: (includeStorage = false, workspace_id?: string) => {
+    const qs = new URLSearchParams();
+    if (includeStorage) qs.set('include_storage', 'true');
+    if (workspace_id) qs.set('workspace_id', workspace_id);
+    const q = qs.toString();
+    return fetchJSON<{
+      total_memos: number;
+      total_collections: number;
+      total_tags: number;
+      memos_this_week: number;
+      by_type: Record<string, number>;
+      storage?: { db_bytes: number; files_bytes: number; cache_bytes: number; total_bytes: number };
+    }>(`/stats${q ? `?${q}` : ''}`);
+  },
+};
+
+// Spaces (ADR-020): a Space is a workspace-backed area above collections.
+export const spaceApi = {
+  list: () => fetchJSON<import('@/types').Space[]>('/spaces'),
+  get: (id: string) => fetchJSON<import('@/types').Space>(`/spaces/${id}`),
+  create: (data: { name: string; emoji?: string; icon?: string; color?: string; description?: string }) =>
+    fetchJSON<import('@/types').Space>('/spaces', { method: 'POST', body: JSON.stringify(data) }),
+  update: (id: string, data: Partial<{ name: string; emoji: string; icon: string; color: string; description: string; pinned: boolean; sort_order: number }>) =>
+    fetchJSON<import('@/types').Space>(`/spaces/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
+  // Destructive: deletes the Space, its collections, AND all its memos. The
+  // server refuses unless confirm_name matches the Space's exact name.
+  delete: (id: string, confirm_name: string) =>
+    fetchJSON<{ status: string; removed: { memos: number } }>(`/spaces/${id}/delete`, {
+      method: 'POST',
+      body: JSON.stringify({ confirm_name }),
+    }),
+  // Notion-style cover image. Multipart upload (no Content-Type header — the
+  // browser sets the multipart boundary). Returns the updated Space.
+  uploadCover: async (id: string, file: File): Promise<import('@/types').Space> => {
+    const form = new FormData();
+    form.append('file', file);
+    const resp = await fetch(`${API_BASE}/spaces/${id}/cover`, { method: 'POST', body: form });
+    if (!resp.ok) {
+      const err = await resp.json().catch(() => ({ detail: resp.statusText }));
+      throw new Error(err.detail || 'Cover upload failed');
+    }
+    return resp.json();
+  },
+  deleteCover: (id: string) =>
+    fetchJSON<import('@/types').Space>(`/spaces/${id}/cover`, { method: 'DELETE' }),
+  // Download a zip backup of the whole Space (memos as Markdown + manifest).
+  exportZip: async (id: string, name: string): Promise<void> => {
+    const resp = await fetch(`${API_BASE}/spaces/${id}/export`);
+    if (!resp.ok) {
+      const err = await resp.json().catch(() => ({ detail: resp.statusText }));
+      throw new Error(err.detail || 'Export failed');
+    }
+    const blob = await resp.blob();
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `openmemo_space_${name.slice(0, 40).replace(/[^\w-]+/g, '_')}.zip`;
+    a.click();
+    URL.revokeObjectURL(url);
+  },
 };

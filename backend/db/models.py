@@ -59,6 +59,10 @@ class Workspace(Base):
     icon = Column(String, nullable=True)
     color = Column(String, nullable=True)
     description = Column(String, nullable=True)
+    # Notion-style full-bleed cover image (ADR-020). Stores just the extension;
+    # the file lives at DATA_DIR/space_covers/<id>.<ext> and is served by the
+    # spaces API. NULL = no cover, the header falls back to the color gradient.
+    cover_ext = Column(String, nullable=True)
     pinned = Column(Boolean, default=False)
     sort_order = Column(Integer, default=0)
     created_at = Column(DateTime, default=datetime.utcnow)

@@ -14,14 +14,16 @@ import json
 import uuid
 import zipfile
 from datetime import datetime
+from pathlib import Path
 from typing import Optional
 
-from fastapi import APIRouter, Depends, HTTPException
-from fastapi.responses import StreamingResponse
+from fastapi import APIRouter, Depends, HTTPException, File, UploadFile
+from fastapi.responses import StreamingResponse, FileResponse
 from sqlalchemy import select, func, delete as sa_delete
 from sqlalchemy.ext.asyncio import AsyncSession
 from pydantic import BaseModel
 
+from backend.config import settings
 from backend.db.database import get_db
 from backend.db.models import (
     Workspace, Memo, Collection, ChatSession,
@@ -34,6 +36,26 @@ router = APIRouter(prefix="/api/spaces", tags=["spaces"])
 
 # The library workspace id is reserved and never a Space (CLAUDE.md).
 LIBRARY_ID = "default"
+
+# Cover images live next to the DB, one per Space: DATA_DIR/space_covers/<id>.<ext>
+_COVER_DIR = Path(settings.DATA_DIR) / "space_covers"
+_COVER_EXTS = {"jpg", "jpeg", "png", "webp", "gif", "avif"}
+_COVER_MAX = 12 * 1024 * 1024  # 12 MB
+
+
+def _cover_path(space_id: str, ext: str) -> Path:
+    return _COVER_DIR / f"{space_id}.{ext}"
+
+
+def _cover_url(w: Workspace) -> Optional[str]:
+    if not w.cover_ext:
+        return None
+    p = _cover_path(w.id, w.cover_ext)
+    try:
+        v = int(p.stat().st_mtime)
+    except OSError:
+        v = 0
+    return f"/api/spaces/{w.id}/cover?v={v}"
 
 
 class SpaceCreate(BaseModel):
@@ -86,6 +108,10 @@ def _space_dict(w: Workspace, counts: Optional[dict] = None) -> dict:
         "icon": w.icon,
         "color": w.color,
         "description": w.description,
+        # Cache-busted on the cover file's mtime so a re-uploaded cover refreshes
+        # without a stale browser cache. NULL cover_ext → no cover_url, the
+        # header uses the color band.
+        "cover_url": _cover_url(w),
         "pinned": bool(w.pinned),
         "sort_order": w.sort_order or 0,
         "created_at": w.created_at.isoformat() if w.created_at else None,
@@ -212,6 +238,58 @@ async def export_space(space_id: str, db: AsyncSession = Depends(get_db)):
     )
 
 
+@router.post("/{space_id}/cover")
+async def upload_cover(space_id: str, file: UploadFile = File(...), db: AsyncSession = Depends(get_db)):
+    """Set the Space's full-bleed header cover image (Notion-style)."""
+    space_id = sanitize_workspace_id(space_id)
+    space = await db.get(Workspace, space_id)
+    if not space or space.kind != "space":
+        raise HTTPException(status_code=404, detail="Space not found")
+
+    ext = (Path(file.filename or "").suffix.lstrip(".") or "").lower()
+    if ext == "jpe":
+        ext = "jpg"
+    if ext not in _COVER_EXTS:
+        raise HTTPException(status_code=400, detail=f"Unsupported image type '.{ext}'. Use JPG, PNG, WebP, GIF, or AVIF.")
+    raw = await file.read()
+    if len(raw) > _COVER_MAX:
+        raise HTTPException(status_code=400, detail="Cover image over 12 MB.")
+
+    _COVER_DIR.mkdir(parents=True, exist_ok=True)
+    # Drop any previous cover (extension may differ) before writing the new one.
+    if space.cover_ext and space.cover_ext != ext:
+        _cover_path(space_id, space.cover_ext).unlink(missing_ok=True)
+    _cover_path(space_id, ext).write_bytes(raw)
+    space.cover_ext = ext
+    await db.commit()
+    return _space_dict(space, await _space_counts(db, space.id))
+
+
+@router.get("/{space_id}/cover")
+async def read_cover(space_id: str, db: AsyncSession = Depends(get_db)):
+    space_id = sanitize_workspace_id(space_id)
+    space = await db.get(Workspace, space_id)
+    if not space or not space.cover_ext:
+        raise HTTPException(status_code=404, detail="No cover set.")
+    p = _cover_path(space_id, space.cover_ext)
+    if not p.exists():
+        raise HTTPException(status_code=404, detail="No cover set.")
+    return FileResponse(p)
+
+
+@router.delete("/{space_id}/cover")
+async def delete_cover(space_id: str, db: AsyncSession = Depends(get_db)):
+    space_id = sanitize_workspace_id(space_id)
+    space = await db.get(Workspace, space_id)
+    if not space or space.kind != "space":
+        raise HTTPException(status_code=404, detail="Space not found")
+    if space.cover_ext:
+        _cover_path(space_id, space.cover_ext).unlink(missing_ok=True)
+        space.cover_ext = None
+        await db.commit()
+    return _space_dict(space, await _space_counts(db, space.id))
+
+
 @router.post("/{space_id}/delete")
 async def delete_space(space_id: str, data: SpaceDelete, db: AsyncSession = Depends(get_db)):
     """Destructively delete a Space: its collections AND all of its memos.
@@ -251,6 +329,8 @@ async def delete_space(space_id: str, data: SpaceDelete, db: AsyncSession = Depe
     await db.execute(sa_delete(ChatSession).where(ChatSession.workspace_id == space_id))
     await db.execute(sa_delete(Memo).where(Memo.workspace_id == space_id))
     await db.execute(sa_delete(Collection).where(Collection.workspace_id == space_id))
+    if space.cover_ext:
+        _cover_path(space_id, space.cover_ext).unlink(missing_ok=True)
     await db.delete(space)
     await db.commit()
     return {"status": "deleted", "removed": {"memos": len(memo_ids)}}

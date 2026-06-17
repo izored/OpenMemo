@@ -5,10 +5,10 @@ import { useDroppable } from '@dnd-kit/core';
 import { motion } from 'framer-motion';
 import { Icon } from './Icon';
 import { SidebarPlayer } from './SidebarPlayer';
-import { collectionApi, memoApi, systemApi, settingsApi } from '@/lib/api';
+import { collectionApi, memoApi, systemApi, settingsApi, spaceApi } from '@/lib/api';
 import { useAppStore } from '@/stores/appStore';
 import { useIsMobile } from '@/lib/useBreakpoint';
-import type { Collection } from '@/types';
+import type { Collection, Space } from '@/types';
 import { cn } from '@/lib/utils';
 
 function CollectionRow({
@@ -56,6 +56,10 @@ export function Sidebar() {
   const {
     activeCollection,
     setActiveCollection,
+    activeSpace,
+    setActiveSpace,
+    setSpaceModalOpen,
+    setEditingSpace,
     sidebarCollapsed,
     toggleSidebarCollapsed,
     setSidebarOpen,
@@ -80,6 +84,14 @@ export function Sidebar() {
   // creating a collection is desktop-only — so the header "+" becomes the
   // expand/collapse toggle on mobile.
   const [collExpanded, setCollExpanded] = React.useState(false);
+  // Library Collections collapse (not hide) when a Space opens, so the Space's
+  // own collections get the room — but the header stays, with a chevron to
+  // expand the library list back without leaving the Space.
+  const [libCollapsed, setLibCollapsed] = React.useState(false);
+  React.useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- intentional: opening/leaving a Space drives the library-collections collapse default
+    setLibCollapsed(!!activeSpace);
+  }, [activeSpace]);
   const revealTimer = React.useRef<number | null>(null);
   const cancelReveal = React.useCallback(() => {
     if (revealTimer.current !== null) {
@@ -105,11 +117,22 @@ export function Sidebar() {
 
   const { data: collections = [] } = useQuery({
     queryKey: ['collections'],
-    queryFn: collectionApi.list,
+    queryFn: () => collectionApi.list(),
+  });
+  const { data: spaces = [] } = useQuery({
+    queryKey: ['spaces'],
+    queryFn: spaceApi.list,
+  });
+  // The open Space's own collections (accordion dropdown). Only fetched while a
+  // Space is active.
+  const { data: spaceCollections = [] } = useQuery({
+    queryKey: ['collections', activeSpace],
+    queryFn: () => collectionApi.list(activeSpace || undefined),
+    enabled: !!activeSpace,
   });
   const { data: pinnedMemos = [] } = useQuery({
     queryKey: ['memos', 'pinned'],
-    queryFn: memoApi.listPinned,
+    queryFn: () => memoApi.listPinned(),
   });
   const { data: stats } = useQuery({
     queryKey: ['stats'],
@@ -135,13 +158,36 @@ export function Sidebar() {
   // Mobile drawer shows the first 3 collections until the chevron expands them.
   const visibleOthers = isMobile && !collExpanded ? others.slice(0, 3) : others;
 
+  // Leaving for a library route exits any open Space (ADR-020 accordion).
   const goRoute = (path: string) => {
     setActiveCollection(null);
+    setActiveSpace(null);
     navigate(path);
   };
   const selectCollection = (id: string) => {
     setActiveCollection(id);
+    setActiveSpace(null);
     navigate('/');
+  };
+  // Accordion: tapping a Space opens it (its collections drop down, the library
+  // sections retract). Tapping the open Space again closes back to the library.
+  const toggleSpace = (id: string) => {
+    if (activeSpace === id) {
+      setActiveSpace(null);
+      setActiveCollection(null);
+      navigate('/');
+    } else {
+      setActiveSpace(id);
+      setActiveCollection(null);
+      navigate(`/space/${id}`);
+    }
+    if (isMobile) setSidebarOpen(false);
+  };
+  const selectSpaceCollection = (spaceId: string, collId: string) => {
+    setActiveSpace(spaceId);
+    setActiveCollection(collId);
+    navigate(`/space/${spaceId}`);
+    if (isMobile) setSidebarOpen(false);
   };
   const editCollection = (e: React.MouseEvent, col: Collection) => {
     e.stopPropagation();
@@ -217,7 +263,7 @@ export function Sidebar() {
               'om-nav-item',
               (location.pathname === n.path ||
                 (n.path !== '/' && location.pathname.startsWith(n.path + '/'))) &&
-                !activeCollection && 'active'
+                !activeCollection && !activeSpace && 'active'
             )}
             title={n.label}
             onClick={() => goRoute(n.path)}
@@ -228,8 +274,86 @@ export function Sidebar() {
         ))}
       </nav>
 
-      {/* Pinned stays fixed above the scroll zone. */}
-      {!sidebarCollapsed && (pinned.length > 0 || pinnedMemos.length > 0) && (
+      {/* Spaces (ADR-020) — separate, walled project areas above collections.
+          Tapping one opens it as an accordion: its collections drop down here
+          and the library's Pinned + Collections sections retract below. */}
+      {!sidebarCollapsed && (
+        <div className="om-sidebar-section om-spaces-section">
+          <div className="om-section-head">
+            <span className="om-section-label mono">Spaces</span>
+            <div className="om-collections-head-actions">
+              <button
+                className="om-icon-btn sm"
+                title="View all Spaces"
+                onClick={() => goRoute('/spaces')}
+              >
+                <Icon name="layers" size={11} />
+              </button>
+              <button
+                className="om-icon-btn sm"
+                title="New Space"
+                onClick={() => { setEditingSpace(null); setSpaceModalOpen(true); }}
+              >
+                <Icon name="plus" size={11} />
+              </button>
+            </div>
+          </div>
+          <div className="om-collection-list">
+            {(spaces as Space[]).length === 0 && (
+              <button className="om-space-empty-cta" onClick={() => { setEditingSpace(null); setSpaceModalOpen(true); }}>
+                <Icon name="plus" size={11} />
+                <span>Create your first Space</span>
+              </button>
+            )}
+            {(spaces as Space[]).map((s) => {
+              const open = activeSpace === s.id;
+              return (
+                <div key={s.id} className={cn('om-space-group', open && 'open')}>
+                  <button
+                    className={cn('om-coll om-space-row', open && 'active')}
+                    onClick={() => toggleSpace(s.id)}
+                    title={s.name}
+                  >
+                    <span className="om-space-row-emoji">{s.emoji || '🗂️'}</span>
+                    <span className="om-coll-name">{s.name}</span>
+                    <Icon name={open ? 'chevronDown' : 'chevronRight'} size={12} className="om-coll-count" />
+                  </button>
+                  {open && (
+                    <div className="om-space-collections">
+                      {spaceCollections.length === 0 && (
+                        <span className="om-space-empty mono">No collections yet</span>
+                      )}
+                      {(spaceCollections as Collection[]).map((c) => (
+                        <button
+                          key={c.id}
+                          className={cn('om-coll om-space-coll', activeCollection === c.id && 'active')}
+                          onClick={() => selectSpaceCollection(s.id, c.id)}
+                        >
+                          <span className="om-coll-dot" style={{ background: c.color || 'var(--text-4)' }} />
+                          <span className="om-coll-name">{c.name}</span>
+                          <span className="om-coll-emoji">{c.emoji || '·'}</span>
+                        </button>
+                      ))}
+                      <button
+                        className="om-space-add-coll"
+                        onClick={() => { setEditingCollection(null); setCollectionModalOpen(true); }}
+                        title={`New collection in ${s.name}`}
+                      >
+                        <Icon name="plus" size={11} />
+                        <span>New collection</span>
+                      </button>
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      {/* Pinned stays fixed above the scroll zone. Hidden while a Space is open
+          (the Space owns the rail then). */}
+      {!sidebarCollapsed && !activeSpace && (pinned.length > 0 || pinnedMemos.length > 0) && (
         <div className="om-sidebar-section">
           <div className="om-section-head">
             <span className="om-section-label mono">Pinned</span>
@@ -265,10 +389,20 @@ export function Sidebar() {
         </div>
       )}
 
-      {/* Collections header — fixed; only its LIST (below) scrolls. */}
+      {/* Collections header — fixed; only its LIST (below) scrolls. When a Space
+          is open the list collapses (not hidden): the header stays with a
+          chevron to expand the library collections back in place. */}
       {!sidebarCollapsed && (
         <div className="om-section-head om-collections-head" onMouseLeave={hideReveal}>
-          <span className="om-section-label mono">Collections</span>
+          <button
+            className="om-section-label mono om-coll-collapse-toggle"
+            onClick={() => setLibCollapsed((v) => !v)}
+            title={libCollapsed ? 'Show collections' : 'Collapse collections'}
+            aria-expanded={!libCollapsed}
+          >
+            <Icon name={libCollapsed ? 'chevronRight' : 'chevronDown'} size={11} />
+            <span>Collections</span>
+          </button>
           <div className="om-collections-head-actions">
             {hiddenRevealed && (
               <button
@@ -314,7 +448,7 @@ export function Sidebar() {
       {/* ONLY the collections list scrolls. Always present (even collapsed) so it
           owns the slack and keeps the player + foot pinned to the bottom. */}
       <div className="om-sidebar-scroll" data-lenis-prevent>
-        {!sidebarCollapsed && (
+        {!sidebarCollapsed && !libCollapsed && (
           <div className="om-collection-list">
             {visibleOthers.map((c: Collection) => (
               <CollectionRow

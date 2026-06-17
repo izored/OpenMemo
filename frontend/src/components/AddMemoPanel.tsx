@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Icon } from './Icon';
 import { VoiceRecorder } from './VoiceRecorder';
-import { ingestApi, collectionApi } from '@/lib/api';
+import { ingestApi, collectionApi, spaceApi } from '@/lib/api';
 import { playlistShape } from '@/lib/playlistUrl';
 import { useAppStore } from '@/stores/appStore';
 import { cn } from '@/lib/utils';
@@ -42,12 +42,21 @@ export function AddMemoPanel() {
   const setEditingCollection = useAppStore((s) => s.setEditingCollection);
   const lastCreatedCollectionId = useAppStore((s) => s.lastCreatedCollectionId);
   const setLastCreatedCollectionId = useAppStore((s) => s.setLastCreatedCollectionId);
+  // When a Space is open, adds land in it (ADR-020) and the collection picker
+  // shows the Space's collections, not the library's.
+  const activeSpace = useAppStore((s) => s.activeSpace);
   const queryClient = useQueryClient();
 
   const { data: collections = [] } = useQuery({
-    queryKey: ['collections'],
-    queryFn: collectionApi.list,
+    queryKey: ['collections', activeSpace],
+    queryFn: () => collectionApi.list(activeSpace || undefined),
   });
+  const { data: spaces = [] } = useQuery({
+    queryKey: ['spaces'],
+    queryFn: spaceApi.list,
+    enabled: !!activeSpace,
+  });
+  const targetSpace = activeSpace ? spaces.find((s) => s.id === activeSpace) : null;
 
   const [tab, setTab] = useState<Tab>('link');
   const [mediaKind, setMediaKind] = useState<'image' | 'video' | 'audio' | 'file'>('image');
@@ -143,6 +152,12 @@ export function AddMemoPanel() {
   const done = () => {
     queryClient.invalidateQueries({ queryKey: ['memos'] });
     queryClient.invalidateQueries({ queryKey: ['stats'] });
+    // Keep Space counts fresh so the header stats and the delete warning
+    // ("N memos will be gone") never lie after an add into a Space.
+    if (activeSpace) {
+      queryClient.invalidateQueries({ queryKey: ['spaces'] });
+      queryClient.invalidateQueries({ queryKey: ['space', activeSpace] });
+    }
     reset();
     close();
   };
@@ -163,10 +178,10 @@ export function AddMemoPanel() {
           navigate(`/music/${res.collection_id}`);
           return;
         }
-        await ingestApi.url(url.trim(), collection || undefined, { noPull });
+        await ingestApi.url(url.trim(), collection || undefined, { noPull, workspace_id: activeSpace || undefined });
       } else if (tab === 'note') {
         if (!noteTitle.trim() && !note.trim()) return;
-        await ingestApi.note(noteTitle.trim() || 'Untitled note', note, collection || undefined);
+        await ingestApi.note(noteTitle.trim() || 'Untitled note', note, collection || undefined, activeSpace || undefined);
       } else if (tab === 'multimedia') {
         fileRef.current?.click();
         return;
@@ -208,7 +223,7 @@ export function AddMemoPanel() {
     // rest. Progress ticks per file.
     for (let i = 0; i < arr.length; i++) {
       try {
-        await ingestApi.file(arr[i], collection || undefined);
+        await ingestApi.file(arr[i], collection || undefined, activeSpace || undefined);
       } catch {
         failed.push(arr[i].name);
       }
@@ -234,7 +249,7 @@ export function AddMemoPanel() {
     setBusy(true);
     setError('');
     try {
-      await ingestApi.file(file, collection || undefined, undefined, {
+      await ingestApi.file(file, collection || undefined, activeSpace || undefined, {
         typeOverride: 'audio',
         transcribe: opts.transcribe,
         audioKind: 'voice',
@@ -309,7 +324,13 @@ export function AddMemoPanel() {
       <div className="om-add-head">
         <div className="om-add-head-l">
           <b>New Memo</b>
-          <span className="om-add-kbd mono">N</span>
+          {targetSpace ? (
+            <span className="om-add-space-chip mono" title={`Saving into the "${targetSpace.name}" Space`}>
+              {targetSpace.emoji || '🗂️'} {targetSpace.name}
+            </span>
+          ) : (
+            <span className="om-add-kbd mono">N</span>
+          )}
         </div>
         <button className="om-add-x" onClick={close} aria-label="Close">
           <Icon name="x" size={13} />

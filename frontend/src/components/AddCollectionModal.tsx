@@ -49,7 +49,7 @@ const PRESET_COLORS = [
 ];
 
 export function AddCollectionModal() {
-  const { collectionModalOpen, setCollectionModalOpen, editingCollection, setEditingCollection, setLastCreatedCollectionId } = useAppStore();
+  const { collectionModalOpen, setCollectionModalOpen, editingCollection, setEditingCollection, setLastCreatedCollectionId, activeSpace } = useAppStore();
   const queryClient = useQueryClient();
   const [name, setName] = useState('');
   const [emoji, setEmoji] = useState('📁');
@@ -135,7 +135,10 @@ export function AddCollectionModal() {
         });
       } else {
         const created = await collectionApi.create({
+          // A collection created while inside a Space belongs to that Space
+          // (ADR-020); otherwise it lands in the main library.
           name: name.trim(), emoji, description: description.trim() || undefined, color,
+          workspace_id: activeSpace || undefined,
         });
         // Let an open surface (AddMemoPanel) auto-select the new collection so
         // the user doesn't have to reopen the picker and select it again.

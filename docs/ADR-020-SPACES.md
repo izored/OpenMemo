@@ -74,20 +74,27 @@ Living checklist. I tick items as they merge and date each entry. `[ ]` todo, `[
 
 **Phase 1 note — orphan files:** destructive delete removes memo rows but does not yet unlink their files on disk (cross-env path resolution, ADR-001 file_path quirk). Not a data leak in-app (no row, no ghost vector); a disk-cleanup pass is a follow-up.
 
-### Phase 2 — Sidebar + navigation
-- [ ] `Space` type + `activeSpace` store state (persisted)
-- [ ] `spaceApi` in `lib/api.ts`; `workspace_id` threaded into list/ingest/search/stats calls
-- [ ] Sidebar Spaces section + `+` create button
-- [ ] Accordion behavior (one Space or the library expanded at a time)
-- [ ] `/spaces` library page (grid of Space cards + create)
-- [ ] Routing: `/spaces`, `/space/:id`
+### Phase 2 — Sidebar + navigation  ✅ done 2026-06-17
+- [x] `Space` type + `activeSpace` store state. NOT persisted: the route is the source of truth (SpacePage re-derives it from the URL). Persisting it made the sidebar show a Space open while the library rendered.
+- [x] `spaceApi` in `lib/api.ts`; `workspace_id` threaded into memos list / pinned / collections / stats / ingest (url, note, file). Search already defaulted to the library.
+- [x] Sidebar Spaces section + `+` create + a "view all" shortcut to `/spaces`
+- [x] Accordion behavior: opening a Space expands its collections; the library Collections **collapse (not hide)** to a header with a chevron, so they stay reachable
+- [x] `/spaces` library page (grid of Space cards + create)
+- [x] Routing: `/spaces`, `/space/:id`
+- [x] `+ New collection` inside the open Space's sidebar section (creates into the Space's workspace)
 
-### Phase 3 — Space home + adds
-- [ ] `SpaceHeader` (cover, name, description, stats)
-- [ ] Space home = Dashboard grid scoped to the Space
-- [ ] `SpaceModal` (create / edit: name, emoji, color, description)
-- [ ] Context-aware add (active Space = default target)
-- [ ] Two-step + typed-sentence delete UI with pre-delete export
+### Phase 3 — Space home + adds  ✅ done 2026-06-17
+- [x] Distinct Space header (own chrome, not the shared PageHeader). Sits below the viewport top (no edge-bleed).
+- [x] Space home = Dashboard grid scoped to the Space
+- [x] `SpaceModal` rebuilt Notion-style: full-bleed cover band, overlapping emoji tile, borderless title/description, single 22px gutter (fixed the alignment complaints)
+- [x] Context-aware add (active Space = default target) with a target-Space chip in the add panel; counts re-invalidated so the delete warning never goes stale
+- [x] Two-step + typed-sentence delete UI with a pre-delete backup download
+
+### Phase 3.5 — Notion-style cover (added on request)  ✅ done 2026-06-17
+- [x] `workspaces.cover_ext` column + migration; covers stored at `DATA_DIR/space_covers/<id>.<ext>`
+- [x] `POST/GET/DELETE /api/spaces/{id}/cover` (image validation, 12 MB cap, cache-busted `cover_url` on mtime)
+- [x] Full-bleed cover on the Space header + the modal, with hover "Change / Remove cover" controls
+- [x] Cover file unlinked on destructive Space delete; cover API test added
 
 ### Phase 4 — Polish
 - [ ] Empty states (no Spaces yet; empty Space)
@@ -99,3 +106,4 @@ Living checklist. I tick items as they merge and date each entry. `[ ]` todo, `[
 ### Entries
 - **2026-06-17** — ADR written. Decisions locked with the user: Workspace-backed (one DB), fully isolated from the main dashboard, context-aware adds, destructive delete behind a two-step + typed-sentence confirm with a pre-delete backup. Starting Phase 1.
 - **2026-06-17** — Phase 1 shipped (backend). `Workspace` grew the Space columns, the lifespan migration backfills `kind='library'`, `spaces.py` carries full CRUD + export + the name-gated destructive delete, and the four library list surfaces now default to the `default` workspace so Space content never leaks. 5 new isolation tests, full backend suite 14 green. Next: Phase 2 (sidebar + navigation).
+- **2026-06-17** — Phases 2 + 3 shipped (frontend) and verified live in the browser: sidebar Spaces accordion, `/spaces` library, `/space/:id` home with its own header, context-aware adds, and the guarded delete. Isolation confirmed end-to-end (a note added in a Space stayed out of the library). Then a design pass on user feedback: centered + re-guttered the modal, collapse-not-hide for library collections, `+ collection` inside a Space, header no longer bleeds off the top. Added Phase 3.5: Notion-style full-bleed, user-changeable cover image per Space (backend + UI + test). 6 spaces tests green.

@@ -92,6 +92,33 @@ def test_destructive_delete_requires_exact_name(client):
     assert space_memo not in _listed_ids(client, workspace_id=space_id, limit=200)
 
 
+def test_space_cover_upload_serve_delete(client):
+    space_id = _create_space(client, "Cover Space")
+    # A 1x1 PNG is enough to exercise validation + storage + serving.
+    png = bytes.fromhex(
+        "89504e470d0a1a0a0000000d49484452000000010000000108020000009077"
+        "53de0000000c4944415408d763f8cfc0f01f00050001ff a5 9a 9c"  # noqa: E501
+        .replace(" ", "")
+        + "0000000049454e44ae426082"
+    )
+    up = client.post(f"/api/spaces/{space_id}/cover", files={"file": ("c.png", png, "image/png")})
+    assert up.status_code == 200, up.text
+    assert up.json()["cover_url"]
+
+    got = client.get(f"/api/spaces/{space_id}/cover")
+    assert got.status_code == 200
+    assert got.headers["content-type"].startswith("image/")
+
+    # A non-image is refused.
+    bad = client.post(f"/api/spaces/{space_id}/cover", files={"file": ("x.txt", b"nope", "text/plain")})
+    assert bad.status_code == 400
+
+    rm = client.delete(f"/api/spaces/{space_id}/cover")
+    assert rm.status_code == 200
+    assert rm.json()["cover_url"] is None
+    assert client.get(f"/api/spaces/{space_id}/cover").status_code == 404
+
+
 def test_space_export_returns_a_zip(client):
     space_id = _create_space(client, "Exportable")
     _create_memo(client, "note to back up", workspace_id=space_id)

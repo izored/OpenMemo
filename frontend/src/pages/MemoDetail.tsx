@@ -1300,7 +1300,7 @@ export function MemoDetail() {
 
   const { data: collections = [] } = useQuery({
     queryKey: ['collections'],
-    queryFn: collectionApi.list,
+    queryFn: () => collectionApi.list(),
   });
 
   /* eslint-disable react-hooks/set-state-in-effect */
