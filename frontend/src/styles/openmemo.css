@@ -235,7 +235,7 @@ input, textarea { font: inherit; color: inherit; }
 
 .om-sidebar-search {
   display: flex; align-items: center; gap: 10px;
-  height: 36px; padding: 0 12px; margin: 0 0 16px;
+  height: 36px; flex-shrink: 0; padding: 0 12px; margin: 0 0 16px;
   border-radius: 10px;
   background: var(--surface);
   border: 1px solid var(--border);
@@ -5321,8 +5321,10 @@ button.om-add-link { background: none; border: 0; padding: 0; cursor: pointer; f
   max-width: 160px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
 
-/* Space detail page header — distinct from the shared PageHeader */
-.om-space-page { display: flex; flex-direction: column; }
+/* Space detail page header — distinct from the shared PageHeader.
+   Block (not flex) so the memo grid lays out full-width exactly like the
+   Dashboard; a flex column made the masonry shrink to its content. */
+.om-space-page { display: block; }
 .om-space-header {
   position: relative; margin: 22px 0; /* clear the viewport top, breathe below */
   border-radius: 16px; overflow: hidden;
@@ -5335,6 +5337,13 @@ button.om-add-link { background: none; border: 0; padding: 0; cursor: pointer; f
 }
 .om-space-header.has-cover { border-color: transparent; }
 .om-space-header.has-cover .om-space-header-band { height: 168px; }
+/* Legibility scrim: a soft dark wash at the very top of the cover so the
+   back/edit controls always read, whatever the image underneath. */
+.om-space-header.has-cover .om-space-header-band::before {
+  content: ''; position: absolute; inset: 0 0 auto 0; height: 72px;
+  background: linear-gradient(rgba(0,0,0,.34), rgba(0,0,0,0));
+  pointer-events: none;
+}
 /* Cover controls — Notion-style, top-right, fade in on header hover. */
 .om-space-cover-actions {
   position: absolute; top: 12px; right: 14px; display: flex; gap: 6px;
