@@ -1,6 +1,6 @@
 # ADR-020: Spaces are workspaces, not a parallel world. One DB, isolated by `workspace_id`
 
-**Date:** 2026-06-17 · **Status:** Designed, building in phases (the Progress log below is the source of truth) · **Builds on:** ADR-001 (define shared things once, scope across the whole type), ADR-015 (a `kind` column keeps two UIs apart without a parallel data model), ADR-006 (the sidebar is a fixed three-zone column), ADR-016 (every page renders one shared header)
+**Date:** 2026-06-17 · **Status:** Shipped · **Builds on:** ADR-001 (define shared things once, scope across the whole type), ADR-015 (a `kind` column keeps two UIs apart without a parallel data model), ADR-006 (the sidebar is a fixed three-zone column), ADR-016 (every page renders one shared header)
 
 > This file is the living foundation for Spaces. I keep the Progress log at the bottom current as each phase lands, so we never lose the thread. Decisions above the log are the plan; the log is what actually shipped.
 
@@ -96,15 +96,17 @@ Living checklist. I tick items as they merge and date each entry. `[ ]` todo, `[
 - [x] Full-bleed cover on the Space header + the modal, with hover "Change / Remove cover" controls
 - [x] Cover file unlinked on destructive Space delete; cover API test added
 
-### Phase 4 — Polish
-- [ ] Empty states (no Spaces yet; empty Space)
-- [ ] Mobile drawer behavior for Spaces accordion (ADR-009)
-- [ ] `docs/CHANGELOG.md` entry
-- [ ] Tests green, lint clean
-- [ ] Flip ADR Status to Shipped
+### Phase 4 — Polish  ✅ done 2026-06-17
+- [x] Empty states (no Spaces yet → "Create your first Space"; empty Space → isolation copy)
+- [x] Design pass on feedback: centered/re-guttered modal, collapse-not-hide collections, header no edge-bleed, icon ring so it doesn't butt the cover, stable sidebar search box, full-width Space grid
+- [x] `docs/CHANGELOG.md` entry
+- [x] Tests green (6 spaces + 14 suite), tsc + lint clean
+- [x] ADR Status → Shipped
+- [ ] Mobile drawer behavior for the Spaces accordion (ADR-009) — deferred, revisit on the next responsive pass
 
 ### Entries
 - **2026-06-17** — ADR written. Decisions locked with the user: Workspace-backed (one DB), fully isolated from the main dashboard, context-aware adds, destructive delete behind a two-step + typed-sentence confirm with a pre-delete backup. Starting Phase 1.
 - **2026-06-17** — Phase 1 shipped (backend). `Workspace` grew the Space columns, the lifespan migration backfills `kind='library'`, `spaces.py` carries full CRUD + export + the name-gated destructive delete, and the four library list surfaces now default to the `default` workspace so Space content never leaks. 5 new isolation tests, full backend suite 14 green. Next: Phase 2 (sidebar + navigation).
 - **2026-06-17** — Behavior fixes: the Space home is a catch-all (the workspace-scoped memo query already unions collection members and loose, no-collection memos), and clicking an already-open Space in the sidebar now stays on its home instead of toggling closed to the dashboard. Leaving a Space is the header "openMemo" back button or a library nav item.
 - **2026-06-17** — Phases 2 + 3 shipped (frontend) and verified live in the browser: sidebar Spaces accordion, `/spaces` library, `/space/:id` home with its own header, context-aware adds, and the guarded delete. Isolation confirmed end-to-end (a note added in a Space stayed out of the library). Then a design pass on user feedback: centered + re-guttered the modal, collapse-not-hide for library collections, `+ collection` inside a Space, header no longer bleeds off the top. Added Phase 3.5: Notion-style full-bleed, user-changeable cover image per Space (backend + UI + test). 6 spaces tests green.
+- **2026-06-17** — Header polish + Phase 4 close-out: rebuilt the Space header so the cover is a block and the identity stacks below it (title can't bleed onto the cover), dropped the on-cover back button (leave via a library nav item), gave the icon a surface ring so it never butts the cover, made the sidebar search box stop resizing on collapse, and fixed the Space grid to render full-width. Status flipped to Shipped; merged to `main` and rebuilt the Docker app.
