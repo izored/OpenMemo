@@ -20,6 +20,7 @@ import { FullscreenWriter } from './FullscreenWriter';
 import { SearchOverlay } from './SearchOverlay';
 import { Onboarding } from './Onboarding';
 import { AddCollectionModal } from './AddCollectionModal';
+import { AddSpaceModal } from './AddSpaceModal';
 import { Lightbox } from './Lightbox';
 import { GuideHost } from './GuideHost';
 import { ThumbnailEditHost } from './ThumbnailEditHost';
@@ -199,6 +200,7 @@ export function Layout() {
       <AppearancePanel />
       <FullscreenWriter />
       <AddCollectionModal />
+      <AddSpaceModal />
 
       {/* Theme transition — sunset/sunrise radial bloom from the horizon.
           Sits BEHIND the memo grid (z=0, same as the bg blob layer) so the

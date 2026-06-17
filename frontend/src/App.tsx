@@ -7,6 +7,8 @@ import { AskMemoPage } from '@/pages/AskMemoPage';
 import { MusicPage } from '@/pages/MusicPage';
 import { SettingsPage } from '@/pages/SettingsPage';
 import { HiddenPage } from '@/pages/HiddenPage';
+import { SpacesPage } from '@/pages/SpacesPage';
+import { SpacePage } from '@/pages/SpacePage';
 
 export default function App() {
   return (
@@ -21,6 +23,8 @@ export default function App() {
           <Route path="music/:playlistId" element={<MusicPage />} />
           <Route path="settings" element={<SettingsPage />} />
           <Route path="hidden" element={<HiddenPage />} />
+          <Route path="spaces" element={<SpacesPage />} />
+          <Route path="space/:id" element={<SpacePage />} />
         </Route>
       </Routes>
     </BrowserRouter>

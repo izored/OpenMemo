@@ -122,6 +122,23 @@ async def lifespan(app: FastAPI):
                 "WHERE c.music_kind = 'album')"
             ))
             await db.commit()
+            # Spaces (ADR-020): a Space is a Workspace with kind='space'. Add the
+            # presentation + ordering columns and mark every existing workspace
+            # as the 'library' kind so the Spaces list (kind='space') stays empty
+            # until the user makes one. Additive, idempotent.
+            wcols = (await db.execute(_sql_text("PRAGMA table_info(workspaces)"))).fetchall()
+            wnames = {c[1] for c in wcols}
+            for col in ("kind", "emoji", "icon", "color", "description", "cover_ext"):
+                if col not in wnames:
+                    await db.execute(_sql_text(f"ALTER TABLE workspaces ADD COLUMN {col} VARCHAR"))
+            if "pinned" not in wnames:
+                await db.execute(_sql_text("ALTER TABLE workspaces ADD COLUMN pinned BOOLEAN DEFAULT 0"))
+            if "sort_order" not in wnames:
+                await db.execute(_sql_text("ALTER TABLE workspaces ADD COLUMN sort_order INTEGER DEFAULT 0"))
+            await db.execute(_sql_text(
+                "UPDATE workspaces SET kind = 'library' WHERE kind IS NULL"
+            ))
+            await db.commit()
     except Exception as e:
         print(f"Schema migration warning (non-critical): {e}")
 
@@ -389,6 +406,7 @@ from backend.api.maintenance import router as maintenance_router
 from backend.api.backup import router as backup_router
 from backend.api.settings import router as settings_router
 from backend.api.music import router as music_router
+from backend.api.spaces import router as spaces_router
 
 app.include_router(memos_router)
 app.include_router(chat_router)
@@ -400,6 +418,7 @@ app.include_router(maintenance_router)
 app.include_router(backup_router)
 app.include_router(settings_router)
 app.include_router(music_router)
+app.include_router(spaces_router)
 
 
 def _dir_size(path: Path) -> int:
@@ -440,29 +459,47 @@ _STORAGE_TTL = 60.0
 
 
 @app.get("/api/stats")
-async def get_stats(include_storage: bool = False, db: AsyncSession = Depends(get_db)):
+async def get_stats(
+    include_storage: bool = False,
+    workspace_id: str = None,
+    db: AsyncSession = Depends(get_db),
+):
     """Aggregate stats. Counts are cheap COUNT()s and always returned.
 
     Storage sizes are an expensive filesystem walk, so they are opt-in
     (`include_storage=true`, used by the Settings page), computed in a worker
     thread (never blocks the event loop), and cached. The sidebar calls this on
     every page for the memo count alone — it must stay instant.
+
+    Spaces isolation (ADR-020): counts are scoped to the main library by
+    default; a Space sidebar passes its workspace_id for that Space's counts.
     """
     from sqlalchemy import func, select
     from backend.db.models import Memo, Collection, Tag
+    from backend.core.security import sanitize_workspace_id
     from datetime import datetime, timedelta
 
-    total_memos = (await db.execute(select(func.count()).select_from(Memo))).scalar() or 0
-    total_collections = (await db.execute(select(func.count()).select_from(Collection))).scalar() or 0
+    ws = sanitize_workspace_id(workspace_id) if workspace_id else "default"
+
+    total_memos = (await db.execute(
+        select(func.count()).select_from(Memo).where(Memo.workspace_id == ws)
+    )).scalar() or 0
+    total_collections = (await db.execute(
+        select(func.count()).select_from(Collection).where(Collection.workspace_id == ws)
+    )).scalar() or 0
     total_tags = (await db.execute(select(func.count()).select_from(Tag))).scalar() or 0
 
     week_ago = datetime.utcnow() - timedelta(days=7)
     memos_this_week = (
-        await db.execute(select(func.count()).select_from(Memo).where(Memo.created_at >= week_ago))
+        await db.execute(select(func.count()).select_from(Memo).where(
+            Memo.workspace_id == ws, Memo.created_at >= week_ago
+        ))
     ).scalar() or 0
 
     by_type_rows = (
-        await db.execute(select(Memo.type, func.count()).group_by(Memo.type))
+        await db.execute(
+            select(Memo.type, func.count()).where(Memo.workspace_id == ws).group_by(Memo.type)
+        )
     ).all()
     by_type = {row[0]: row[1] for row in by_type_rows}
 

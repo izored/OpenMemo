@@ -49,8 +49,24 @@ class Workspace(Base):
     name = Column(String, nullable=False)
     owner_id = Column(String, ForeignKey("users.id"))
     type = Column(String, default="personal")  # personal | team
+    # Spaces (ADR-020): a Space is a Workspace with kind='space'. The 'default'
+    # workspace is the main library (kind='library') and is never listed as a
+    # Space. Memos + collections carry workspace_id, so a Space is isolated by a
+    # filter, not a separate database. These columns drive the Space card +
+    # sidebar presentation; NULL/legacy rows mean the 'default' library.
+    kind = Column(String, default="library")  # library | space
+    emoji = Column(String, nullable=True)
+    icon = Column(String, nullable=True)
+    color = Column(String, nullable=True)
+    description = Column(String, nullable=True)
+    # Notion-style full-bleed cover image (ADR-020). Stores just the extension;
+    # the file lives at DATA_DIR/space_covers/<id>.<ext> and is served by the
+    # spaces API. NULL = no cover, the header falls back to the color gradient.
+    cover_ext = Column(String, nullable=True)
+    pinned = Column(Boolean, default=False)
+    sort_order = Column(Integer, default=0)
     created_at = Column(DateTime, default=datetime.utcnow)
-    
+
     owner = relationship("User", back_populates="workspaces")
     memos = relationship("Memo", back_populates="workspace")
     collections = relationship("Collection", back_populates="workspace")

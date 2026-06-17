@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import type { Collection, Memo } from '@/types';
+import type { Collection, Memo, Space } from '@/types';
 import { DEFAULT_TWEAKS, applyTweaks, type Tweaks } from '@/lib/appearance';
 
 // Ids of the step-by-step guides the GuideModal can render. Add new guides here.
@@ -66,6 +66,18 @@ interface AppState {
   // Active collection
   activeCollection: string | null;
   setActiveCollection: (id: string | null) => void;
+
+  // Active Space (ADR-020). null = the main library. When set, the app is
+  // "inside" that Space: lists scope to it, the sidebar shows its collections,
+  // and adds land in it. Persisted so a reload keeps you where you were.
+  activeSpace: string | null;
+  setActiveSpace: (id: string | null) => void;
+
+  // Space create/edit modal
+  spaceModalOpen: boolean;
+  setSpaceModalOpen: (open: boolean) => void;
+  editingSpace: Space | null;
+  setEditingSpace: (space: Space | null) => void;
 
   // Selected memo (detail view)
   selectedMemoId: string | null;
@@ -178,6 +190,18 @@ export const useAppStore = create<AppState>((set) => ({
 
   activeCollection: null,
   setActiveCollection: (id) => set({ activeCollection: id }),
+
+  // Not persisted: the route is the source of truth. SpacePage re-derives this
+  // from the URL on load, so a reload at "/" is the library and a reload at
+  // "/space/:id" re-enters the Space. Persisting it caused the sidebar to show
+  // a Space open while the library rendered.
+  activeSpace: null,
+  setActiveSpace: (id) => set({ activeSpace: id }),
+
+  spaceModalOpen: false,
+  setSpaceModalOpen: (open) => set({ spaceModalOpen: open }),
+  editingSpace: null,
+  setEditingSpace: (space) => set({ editingSpace: space }),
 
   selectedMemoId: null,
   setSelectedMemoId: (id) => set({ selectedMemoId: id }),

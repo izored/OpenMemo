@@ -109,7 +109,7 @@ export function CollectionsPage() {
 
   const { data: serverCollections = [] } = useQuery({
     queryKey: ['collections'],
-    queryFn: collectionApi.list,
+    queryFn: () => collectionApi.list(),
   });
   const [order, setOrder] = useState<Collection[]>([]);
   useEffect(() => {
