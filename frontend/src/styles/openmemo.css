@@ -5376,12 +5376,14 @@ button.om-add-link { background: none; border: 0; padding: 0; cursor: pointer; f
   padding: 14px 22px 20px; background: var(--surface);
 }
 .om-space-emoji {
-  flex-shrink: 0; margin-top: -52px;
+  flex-shrink: 0; margin-top: -46px;
   font-size: 40px; line-height: 1;
   width: 76px; height: 76px; border-radius: 18px;
   display: flex; align-items: center; justify-content: center;
-  background: var(--surface); border: 1px solid var(--surface-2);
-  box-shadow: 0 8px 24px rgba(0,0,0,0.18);
+  background: var(--surface);
+  /* A surface-colored ring separates the tile from the cover so its background
+     never butts straight against the image (Notion "cut-out" look). */
+  box-shadow: 0 0 0 5px var(--surface), 0 8px 22px rgba(0,0,0,0.18);
   font-family: "Apple Color Emoji", "Segoe UI Emoji", "Noto Color Emoji", sans-serif;
 }
 .om-space-identity-text { flex: 1; min-width: 0; padding-bottom: 2px; }
