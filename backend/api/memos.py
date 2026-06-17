@@ -124,8 +124,10 @@ async def list_memos(
     limit: int = 50,
     db: AsyncSession = Depends(get_db),
 ):
-    if workspace_id:
-        workspace_id = sanitize_workspace_id(workspace_id)
+    # Spaces isolation (ADR-020): a missing workspace_id means the main library,
+    # never "all workspaces". Space surfaces pass their id explicitly. Without
+    # this default, every Space's memos would leak into the main dashboard.
+    workspace_id = sanitize_workspace_id(workspace_id) if workspace_id else "default"
     """List memos with filtering and pagination."""
     query = select(Memo).options(
         load_only(
@@ -685,12 +687,20 @@ async def update_memo_like(memo_id: str, body: LikeUpdate, db: AsyncSession = De
 
 
 @router.get("/pinned/list")
-async def list_pinned_memos(db: AsyncSession = Depends(get_db)):
+async def list_pinned_memos(
+    workspace_id: Optional[str] = None,
+    db: AsyncSession = Depends(get_db),
+):
     """Return memos with pinned=True, ordered by recency. Hidden memos are
-    excluded — the pinned sidebar is a main-dashboard surface."""
+    excluded — the pinned sidebar is a main-dashboard surface.
+
+    Spaces isolation (ADR-020): scoped to the main library by default; a Space
+    sidebar passes its workspace_id so it only shows that Space's pins."""
+    workspace_id = sanitize_workspace_id(workspace_id) if workspace_id else "default"
     rows = (
         await db.execute(
             select(Memo)
+            .where(Memo.workspace_id == workspace_id)
             .where(Memo.pinned.is_(True))
             .where((Memo.is_deleted == False) | (Memo.is_deleted == None))  # noqa: E712
             .where((Memo.hidden == False) | (Memo.hidden == None))  # noqa: E712
