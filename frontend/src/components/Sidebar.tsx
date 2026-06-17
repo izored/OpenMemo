@@ -169,18 +169,14 @@ export function Sidebar() {
     setActiveSpace(null);
     navigate('/');
   };
-  // Accordion: tapping a Space opens it (its collections drop down, the library
-  // sections retract). Tapping the open Space again closes back to the library.
-  const toggleSpace = (id: string) => {
-    if (activeSpace === id) {
-      setActiveSpace(null);
-      setActiveCollection(null);
-      navigate('/');
-    } else {
-      setActiveSpace(id);
-      setActiveCollection(null);
-      navigate(`/space/${id}`);
-    }
+  // Tapping a Space always opens it (its collections drop down, the library
+  // sections retract). It never closes back to the dashboard — leaving a Space
+  // is the header's "openMemo" back button or a library nav item. Clicking the
+  // open Space again just lands on its catch-all home (clears any collection).
+  const openSpace = (id: string) => {
+    setActiveSpace(id);
+    setActiveCollection(null);
+    navigate(`/space/${id}`);
     if (isMobile) setSidebarOpen(false);
   };
   const selectSpaceCollection = (spaceId: string, collId: string) => {
@@ -311,7 +307,7 @@ export function Sidebar() {
                 <div key={s.id} className={cn('om-space-group', open && 'open')}>
                   <button
                     className={cn('om-coll om-space-row', open && 'active')}
-                    onClick={() => toggleSpace(s.id)}
+                    onClick={() => openSpace(s.id)}
                     title={s.name}
                   >
                     <span className="om-space-row-emoji">{s.emoji || '🗂️'}</span>
