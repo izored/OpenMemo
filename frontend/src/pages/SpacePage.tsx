@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams } from 'react-router-dom';
 import { useQuery, useInfiniteQuery, useQueryClient } from '@tanstack/react-query';
 import { MemoGrid } from '@/components/MemoGrid';
 import { Icon } from '@/components/Icon';
@@ -14,7 +14,6 @@ function band(color: string): string {
 
 export function SpacePage() {
   const { id = '' } = useParams();
-  const navigate = useNavigate();
   const queryClient = useQueryClient();
   const coverInputRef = useRef<HTMLInputElement>(null);
   const [coverBusy, setCoverBusy] = useState(false);
@@ -80,12 +79,6 @@ export function SpacePage() {
     return () => observer.disconnect();
   }, [hasNextPage, isFetchingNextPage, fetchNextPage]);
 
-  const exitToLibrary = () => {
-    setActiveSpace(null);
-    setActiveCollection(null);
-    navigate('/');
-  };
-
   const onPickCover = async (f: File | null) => {
     if (!f || !id) return;
     setCoverBusy(true);
@@ -120,6 +113,15 @@ export function SpacePage() {
           style={hasCover ? { backgroundImage: `url(${space?.cover_url})` } : { background: band(space?.color || '#6366F1') }}
         >
           {!hasCover && <div className="om-hero-noise" />}
+          {space && (
+            <button
+              className="om-space-edit"
+              onClick={() => { setEditingSpace(space); setSpaceModalOpen(true); }}
+              title="Edit Space"
+            >
+              <Icon name="edit" size={14} />
+            </button>
+          )}
           <div className="om-space-cover-actions">
             <button className="om-space-cover-btn" onClick={() => coverInputRef.current?.click()} disabled={coverBusy} title={hasCover ? 'Change cover' : 'Add cover'}>
               <Icon name="image" size={12} />
@@ -133,24 +135,9 @@ export function SpacePage() {
           </div>
         </div>
         <input ref={coverInputRef} type="file" accept="image/*" hidden onChange={(e) => onPickCover(e.target.files?.[0] || null)} />
-        <div className="om-space-header-row">
-          <button className="om-space-back" onClick={exitToLibrary} title="Back to openMemo">
-            <Icon name="chevronLeft" size={15} />
-            <span>openMemo</span>
-          </button>
-          {space && (
-            <button
-              className="om-icon-btn"
-              onClick={() => { setEditingSpace(space); setSpaceModalOpen(true); }}
-              title="Edit Space"
-            >
-              <Icon name="edit" size={15} />
-            </button>
-          )}
-        </div>
         <div className="om-space-identity">
           <span className="om-space-emoji" aria-hidden>{space?.emoji || '🗂️'}</span>
-          <div>
+          <div className="om-space-identity-text">
             <h1 className="om-space-name">{space?.name || 'Space'}</h1>
             <p className="om-space-sub">
               {activeColl ? (

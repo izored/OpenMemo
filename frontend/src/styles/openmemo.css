@@ -5331,22 +5331,32 @@ button.om-add-link { background: none; border: 0; padding: 0; cursor: pointer; f
   background: var(--surface);
   border: 1px solid var(--surface-2);
 }
+/* Band is a normal block: the identity stacks BELOW it, so the title can never
+   bleed onto the cover. The emoji is the only thing that overlaps (lifted up). */
 .om-space-header-band {
-  position: absolute; inset: 0 0 auto 0; height: 96px;
+  position: relative; width: 100%; height: 104px;
   background-size: cover; background-position: center; background-repeat: no-repeat;
 }
 .om-space-header.has-cover { border-color: transparent; }
-.om-space-header.has-cover .om-space-header-band { height: 168px; }
-/* Legibility scrim: a soft dark wash at the very top of the cover so the
-   back/edit controls always read, whatever the image underneath. */
+.om-space-header.has-cover .om-space-header-band { height: 184px; }
+/* Legibility scrim at the top of a cover so the edit control always reads. */
 .om-space-header.has-cover .om-space-header-band::before {
-  content: ''; position: absolute; inset: 0 0 auto 0; height: 72px;
-  background: linear-gradient(rgba(0,0,0,.34), rgba(0,0,0,0));
+  content: ''; position: absolute; inset: 0 0 auto 0; height: 64px;
+  background: linear-gradient(rgba(0,0,0,.3), rgba(0,0,0,0));
   pointer-events: none;
 }
-/* Cover controls — Notion-style, top-right, fade in on header hover. */
+/* Edit — top-right of the band, always visible. */
+.om-space-edit {
+  position: absolute; top: 12px; right: 14px; z-index: 3;
+  width: 30px; height: 30px; border-radius: 8px;
+  display: flex; align-items: center; justify-content: center;
+  color: #fff; background: rgba(0,0,0,0.3); backdrop-filter: blur(6px);
+  transition: background .15s;
+}
+.om-space-edit:hover { background: rgba(0,0,0,0.5); }
+/* Cover controls — bottom-right, fade in on header hover. */
 .om-space-cover-actions {
-  position: absolute; top: 12px; right: 14px; display: flex; gap: 6px;
+  position: absolute; bottom: 12px; right: 14px; display: flex; gap: 6px; z-index: 2;
   opacity: 0; transition: opacity .18s;
 }
 .om-space-header:hover .om-space-cover-actions { opacity: 1; }
@@ -5358,40 +5368,26 @@ button.om-add-link { background: none; border: 0; padding: 0; cursor: pointer; f
 }
 .om-space-cover-btn:hover { background: rgba(0,0,0,.5); }
 .om-space-cover-btn:disabled { opacity: .6; cursor: default; }
-/* With a cover, the back/edit row floats over the image and the identity drops
-   below it so the emoji tile overlaps the cover's bottom edge (Notion-style). */
-.om-space-header.has-cover .om-space-header-row { position: absolute; top: 0; left: 0; right: 0; z-index: 2; }
-.om-space-header.has-cover .om-space-identity { margin-top: 120px; }
-.om-space-header-row {
-  position: relative; z-index: 1;
-  display: flex; align-items: center; justify-content: space-between;
-  padding: 12px 14px;
-}
-.om-space-back {
-  display: inline-flex; align-items: center; gap: 4px;
-  height: 30px; padding: 0 12px 0 8px; border-radius: 999px;
-  font-size: 12.5px; color: #fff;
-  background: rgba(0,0,0,0.28); backdrop-filter: blur(6px);
-  transition: background .15s;
-}
-.om-space-back:hover { background: rgba(0,0,0,0.42); }
-.om-space-header-row .om-icon-btn { color: #fff; background: rgba(0,0,0,0.28); backdrop-filter: blur(6px); }
+/* Identity sits on the solid header below the band. The emoji is lifted with a
+   negative top margin so it straddles the band edge (Notion-style), while the
+   title + description stay fully on the solid area. */
 .om-space-identity {
-  position: relative; z-index: 1;
-  display: flex; align-items: flex-end; gap: 16px;
-  padding: 26px 22px 22px;
+  position: relative; display: flex; align-items: flex-end; gap: 16px;
+  padding: 14px 22px 20px; background: var(--surface);
 }
 .om-space-emoji {
-  font-size: 44px; line-height: 1;
-  width: 72px; height: 72px; border-radius: 18px;
+  flex-shrink: 0; margin-top: -52px;
+  font-size: 40px; line-height: 1;
+  width: 76px; height: 76px; border-radius: 18px;
   display: flex; align-items: center; justify-content: center;
   background: var(--surface); border: 1px solid var(--surface-2);
-  box-shadow: 0 8px 24px rgba(0,0,0,0.2);
+  box-shadow: 0 8px 24px rgba(0,0,0,0.18);
   font-family: "Apple Color Emoji", "Segoe UI Emoji", "Noto Color Emoji", sans-serif;
 }
+.om-space-identity-text { flex: 1; min-width: 0; padding-bottom: 2px; }
 .om-space-name { font-size: 26px; font-weight: 650; color: var(--text); margin: 0 0 2px; letter-spacing: -0.01em; }
 .om-space-sub { font-size: 13px; color: var(--text-3); margin: 0; max-width: 60ch; }
-.om-space-stats { margin-left: auto; display: flex; flex-direction: column; gap: 2px; text-align: right; font-size: 11px; color: var(--text-4); }
+.om-space-stats { flex-shrink: 0; display: flex; flex-direction: column; gap: 2px; text-align: right; font-size: 11px; color: var(--text-4); padding-bottom: 2px; }
 .om-link-btn { color: var(--accent); text-decoration: underline; }
 
 /* Space card glyph (Spaces library grid) */
