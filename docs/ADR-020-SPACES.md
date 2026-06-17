@@ -49,7 +49,32 @@ We do not silently move memos to the library on delete. Delete means delete. The
 - Deleting a Space is the only destructive, unrecoverable path in openMemo. The typed-sentence gate plus the pre-delete export are the safety net.
 - The `'default'` workspace id stays hardcoded as the library everywhere (CLAUDE.md rule). Spaces never reuse or shadow it.
 
+## Hidden memos inside a Space
+
+**Status: designed here, not yet built.**
+
+Hidden (OPNMMO-0016) is a per-memo flag (`memos.hidden`), orthogonal to `workspace_id`. A Memo can be hidden and live in a Space at the same time. Spaces do not invent a second privacy model. They compose with the one openMemo already has, the same way isolation composes with the existing list filters.
+
+The behavior, surface by surface:
+
+- **Space home (the catch-all):** excludes hidden Memos, exactly like the main dashboard. The list endpoint already drops hidden Memos when no `collection_id` is asked for, so the Space home gets this for free (`?workspace_id=<space>` with no `hidden`, no `collection_id`).
+- **Inside a Space collection:** hidden Memos show, exactly like a library collection. Opening a collection asks for it explicitly (`collection_id` present), which lifts the hidden filter.
+- **The Space's hidden section:** each workspace has its own. `GET /api/memos?hidden=true&workspace_id=<space>` returns only that Space's hidden Memos; the library's hidden section is the same call against the `default` workspace. Isolation holds in both directions: a Space's hidden Memos never surface in the library's hidden section, and the library's never surface in a Space's. **No new backend endpoint is needed** — the existing `workspace_id` default and the `hidden` filter already compose (verified in `backend/api/memos.py`).
+
+**One passcode, not many.** The hidden passcode (`app_settings.hidden_passcode`) and the per-tab `hiddenUnlocked` session flag stay **global**. Unlocking once reveals every hidden section, library and Spaces alike. The passcode is the user's "show me what I tucked away" gate, not a per-project secret. A per-Space passcode is a deliberate non-goal for v1 (see Open questions).
+
+**Entry point.** The library reveals its hidden section by dwelling on the Collections "+" (a quiet gesture, never a visible button). A Space mirrors this with its own scoped reveal and a workspace-scoped route, `/space/:id/hidden`. `HiddenPage` becomes workspace-aware: it reads the active workspace and lists hidden Memos for it, behind the same passcode + session unlock.
+
+**Delete and backup already cover hidden Memos.** A Space's destructive delete and its pre-delete export both walk every non-deleted Memo in the workspace, hidden included. So a hidden Memo is backed up before deletion and removed with the rest, and the delete warning's count includes it (correct: it is going too). One nuance to accept: the warning reveals the *count* of hidden Memos in the Space, though never their content. For a single-user local app this is fine.
+
+The only build work is the front end: the per-Space reveal gesture and the workspace-scoped hidden route/page. The data layer is done.
+
 ## Open questions
+- **Per-Space hidden passcode** (a Space that locks separately from the library, or hides its very existence from the sidebar until unlocked). Deferred: v1 uses one global passcode for every hidden section.
+- Per-Space chat model / appearance overrides, or inherit global? (Default: inherit for v1.)
+- Moving an existing memo from the library into a Space, and back. (Likely a "Move to Space" action on the memo, post-v1.)
+- Manual ordering of Spaces in the sidebar (drag). `sort_order` exists; wiring deferred.
+- Export format for the pre-delete backup: reuse the existing `/api/export` shape, scoped to the Space.
 - Per-Space chat model / appearance overrides, or inherit global? (Default: inherit for v1.)
 - Moving an existing memo from the library into a Space, and back. (Likely a "Move to Space" action on the memo, post-v1.)
 - Manual ordering of Spaces in the sidebar (drag). `sort_order` exists; wiring deferred.
@@ -104,9 +129,17 @@ Living checklist. I tick items as they merge and date each entry. `[ ]` todo, `[
 - [x] ADR Status → Shipped
 - [ ] Mobile drawer behavior for the Spaces accordion (ADR-009) — deferred, revisit on the next responsive pass
 
+### Phase 5 — Hidden memos inside a Space  (designed, not yet built)
+- [x] Decision written: hidden composes with isolation; per-workspace hidden section; one global passcode (see "Hidden memos inside a Space")
+- [x] Backend confirmed: no new endpoint — `?hidden=true&workspace_id=<space>` already composes
+- [ ] `HiddenPage` becomes workspace-aware (reads active workspace, lists its hidden Memos)
+- [ ] Route `/space/:id/hidden` + a per-Space reveal gesture, behind the existing passcode + session unlock
+- [ ] Verify: a Space's hidden Memo stays out of the library hidden section and the Space home, shows inside its collection
+
 ### Entries
 - **2026-06-17** — ADR written. Decisions locked with the user: Workspace-backed (one DB), fully isolated from the main dashboard, context-aware adds, destructive delete behind a two-step + typed-sentence confirm with a pre-delete backup. Starting Phase 1.
 - **2026-06-17** — Phase 1 shipped (backend). `Workspace` grew the Space columns, the lifespan migration backfills `kind='library'`, `spaces.py` carries full CRUD + export + the name-gated destructive delete, and the four library list surfaces now default to the `default` workspace so Space content never leaks. 5 new isolation tests, full backend suite 14 green. Next: Phase 2 (sidebar + navigation).
 - **2026-06-17** — Behavior fixes: the Space home is a catch-all (the workspace-scoped memo query already unions collection members and loose, no-collection memos), and clicking an already-open Space in the sidebar now stays on its home instead of toggling closed to the dashboard. Leaving a Space is the header "openMemo" back button or a library nav item.
 - **2026-06-17** — Phases 2 + 3 shipped (frontend) and verified live in the browser: sidebar Spaces accordion, `/spaces` library, `/space/:id` home with its own header, context-aware adds, and the guarded delete. Isolation confirmed end-to-end (a note added in a Space stayed out of the library). Then a design pass on user feedback: centered + re-guttered the modal, collapse-not-hide for library collections, `+ collection` inside a Space, header no longer bleeds off the top. Added Phase 3.5: Notion-style full-bleed, user-changeable cover image per Space (backend + UI + test). 6 spaces tests green.
 - **2026-06-17** — Header polish + Phase 4 close-out: rebuilt the Space header so the cover is a block and the identity stacks below it (title can't bleed onto the cover), dropped the on-cover back button (leave via a library nav item), gave the icon a surface ring so it never butts the cover, made the sidebar search box stop resizing on collapse, and fixed the Space grid to render full-width. Status flipped to Shipped; merged to `main` and rebuilt the Docker app.
+- **2026-06-17** — Designed Phase 5 (hidden Memos inside a Space). The decision: hidden is a per-Memo flag that composes with isolation, so each workspace gets its own hidden section (`?hidden=true&workspace_id=<space>`, no new endpoint), the Space home excludes hidden and a Space collection shows it (both already true), and one global passcode gates every hidden section. Only the front-end reveal + workspace-scoped route remain to build. Written up in the "Hidden memos inside a Space" section.
