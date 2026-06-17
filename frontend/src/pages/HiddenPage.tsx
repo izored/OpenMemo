@@ -1,9 +1,10 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
+import { useParams } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { MemoGrid } from '@/components/MemoGrid';
 import { PageHeader } from '@/components/PageHeader';
 import { Icon } from '@/components/Icon';
-import { memoApi, settingsApi } from '@/lib/api';
+import { memoApi, settingsApi, spaceApi } from '@/lib/api';
 import { useAppStore } from '@/stores/appStore';
 
 // Passcode gate for the hidden section (OPNMMO-0016). Two modes:
@@ -98,18 +99,41 @@ function PassGate({ passcodeSet }: { passcodeSet: boolean }) {
   );
 }
 
+// Workspace-aware hidden section (ADR-020). One page, two surfaces:
+//   • /hidden           → the main library's hidden Memos (no workspace_id)
+//   • /space/:id/hidden → that Space's own hidden Memos (workspace_id = id)
+// Hidden composes with isolation: each workspace gets its own hidden list via
+// `?hidden=true&workspace_id=<ws>`. The passcode + session unlock stay GLOBAL —
+// unlocking once reveals every hidden section, library and Spaces alike. No new
+// backend endpoint; the existing list filters already compose.
 export function HiddenPage() {
+  // The route is the source of truth. A `:id` param means we are inside a Space.
+  const { id: spaceId } = useParams();
   const hiddenUnlocked = useAppStore((s) => s.hiddenUnlocked);
   const setHiddenUnlocked = useAppStore((s) => s.setHiddenUnlocked);
+  const { activeSpace, setActiveSpace } = useAppStore();
+
+  // Entering /space/:id/hidden keeps the store in sync so the sidebar shows the
+  // Space open; the bare /hidden route exits any Space.
+  useEffect(() => {
+    if ((spaceId || null) !== activeSpace) setActiveSpace(spaceId || null);
+  }, [spaceId, activeSpace, setActiveSpace]);
 
   const { data: appSettings, isLoading: settingsLoading } = useQuery({
     queryKey: ['settings'],
     queryFn: settingsApi.get,
   });
 
+  // Only needed inside a Space, to title the header with the Space's name.
+  const { data: space } = useQuery({
+    queryKey: ['space', spaceId],
+    queryFn: () => spaceApi.get(spaceId!),
+    enabled: !!spaceId,
+  });
+
   const { data, isLoading } = useQuery({
-    queryKey: ['memos', 'hidden-list'],
-    queryFn: () => memoApi.list({ hidden: true, limit: 200 }),
+    queryKey: ['memos', 'hidden-list', spaceId ?? 'library'],
+    queryFn: () => memoApi.list({ hidden: true, limit: 200, workspace_id: spaceId || undefined }),
     enabled: hiddenUnlocked,
   });
   const memos = data?.items ?? [];
@@ -119,12 +143,18 @@ export function HiddenPage() {
     return <PassGate passcodeSet={!!appSettings?.hidden_passcode_set} />;
   }
 
+  const scopeName = spaceId ? (space?.name || 'this Space') : null;
+
   return (
     <>
       <PageHeader
         eyebrow="Passcode-gated"
-        title="Hidden"
-        sub="Off the dashboard, still in their collections. Unhide a Memo to bring it back."
+        title={spaceId ? `Hidden in ${space?.name || 'Space'}` : 'Hidden'}
+        sub={
+          spaceId
+            ? `Tucked away inside ${scopeName}, off its home but still in their collections. Unhide a Memo to bring it back.`
+            : 'Off the dashboard, still in their collections. Unhide a Memo to bring it back.'
+        }
       >
         <button className="om-passgate-lock" onClick={() => setHiddenUnlocked(false)} title="Lock the hidden section">
           <Icon name="eye" size={13} />
@@ -144,7 +174,11 @@ export function HiddenPage() {
           <div className="om-empty-mark">
             <Icon name="eye" size={24} />
           </div>
-          <p>Nothing hidden. Use Hide on a card’s delete prompt to tuck it away.</p>
+          <p>
+            {spaceId
+              ? 'Nothing hidden in this Space. Use Hide on a card’s delete prompt to tuck it away here.'
+              : 'Nothing hidden. Use Hide on a card’s delete prompt to tuck it away.'}
+          </p>
         </div>
       ) : (
         <MemoGrid memos={memos} />

@@ -5289,6 +5289,10 @@ button.om-add-link { background: none; border: 0; padding: 0; cursor: pointer; f
 }
 .om-space-add-coll:hover { background: var(--surface-2); color: var(--text-2); }
 .om-space-add-coll svg { flex-shrink: 0; }
+/* Quiet dwell-revealed hidden entry for the open Space (ADR-020): even fainter
+   than New collection, lowercase, fades in. */
+.om-space-hidden-reveal { color: var(--text-4); opacity: 0.7; animation: om-hidden-reveal-in .25s ease; }
+.om-space-hidden-reveal:hover { opacity: 1; color: var(--text-2); }
 
 /* "Create your first Space" — small, left-aligned, subtle (not a big black
    default button). Matches the quiet weight of a collection row. */

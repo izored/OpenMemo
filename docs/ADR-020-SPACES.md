@@ -129,12 +129,12 @@ Living checklist. I tick items as they merge and date each entry. `[ ]` todo, `[
 - [x] ADR Status → Shipped
 - [ ] Mobile drawer behavior for the Spaces accordion (ADR-009) — deferred, revisit on the next responsive pass
 
-### Phase 5 — Hidden memos inside a Space  (designed, not yet built)
+### Phase 5 — Hidden memos inside a Space  ✅ done 2026-06-17
 - [x] Decision written: hidden composes with isolation; per-workspace hidden section; one global passcode (see "Hidden memos inside a Space")
 - [x] Backend confirmed: no new endpoint — `?hidden=true&workspace_id=<space>` already composes
-- [ ] `HiddenPage` becomes workspace-aware (reads active workspace, lists its hidden Memos)
-- [ ] Route `/space/:id/hidden` + a per-Space reveal gesture, behind the existing passcode + session unlock
-- [ ] Verify: a Space's hidden Memo stays out of the library hidden section and the Space home, shows inside its collection
+- [x] `HiddenPage` becomes workspace-aware (reads the `:id` route param, lists that workspace's hidden Memos; `/hidden` stays the library)
+- [x] Route `/space/:id/hidden` + a per-Space reveal gesture (dwell on the open Space's "New collection" row), behind the existing passcode + session unlock
+- [x] Verify: a Space's hidden Memo stays out of the library hidden section and the Space home, and shows inside its collection — `backend/tests/test_spaces_isolation.py::test_hidden_memo_inside_a_space_stays_isolated`
 
 ### Entries
 - **2026-06-17** — ADR written. Decisions locked with the user: Workspace-backed (one DB), fully isolated from the main dashboard, context-aware adds, destructive delete behind a two-step + typed-sentence confirm with a pre-delete backup. Starting Phase 1.
@@ -143,3 +143,4 @@ Living checklist. I tick items as they merge and date each entry. `[ ]` todo, `[
 - **2026-06-17** — Phases 2 + 3 shipped (frontend) and verified live in the browser: sidebar Spaces accordion, `/spaces` library, `/space/:id` home with its own header, context-aware adds, and the guarded delete. Isolation confirmed end-to-end (a note added in a Space stayed out of the library). Then a design pass on user feedback: centered + re-guttered the modal, collapse-not-hide for library collections, `+ collection` inside a Space, header no longer bleeds off the top. Added Phase 3.5: Notion-style full-bleed, user-changeable cover image per Space (backend + UI + test). 6 spaces tests green.
 - **2026-06-17** — Header polish + Phase 4 close-out: rebuilt the Space header so the cover is a block and the identity stacks below it (title can't bleed onto the cover), dropped the on-cover back button (leave via a library nav item), gave the icon a surface ring so it never butts the cover, made the sidebar search box stop resizing on collapse, and fixed the Space grid to render full-width. Status flipped to Shipped; merged to `main` and rebuilt the Docker app.
 - **2026-06-17** — Designed Phase 5 (hidden Memos inside a Space). The decision: hidden is a per-Memo flag that composes with isolation, so each workspace gets its own hidden section (`?hidden=true&workspace_id=<space>`, no new endpoint), the Space home excludes hidden and a Space collection shows it (both already true), and one global passcode gates every hidden section. Only the front-end reveal + workspace-scoped route remain to build. Written up in the "Hidden memos inside a Space" section.
+- **2026-06-17** — Phase 5 shipped (front end). `HiddenPage` reads the `:id` route param and lists that workspace's hidden Memos (`/hidden` is still the library, `/space/:id/hidden` is the Space), behind the same global passcode + session unlock. The sidebar grew a per-Space reveal: dwelling on the open Space's "New collection" row fades in a quiet "hidden" link, mirroring the library's dwell-on-"+" gesture, scoped to the open Space. No per-Space passcode (deliberate v1 non-goal). Verified end-to-end with a new isolation test: a Space's hidden Memo stays out of the library hidden list and the Space home, shows in its own hidden list and inside its collection. Full backend suite 16 green, tsc + lint clean. Also fixed the test bootstrap so a fresh worktree runs the suite: `conftest.py` now pins `DATA_DIR` and `DATABASE_URL` to one throwaway file, since `_run_migrations` opens `DATA_DIR/openmemo.db` directly while `init_db` builds tables on `DATABASE_URL`.

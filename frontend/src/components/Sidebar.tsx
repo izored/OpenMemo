@@ -110,6 +110,34 @@ export function Sidebar() {
   };
   React.useEffect(() => cancelReveal, [cancelReveal]);
 
+  // Per-Space hidden reveal (ADR-020): the same quiet dwell gesture as the
+  // library, but scoped to the open Space. Dwelling on the open Space's "New
+  // collection" row fades in a "hidden" link that opens /space/:id/hidden. One
+  // global passcode still gates it — Spaces don't add a second secret.
+  const [spaceHiddenRevealed, setSpaceHiddenRevealed] = React.useState(false);
+  const spaceRevealTimer = React.useRef<number | null>(null);
+  const cancelSpaceReveal = React.useCallback(() => {
+    if (spaceRevealTimer.current !== null) {
+      window.clearTimeout(spaceRevealTimer.current);
+      spaceRevealTimer.current = null;
+    }
+  }, []);
+  const startSpaceReveal = () => {
+    if (spaceHiddenRevealed) return;
+    cancelSpaceReveal();
+    spaceRevealTimer.current = window.setTimeout(() => setSpaceHiddenRevealed(true), 1500);
+  };
+  const hideSpaceReveal = () => {
+    cancelSpaceReveal();
+    setSpaceHiddenRevealed(false);
+  };
+  React.useEffect(() => cancelSpaceReveal, [cancelSpaceReveal]);
+  // Leaving a Space drops any revealed Space-hidden affordance.
+  React.useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- intentional: leaving a Space resets its dwell-revealed hidden link
+    if (!activeSpace) setSpaceHiddenRevealed(false);
+  }, [activeSpace]);
+
   // Expose sidebar width as a CSS var so fixed overlays (lightbox) can clear it.
   React.useEffect(() => {
     document.documentElement.style.setProperty('--sidebar-w', sidebarCollapsed ? '76px' : '260px');
@@ -183,6 +211,14 @@ export function Sidebar() {
     setActiveSpace(spaceId);
     setActiveCollection(collId);
     navigate(`/space/${spaceId}`);
+    if (isMobile) setSidebarOpen(false);
+  };
+  // Open the open Space's own hidden section (ADR-020). Stays inside the Space.
+  const openSpaceHidden = (spaceId: string) => {
+    setActiveSpace(spaceId);
+    setActiveCollection(null);
+    hideSpaceReveal();
+    navigate(`/space/${spaceId}/hidden`);
     if (isMobile) setSidebarOpen(false);
   };
   const editCollection = (e: React.MouseEvent, col: Collection) => {
@@ -315,7 +351,7 @@ export function Sidebar() {
                     <Icon name={open ? 'chevronDown' : 'chevronRight'} size={12} className="om-coll-count" />
                   </button>
                   {open && (
-                    <div className="om-space-collections">
+                    <div className="om-space-collections" onMouseLeave={hideSpaceReveal}>
                       {spaceCollections.length === 0 && (
                         <span className="om-space-empty mono">No collections yet</span>
                       )}
@@ -333,11 +369,25 @@ export function Sidebar() {
                       <button
                         className="om-space-add-coll"
                         onClick={() => { setEditingCollection(null); setCollectionModalOpen(true); }}
+                        onMouseEnter={startSpaceReveal}
+                        onMouseLeave={cancelSpaceReveal}
                         title={`New collection in ${s.name}`}
                       >
                         <Icon name="plus" size={11} />
                         <span>New collection</span>
                       </button>
+                      {/* Quiet dwell-to-reveal hidden entry for THIS Space — mirrors
+                          the library gesture, scoped to the open Space (ADR-020). */}
+                      {spaceHiddenRevealed && (
+                        <button
+                          className="om-space-add-coll om-space-hidden-reveal mono"
+                          onClick={() => openSpaceHidden(s.id)}
+                          title={`Open the hidden section in ${s.name}`}
+                        >
+                          <Icon name="eye" size={11} />
+                          <span>hidden</span>
+                        </button>
+                      )}
                     </div>
                   )}
                 </div>
