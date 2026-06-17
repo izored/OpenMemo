@@ -97,6 +97,24 @@ export interface MusicPlaylist {
   progress: { total: number; done: number; error: number; pending: number; active?: boolean };
 }
 
+/** A Space (ADR-020): a Workspace with kind='space'. A separate, hidden area
+ *  above collections, isolated by workspace_id but living in the same DB. */
+export interface Space {
+  id: string;
+  name: string;
+  emoji?: string | null;
+  icon?: string | null;
+  color?: string | null;
+  description?: string | null;
+  /** Notion-style full-bleed cover image URL (cache-busted), or null. */
+  cover_url?: string | null;
+  pinned: boolean;
+  sort_order: number;
+  created_at: string | null;
+  /** Live memo + collection counts (present on list/get). */
+  counts?: { memos: number; collections: number };
+}
+
 export interface ChatMessage {
   id: string;
   role: 'user' | 'assistant' | 'system';

@@ -235,7 +235,7 @@ input, textarea { font: inherit; color: inherit; }
 
 .om-sidebar-search {
   display: flex; align-items: center; gap: 10px;
-  height: 36px; padding: 0 12px; margin: 0 0 16px;
+  height: 36px; flex-shrink: 0; padding: 0 12px; margin: 0 0 16px;
   border-radius: 10px;
   background: var(--surface);
   border: 1px solid var(--border);
@@ -5254,3 +5254,224 @@ button.om-add-link { background: none; border: 0; padding: 0; cursor: pointer; f
     animation: omScrimIn .2s ease;
   }
 }
+
+/* ── Spaces (ADR-020) ─────────────────────────────────────────────────────
+   A Space is a walled project area above collections. Sidebar accordion +
+   a dedicated detail header. Tokens only (dark-mode safe). */
+
+/* Sidebar Spaces section */
+.om-spaces-section .om-collections-head-actions { display: flex; gap: 2px; }
+.om-space-group { display: flex; flex-direction: column; }
+.om-space-row { grid-template-columns: 18px 1fr auto; }
+.om-space-row-emoji {
+  font-size: 14px; line-height: 1; width: 18px; text-align: center;
+  font-family: "Apple Color Emoji", "Segoe UI Emoji", "Noto Color Emoji", sans-serif;
+}
+.om-space-group.open > .om-space-row {
+  background: var(--surface-2); color: var(--text); font-weight: 500;
+}
+/* The open Space's collections drop in beneath it, set in slightly. */
+.om-space-collections {
+  display: flex; flex-direction: column; gap: 1px;
+  margin: 2px 0 4px 14px;
+  padding-left: 8px;
+  border-left: 1px solid var(--border, var(--surface-2));
+  animation: omSpaceDrop .18s ease;
+}
+@keyframes omSpaceDrop { from { opacity: 0; transform: translateY(-3px); } to { opacity: 1; transform: none; } }
+.om-space-coll { grid-template-columns: 8px 1fr auto; height: 28px; font-size: 12.5px; }
+.om-space-empty { padding: 4px 12px; font-size: 11px; color: var(--text-4); }
+.om-space-add-coll {
+  display: flex; align-items: center; gap: 7px;
+  width: 100%; height: 28px; padding: 0 12px; border-radius: 8px;
+  font-size: 12px; color: var(--text-4); text-align: left; background: transparent;
+  transition: background .15s, color .15s;
+}
+.om-space-add-coll:hover { background: var(--surface-2); color: var(--text-2); }
+.om-space-add-coll svg { flex-shrink: 0; }
+
+/* "Create your first Space" — small, left-aligned, subtle (not a big black
+   default button). Matches the quiet weight of a collection row. */
+.om-space-empty-cta {
+  display: flex; align-items: center; gap: 7px;
+  width: 100%; height: 30px; padding: 0 12px;
+  border-radius: 8px; background: transparent;
+  font-size: 12.5px; color: var(--text-3); text-align: left;
+  transition: background .15s, color .15s;
+}
+.om-space-empty-cta:hover { background: var(--surface-2); color: var(--text); }
+.om-space-empty-cta svg { color: var(--text-4); flex-shrink: 0; }
+
+/* Collapsible Collections header label (chevron + word). Looks like the plain
+   section label, but is a toggle. */
+.om-coll-collapse-toggle {
+  display: inline-flex; align-items: center; gap: 5px;
+  background: transparent; color: var(--text-4);
+  font-size: 10.5px; letter-spacing: 0.08em; text-transform: uppercase;
+}
+.om-coll-collapse-toggle:hover { color: var(--text-2); }
+.om-coll-collapse-toggle svg { opacity: 0.7; }
+
+/* Add-panel chip: shows the Space adds will land in */
+.om-add-space-chip {
+  display: inline-flex; align-items: center; gap: 4px;
+  padding: 2px 8px; border-radius: 999px;
+  font-size: 10.5px; color: var(--text-2);
+  background: var(--accent-soft); border: 1px solid var(--accent);
+  max-width: 160px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+
+/* Space detail page header — distinct from the shared PageHeader.
+   Block (not flex) so the memo grid lays out full-width exactly like the
+   Dashboard; a flex column made the masonry shrink to its content. */
+.om-space-page { display: block; }
+.om-space-header {
+  position: relative; margin: 22px 0; /* clear the viewport top, breathe below */
+  border-radius: 16px; overflow: hidden;
+  background: var(--surface);
+  border: 1px solid var(--surface-2);
+}
+/* Band is a normal block: the identity stacks BELOW it, so the title can never
+   bleed onto the cover. The emoji is the only thing that overlaps (lifted up). */
+.om-space-header-band {
+  position: relative; width: 100%; height: 104px;
+  background-size: cover; background-position: center; background-repeat: no-repeat;
+}
+.om-space-header.has-cover { border-color: transparent; }
+.om-space-header.has-cover .om-space-header-band { height: 184px; }
+/* Legibility scrim at the top of a cover so the edit control always reads. */
+.om-space-header.has-cover .om-space-header-band::before {
+  content: ''; position: absolute; inset: 0 0 auto 0; height: 64px;
+  background: linear-gradient(rgba(0,0,0,.3), rgba(0,0,0,0));
+  pointer-events: none;
+}
+/* Edit — top-right of the band, always visible. */
+.om-space-edit {
+  position: absolute; top: 12px; right: 14px; z-index: 3;
+  width: 30px; height: 30px; border-radius: 8px;
+  display: flex; align-items: center; justify-content: center;
+  color: #fff; background: rgba(0,0,0,0.3); backdrop-filter: blur(6px);
+  transition: background .15s;
+}
+.om-space-edit:hover { background: rgba(0,0,0,0.5); }
+/* Cover controls — bottom-right, fade in on header hover. */
+.om-space-cover-actions {
+  position: absolute; bottom: 12px; right: 14px; display: flex; gap: 6px; z-index: 2;
+  opacity: 0; transition: opacity .18s;
+}
+.om-space-header:hover .om-space-cover-actions { opacity: 1; }
+.om-space-cover-btn {
+  display: inline-flex; align-items: center; gap: 5px;
+  height: 28px; padding: 0 10px; border-radius: 8px;
+  font-size: 11.5px; color: #fff; background: rgba(0,0,0,.32); backdrop-filter: blur(6px);
+  transition: background .15s;
+}
+.om-space-cover-btn:hover { background: rgba(0,0,0,.5); }
+.om-space-cover-btn:disabled { opacity: .6; cursor: default; }
+/* Identity sits on the solid header below the band. The emoji is lifted with a
+   negative top margin so it straddles the band edge (Notion-style), while the
+   title + description stay fully on the solid area. */
+.om-space-identity {
+  position: relative; display: flex; align-items: flex-end; gap: 16px;
+  padding: 14px 22px 20px; background: var(--surface);
+}
+.om-space-emoji {
+  flex-shrink: 0; margin-top: -46px;
+  font-size: 40px; line-height: 1;
+  width: 76px; height: 76px; border-radius: 18px;
+  display: flex; align-items: center; justify-content: center;
+  background: var(--surface);
+  /* A surface-colored ring separates the tile from the cover so its background
+     never butts straight against the image (Notion "cut-out" look). */
+  box-shadow: 0 0 0 5px var(--surface), 0 8px 22px rgba(0,0,0,0.18);
+  font-family: "Apple Color Emoji", "Segoe UI Emoji", "Noto Color Emoji", sans-serif;
+}
+.om-space-identity-text { flex: 1; min-width: 0; padding-bottom: 2px; }
+.om-space-name { font-size: 26px; font-weight: 650; color: var(--text); margin: 0 0 2px; letter-spacing: -0.01em; }
+.om-space-sub { font-size: 13px; color: var(--text-3); margin: 0; max-width: 60ch; }
+.om-space-stats { flex-shrink: 0; display: flex; flex-direction: column; gap: 2px; text-align: right; font-size: 11px; color: var(--text-4); padding-bottom: 2px; }
+.om-link-btn { color: var(--accent); text-decoration: underline; }
+
+/* Space card glyph (Spaces library grid) */
+.om-space-glyph {
+  position: absolute; right: 12px; bottom: 10px; font-size: 30px; line-height: 1;
+  filter: drop-shadow(0 2px 6px rgba(0,0,0,0.3));
+  font-family: "Apple Color Emoji", "Segoe UI Emoji", "Noto Color Emoji", sans-serif;
+}
+
+/* ── Space create/edit modal (Notion-style cover + single gutter) ─────────── */
+.om-space-modal {
+  position: relative; width: min(460px, calc(100vw - 32px));
+  max-height: calc(100vh - 64px); overflow: hidden auto;
+  background: var(--elev); border: 1px solid var(--border);
+  border-radius: var(--r-2xl); box-shadow: var(--shadow-elev);
+  animation: pop .2s cubic-bezier(.2,.7,.2,1);
+}
+.om-spm-cover {
+  position: relative; height: 124px;
+  background-size: cover; background-position: center; background-repeat: no-repeat;
+}
+.om-spm-close {
+  position: absolute; top: 12px; right: 12px;
+  width: 28px; height: 28px; border-radius: 8px;
+  display: flex; align-items: center; justify-content: center;
+  color: #fff; background: rgba(0,0,0,.3); backdrop-filter: blur(6px);
+  transition: background .15s;
+}
+.om-spm-close:hover { background: rgba(0,0,0,.48); }
+.om-spm-cover-actions { position: absolute; bottom: 10px; right: 12px; display: flex; gap: 6px; }
+.om-spm-cover-btn {
+  display: inline-flex; align-items: center; gap: 5px;
+  height: 28px; padding: 0 10px; border-radius: 8px;
+  font-size: 11.5px; color: #fff; background: rgba(0,0,0,.3); backdrop-filter: blur(6px);
+  transition: background .15s;
+}
+.om-spm-cover-btn:hover { background: rgba(0,0,0,.48); }
+.om-spm-emoji-wrap { position: absolute; left: 22px; bottom: -24px; }
+.om-spm-emoji {
+  width: 62px; height: 62px; border-radius: 16px; font-size: 32px; line-height: 1;
+  display: flex; align-items: center; justify-content: center;
+  background: var(--elev); border: 1px solid var(--border);
+  box-shadow: 0 6px 18px rgba(0,0,0,.18); cursor: pointer;
+  transition: background .15s, transform .15s;
+  font-family: "Apple Color Emoji", "Segoe UI Emoji", "Noto Color Emoji", sans-serif;
+}
+.om-spm-emoji:hover { background: var(--surface-2); transform: translateY(-1px); }
+.om-spm-emoji-picker { top: calc(100% + 8px); left: 0; }
+.om-spm-body { padding: 38px 22px 22px; display: flex; flex-direction: column; gap: 14px; }
+.om-spm-name {
+  border: 0; background: transparent; outline: none; padding: 0;
+  font-size: 22px; font-weight: 650; letter-spacing: -0.01em; color: var(--text);
+}
+.om-spm-name::placeholder { color: var(--text-4); }
+.om-spm-desc {
+  border: 0; background: transparent; outline: none; resize: none; padding: 0;
+  font-size: 13.5px; color: var(--text-2); line-height: 1.55; min-height: 20px;
+  font-family: inherit;
+}
+.om-spm-desc::placeholder { color: var(--text-4); }
+.om-spm-field { display: flex; flex-direction: column; gap: 9px; }
+.om-spm-danger { margin-top: 2px; padding-top: 14px; border-top: 1px solid var(--border); }
+.om-spm-danger-link {
+  display: inline-flex; align-items: center; gap: 6px;
+  font-size: 12.5px; color: var(--text-3); background: transparent; transition: color .15s;
+}
+.om-spm-danger-link:hover { color: #dc2626; }
+.om-spm-danger-link svg { opacity: 0.8; }
+.om-spm-confirm { display: flex; flex-direction: column; gap: 10px; }
+.om-spm-confirm-text { font-size: 12.5px; color: var(--text-3); line-height: 1.55; margin: 0; }
+.om-spm-backup {
+  display: inline-flex; align-items: center; justify-content: center; gap: 7px;
+  width: 100%; height: 38px; border-radius: 10px;
+  border: 1px solid var(--border); color: var(--text-2); font-size: 12.5px; font-weight: 500;
+  transition: background .15s, color .15s, border-color .15s;
+}
+.om-spm-backup:hover { background: var(--surface-2); color: var(--text); }
+.om-spm-backup.done { color: #059669; border-color: rgba(5,150,105,.4); background: rgba(5,150,105,.06); }
+.om-spm-confirm-row { display: flex; gap: 8px; }
+.om-spm-continue {
+  flex: 1; padding: 10px; border-radius: 99px;
+  border: 1px solid rgba(220,38,38,.35); color: #dc2626; font-size: 13px; font-weight: 600;
+  transition: background .15s;
+}
+.om-spm-continue:hover { background: rgba(220,38,38,.08); }

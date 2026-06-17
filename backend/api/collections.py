@@ -56,8 +56,10 @@ async def list_collections(
         )
     elif kind != "all":
         query = query.where(Collection.kind == kind)
-    if workspace_id:
-        query = query.where(Collection.workspace_id == sanitize_workspace_id(workspace_id))
+    # Spaces isolation (ADR-020): a missing workspace_id means the main library,
+    # not "all workspaces". A Space passes its id to get only its collections.
+    ws = sanitize_workspace_id(workspace_id) if workspace_id else "default"
+    query = query.where(Collection.workspace_id == ws)
 
     result = await db.execute(query)
     collections = result.scalars().all()

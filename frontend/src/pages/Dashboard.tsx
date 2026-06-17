@@ -105,7 +105,7 @@ export function Dashboard() {
 
   const { data: collections = [] } = useQuery({
     queryKey: ['collections'],
-    queryFn: collectionApi.list,
+    queryFn: () => collectionApi.list(),
   });
 
   const {
