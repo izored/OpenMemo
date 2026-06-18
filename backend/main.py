@@ -128,7 +128,7 @@ async def lifespan(app: FastAPI):
             # until the user makes one. Additive, idempotent.
             wcols = (await db.execute(_sql_text("PRAGMA table_info(workspaces)"))).fetchall()
             wnames = {c[1] for c in wcols}
-            for col in ("kind", "emoji", "icon", "color", "description", "cover_ext"):
+            for col in ("kind", "emoji", "icon", "color", "description", "cover_ext", "cover_pos"):
                 if col not in wnames:
                     await db.execute(_sql_text(f"ALTER TABLE workspaces ADD COLUMN {col} VARCHAR"))
             if "pinned" not in wnames:

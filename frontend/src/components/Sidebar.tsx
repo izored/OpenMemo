@@ -87,11 +87,9 @@ export function Sidebar() {
   // Library Collections collapse (not hide) when a Space opens, so the Space's
   // own collections get the room — but the header stays, with a chevron to
   // expand the library list back without leaving the Space.
+  // Library collections collapse is purely manual now (the chevron). Opening a
+  // Space no longer auto-collapses them — both stay visible.
   const [libCollapsed, setLibCollapsed] = React.useState(false);
-  React.useEffect(() => {
-    // eslint-disable-next-line react-hooks/set-state-in-effect -- intentional: opening/leaving a Space drives the library-collections collapse default
-    setLibCollapsed(!!activeSpace);
-  }, [activeSpace]);
   const revealTimer = React.useRef<number | null>(null);
   const cancelReveal = React.useCallback(() => {
     if (revealTimer.current !== null) {
