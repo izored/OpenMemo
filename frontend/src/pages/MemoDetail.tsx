@@ -40,7 +40,7 @@ import { memoApi, collectionApi } from '@/lib/api';
 import { AskMemoPanel } from '@/components/AskMemoPanel';
 import { useIsMobile } from '@/lib/useBreakpoint';
 import { audioEmbed, audioPlatformMeta, canMakeLocal, canTranscript, canSummarize, audioKind } from '@/lib/media';
-import { videoEmbedUrl, embedAspectRatio, platformMeta } from '@/lib/platforms';
+import { videoEmbedUrl, embedKind, platformMeta } from '@/lib/platforms';
 import { useAppStore } from '@/stores/appStore';
 import { useAudioPlayer, formatTime } from '@/lib/audioPlayer';
 import { useCoverMood } from '@/lib/coverMood';
@@ -209,6 +209,70 @@ function MediaPreview({ src, alt, kind, poster, seek, theater: theaterProp, onTh
         </div>
       )}
     </>
+  );
+}
+
+// Inline platform embed for video-type memos (YouTube, Vimeo, Instagram, TikTok,
+// X, …). Three shapes, driven by the platform registry (embedKind):
+//   - 'video'    fixed 16/9 frame
+//   - 'portrait' fixed 9/16 frame (width-capped, centered)
+//   - 'card'     variable-height post (X/Twitter) — the frame auto-grows to the
+//                tweet's own height (reported via postMessage) so it never clips.
+// A clicked transcript/summary timestamp appends ?start= and reloads the iframe
+// (keyed by the seek nonce) to seek + autoplay.
+function PlatformEmbed({ memo, src, kind, seek }: { memo: Memo; src: string; kind: 'video' | 'portrait' | 'card'; seek?: SeekSignal | null }) {
+  const url = seek ? src + (src.includes('?') ? '&' : '?') + `start=${seek.sec}&autoplay=1` : src;
+  // Card embeds (X/Twitter) report their content height to the parent via
+  // postMessage. Start at a sensible height, then track the real one.
+  const [cardHeight, setCardHeight] = useState(560);
+  useEffect(() => {
+    if (kind !== 'card') return;
+    const onMsg = (e: MessageEvent) => {
+      if (e.origin !== 'https://platform.twitter.com') return;
+      let data: unknown = e.data;
+      if (typeof data === 'string') {
+        try { data = JSON.parse(data); } catch { return; }
+      }
+      const embed = (data as { ['twttr.embed']?: { method?: string; params?: { height?: number }[] } })?.['twttr.embed'];
+      if (embed?.method === 'twttr.private.resize') {
+        const h = embed.params?.[0]?.height;
+        if (typeof h === 'number' && h > 0) setCardHeight(h);
+      }
+    };
+    window.addEventListener('message', onMsg);
+    return () => window.removeEventListener('message', onMsg);
+  }, [kind]);
+
+  if (kind === 'card') {
+    return (
+      <div className="om-video-embed om-video-embed--card" style={{ marginBottom: '24px' }}>
+        <iframe
+          key={seek?.nonce ?? 'base'}
+          src={url}
+          title={memo.title}
+          allow="autoplay; encrypted-media; picture-in-picture; fullscreen"
+          allowFullScreen
+          scrolling="no"
+          style={{ height: cardHeight }}
+        />
+      </div>
+    );
+  }
+
+  return (
+    <div
+      className={`om-video-embed${kind === 'portrait' ? ' om-video-embed--portrait' : ''}`}
+      style={{ marginBottom: '24px', aspectRatio: kind === 'portrait' ? '9/16' : '16/9' }}
+    >
+      <iframe
+        key={seek?.nonce ?? 'base'}
+        src={url}
+        allow="autoplay; encrypted-media; picture-in-picture; fullscreen"
+        allowFullScreen
+        scrolling="no"
+        title={memo.title}
+      />
+    </div>
   );
 }
 
@@ -1447,7 +1511,7 @@ export function MemoDetail() {
   // platform in the registry — YouTube, Vimeo, Instagram, TikTok, etc. Null →
   // no embeddable player; the "Make it local" panel + Open Original still show.
   const videoEmbed = memo.type === 'video' && !memo.file_path ? videoEmbedUrl(memo) : null;
-  const videoEmbedRatio = videoEmbed ? embedAspectRatio(memo) : '16/9';
+  const videoEmbedKind = videoEmbed ? embedKind(memo) : 'video';
   const isWebType = memo.type === 'article' || memo.type === 'link';
 
   // Tool rail (OPNMMO-0042): AI Summary + Make-it-local + future tools hug the
@@ -1797,28 +1861,14 @@ export function MemoDetail() {
               )
             )}
 
-            {/* Inline platform embed (YouTube, Vimeo, Instagram, TikTok, …) */}
+            {/* Inline platform embed (YouTube, Vimeo, Instagram, TikTok, X, …) */}
             {videoEmbed && !isEditing && (
-              <div
-                className={`om-video-embed${videoEmbedRatio === '9/16' ? ' om-video-embed--portrait' : ''}`}
-                style={{ marginBottom: '24px', aspectRatio: videoEmbedRatio }}
-              >
-                {/* A clicked transcript/summary timestamp appends ?start= and
-                    reloads the iframe (keyed by nonce) to seek + autoplay. */}
-                <iframe
-                  key={videoSeek?.nonce ?? 'base'}
-                  src={videoSeek ? videoEmbed + (videoEmbed.includes('?') ? '&' : '?') + `start=${videoSeek.sec}&autoplay=1` : videoEmbed}
-                  allow="autoplay; encrypted-media; picture-in-picture; fullscreen"
-                  allowFullScreen
-                  scrolling="no"
-                  title={memo.title}
-                />
-              </div>
+              <PlatformEmbed memo={memo} src={videoEmbed} kind={videoEmbedKind} seek={videoSeek} />
             )}
 
             {/* Portrait-platform hint: Instagram/TikTok embeds carry full platform UI.
                 Nudge user toward Make it Local for a clean native player. */}
-            {videoEmbed && !isEditing && videoEmbedRatio === '9/16' && canMakeLocal(memo) && !memo.file_path && (
+            {videoEmbed && !isEditing && videoEmbedKind === 'portrait' && canMakeLocal(memo) && !memo.file_path && (
               <p className="om-detail-desc" style={{ marginBottom: 16, marginTop: -8 }}>
                 Want just the video without the platform UI? Save locally below for a clean native player.
               </p>

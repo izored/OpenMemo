@@ -111,7 +111,7 @@ export function randomBlobPositions(): [number, number][] {
 export interface Tweaks {
   theme: 'light' | 'dark';
   accent: string;
-  cardStyle: 'minimal' | 'normal';
+  cardStyle: 'minimal' | 'normal' | 'edge';
   density: 'compact' | 'comfy' | 'roomy';
   typePair: 'satoshi' | 'general' | 'cabinet';
   layout: 'boxed' | 'full';
@@ -137,8 +137,12 @@ export interface Tweaks {
   bgSolid: string;
   cloudSpeed: number;
   cloudFullness: number;
+  // Intensity is no longer user-facing — frozen at 0 (the cloud renderer reads a
+  // hardcoded 0). Kept on the type so saved tweaks still parse.
   cloudIntensity: number;
   cloudSize: number;
+  // Optional blur over the cloud canvas (px). 0 = crisp clouds.
+  cloudBlur: number;
   // Sky gradient bias (0..1): low pins the zenith color to the very top, high
   // spreads it down toward the horizon. Drives the shader + the static-sky CSS.
   skyGradient: number;
@@ -212,6 +216,8 @@ export function applyTweaks(t: Tweaks) {
   // on TOP of — so if the shader is missing or still booting, a day-appropriate
   // sky shows instead of a blank panel (mandatory graceful fallback).
   root.style.setProperty('--bg-solid', t.bgSolid || '#0E1116');
+  // Optional blur over the cloud canvas (Cloud mode only). 0 keeps clouds crisp.
+  root.style.setProperty('--cloud-blur', `${t.cloudBlur ?? 0}px`);
   const sky = resolveSky(t.skyBand || 'auto', resolveTheme(t.theme) !== 'light');
   root.style.setProperty('--sky-bottom', skyCss(sky.bottom));
   root.style.setProperty('--sky-top', skyCss(sky.top));
@@ -246,11 +252,12 @@ export const DEFAULT_TWEAKS: Tweaks = {
   customAccents: ['', ''],
   blobSpeed: 2,
   bgSolid: '#0E1116',
-  cloudSpeed: 0.35,
-  cloudFullness: 0.6,
-  cloudIntensity: 0.6,
-  cloudSize: 0.75,
-  skyGradient: 0.5,
+  cloudSpeed: 0.1,
+  cloudFullness: 0.5,
+  cloudIntensity: 0,
+  cloudSize: 1,
+  cloudBlur: 0,
+  skyGradient: 0.8,
   skyBand: 'auto',
   playerSize: 'small',
 };

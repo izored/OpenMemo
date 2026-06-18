@@ -1,7 +1,7 @@
 // Onboarding flow — data-driven so the tour can be reshaped without touching
 // component logic. Bump STORAGE_KEY to re-show the tour after a big change.
 
-export const ONBOARDING_VERSION = 1;
+export const ONBOARDING_VERSION = 2;
 export const ONBOARDING_KEY = `openmemo_onboarded_v${ONBOARDING_VERSION}`;
 
 export interface TourStep {
@@ -33,20 +33,48 @@ export const TOUR_STEPS: TourStep[] = [
     placement: 'left',
     gate: 'panelOpen',
     morphTarget: '.om-add-panel.open',
-    gateBody: 'Save a link, note, file, or voice memo — or press N anytime. Hit Next when ready.',
+    gateBody: 'Save a link, note, file, or voice memo (or press N anytime). Hit Next when ready.',
+  },
+  {
+    id: 'library',
+    title: 'All Memos is your library',
+    body: 'Everything you save lands here, in one place. This is home: the full library, newest first.',
+    target: '[data-tour="nav-home"]',
+    placement: 'right',
+  },
+  {
+    id: 'collections',
+    title: 'Collections group your library',
+    body: 'Collections are labels for sorting the library, not separate boxes. A Memo can sit in several. Drag a card onto one in the sidebar to file it.',
+    target: '.om-collections-head',
+    placement: 'right',
+  },
+  {
+    id: 'spaces',
+    title: 'Spaces wall off a project',
+    body: 'A Space is its own area with its own Memos and collections, kept out of the main library so everyday stuff stays clean. Open one to expand it; adds you make inside it land in it. Deleting a Space is the one thing you cannot undo, so it asks twice.',
+    target: '.om-spaces-section',
+    placement: 'right',
+  },
+  {
+    id: 'hidden',
+    title: 'A quiet hidden corner',
+    body: 'Some Memos are nobody else’s business. Dwell on the + next to Collections and a faint "hidden" link fades in: that is the way into a passcode-locked section. Each Space keeps its own, and one passcode opens them all.',
+    target: '.om-collections-head',
+    placement: 'right',
+  },
+  {
+    id: 'music',
+    title: 'Music has its own room',
+    body: 'Saved audio lives on the Music page. Paste a Spotify or Apple Music link for a lossless copy, build playlists, and play from the sidebar while you browse.',
+    target: '[data-tour="nav-music"]',
+    placement: 'right',
   },
   {
     id: 'search',
     title: 'Find it fast',
     body: 'Search across everything with ⌘K. Titles, content, and domains.',
     target: '.om-sidebar-search',
-    placement: 'right',
-  },
-  {
-    id: 'collections',
-    title: 'Organise with collections',
-    body: 'Group Memos into collections. Drag a card onto one in the sidebar to file it.',
-    target: '.om-sidebar-nav',
     placement: 'right',
   },
   {

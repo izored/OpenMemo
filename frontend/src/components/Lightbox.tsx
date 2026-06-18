@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { Icon } from './Icon';
 import { useAppStore } from '@/stores/appStore';
 import { mediaSrc } from '@/lib/media';
-import { videoEmbedUrl, embedAspectRatio } from '@/lib/platforms';
+import { videoEmbedUrl, embedKind } from '@/lib/platforms';
 
 // Single shared lightbox for the whole app. Reads the active media group +
 // index from the store so arrow keys / on-screen arrows page between memos.
@@ -36,11 +36,18 @@ export function Lightbox() {
   // Autoplay is right here: the user explicitly clicked the card to play.
   const embed = memo.type === 'video' && !localVideo ? videoEmbedUrl(memo, { autoplay: true }) : null;
   const hasPrevNext = group.length > 1;
-  const ratio = embed ? embedAspectRatio(memo) : '16/9';
-  const isPortrait = ratio === '9/16';
-  const embedStyle: CSSProperties = isPortrait
-    ? { height: 'min(85vh, 720px)', aspectRatio: '9/16', width: 'auto', border: 0, borderRadius: 12, boxShadow: '0 30px 80px rgba(0,0,0,0.5)' }
-    : { width: 'min(90vw, 1280px)', aspectRatio: '16/9', border: 0, borderRadius: 12, boxShadow: '0 30px 80px rgba(0,0,0,0.5)' };
+  // Size relative to the overlay (which is already inset by the sidebar via
+  // --sidebar-w in CSS) rather than the raw viewport — so the embed stays centered
+  // in the visible area whether the sidebar is open or collapsed. Widths use 100%
+  // (of the inset overlay), not vw (the full window).
+  const kind = embed ? embedKind(memo) : 'video';
+  const shadow = '0 30px 80px rgba(0,0,0,0.5)';
+  const embedStyle: CSSProperties =
+    kind === 'portrait'
+      ? { height: 'min(85vh, 720px)', aspectRatio: '9/16', width: 'auto', maxWidth: '100%', border: 0, borderRadius: 12, boxShadow: shadow }
+      : kind === 'card'
+      ? { width: 'min(100%, 550px)', height: 'min(85vh, 800px)', border: 0, borderRadius: 12, boxShadow: shadow, background: '#15202b' }
+      : { width: 'min(100%, 1280px)', aspectRatio: '16/9', maxHeight: '85vh', border: 0, borderRadius: 12, boxShadow: shadow };
 
   return (
     <div className="om-lightbox" role="dialog" aria-modal="true" onClick={close}>
@@ -61,7 +68,7 @@ export function Lightbox() {
             title={memo.title}
             allow="autoplay; encrypted-media; picture-in-picture; fullscreen"
             allowFullScreen
-            scrolling="no"
+            scrolling={kind === 'card' ? 'auto' : 'no'}
             onClick={(e) => e.stopPropagation()}
             style={embedStyle}
           />

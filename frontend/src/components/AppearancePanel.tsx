@@ -177,10 +177,11 @@ export function AppearancePanel() {
             <p>Card style</p>
             <span className="mono">How Memos render in the grid</span>
           </div>
-          <div className="om-add-segment two" role="tablist">
+          <div className="om-add-segment" role="tablist">
             {[
               { v: 'normal', l: 'Normal', star: false },
               { v: 'minimal', l: 'Minimal', star: true },
+              { v: 'edge', l: 'Edge', star: false },
             ].map((o) => (
               <button
                 key={o.v}
@@ -266,7 +267,7 @@ export function AppearancePanel() {
         <div className="om-ap-row">
           <div className="om-ap-label">
             <p>Custom background</p>
-            <span className="mono">Color, drifting clouds, or a wallpaper</span>
+            <span className="mono">Color, clouds, or wallpaper</span>
           </div>
           <div className="om-ap-bg">
             <div className="om-add-segment" role="tablist">
@@ -327,11 +328,10 @@ export function AppearancePanel() {
                   ))}
                 </div>
                 {([
-                  { k: 'cloudSpeed', l: 'Speed', d: 0.35 },
-                  { k: 'cloudFullness', l: 'Fullness', d: 0.6 },
-                  { k: 'cloudIntensity', l: 'Intensity', d: 0.6 },
-                  { k: 'cloudSize', l: 'Size', d: 0.75 },
-                  { k: 'skyGradient', l: 'Gradient', d: 0.5 },
+                  { k: 'cloudSpeed', l: 'Speed', d: 0.1 },
+                  { k: 'cloudFullness', l: 'Fullness', d: 0.5 },
+                  { k: 'cloudSize', l: 'Size', d: 1 },
+                  { k: 'skyGradient', l: 'Gradient', d: 0.8 },
                 ] as const).map((s) => (
                   <div key={s.k} className="om-ap-blur-row">
                     <span className="mono om-ap-blur-label">
@@ -349,6 +349,20 @@ export function AppearancePanel() {
                     />
                   </div>
                 ))}
+                {/* Blur replaces the old Intensity control — softens the clouds. */}
+                <div className="om-ap-blur-row">
+                  <span className="mono om-ap-blur-label">Blur — {Math.round(t.cloudBlur ?? 0)}px</span>
+                  <input
+                    type="range"
+                    min={0}
+                    max={60}
+                    step={1}
+                    value={t.cloudBlur ?? 0}
+                    onChange={(e) => setTweak('cloudBlur', parseInt(e.target.value))}
+                    className="om-ap-range"
+                    aria-label="Cloud blur"
+                  />
+                </div>
               </div>
             )}
 
