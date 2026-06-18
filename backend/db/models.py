@@ -63,6 +63,9 @@ class Workspace(Base):
     # the file lives at DATA_DIR/space_covers/<id>.<ext> and is served by the
     # spaces API. NULL = no cover, the header falls back to the color gradient.
     cover_ext = Column(String, nullable=True)
+    # Cover focal point as a CSS background-position string (e.g. "50% 30%") so
+    # the user can reposition a cover that does not frame well. NULL = "50% 50%".
+    cover_pos = Column(String, nullable=True)
     pinned = Column(Boolean, default=False)
     sort_order = Column(Integer, default=0)
     created_at = Column(DateTime, default=datetime.utcnow)

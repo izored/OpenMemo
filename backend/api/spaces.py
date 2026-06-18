@@ -72,6 +72,7 @@ class SpaceUpdate(BaseModel):
     icon: Optional[str] = None
     color: Optional[str] = None
     description: Optional[str] = None
+    cover_pos: Optional[str] = None
     pinned: Optional[bool] = None
     sort_order: Optional[int] = None
 
@@ -112,6 +113,7 @@ def _space_dict(w: Workspace, counts: Optional[dict] = None) -> dict:
         # without a stale browser cache. NULL cover_ext → no cover_url, the
         # header uses the color band.
         "cover_url": _cover_url(w),
+        "cover_pos": w.cover_pos,
         "pinned": bool(w.pinned),
         "sort_order": w.sort_order or 0,
         "created_at": w.created_at.isoformat() if w.created_at else None,
@@ -173,7 +175,7 @@ async def update_space(space_id: str, data: SpaceUpdate, db: AsyncSession = Depe
     space = await db.get(Workspace, space_id)
     if not space or space.kind != "space":
         raise HTTPException(status_code=404, detail="Space not found")
-    for field in ("name", "emoji", "icon", "color", "description", "pinned", "sort_order"):
+    for field in ("name", "emoji", "icon", "color", "description", "cover_pos", "pinned", "sort_order"):
         val = getattr(data, field)
         if val is not None:
             setattr(space, field, val)

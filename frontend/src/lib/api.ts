@@ -425,7 +425,7 @@ export const spaceApi = {
   get: (id: string) => fetchJSON<import('@/types').Space>(`/spaces/${id}`),
   create: (data: { name: string; emoji?: string; icon?: string; color?: string; description?: string }) =>
     fetchJSON<import('@/types').Space>('/spaces', { method: 'POST', body: JSON.stringify(data) }),
-  update: (id: string, data: Partial<{ name: string; emoji: string; icon: string; color: string; description: string; pinned: boolean; sort_order: number }>) =>
+  update: (id: string, data: Partial<{ name: string; emoji: string; icon: string; color: string; description: string; cover_pos: string; pinned: boolean; sort_order: number }>) =>
     fetchJSON<import('@/types').Space>(`/spaces/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
   // Destructive: deletes the Space, its collections, AND all its memos. The
   // server refuses unless confirm_name matches the Space's exact name.

@@ -22,10 +22,11 @@ import { PageHeader } from '@/components/PageHeader';
 import { Icon } from '@/components/Icon';
 import { useAppStore } from '@/stores/appStore';
 import { memoApi, collectionApi } from '@/lib/api';
+import { MEMO_FILTERS, filterToParams, type MemoFilterDef } from '@/lib/memoFilters';
 import { cn } from '@/lib/utils';
 import type { Collection } from '@/types';
 
-interface FilterDef { id: string; label: string }
+type FilterDef = MemoFilterDef;
 
 // One draggable filter tab. distance:8 on the sensor keeps plain clicks
 // (selecting a filter) working — only a real drag starts a reorder.
@@ -58,21 +59,9 @@ function SortableFilterTab({ f, active, onSelect }: { f: FilterDef; active: bool
   );
 }
 
-const FILTERS = [
-  { id: 'all', label: 'All' },
-  { id: 'note', label: 'Notes' },
-  { id: 'link', label: 'Links' },
-  { id: 'image', label: 'Images' },
-  { id: 'video', label: 'Videos' },
-  // The old Audio tab split in two (OPNMMO-0023): `type:audio_kind` ids map to
-  // the server's audio_kind filter — music and voice are different things.
-  { id: 'audio:music', label: 'Music' },
-  { id: 'audio:voice', label: 'Voice' },
-  { id: 'code', label: 'Code' },
-  // Files = real documents + generic uploads. Code and audio are their own
-  // tabs. Comma group expands server-side into a Memo.type IN (...) filter.
-  { id: 'document,file', label: 'Files' },
-];
+// The filter set + the id→params mapping live in @/lib/memoFilters so the
+// Space home (SpacePage) shows the exact same tabs.
+const FILTERS = MEMO_FILTERS;
 
 export function Dashboard() {
   const { activeFilter, setActiveFilter, activeCollection, setActiveCollection, filterOrder, setFilterOrder } = useAppStore();
@@ -117,14 +106,9 @@ export function Dashboard() {
   } = useInfiniteQuery({
     queryKey: ['memos', activeFilter, activeCollection],
     queryFn: ({ pageParam }) => {
-      const params: { type?: string; audio_kind?: 'voice' | 'music'; collection_id?: string; offset?: number } = {};
-      if (activeFilter !== 'all') {
-        // `type:audio_kind` ids (Music / Voice tabs) carry the audio sub-kind
-        // after the colon; everything else is a plain type (group) filter.
-        const [type, kind] = activeFilter.split(':');
-        params.type = type;
-        if (kind === 'voice' || kind === 'music') params.audio_kind = kind;
-      }
+      const params: { type?: string; audio_kind?: 'voice' | 'music'; collection_id?: string; offset?: number } = {
+        ...filterToParams(activeFilter),
+      };
       if (activeCollection) params.collection_id = activeCollection;
       params.offset = pageParam;
       return memoApi.list(params);

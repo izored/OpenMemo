@@ -108,6 +108,8 @@ export interface Space {
   description?: string | null;
   /** Notion-style full-bleed cover image URL (cache-busted), or null. */
   cover_url?: string | null;
+  /** CSS background-position for the cover focal point (e.g. "50% 30%"), or null = centered. */
+  cover_pos?: string | null;
   pinned: boolean;
   sort_order: number;
   created_at: string | null;
