@@ -2525,6 +2525,9 @@ input, textarea { font: inherit; color: inherit; }
   border-radius: var(--r-lg, 14px);
   background: color-mix(in oklab, var(--surface-2) 70%, transparent);
   border: 1px solid var(--border);
+  /* Never shrink when the collection list above grows/collapses — the scroll
+     area owns all the slack, so the player keeps a constant size + design. */
+  flex-shrink: 0;
   display: flex; flex-direction: column; gap: 10px; min-width: 0;
   /* Anchor for the Up-next popover (absolute, floats above the player). */
   position: relative;
@@ -5368,6 +5371,22 @@ button.om-add-link { background: none; border: 0; padding: 0; cursor: pointer; f
 }
 .om-space-cover-btn:hover { background: rgba(0,0,0,.5); }
 .om-space-cover-btn:disabled { opacity: .6; cursor: default; }
+.om-space-cover-btn.primary { background: var(--accent); color: #fff; }
+.om-space-cover-btn.primary:hover { background: var(--accent); filter: brightness(1.08); }
+
+/* Reposition mode: the cover becomes a vertical drag surface; controls + hint
+   stay visible (not hover-gated). */
+.om-space-header.reposing .om-space-header-band { cursor: grab; touch-action: none; }
+.om-space-header.reposing .om-space-header-band:active { cursor: grabbing; }
+.om-space-header.reposing .om-space-cover-actions { opacity: 1; }
+.om-space-repos-hint {
+  position: absolute; top: 12px; left: 50%; transform: translateX(-50%); z-index: 3;
+  padding: 4px 10px; border-radius: 999px; font-size: 11px; color: #fff;
+  background: rgba(0,0,0,.42); backdrop-filter: blur(6px); pointer-events: none;
+}
+
+/* Space type-filter row, under the header, before the grid. */
+.om-space-filters { margin: 2px 0 18px; }
 /* Identity sits on the solid header below the band. The emoji is lifted with a
    negative top margin so it straddles the band edge (Notion-style), while the
    title + description stay fully on the solid area. */
