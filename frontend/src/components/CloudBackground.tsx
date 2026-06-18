@@ -35,11 +35,12 @@ export function CloudBackground() {
 
   // Build the current shader params from tweaks + resolved sky.
   const params: CloudParams = {
-    speed: tweaks.cloudSpeed ?? 0.35,
-    fullness: tweaks.cloudFullness ?? 0.6,
-    intensity: tweaks.cloudIntensity ?? 0.6,
-    size: tweaks.cloudSize ?? 0.75,
-    gradient: tweaks.skyGradient ?? 0.5,
+    speed: tweaks.cloudSpeed ?? 0.1,
+    fullness: tweaks.cloudFullness ?? 0.5,
+    // Intensity retired as a control — always 0 regardless of any saved value.
+    intensity: 0,
+    size: tweaks.cloudSize ?? 1,
+    gradient: tweaks.skyGradient ?? 0.8,
     sky: resolveSky(band, dark),
     paused: !!reduceMotion,
   };

@@ -1000,6 +1000,159 @@ input, textarea { font: inherit; color: inherit; }
 }
 [data-card="minimal"] .om-card-actions .om-action.pinned { background: var(--accent); color: var(--accent-text, #fff); }
 
+/* ─ Edge mode — gapless full-bleed gallery wall ─────────────────────────────
+   Edge inherits the minimal hover machinery (overlay, footer pill, action
+   cluster) but pushes it further: every card is pure media at rest, all chrome
+   appears only on hover, and the cards butt edge to edge with no gutter (the
+   gap is forced to 0 in MemoGrid). The grid columns lose their max-width cap so
+   the wall fills the available width. */
+[data-card="edge"] .om-card {
+  box-shadow: none;
+  background: var(--surface-2);
+  border: 0;
+  border-radius: 0;
+  min-height: 0;
+  overflow: hidden;
+}
+[data-card="edge"] .om-card-hover:hover { transform: none; box-shadow: none; }
+/* Backdrop dominant-color glow doesn't fit a tight wall. */
+[data-card="edge"] .om-card-dom { display: none; }
+
+/* Square tiles for every media type — a uniform contact-sheet grid. */
+[data-card="edge"] .om-card-image .om-image-frame,
+[data-card="edge"] .om-card-image .om-image-frame[data-orient="portrait"],
+[data-card="edge"] .om-card-video .om-video-frame,
+[data-card="edge"] .om-card-link .om-card-hero,
+[data-card="edge"] .om-card-audio .om-audio-frame {
+  margin: 0;
+  border-radius: 0;
+  aspect-ratio: 1 / 1;
+}
+[data-card="edge"] .om-card-image .om-image-frame img,
+[data-card="edge"] .om-card-video .om-video-frame img,
+[data-card="edge"] .om-card-link .om-card-hero img,
+[data-card="edge"] .om-card-audio .om-audio-frame img {
+  width: 100%; height: 100%; object-fit: cover; display: block;
+}
+
+/* Nothing shows at rest — the normal-mode body never renders. */
+[data-card="edge"] .om-card-body { display: none; }
+
+/* Media tiles: square, hover blur + scale (mirrors minimal). */
+[data-card="edge"] .om-card-image,
+[data-card="edge"] .om-card-video,
+[data-card="edge"] .om-card-link,
+[data-card="edge"] .om-card-audio { min-height: 0; }
+[data-card="edge"] .om-media-img { transition: filter 0.7s ease, transform 1.8s ease; }
+[data-card="edge"] .om-card:hover .om-media-img { filter: blur(12px); transform: scale(1.10); }
+[data-card="edge"] .om-card-image .om-media-img { transition: transform 1.8s ease; }
+[data-card="edge"] .om-card-image:hover .om-media-img { filter: none; transform: scale(1.10); }
+
+/* Play button hidden until hover (same as minimal). */
+[data-card="edge"] .om-play { opacity: 0; transform: translate(-50%, -50%) scale(0.8); transition: opacity .2s, transform .2s; }
+[data-card="edge"] .om-card:hover .om-play { opacity: 1; transform: translate(-50%, -50%) scale(1); }
+
+/* Note / doc / file: no media, so a tinted square tile carries the title on
+   hover only — never a blank dead tile. */
+[data-card="edge"] .om-card-note,
+[data-card="edge"] .om-card-doc {
+  aspect-ratio: 1 / 1;
+  min-height: 0;
+  display: flex;
+}
+[data-card="edge"] .om-card-note {
+  padding: 0;
+  background: color-mix(in oklab, var(--accent) 8%, var(--surface-3));
+  color: var(--text);
+}
+[data-card="edge"] .om-card-note .om-note-body {
+  margin: auto 0 0; padding: 16px;
+  opacity: 0; transition: opacity .25s ease;
+}
+[data-card="edge"] .om-card-note:hover .om-note-body { opacity: 1; }
+[data-card="edge"] .om-card-note .om-note-title { font-size: 16px; line-height: 1.25; letter-spacing: -0.015em; }
+[data-card="edge"] .om-card-note .om-note-text {
+  opacity: 0; transition: opacity .25s ease; -webkit-line-clamp: 6;
+}
+[data-card="edge"] .om-card-note:hover .om-note-text { opacity: 1; }
+[data-card="edge"] .om-card-note .om-meta { display: none; }
+[data-card="edge"] .om-card-note .om-card-actions { flex-direction: column; }
+
+[data-card="edge"] .om-card-doc {
+  background: var(--bg-rail);
+  flex-direction: column;
+}
+[data-card="edge"] .om-card-doc .om-doc-frame { background: transparent; flex: 1; aspect-ratio: auto; transition: transform .3s ease; }
+[data-card="edge"] .om-card-doc:hover .om-doc-frame { transform: scale(0.95); }
+/* Doc title reveals on hover only (no title box at rest). */
+[data-card="edge"] .om-card-doc .om-card-body {
+  display: block;
+  padding: 12px 14px 14px;
+  border-top: 1px solid var(--border);
+  background: transparent;
+  opacity: 0; transition: opacity .25s ease;
+}
+[data-card="edge"] .om-card-doc:hover .om-card-body { opacity: 1; }
+[data-card="edge"] .om-card-doc .om-card-title { font-size: 13px; }
+[data-card="edge"] .om-card-doc .om-card-desc,
+[data-card="edge"] .om-card-doc .om-meta { display: none; }
+
+/* Audio: cover-less voice memos keep a waveform tile, squared up. */
+[data-card="edge"] .om-card-audio {
+  background-color: var(--bg-rail);
+  min-height: 0;
+  display: block;
+}
+[data-card="edge"] .om-card-audio .om-audio-frame { border-radius: 0; }
+
+/* Footer pill + hover overlay reuse the minimal rules. Pills/overlays are
+   hidden at rest and reveal on hover exactly as minimal does. */
+[data-card="edge"] .om-min-domain { display: flex; }
+[data-card="edge"] .om-card-image .om-min-domain,
+[data-card="edge"] .om-card-video .om-min-domain,
+[data-card="edge"] .om-card-audio .om-min-domain { gap: 0; }
+[data-card="edge"] .om-card-image .om-min-domain span,
+[data-card="edge"] .om-card-video .om-min-domain span,
+[data-card="edge"] .om-card-audio .om-min-domain span {
+  max-width: 0; opacity: 0; overflow: hidden; white-space: nowrap;
+  padding-left: 0;
+  transition: max-width .3s ease, opacity .22s ease, padding-left .3s ease;
+}
+[data-card="edge"] .om-card-image:hover .om-min-domain span,
+[data-card="edge"] .om-card-video:hover .om-min-domain span,
+[data-card="edge"] .om-card-audio:hover .om-min-domain span {
+  max-width: 220px; opacity: 1; padding-left: 6px;
+}
+/* No title box at rest anywhere — even the link pill (always-visible in
+   minimal) only appears on hover here. */
+[data-card="edge"] .om-min-domain { opacity: 0; transition: opacity .22s ease; }
+[data-card="edge"] .om-card:hover .om-min-domain { opacity: 1; }
+
+[data-card="edge"] .om-card:hover .om-min-hover { opacity: 1; }
+[data-card="edge"] .om-card-link .om-min-hover:has(.om-min-hover-desc:not(:empty)),
+[data-card="edge"] .om-card-video .om-min-hover:has(.om-min-hover-desc:not(:empty)) {
+  background: color-mix(in srgb, var(--accent) 30%, rgba(255,255,255,0.55));
+}
+[data-theme="hi"][data-card="edge"] .om-card-link .om-min-hover:has(.om-min-hover-desc:not(:empty)),
+[data-theme="hi"][data-card="edge"] .om-card-video .om-min-hover:has(.om-min-hover-desc:not(:empty)) {
+  background: color-mix(in srgb, var(--accent) 20%, rgba(0,0,0,0.65));
+  color: rgba(255,255,255,0.96);
+}
+
+/* Action cluster sits in the hover overlay's top-right corner. */
+[data-card="edge"] .om-card-actions { top: 12px; right: 12px; z-index: 4; pointer-events: auto; }
+[data-card="edge"] .om-card-actions .om-action.pinned { background: var(--accent); color: var(--accent-text, #fff); }
+
+/* The wall fills the width — drop the column max-width cap. */
+[data-card="edge"] .om-masonry-col { max-width: none; }
+
+/* Hide page titles/headers in Edge, keep ONLY the type-filter rail. Shared
+   PageHeader greeting + Space cover header collapse; the filter rails stay. */
+[data-card="edge"] .om-header { padding-top: 24px; }
+[data-card="edge"] .om-header::before { display: none; }
+[data-card="edge"] .om-greet { display: none; }
+[data-card="edge"] .om-space-header { display: none; }
+
 .om-card-actions {
   position: absolute; top: 10px; right: 10px; z-index: 10;
   display: flex; gap: 4px;
@@ -1522,10 +1675,21 @@ input, textarea { font: inherit; color: inherit; }
 /* Media frames */
 .om-image-memo      { border-radius: var(--r-xl); overflow: hidden; border: 1px solid var(--border); }
 .om-image-memo img  { width: 100%; display: block; }
-.om-video-embed     { aspect-ratio: 16/9; border-radius: var(--r-xl); overflow: hidden; background: var(--surface-3); }
-.om-video-embed iframe { width: 100%; height: 100%; display: block; }
+.om-video-embed     { width: 100%; aspect-ratio: 16/9; border-radius: var(--r-xl); overflow: hidden; background: var(--surface-3); }
+.om-video-embed iframe { width: 100%; height: 100%; display: block; border: 0; }
 /* Portrait platforms (Instagram Reels, TikTok) — constrain width, center */
 .om-video-embed--portrait { max-width: 400px; margin-left: auto; margin-right: auto; }
+/* Card platforms (X/Twitter) — a variable-height post, not a fixed-aspect video.
+   The frame auto-grows to the iframe's reported height so the tweet (and any media
+   inside it) is never clipped; width-capped and centered like a real tweet. */
+.om-video-embed--card {
+  aspect-ratio: auto;
+  max-width: 550px;
+  margin-left: auto; margin-right: auto;
+  background: transparent;
+  overflow: visible;
+}
+.om-video-embed--card iframe { height: auto; }
 
 /* Web preview card (full-width article/link detail) */
 .om-web-card        { background: var(--surface-2); border: 1px solid var(--border);
@@ -2020,10 +2184,11 @@ input, textarea { font: inherit; color: inherit; }
 .om-ap-row:first-child { border-top: 0; padding-top: 4px; }
 [data-theme="light"] .om-ap-row { border-top-color: rgba(20,18,14,0.07); }
 .om-ap-label { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; }
-.om-ap-label p { margin: 0; font-size: 12px; font-weight: 500; color: var(--text); }
+.om-ap-label p { margin: 0; font-size: 12px; font-weight: 500; color: var(--text); white-space: nowrap; flex: none; }
 .om-ap-label-ico { display: inline-flex; align-items: center; gap: 6px; }
 .om-ap-label-ico svg { color: var(--accent); flex: none; }
-.om-ap-label span { font-size: 10px; color: var(--text-4); letter-spacing: 0.01em; }
+/* Description sits on one line beside the title; truncate rather than wrap. */
+.om-ap-label span { font-size: 10px; color: var(--text-4); letter-spacing: 0.01em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; text-align: right; }
 .om-ap-swatches { display: flex; flex-wrap: wrap; gap: 6px; padding: 2px; }
 .om-ap-swatch {
   width: 28px; height: 28px; border-radius: 8px;
@@ -3329,6 +3494,12 @@ input, textarea { font: inherit; color: inherit; }
 .om-seg-swatch.s-minimal { background: transparent; box-shadow: inset 0 0 0 1px var(--border-2); }
 .om-seg-swatch.s-normal  { background: var(--surface-2); box-shadow: inset 0 0 0 1px var(--border-2), 0 1px 2px rgba(0,0,0,0.18); }
 .om-seg-swatch.s-rich    { background: linear-gradient(135deg, var(--accent-soft), var(--surface-2)); box-shadow: 0 1px 2px rgba(0,0,0,0.25), 0 0 8px var(--accent-soft); }
+/* Edge — gapless tile wall: two solid blocks butted together, no gutter. */
+.om-seg-swatch.s-edge {
+  background:
+    linear-gradient(90deg, var(--accent) 0 50%, var(--accent-deep, var(--accent)) 50% 100%);
+  box-shadow: inset 0 0 0 1px var(--border-2);
+}
 .om-seg.active .om-seg-swatch { box-shadow: inset 0 0 0 1px var(--accent), 0 1px 2px rgba(0,0,0,0.18); }
 
 .om-seg-cols { display: inline-flex; gap: 1.5px; align-items: center; height: 10px; width: 14px; }
@@ -3594,7 +3765,11 @@ input, textarea { font: inherit; color: inherit; }
    WebGPU is missing or still booting a day-appropriate sky shows instead of a
    blank panel. The canvas paints clouds on top when the shader is live. */
 .om-cloud-bg {
-  position: fixed; inset: 0; z-index: 0; pointer-events: none;
+  position: fixed; z-index: 0; pointer-events: none;
+  /* Overscan by the blur radius so the soft edges fall outside the viewport
+     instead of leaving a vignette where the blur samples transparent pixels. */
+  inset: calc(-1 * var(--cloud-blur, 0px));
+  filter: blur(var(--cloud-blur, 0px));
   /* --sky-stop (from the Gradient slider) sets where the zenith color lands, so
      the static fallback follows the same control as the shader. */
   background: linear-gradient(to top, var(--sky-bottom, #1a2444), var(--sky-top, #0a0e22) var(--sky-stop, 50%));
@@ -3701,7 +3876,9 @@ input, textarea { font: inherit; color: inherit; }
   position: absolute; inset: -4px; width: calc(100% + 8px); height: calc(100% + 8px);
   border: none; padding: 0; background: none; cursor: pointer; opacity: 0;
 }
-.om-ap-cloud { display: flex; flex-direction: column; gap: 8px; }
+/* padding-bottom keeps the last slider's round thumb from being clipped by the
+   AnimatedHeight wrapper's overflow:hidden (the Gradient row sits at the edge). */
+.om-ap-cloud { display: flex; flex-direction: column; gap: 8px; padding-bottom: 8px; }
 .om-ap-cloud-note {
   font-size: 10px; line-height: 1.4; color: var(--text-4);
   background: var(--surface-2); border: 1px solid var(--border);
@@ -3714,9 +3891,12 @@ input, textarea { font: inherit; color: inherit; }
   color: var(--text-3); cursor: pointer; transition: background .15s ease, color .15s ease, border-color .15s ease;
 }
 .om-ap-sky-chip:hover { color: var(--text-1); border-color: color-mix(in oklab, var(--accent) 28%, var(--border)); }
+/* Active = solid accent fill with contrast-safe text (--accent-text auto-picks
+   dark/white). A bright accent (yellow/green) gets dark text, so the label always
+   reads — the old pale accent-soft tint hid bright accent text in light mode. */
 .om-ap-sky-chip.active {
-  background: var(--accent-soft); color: var(--accent);
-  border-color: color-mix(in oklab, var(--accent) 40%, transparent);
+  background: var(--accent); color: var(--accent-text);
+  border-color: transparent;
 }
 
 /* ─ Sparse-grid guard ───────────────────────────────────────────────────────
