@@ -25,6 +25,9 @@ export default function App() {
           <Route path="hidden" element={<HiddenPage />} />
           <Route path="spaces" element={<SpacesPage />} />
           <Route path="space/:id" element={<SpacePage />} />
+          {/* Per-Space hidden section (ADR-020) — same passcode + session unlock
+              as /hidden, scoped to the Space via the :id param. */}
+          <Route path="space/:id/hidden" element={<HiddenPage />} />
         </Route>
       </Routes>
     </BrowserRouter>
