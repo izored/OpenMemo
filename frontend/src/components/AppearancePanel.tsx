@@ -4,6 +4,8 @@ import { useAppStore } from '@/stores/appStore';
 import { cn } from '@/lib/utils';
 import { ACCENT_OPTIONS, accentHarmony, randomBlobPositions } from '@/lib/appearance';
 import { BG_PRESETS, type BgPreset } from '@/lib/bgPresets';
+import { SKY_BANDS } from '@/lib/skyPalette';
+import { CloudRenderer } from '@/lib/cloudShader';
 import { settingsApi } from '@/lib/api';
 
 export function AppearancePanel() {
@@ -12,6 +14,7 @@ export function AppearancePanel() {
   const t = useAppStore((s) => s.tweaks);
   const setTweak = useAppStore((s) => s.setTweak);
   const fileRef = useRef<HTMLInputElement>(null);
+  const cloudSupported = CloudRenderer.supported();
 
   const randomizeBg = useCallback(() => {
     setTweak({
@@ -282,17 +285,33 @@ export function AppearancePanel() {
           </div>
         </div>
 
-        {/* Background */}
+        {/* Custom background */}
         <div className="om-ap-row">
           <div className="om-ap-label">
-            <p>Background</p>
-            <span className="mono">Image or randomized accent wash</span>
+            <p>Custom background</p>
+            <span className="mono">Color, drifting clouds, or a wallpaper</span>
           </div>
           <div className="om-ap-bg">
+            <div className="om-add-segment" role="tablist">
+              {[
+                { v: 'color', l: 'Color', icon: 'circle' },
+                { v: 'cloud', l: 'Cloud', icon: 'cloud' },
+                { v: 'live', l: 'Live', icon: 'sun' },
+              ].map((o) => (
+                <button
+                  key={o.v}
+                  className={cn('om-add-seg', t.bgMode === o.v && 'active')}
+                  onClick={() => setTweak('bgMode', o.v)}
+                >
+                  <Icon name={o.icon} size={11} />
+                  <span>{o.l}</span>
+                </button>
+              ))}
+            </div>
             <div className="om-add-segment two" role="tablist">
               {[
                 { v: 'image', l: 'Image', icon: 'image' },
-                { v: 'random', l: 'Random', icon: 'sparkles' },
+                { v: 'random', l: 'Blob drift', icon: 'sparkles' },
               ].map((o) => (
                 <button
                   key={o.v}
@@ -305,7 +324,74 @@ export function AppearancePanel() {
               ))}
             </div>
 
-            {t.bgMode === 'image' ? (
+            {t.bgMode === 'color' && (
+              <label className="om-ap-color-row">
+                <span className="om-ap-color-swatch" style={{ background: t.bgSolid || '#0E1116' }}>
+                  <input
+                    type="color"
+                    value={t.bgSolid || '#0E1116'}
+                    onChange={(e) => setTweak('bgSolid', e.target.value)}
+                    aria-label="Background color"
+                  />
+                </span>
+                <span className="mono">{(t.bgSolid || '#0E1116').toUpperCase()}</span>
+              </label>
+            )}
+
+            {(t.bgMode === 'cloud' || t.bgMode === 'live') && (
+              <div className="om-ap-cloud">
+                {!cloudSupported && (
+                  <p className="om-ap-cloud-note mono">
+                    Live clouds need WebGPU, which this browser does not have. A still sky shows instead.
+                  </p>
+                )}
+                {/* Sky bands — Live ('auto') tracks your local clock; pick one to pin it. */}
+                <div className="om-ap-sky">
+                  <button
+                    className={cn('om-ap-sky-chip', (t.bgMode === 'live' || t.skyBand === 'auto') && 'active')}
+                    onClick={() => setTweak({ bgMode: 'live', skyBand: 'auto' })}
+                  >
+                    Live
+                  </button>
+                  {SKY_BANDS.map((b) => (
+                    <button
+                      key={b.id}
+                      className={cn(
+                        'om-ap-sky-chip',
+                        t.bgMode !== 'live' && t.skyBand === b.id && 'active',
+                      )}
+                      onClick={() => setTweak({ bgMode: 'cloud', skyBand: b.id })}
+                    >
+                      {b.label}
+                    </button>
+                  ))}
+                </div>
+                {([
+                  { k: 'cloudSpeed', l: 'Speed', d: 0.35 },
+                  { k: 'cloudFullness', l: 'Fullness', d: 0.6 },
+                  { k: 'cloudIntensity', l: 'Intensity', d: 0.6 },
+                  { k: 'cloudSize', l: 'Size', d: 0.75 },
+                ] as const).map((s) => (
+                  <div key={s.k} className="om-ap-blur-row">
+                    <span className="mono om-ap-blur-label">
+                      {s.l} — {((t[s.k] as number) ?? s.d).toFixed(2)}
+                    </span>
+                    <input
+                      type="range"
+                      min={0}
+                      max={1}
+                      step={0.01}
+                      value={(t[s.k] as number) ?? s.d}
+                      onChange={(e) => setTweak(s.k, parseFloat(e.target.value))}
+                      className="om-ap-range"
+                      aria-label={s.l}
+                    />
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {t.bgMode === 'image' && (
               <div className="om-ap-bg-image">
                 <input ref={fileRef} type="file" accept="image/*" onChange={onPickImage} hidden />
                 <div className="om-ap-bg-gallery">
@@ -369,7 +455,9 @@ export function AppearancePanel() {
                   />
                 </div>
               </div>
-            ) : (
+            )}
+
+            {t.bgMode === 'random' && (
               <div className="om-ap-bg-random">
                 <div className="om-ap-bg-preview" aria-hidden>
                   {(t.bgPalette?.length ? t.bgPalette : accentHarmony(t.accent)).map((c, i) => (
@@ -404,24 +492,26 @@ export function AppearancePanel() {
           />
         </div>
 
-        {/* Blob animation speed */}
-        <div className="om-ap-row">
-          <div className="om-ap-label">
-            <p>Animation speed</p>
-            <span className="mono">Background blob drift</span>
+        {/* Blob drift speed — only the legacy random mode animates this way */}
+        {t.bgMode === 'random' && (
+          <div className="om-ap-row">
+            <div className="om-ap-label">
+              <p>Animation speed</p>
+              <span className="mono">Background blob drift</span>
+            </div>
+            <div className="om-add-segment" role="tablist">
+              {([0, 2, 4] as const).map((s) => (
+                <button
+                  key={s}
+                  className={cn('om-add-seg', (t.blobSpeed ?? 2) === s && 'active')}
+                  onClick={() => setTweak('blobSpeed', s)}
+                >
+                  <span>{s === 0 ? 'Off' : `${s}×`}</span>
+                </button>
+              ))}
+            </div>
           </div>
-          <div className="om-add-segment" role="tablist">
-            {([0, 2, 4] as const).map((s) => (
-              <button
-                key={s}
-                className={cn('om-add-seg', (t.blobSpeed ?? 2) === s && 'active')}
-                onClick={() => setTweak('blobSpeed', s)}
-              >
-                <span>{s === 0 ? 'Off' : `${s}×`}</span>
-              </button>
-            ))}
-          </div>
-        </div>
+        )}
       </div>
 
       <div className="om-add-foot">
