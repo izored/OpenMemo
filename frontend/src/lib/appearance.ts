@@ -1,6 +1,7 @@
 // Appearance helpers ported from the OpenMemo design bundle (app.jsx).
 // Drive theme / accent / background CSS variables on <html>.
 import { presetById } from './bgPresets';
+import { resolveSky, skyCss, type SkyBand } from './skyPalette';
 
 // Perceived luminance (0..1) for choosing a readable text color on an accent.
 export function luminance(hex: string): number {
@@ -115,7 +116,10 @@ export interface Tweaks {
   typePair: 'satoshi' | 'general' | 'cabinet';
   layout: 'boxed' | 'full';
   gridColumns: number;
-  bgMode: 'none' | 'random' | 'image';
+  // 'random' is the legacy "blob drift". 'color' = flat single color, 'cloud' =
+  // WebGPU noise-cloud shader, 'live' = cloud shader with a clock-tracked sky
+  // (OPNMMO-0048, ADR-021).
+  bgMode: 'none' | 'random' | 'image' | 'color' | 'cloud' | 'live';
   bgImage: string;
   // Id of a built-in background preset (filename stem) when one is selected;
   // '' when the image is a user upload or there is none. The live URL is
@@ -127,6 +131,15 @@ export interface Tweaks {
   bgPositions: [number, number][];
   customAccents: [string, string];
   blobSpeed: 0 | 2 | 4;
+  // Cloud-shader background (OPNMMO-0048). bgSolid drives the flat Color mode and
+  // doubles as a fallback target. Cloud params (0..1) feed the noise shader.
+  // skyBand pins a sky; 'auto' tracks the local clock (Live).
+  bgSolid: string;
+  cloudSpeed: number;
+  cloudFullness: number;
+  cloudIntensity: number;
+  cloudSize: number;
+  skyBand: SkyBand;
   // Sidebar now-playing player size: 'small' = cover-thumbnail row (default),
   // 'big' = full cover on top fading into the mood color (ADR-005).
   playerSize: 'small' | 'big';
@@ -191,6 +204,14 @@ export function applyTweaks(t: Tweaks) {
     root.style.setProperty('--blob-play-state', 'running');
     root.style.setProperty('--blob-duration', `${Math.round(42 / speed)}s`);
   }
+  // Cloud-shader vars (OPNMMO-0048). --bg-solid paints the flat Color mode.
+  // The resolved sky also paints a static gradient that the WebGPU canvas sits
+  // on TOP of — so if the shader is missing or still booting, a day-appropriate
+  // sky shows instead of a blank panel (mandatory graceful fallback).
+  root.style.setProperty('--bg-solid', t.bgSolid || '#0E1116');
+  const sky = resolveSky(t.skyBand || 'auto', resolveTheme(t.theme) !== 'light');
+  root.style.setProperty('--sky-bottom', skyCss(sky.bottom));
+  root.style.setProperty('--sky-top', skyCss(sky.top));
 }
 
 export const ACCENT_OPTIONS = ['#F4825A', '#E8D77B', '#7DB9E8', '#C3F26B', '#71717A'];
@@ -203,7 +224,7 @@ export const DEFAULT_TWEAKS: Tweaks = {
   typePair: 'cabinet',
   layout: 'boxed',
   gridColumns: 4,
-  bgMode: 'random',
+  bgMode: 'cloud',
   bgImage: '',
   bgPreset: '',
   bgFade: 0,
@@ -217,5 +238,11 @@ export const DEFAULT_TWEAKS: Tweaks = {
   ],
   customAccents: ['', ''],
   blobSpeed: 2,
+  bgSolid: '#0E1116',
+  cloudSpeed: 0.35,
+  cloudFullness: 0.6,
+  cloudIntensity: 0.6,
+  cloudSize: 0.75,
+  skyBand: 'auto',
   playerSize: 'small',
 };

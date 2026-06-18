@@ -16,6 +16,7 @@ import { MobileTopBar } from './MobileTopBar';
 import { AddMemoPanel } from './AddMemoPanel';
 import { MusicAddModal } from './MusicAddModal';
 import { AppearancePanel } from './AppearancePanel';
+import { CloudBackground } from './CloudBackground';
 import { FullscreenWriter } from './FullscreenWriter';
 import { SearchOverlay } from './SearchOverlay';
 import { Onboarding } from './Onboarding';
@@ -180,6 +181,7 @@ export function Layout() {
         onDragOver={(e) => dndBusRef.current.onDragOver?.(e)}
         onDragEnd={(e) => dndBusRef.current.onDragEnd?.(e)}
       >
+      <CloudBackground />
       <div className="om-bg-veil" style={{ opacity: tweaks.bgFade ?? 0 }} aria-hidden />
       <MobileTopBar />
       {isMobile && drawerOpen && (

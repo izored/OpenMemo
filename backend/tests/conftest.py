@@ -14,6 +14,15 @@ from pathlib import Path
 # break every backend test in a Windows worktree. `Path.as_posix()` keeps the
 # Windows drive letter but normalizes the separators (C:/Users/.../test.db), so
 # the same line is valid on Windows, macOS, Linux, and CI alike (OPNMMO-0043).
+#
+# DATA_DIR must point at the SAME throwaway dir, and DATABASE_URL at the
+# `openmemo.db` inside it: init_db() creates the tables via SQLAlchemy on
+# DATABASE_URL, but _run_migrations() opens `DATA_DIR / "openmemo.db"` directly
+# with aiosqlite. If the two disagree (the default, where a worktree has no
+# seeded ./data DB), the migration pass runs ALTER TABLE against an empty file
+# and every test errors with "no such table: memos". Keeping them on one file
+# fixes that in a fresh worktree.
 _tmpdir = tempfile.mkdtemp(prefix="openmemo-test-")
-_db_path = Path(_tmpdir, "test.db").as_posix()
+_db_path = Path(_tmpdir, "openmemo.db").as_posix()
+os.environ.setdefault("DATA_DIR", _tmpdir)
 os.environ.setdefault("DATABASE_URL", f"sqlite+aiosqlite:///{_db_path}")
