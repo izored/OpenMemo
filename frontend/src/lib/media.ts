@@ -99,6 +99,26 @@ export function canSummarize(memo: Memo): boolean {
   return SUMMARIZABLE_TYPES.has(memo.type);
 }
 
+/**
+ * Is this memo still being actively pulled in the background? (OPNMMO-0050)
+ *
+ * Two cases the user should see as "working", not as a finished card:
+ *   1. localize_status pending/processing — yt-dlp / headless scrape is
+ *      downloading the media right now (the "couple of seconds" case the user
+ *      flagged: an embed-less video or linked audio auto-downloading on save).
+ *   2. is_processed === false AND there is no error — the memo's text is still
+ *      being chunked + embedded. A localize error is NOT working: it failed and
+ *      its own error chip takes over, so a memo never spins forever.
+ *
+ * Single source of truth — every render site (card badge, grid polling) reads
+ * this so the "is it busy?" answer can never drift between them.
+ */
+export function isMemoWorking(memo: Memo): boolean {
+  if (memo.localize_status === 'pending' || memo.localize_status === 'processing') return true;
+  if (memo.localize_status === 'error') return false;
+  return memo.is_processed === false;
+}
+
 export function mediaSrc(memo: Memo): string | null {
   if (memo.thumbnail_path) {
     if (memo.thumbnail_path.startsWith('http')) {
