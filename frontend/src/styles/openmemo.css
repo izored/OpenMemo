@@ -714,6 +714,35 @@ input, textarea { font: inherit; color: inherit; }
 .om-card:active { cursor: grabbing; }
 .om-card-hover:hover { transform: translateY(-2px); box-shadow: var(--shadow-card-hover); border-color: var(--border-2); }
 
+/* ─ Working / pulling state (OPNMMO-0050) ────────────────────────────────
+   A memo still being pulled in the background (yt-dlp / headless scrape, or
+   embedding) gets a soft accent ring, a slow light sweep, and a corner chip,
+   so the card reads as "actively working" instead of looking finished. The
+   moment the memo settles the grid refetches and these come off on their own. */
+.om-card.is-working { border-color: var(--accent-soft); }
+.om-card-working { position: absolute; inset: 0; z-index: 3; pointer-events: none; overflow: hidden; border-radius: inherit; }
+.om-card-working-sweep {
+  position: absolute; inset: 0;
+  background: linear-gradient(105deg, transparent 30%, var(--accent-soft) 50%, transparent 70%);
+  opacity: 0.5;
+  transform: translateX(-100%);
+  animation: om-card-sweep 1.6s ease-in-out infinite;
+}
+@keyframes om-card-sweep { to { transform: translateX(100%); } }
+.om-card-working-chip {
+  position: absolute; top: 10px; left: 10px;
+  display: inline-flex; align-items: center; gap: 5px;
+  height: 22px; padding: 0 9px; border-radius: 99px;
+  font-size: 10.5px; letter-spacing: 0.04em;
+  color: #fff; background: var(--accent);
+  box-shadow: 0 2px 8px rgba(0,0,0,0.25);
+}
+.om-card-working-chip svg { flex-shrink: 0; }
+@media (prefers-reduced-motion: reduce) {
+  .om-card-working-sweep { animation: none; opacity: 0.28; transform: none; }
+  .om-card.is-working .om-card-working-chip .om-spin { animation: none; }
+}
+
 /* Normal — card hover halo */
 [data-card="normal"] .om-card::before {
   content: ""; position: absolute; inset: -20%;
@@ -5292,6 +5321,10 @@ button.om-add-link { background: none; border: 0; padding: 0; cursor: pointer; f
 }
 .om-space-add-coll:hover { background: var(--surface-2); color: var(--text-2); }
 .om-space-add-coll svg { flex-shrink: 0; }
+/* Quiet dwell-revealed hidden entry for the open Space (ADR-020): even fainter
+   than New collection, lowercase, fades in. */
+.om-space-hidden-reveal { color: var(--text-4); opacity: 0.7; animation: om-hidden-reveal-in .25s ease; }
+.om-space-hidden-reveal:hover { opacity: 1; color: var(--text-2); }
 
 /* "Create your first Space" — small, left-aligned, subtle (not a big black
    default button). Matches the quiet weight of a collection row. */

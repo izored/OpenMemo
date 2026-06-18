@@ -5,7 +5,7 @@ import type { DraggableAttributes } from '@dnd-kit/core';
 import { Icon } from './Icon';
 import { cn } from '@/lib/utils';
 import { memoApi } from '@/lib/api';
-import { mediaSrc, audioKind } from '@/lib/media';
+import { mediaSrc, audioKind, isMemoWorking } from '@/lib/media';
 import { useCoverMood, type CoverMood } from '@/lib/coverMood';
 import { platformMeta, videoEmbedUrl } from '@/lib/platforms';
 import { useAppStore } from '@/stores/appStore';
@@ -129,6 +129,29 @@ interface DragProps {
   listeners?: Record<string, unknown>;
 }
 
+// "Working" state for a memo still being pulled in the background (OPNMMO-0050).
+// yt-dlp / headless scrape (auto-download) and embedding both take a beat after
+// the card first appears; without this the card looks finished while the backend
+// is still fetching. A small, on-brand chip rides the top-left corner with a
+// soft sweep across the card so the user can see it is actively working. It
+// resolves to the finished card the moment the memo settles (the grid polls
+// while any card is working). A localize error never lands here — `isMemoWorking`
+// returns false for it, so a failed pull surfaces its own error chip instead of
+// spinning forever.
+function WorkingBadge({ memo }: { memo: Memo }) {
+  const downloading = memo.localize_status === 'pending' || memo.localize_status === 'processing';
+  const label = downloading ? 'Pulling' : 'Saving';
+  return (
+    <div className="om-card-working" aria-hidden>
+      <div className="om-card-working-sweep" />
+      <span className="om-card-working-chip mono">
+        <Icon name="refresh" size={11} className="om-spin" />
+        <span>{label}</span>
+      </span>
+    </div>
+  );
+}
+
 function Chrome({
   memo,
   className,
@@ -171,7 +194,7 @@ function Chrome({
     <div
       {...(dragHandleProps?.attributes || {})}
       {...(dragHandleProps?.listeners || {})}
-      className={cn('om-card om-card-hover', className)}
+      className={cn('om-card om-card-hover', isMemoWorking(memo) && 'is-working', className)}
       style={style}
       data-tint={dataTint !== undefined ? String(dataTint) : undefined}
       onClick={handleClick}
@@ -182,6 +205,7 @@ function Chrome({
         </div>
       )}
       {confirmOverlay}
+      {isMemoWorking(memo) && <WorkingBadge memo={memo} />}
       {/* Pen on EVERY card: edit its thumbnail + title, whatever the memo
           type. It always sits directly under the delete ✕ — the position
           rules just track where that ✕ lives per variant (row, minimal
