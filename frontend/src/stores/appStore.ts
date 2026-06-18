@@ -13,6 +13,9 @@ const loadTweaks = (): Tweaks => {
       // Migrations: 'rich'/'hybrid' card style → 'normal'; 1× blob speed → 2×.
       if (parsed.cardStyle === 'rich' || parsed.cardStyle === 'hybrid') parsed.cardStyle = 'normal';
       if (parsed.blobSpeed === 1) parsed.blobSpeed = 2;
+      // Blob drift retired (OPNMMO-0048): the old 'random' mode becomes the new
+      // cloud shader. Existing users stop seeing blobs without touching settings.
+      if (parsed.bgMode === 'random') parsed.bgMode = 'cloud';
       return { ...DEFAULT_TWEAKS, ...parsed, density: 'roomy' as const };
     }
   } catch {

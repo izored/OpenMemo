@@ -415,6 +415,7 @@ function MusicDetailPlayer({ memo }: { memo: Memo }) {
   const [coverWide, setCoverWide] = useState<boolean | null>(null);
   const [ready, setReady] = useState(false);
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- derive cover aspect from the image load (external system)
     if (!cover) { setCoverWide(null); setReady(true); return; }
     setReady(false);
     const img = new Image();
@@ -483,6 +484,7 @@ function MusicDetailPlayer({ memo }: { memo: Memo }) {
 // Transcript block, rendered directly under the audio player. Shows the cleaned
 // speech-to-text result, a live "transcribing…" state, or an on-demand
 // Transcribe button for audio that was uploaded (rather than recorded).
+// eslint-disable-next-line @typescript-eslint/no-unused-vars -- kept for reference; superseded by the tool rail (OPNMMO-0042), may return
 function AudioTranscript({ memo }: { memo: Memo }) {
   const queryClient = useQueryClient();
   const [starting, setStarting] = useState(false);
@@ -554,6 +556,7 @@ function AudioTranscript({ memo }: { memo: Memo }) {
 // carries a rich description from its source (YouTube/SoundCloud) that defines
 // the content — tracklist, timestamps, notes. Keep it, clearly labeled
 // "Description" (NOT transcript), togglable below the hero player.
+// eslint-disable-next-line @typescript-eslint/no-unused-vars -- kept for reference; superseded by the tool rail (OPNMMO-0042), may return
 function MusicDescription({ memo }: { memo: Memo }) {
   const [open, setOpen] = useState(false);
   const text = memo.video_description || memo.content_text || '';
@@ -581,6 +584,7 @@ function MusicDescription({ memo }: { memo: Memo }) {
 // Two-tab panel for video memos sourced from YouTube/social platforms.
 // "Video description" = platform metadata. "Transcript" = Whisper STT result.
 // Fixes the bug where content_text (YouTube description) was mislabeled "Transcript".
+// eslint-disable-next-line @typescript-eslint/no-unused-vars -- kept for reference; superseded by the tool rail (OPNMMO-0042), may return
 function VideoContentPanel({ memo }: { memo: Memo }) {
   const queryClient = useQueryClient();
   // Collapsed by default (null): the two buttons are toggles, so a long video
@@ -993,6 +997,7 @@ function SummaryPanel({
     const st = memo.transcript_status;
     if (st === 'done' || st === 'error') {
       autoRetried.current = true;
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- intentional one-shot auto-retry once the background transcript settles
       generate();
     }
   }, [waitingTranscript, memo.transcript_status, generate]);
@@ -1292,11 +1297,6 @@ export function MemoDetail() {
     },
   });
 
-  const { data: related = [] } = useQuery<Memo[]>({
-    queryKey: ['memo-related', id],
-    queryFn: () => memoApi.related(id!),
-    enabled: !!id,
-  });
 
   const { data: collections = [] } = useQuery({
     queryKey: ['collections'],
@@ -1931,24 +1931,8 @@ export function MemoDetail() {
               <div className="om-rail-inline">{railTools}</div>
             )}
 
-            {/* Related memos — hidden for now (revisit the UX). */}
-            {false && !isEditing && related.length > 0 && (
-              <div className="om-related">
-                <h3 className="om-section-h">Related Memos</h3>
-                <div className="om-related-strip">
-                  {related.map((r) => (
-                    <button
-                      key={r.id}
-                      onClick={() => navigate(`/memo/${r.id}`)}
-                      className="om-related-card"
-                    >
-                      <p className="om-related-card-title">{r.title}</p>
-                      <p className="om-related-card-meta">{r.source_domain || r.type}</p>
-                    </button>
-                  ))}
-                </div>
-              </div>
-            )}
+            {/* Related memos: removed for now (revisit the UX). The /related
+                endpoint + UI are in git history if/when it comes back. */}
           </div>{/* /.om-detail-main */}
 
           {/* Notes — under the media in the same left column, so it stays put
