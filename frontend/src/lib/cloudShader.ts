@@ -21,6 +21,7 @@ export interface CloudParams {
   fullness: number; // 0..1 — cloud coverage (lower = more open sky)
   intensity: number; // 0..1 — cloud contrast / opacity
   size: number; // 0..1 — noise scale (higher = bigger, softer clouds)
+  gradient: number; // 0..1 — sky gradient bias (low = top color hugs the top; high = it spreads down)
   sky: Sky;
   paused: boolean; // freeze on one evolved frame (reduced motion)
 }
@@ -33,7 +34,7 @@ struct Uniforms {
   fullness : f32,
   intensity : f32,
   size : f32,
-  _pad : f32,
+  gradient : f32,
   skyBottom : vec4<f32>,
   skyTop : vec4<f32>,
   cloudColor : vec4<f32>,
@@ -104,8 +105,10 @@ fn fs(@builtin(position) frag : vec4<f32>) -> @location(0) vec4<f32> {
   let edge = mix(0.30, 0.06, u.intensity);
   let cloud = smoothstep(cover, cover + edge, density);
 
-  // Sky gradient horizon -> zenith, then blend the cloud tint on top.
-  let sky = mix(u.skyBottom.rgb, u.skyTop.rgb, uv.y);
+  // Sky gradient horizon -> zenith, biased by u.gradient so the top color can
+  // hug the top (low) or spread down toward the horizon (high).
+  let gy = pow(clamp(uv.y, 0.0, 1.0), mix(2.4, 0.4, u.gradient));
+  let sky = mix(u.skyBottom.rgb, u.skyTop.rgb, gy);
   let col = mix(sky, u.cloudColor.rgb, cloud * mix(0.5, 1.0, u.intensity));
   return vec4<f32>(col, 1.0);
 }
@@ -203,7 +206,7 @@ export class CloudRenderer {
       return;
     this.resize();
     const elapsed = this.params.paused ? 8.0 : (performance.now() - this.start0) / 1000;
-    const { speed, fullness, intensity, size, sky } = this.params;
+    const { speed, fullness, intensity, size, gradient, sky } = this.params;
     const data = new Float32Array(24);
     data[0] = this.canvas.width;
     data[1] = this.canvas.height;
@@ -212,7 +215,7 @@ export class CloudRenderer {
     data[4] = fullness;
     data[5] = intensity;
     data[6] = size;
-    data[7] = 0;
+    data[7] = gradient ?? 0.5;
     data.set([...sky.bottom, 1], 8);
     data.set([...sky.top, 1], 12);
     data.set([...sky.cloud, 1], 16);

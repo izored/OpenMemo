@@ -16,6 +16,9 @@ const loadTweaks = (): Tweaks => {
       // Blob drift retired (OPNMMO-0048): the old 'random' mode becomes the new
       // cloud shader. Existing users stop seeing blobs without touching settings.
       if (parsed.bgMode === 'random') parsed.bgMode = 'cloud';
+      // 'live' is no longer a top-level mode — it's the 'auto' sky band inside
+      // Cloud. Fold saved live into cloud + auto so it keeps tracking the clock.
+      if (parsed.bgMode === 'live') { parsed.bgMode = 'cloud'; parsed.skyBand = 'auto'; }
       return { ...DEFAULT_TWEAKS, ...parsed, density: 'roomy' as const };
     }
   } catch {

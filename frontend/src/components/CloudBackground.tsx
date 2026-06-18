@@ -12,7 +12,7 @@ import { resolveSky } from '@/lib/skyPalette';
 // so the background is never blank or broken.
 export function CloudBackground() {
   const tweaks = useAppStore((s) => s.tweaks);
-  const active = tweaks.bgMode === 'cloud' || tweaks.bgMode === 'live';
+  const active = tweaks.bgMode === 'cloud';
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const rendererRef = useRef<CloudRenderer | null>(null);
   // WebGPU support is a static capability check (render-time const, no setState).
@@ -25,8 +25,9 @@ export function CloudBackground() {
   const [, setLiveTick] = useState(0);
 
   const dark = tweaks.theme === 'dark';
-  // Live ('live' mode) always tracks the clock; otherwise honor the pinned band.
-  const band = tweaks.bgMode === 'live' ? 'auto' : tweaks.skyBand || 'auto';
+  // 'auto' sky band tracks the local clock (the old "Live"); any other band pins
+  // a fixed sky.
+  const band = tweaks.skyBand || 'auto';
 
   const reduceMotion =
     typeof window !== 'undefined' &&
@@ -38,6 +39,7 @@ export function CloudBackground() {
     fullness: tweaks.cloudFullness ?? 0.6,
     intensity: tweaks.cloudIntensity ?? 0.6,
     size: tweaks.cloudSize ?? 0.75,
+    gradient: tweaks.skyGradient ?? 0.5,
     sky: resolveSky(band, dark),
     paused: !!reduceMotion,
   };
@@ -94,6 +96,7 @@ export function CloudBackground() {
     tweaks.cloudFullness,
     tweaks.cloudIntensity,
     tweaks.cloudSize,
+    tweaks.skyGradient,
     tweaks.skyBand,
     tweaks.bgMode,
     tweaks.theme,
@@ -102,7 +105,7 @@ export function CloudBackground() {
   // Live: re-resolve the sky every 3 minutes and on tab focus, so a session left
   // open through sunset catches up. Local clock only — no geolocation, no network.
   useEffect(() => {
-    if (tweaks.bgMode !== 'live') return;
+    if (tweaks.bgMode !== 'cloud' || tweaks.skyBand !== 'auto') return;
     const tick = () => setLiveTick((n) => n + 1);
     const id = window.setInterval(tick, 180_000);
     window.addEventListener('focus', tick);
@@ -110,7 +113,7 @@ export function CloudBackground() {
       window.clearInterval(id);
       window.removeEventListener('focus', tick);
     };
-  }, [tweaks.bgMode]);
+  }, [tweaks.bgMode, tweaks.skyBand]);
 
   if (!active) return null;
 

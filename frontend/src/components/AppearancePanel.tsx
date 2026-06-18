@@ -6,6 +6,7 @@ import { ACCENT_OPTIONS, accentHarmony, randomBlobPositions } from '@/lib/appear
 import { BG_PRESETS, type BgPreset } from '@/lib/bgPresets';
 import { SKY_BANDS } from '@/lib/skyPalette';
 import { CloudRenderer } from '@/lib/cloudShader';
+import { AnimatedHeight } from './AnimatedHeight';
 import { settingsApi } from '@/lib/api';
 
 export function AppearancePanel() {
@@ -268,11 +269,10 @@ export function AppearancePanel() {
             <span className="mono">Color, drifting clouds, or a wallpaper</span>
           </div>
           <div className="om-ap-bg">
-            <div className="om-add-segment two" role="tablist">
+            <div className="om-add-segment" role="tablist">
               {[
                 { v: 'color', l: 'Color', icon: 'circle' },
                 { v: 'cloud', l: 'Cloud', icon: 'cloud' },
-                { v: 'live', l: 'Live', icon: 'sun' },
                 { v: 'image', l: 'Image', icon: 'image' },
               ].map((o) => (
                 <button
@@ -286,6 +286,7 @@ export function AppearancePanel() {
               ))}
             </div>
 
+            <AnimatedHeight tabKey={t.bgMode}>
             {t.bgMode === 'color' && (
               <label className="om-ap-color-row">
                 <span className="om-ap-color-swatch" style={{ background: t.bgSolid || '#0E1116' }}>
@@ -300,7 +301,7 @@ export function AppearancePanel() {
               </label>
             )}
 
-            {(t.bgMode === 'cloud' || t.bgMode === 'live') && (
+            {t.bgMode === 'cloud' && (
               <div className="om-ap-cloud">
                 {!cloudSupported && (
                   <p className="om-ap-cloud-note mono">
@@ -310,19 +311,16 @@ export function AppearancePanel() {
                 {/* Sky bands — Live ('auto') tracks your local clock; pick one to pin it. */}
                 <div className="om-ap-sky">
                   <button
-                    className={cn('om-ap-sky-chip', (t.bgMode === 'live' || t.skyBand === 'auto') && 'active')}
-                    onClick={() => setTweak({ bgMode: 'live', skyBand: 'auto' })}
+                    className={cn('om-ap-sky-chip', t.skyBand === 'auto' && 'active')}
+                    onClick={() => setTweak('skyBand', 'auto')}
                   >
                     Live
                   </button>
                   {SKY_BANDS.map((b) => (
                     <button
                       key={b.id}
-                      className={cn(
-                        'om-ap-sky-chip',
-                        t.bgMode !== 'live' && t.skyBand === b.id && 'active',
-                      )}
-                      onClick={() => setTweak({ bgMode: 'cloud', skyBand: b.id })}
+                      className={cn('om-ap-sky-chip', t.skyBand === b.id && 'active')}
+                      onClick={() => setTweak('skyBand', b.id)}
                     >
                       {b.label}
                     </button>
@@ -333,6 +331,7 @@ export function AppearancePanel() {
                   { k: 'cloudFullness', l: 'Fullness', d: 0.6 },
                   { k: 'cloudIntensity', l: 'Intensity', d: 0.6 },
                   { k: 'cloudSize', l: 'Size', d: 0.75 },
+                  { k: 'skyGradient', l: 'Gradient', d: 0.5 },
                 ] as const).map((s) => (
                   <div key={s.k} className="om-ap-blur-row">
                     <span className="mono om-ap-blur-label">
@@ -418,6 +417,7 @@ export function AppearancePanel() {
                 </div>
               </div>
             )}
+            </AnimatedHeight>
 
           </div>
         </div>
