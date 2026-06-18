@@ -139,6 +139,9 @@ export interface Tweaks {
   cloudFullness: number;
   cloudIntensity: number;
   cloudSize: number;
+  // Sky gradient bias (0..1): low pins the zenith color to the very top, high
+  // spreads it down toward the horizon. Drives the shader + the static-sky CSS.
+  skyGradient: number;
   skyBand: SkyBand;
   // Sidebar now-playing player size: 'small' = cover-thumbnail row (default),
   // 'big' = full cover on top fading into the mood color (ADR-005).
@@ -212,6 +215,10 @@ export function applyTweaks(t: Tweaks) {
   const sky = resolveSky(t.skyBand || 'auto', resolveTheme(t.theme) !== 'light');
   root.style.setProperty('--sky-bottom', skyCss(sky.bottom));
   root.style.setProperty('--sky-top', skyCss(sky.top));
+  // Gradient bias for the static-sky fallback: map 0..1 to the top color's stop
+  // position (low = top color sits near the top; high = it reaches down).
+  const grad = typeof t.skyGradient === 'number' ? t.skyGradient : 0.5;
+  root.style.setProperty('--sky-stop', `${Math.round(12 + (1 - grad) * 76)}%`);
 }
 
 export const ACCENT_OPTIONS = ['#F4825A', '#E8D77B', '#7DB9E8', '#C3F26B', '#71717A'];
@@ -243,6 +250,7 @@ export const DEFAULT_TWEAKS: Tweaks = {
   cloudFullness: 0.6,
   cloudIntensity: 0.6,
   cloudSize: 0.75,
+  skyGradient: 0.5,
   skyBand: 'auto',
   playerSize: 'small',
 };

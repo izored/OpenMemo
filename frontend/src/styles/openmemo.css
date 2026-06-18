@@ -3595,7 +3595,9 @@ input, textarea { font: inherit; color: inherit; }
    blank panel. The canvas paints clouds on top when the shader is live. */
 .om-cloud-bg {
   position: fixed; inset: 0; z-index: 0; pointer-events: none;
-  background: linear-gradient(to top, var(--sky-bottom, #1a2444), var(--sky-top, #0a0e22));
+  /* --sky-stop (from the Gradient slider) sets where the zenith color lands, so
+     the static fallback follows the same control as the shader. */
+  background: linear-gradient(to top, var(--sky-bottom, #1a2444), var(--sky-top, #0a0e22) var(--sky-stop, 50%));
 }
 .om-cloud-canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
 @media (prefers-reduced-motion: reduce) { .om-cloud-canvas { /* renderer freezes one frame */ } }
