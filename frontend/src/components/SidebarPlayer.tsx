@@ -26,6 +26,7 @@ export function SidebarPlayer() {
   const isMobile = useIsMobile();
   const { track, playing, currentTime, duration, repeat, toggleRepeat, toggle, seek, close, next, prev, queueLength, queueIndex, shuffled, toggleShuffle, queueSource } = useAudioPlayer();
   // Up-next popover (ADR-015) — the queue, inspectable and editable in place.
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars -- popover wiring kept for when the queue UI returns
   const [upNextOpen, setUpNextOpen] = useState(false);
   // "Add to playlist" for the playing track (music only).
   const [plMenuOpen, setPlMenuOpen] = useState(false);
@@ -403,6 +404,7 @@ export function SidebarPlayer() {
 
 // Up-next popover — the live queue above the player. Click a row to jump,
 // × to drop it from the queue (the playing track can't be removed).
+// eslint-disable-next-line @typescript-eslint/no-unused-vars -- queue popover, not currently mounted; kept for when the queue UI returns
 function UpNext({ open, onClose }: { open: boolean; onClose: () => void }) {
   const { queueTracks, queueIndex, jumpTo, removeAt, playing } = useAudioPlayer();
   if (!open || !queueTracks.length) return null;

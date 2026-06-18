@@ -83,6 +83,7 @@ export function MusicAddModal() {
 
   // Debounced lossless preview so paste/typing doesn't hammer the probe.
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- reset the probe as the URL/provider changes
     setLlProbe(null);
     if (!provider || !open) {
       setLlProbing(false);

@@ -175,6 +175,7 @@ export function Sidebar() {
   const navItems = [
     { id: 'home', label: 'All Memos', icon: 'home', path: '/' },
     { id: 'collections', label: 'Collections', icon: 'layers', path: '/collections' },
+    { id: 'spaces', label: 'Spaces', icon: 'grid', path: '/spaces' },
     { id: 'music', label: 'Music', icon: 'music', path: '/music' },
     { id: 'ask', label: 'Ask Memo', icon: 'sparkles', path: '/ask' },
   ];
@@ -304,212 +305,194 @@ export function Sidebar() {
         ))}
       </nav>
 
-      {/* Spaces (ADR-020) — separate, walled project areas above collections.
-          Tapping one opens it as an accordion: its collections drop down here
-          and the library's Pinned + Collections sections retract below. */}
-      {!sidebarCollapsed && (
-        <div className="om-sidebar-section om-spaces-section">
-          <div className="om-section-head">
-            <span className="om-section-label mono">Spaces</span>
-            <div className="om-collections-head-actions">
-              <button
-                className="om-icon-btn sm"
-                title="View all Spaces"
-                onClick={() => goRoute('/spaces')}
-              >
-                <Icon name="layers" size={11} />
-              </button>
-              <button
-                className="om-icon-btn sm"
-                title="New Space"
-                onClick={() => { setEditingSpace(null); setSpaceModalOpen(true); }}
-              >
-                <Icon name="plus" size={11} />
-              </button>
-            </div>
-          </div>
-          <div className="om-collection-list">
-            {(spaces as Space[]).length === 0 && (
-              <button className="om-space-empty-cta" onClick={() => { setEditingSpace(null); setSpaceModalOpen(true); }}>
-                <Icon name="plus" size={11} />
-                <span>Create your first Space</span>
-              </button>
-            )}
-            {(spaces as Space[]).map((s) => {
-              const open = activeSpace === s.id;
-              return (
-                <div key={s.id} className={cn('om-space-group', open && 'open')}>
-                  <button
-                    className={cn('om-coll om-space-row', open && 'active')}
-                    onClick={() => openSpace(s.id)}
-                    title={s.name}
-                  >
-                    <span className="om-space-row-emoji">{s.emoji || '🗂️'}</span>
-                    <span className="om-coll-name">{s.name}</span>
-                    <Icon name={open ? 'chevronDown' : 'chevronRight'} size={12} className="om-coll-count" />
+      {/* ONE scroll region holds every variable section — Spaces, Pinned,
+          Collections. Head/search/nav above and player/foot below stay fixed, so
+          expanding a Space or collapsing a list never resizes the player. Nothing
+          auto-hides: sections only open/close when the user toggles them. */}
+      <div className="om-sidebar-scroll" data-lenis-prevent>
+        {!sidebarCollapsed && (
+          <>
+            {/* Spaces (ADR-020) — walled project areas. Tap one to open its
+                collections inline; the library sections stay put below. */}
+            <div className="om-sidebar-section om-spaces-section">
+              <div className="om-section-head">
+                <span className="om-section-label mono">Spaces</span>
+                <div className="om-collections-head-actions">
+                  <button className="om-icon-btn sm" title="View all Spaces" onClick={() => goRoute('/spaces')}>
+                    <Icon name="grid" size={11} />
                   </button>
-                  {open && (
-                    <div className="om-space-collections" onMouseLeave={hideSpaceReveal}>
-                      {spaceCollections.length === 0 && (
-                        <span className="om-space-empty mono">No collections yet</span>
-                      )}
-                      {(spaceCollections as Collection[]).map((c) => (
-                        <button
-                          key={c.id}
-                          className={cn('om-coll om-space-coll', activeCollection === c.id && 'active')}
-                          onClick={() => selectSpaceCollection(s.id, c.id)}
-                        >
-                          <span className="om-coll-dot" style={{ background: c.color || 'var(--text-4)' }} />
-                          <span className="om-coll-name">{c.name}</span>
-                          <span className="om-coll-emoji">{c.emoji || '·'}</span>
-                        </button>
-                      ))}
+                  <button
+                    className="om-icon-btn sm"
+                    title="New Space"
+                    onClick={() => { setEditingSpace(null); setSpaceModalOpen(true); }}
+                  >
+                    <Icon name="plus" size={11} />
+                  </button>
+                </div>
+              </div>
+              <div className="om-collection-list">
+                {(spaces as Space[]).length === 0 && (
+                  <button className="om-space-empty-cta" onClick={() => { setEditingSpace(null); setSpaceModalOpen(true); }}>
+                    <Icon name="plus" size={11} />
+                    <span>Create your first Space</span>
+                  </button>
+                )}
+                {(spaces as Space[]).map((s) => {
+                  const open = activeSpace === s.id;
+                  return (
+                    <div key={s.id} className={cn('om-space-group', open && 'open')}>
                       <button
-                        className="om-space-add-coll"
-                        onClick={() => { setEditingCollection(null); setCollectionModalOpen(true); }}
-                        onMouseEnter={startSpaceReveal}
-                        onMouseLeave={cancelSpaceReveal}
-                        title={`New collection in ${s.name}`}
+                        className={cn('om-coll om-space-row', open && 'active')}
+                        onClick={() => openSpace(s.id)}
+                        title={s.name}
                       >
-                        <Icon name="plus" size={11} />
-                        <span>New collection</span>
+                        <span className="om-space-row-emoji">{s.emoji || '🗂️'}</span>
+                        <span className="om-coll-name">{s.name}</span>
+                        <Icon name={open ? 'chevronDown' : 'chevronRight'} size={12} className="om-coll-count" />
                       </button>
-                      {/* Quiet dwell-to-reveal hidden entry for THIS Space — mirrors
-                          the library gesture, scoped to the open Space (ADR-020). */}
-                      {spaceHiddenRevealed && (
-                        <button
-                          className="om-space-add-coll om-space-hidden-reveal mono"
-                          onClick={() => openSpaceHidden(s.id)}
-                          title={`Open the hidden section in ${s.name}`}
-                        >
-                          <Icon name="eye" size={11} />
-                          <span>hidden</span>
-                        </button>
+                      {open && (
+                        <div className="om-space-collections" onMouseLeave={hideSpaceReveal}>
+                          {spaceCollections.length === 0 && (
+                            <span className="om-space-empty mono">No collections yet</span>
+                          )}
+                          {(spaceCollections as Collection[]).map((c) => (
+                            <button
+                              key={c.id}
+                              className={cn('om-coll om-space-coll', activeCollection === c.id && 'active')}
+                              onClick={() => selectSpaceCollection(s.id, c.id)}
+                            >
+                              <span className="om-coll-dot" style={{ background: c.color || 'var(--text-4)' }} />
+                              <span className="om-coll-name">{c.name}</span>
+                              <span className="om-coll-emoji">{c.emoji || '·'}</span>
+                            </button>
+                          ))}
+                          <button
+                            className="om-space-add-coll"
+                            onClick={() => { setEditingCollection(null); setCollectionModalOpen(true); }}
+                            onMouseEnter={startSpaceReveal}
+                            onMouseLeave={cancelSpaceReveal}
+                            title={`New collection in ${s.name}`}
+                          >
+                            <Icon name="plus" size={11} />
+                            <span>New collection</span>
+                          </button>
+                          {/* Quiet dwell-to-reveal hidden entry for THIS Space. */}
+                          {spaceHiddenRevealed && (
+                            <button
+                              className="om-space-add-coll om-space-hidden-reveal mono"
+                              onClick={() => openSpaceHidden(s.id)}
+                              title={`Open the hidden section in ${s.name}`}
+                            >
+                              <Icon name="eye" size={11} />
+                              <span>hidden</span>
+                            </button>
+                          )}
+                        </div>
                       )}
                     </div>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* Pinned — always visible, even inside a Space. */}
+            {(pinned.length > 0 || pinnedMemos.length > 0) && (
+              <div className="om-sidebar-section">
+                <div className="om-section-head">
+                  <span className="om-section-label mono">Pinned</span>
+                  <Icon name="pin" size={10} className="om-section-icon" />
+                </div>
+                <div className="om-collection-list">
+                  {pinned.map((c: Collection) => (
+                    <CollectionRow
+                      key={`col-${c.id}`}
+                      col={c}
+                      pinned
+                      active={activeCollection === c.id}
+                      onSelect={() => selectCollection(c.id)}
+                      onEdit={(e) => editCollection(e, c)}
+                    />
+                  ))}
+                  {pinnedMemos.map((m) => (
+                    <button
+                      key={`memo-${m.id}`}
+                      className="om-coll pinned"
+                      onClick={() => { setActiveCollection(null); navigate(`/memo/${m.id}`); }}
+                      title={m.title}
+                    >
+                      <span className="om-coll-dot" style={{ background: 'var(--accent)' }} />
+                      <span className="om-coll-name">{m.title}</span>
+                      <Icon name="pin" size={10} className="om-coll-count" />
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Collections — header + list, manual collapse only (the chevron). */}
+            <div className="om-sidebar-section">
+              <div className="om-section-head om-collections-head" onMouseLeave={hideReveal}>
+                <button
+                  className="om-section-label mono om-coll-collapse-toggle"
+                  onClick={() => setLibCollapsed((v) => !v)}
+                  title={libCollapsed ? 'Show collections' : 'Collapse collections'}
+                  aria-expanded={!libCollapsed}
+                >
+                  <Icon name={libCollapsed ? 'chevronRight' : 'chevronDown'} size={11} />
+                  <span>Collections</span>
+                </button>
+                <div className="om-collections-head-actions">
+                  {hiddenRevealed && (
+                    <button className="om-hidden-reveal mono" onClick={() => goRoute('/hidden')} title="Open the hidden section">
+                      hidden
+                    </button>
+                  )}
+                  {isMobile ? (
+                    others.length > 3 && (
+                      <button
+                        className={cn('om-icon-btn sm om-coll-toggle', collExpanded && 'is-open')}
+                        onClick={() => setCollExpanded((v) => !v)}
+                        title={collExpanded ? 'Show fewer' : `Show all ${others.length}`}
+                        aria-expanded={collExpanded}
+                        aria-label={collExpanded ? 'Show fewer collections' : 'Show all collections'}
+                      >
+                        <Icon name="chevronDown" size={14} />
+                      </button>
+                    )
+                  ) : (
+                    <button
+                      className="om-icon-btn sm"
+                      title="New collection"
+                      onMouseEnter={startReveal}
+                      onMouseLeave={cancelReveal}
+                      onClick={() => { setEditingCollection(null); setCollectionModalOpen(true); }}
+                    >
+                      <Icon name="plus" size={11} />
+                    </button>
                   )}
                 </div>
-              );
-            })}
-          </div>
-        </div>
-      )}
-
-      {/* Pinned stays fixed above the scroll zone. Hidden while a Space is open
-          (the Space owns the rail then). */}
-      {!sidebarCollapsed && !activeSpace && (pinned.length > 0 || pinnedMemos.length > 0) && (
-        <div className="om-sidebar-section">
-          <div className="om-section-head">
-            <span className="om-section-label mono">Pinned</span>
-            <Icon name="pin" size={10} className="om-section-icon" />
-          </div>
-          <div className="om-collection-list">
-            {pinned.map((c: Collection) => (
-              <CollectionRow
-                key={`col-${c.id}`}
-                col={c}
-                pinned
-                active={activeCollection === c.id}
-                onSelect={() => selectCollection(c.id)}
-                onEdit={(e) => editCollection(e, c)}
-              />
-            ))}
-            {pinnedMemos.map((m) => (
-              <button
-                key={`memo-${m.id}`}
-                className="om-coll pinned"
-                onClick={() => {
-                  setActiveCollection(null);
-                  navigate(`/memo/${m.id}`);
-                }}
-                title={m.title}
-              >
-                <span className="om-coll-dot" style={{ background: 'var(--accent)' }} />
-                <span className="om-coll-name">{m.title}</span>
-                <Icon name="pin" size={10} className="om-coll-count" />
-              </button>
-            ))}
-          </div>
-        </div>
-      )}
-
-      {/* Collections header — fixed; only its LIST (below) scrolls. When a Space
-          is open the list collapses (not hidden): the header stays with a
-          chevron to expand the library collections back in place. */}
-      {!sidebarCollapsed && (
-        <div className="om-section-head om-collections-head" onMouseLeave={hideReveal}>
-          <button
-            className="om-section-label mono om-coll-collapse-toggle"
-            onClick={() => setLibCollapsed((v) => !v)}
-            title={libCollapsed ? 'Show collections' : 'Collapse collections'}
-            aria-expanded={!libCollapsed}
-          >
-            <Icon name={libCollapsed ? 'chevronRight' : 'chevronDown'} size={11} />
-            <span>Collections</span>
-          </button>
-          <div className="om-collections-head-actions">
-            {hiddenRevealed && (
-              <button
-                className="om-hidden-reveal mono"
-                onClick={() => goRoute('/hidden')}
-                title="Open the hidden section"
-              >
-                hidden
-              </button>
-            )}
-            {isMobile ? (
-              // Mobile: creating a collection is desktop-only; the header control
-              // is a chevron that expands/collapses the (3-by-default) list.
-              others.length > 3 && (
-                <button
-                  className={cn('om-icon-btn sm om-coll-toggle', collExpanded && 'is-open')}
-                  onClick={() => setCollExpanded((v) => !v)}
-                  title={collExpanded ? 'Show fewer' : `Show all ${others.length}`}
-                  aria-expanded={collExpanded}
-                  aria-label={collExpanded ? 'Show fewer collections' : 'Show all collections'}
-                >
-                  <Icon name="chevronDown" size={14} />
-                </button>
-              )
-            ) : (
-              <button
-                className="om-icon-btn sm"
-                title="New collection"
-                onMouseEnter={startReveal}
-                onMouseLeave={cancelReveal}
-                onClick={() => {
-                  setEditingCollection(null);
-                  setCollectionModalOpen(true);
-                }}
-              >
-                <Icon name="plus" size={11} />
-              </button>
-            )}
-          </div>
-        </div>
-      )}
-
-      {/* ONLY the collections list scrolls. Always present (even collapsed) so it
-          owns the slack and keeps the player + foot pinned to the bottom. */}
-      <div className="om-sidebar-scroll" data-lenis-prevent>
-        {!sidebarCollapsed && !libCollapsed && (
-          <div className="om-collection-list">
-            {visibleOthers.map((c: Collection) => (
-              <CollectionRow
-                key={c.id}
-                col={c}
-                pinned={false}
-                active={activeCollection === c.id}
-                onSelect={() => selectCollection(c.id)}
-                onEdit={(e) => editCollection(e, c)}
-              />
-            ))}
-            {isMobile && !collExpanded && others.length > 3 && (
-              <button className="om-coll-more mono" onClick={() => setCollExpanded(true)}>
-                Show {others.length - 3} more
-              </button>
-            )}
-          </div>
+              </div>
+              {!libCollapsed && (
+                <div className="om-collection-list">
+                  {visibleOthers.map((c: Collection) => (
+                    <CollectionRow
+                      key={c.id}
+                      col={c}
+                      pinned={false}
+                      active={activeCollection === c.id}
+                      onSelect={() => selectCollection(c.id)}
+                      onEdit={(e) => editCollection(e, c)}
+                    />
+                  ))}
+                  {isMobile && !collExpanded && others.length > 3 && (
+                    <button className="om-coll-more mono" onClick={() => setCollExpanded(true)}>
+                      Show {others.length - 3} more
+                    </button>
+                  )}
+                </div>
+              )}
+            </div>
+          </>
         )}
       </div>
 

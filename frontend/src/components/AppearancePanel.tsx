@@ -16,14 +16,6 @@ export function AppearancePanel() {
   const fileRef = useRef<HTMLInputElement>(null);
   const cloudSupported = CloudRenderer.supported();
 
-  const randomizeBg = useCallback(() => {
-    setTweak({
-      bgPalette: accentHarmony(t.accent),
-      bgPositions: randomBlobPositions(),
-      bgMode: 'random',
-    });
-  }, [t.accent, setTweak]);
-
   // Selecting a built-in preset drives the wallpaper, accent, and theme at once
   // (all three are encoded in the filename), so the UI always matches its image.
   const pickPreset = useCallback(
@@ -123,14 +115,7 @@ export function AppearancePanel() {
                 key={c}
                 className={cn('om-ap-swatch', t.accent === c && 'active')}
                 style={{ background: c }}
-                onClick={() =>
-                  setTweak({
-                    accent: c,
-                    bgPalette: accentHarmony(c),
-                    bgPositions: randomBlobPositions(),
-                    bgMode: 'random',
-                  })
-                }
+                onClick={() => setTweak({ accent: c, bgPalette: accentHarmony(c) })}
                 aria-label={c}
               >
                 {t.accent === c && <Icon name="check" size={10} />}
@@ -150,8 +135,6 @@ export function AppearancePanel() {
                           accent: e.target.value,
                           customAccents: arr,
                           bgPalette: accentHarmony(e.target.value),
-                          bgPositions: randomBlobPositions(),
-                          bgMode: 'random',
                         });
                       }}
                     />
@@ -164,14 +147,7 @@ export function AppearancePanel() {
                   key={`cu-${i}`}
                   className={cn('om-ap-swatch custom filled', t.accent === c && 'active')}
                   style={{ background: c }}
-                  onClick={() =>
-                    setTweak({
-                      accent: c,
-                      bgPalette: accentHarmony(c),
-                      bgPositions: randomBlobPositions(),
-                      bgMode: 'random',
-                    })
-                  }
+                  onClick={() => setTweak({ accent: c, bgPalette: accentHarmony(c) })}
                   aria-label={`Custom ${c}`}
                 >
                   {t.accent === c && <Icon name="check" size={10} />}
@@ -292,26 +268,12 @@ export function AppearancePanel() {
             <span className="mono">Color, drifting clouds, or a wallpaper</span>
           </div>
           <div className="om-ap-bg">
-            <div className="om-add-segment" role="tablist">
+            <div className="om-add-segment two" role="tablist">
               {[
                 { v: 'color', l: 'Color', icon: 'circle' },
                 { v: 'cloud', l: 'Cloud', icon: 'cloud' },
                 { v: 'live', l: 'Live', icon: 'sun' },
-              ].map((o) => (
-                <button
-                  key={o.v}
-                  className={cn('om-add-seg', t.bgMode === o.v && 'active')}
-                  onClick={() => setTweak('bgMode', o.v)}
-                >
-                  <Icon name={o.icon} size={11} />
-                  <span>{o.l}</span>
-                </button>
-              ))}
-            </div>
-            <div className="om-add-segment two" role="tablist">
-              {[
                 { v: 'image', l: 'Image', icon: 'image' },
-                { v: 'random', l: 'Blob drift', icon: 'sparkles' },
               ].map((o) => (
                 <button
                   key={o.v}
@@ -457,20 +419,6 @@ export function AppearancePanel() {
               </div>
             )}
 
-            {t.bgMode === 'random' && (
-              <div className="om-ap-bg-random">
-                <div className="om-ap-bg-preview" aria-hidden>
-                  {(t.bgPalette?.length ? t.bgPalette : accentHarmony(t.accent)).map((c, i) => (
-                    <span key={i} style={{ background: c }} />
-                  ))}
-                </div>
-                <button className="om-ap-bg-roll" onClick={randomizeBg}>
-                  <Icon name="refresh" size={11} />
-                  <span>Randomize</span>
-                  <span className="mono">· in {t.accent}</span>
-                </button>
-              </div>
-            )}
           </div>
         </div>
 

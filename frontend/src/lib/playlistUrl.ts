@@ -62,7 +62,7 @@ export function spotifyKind(raw: string): 'track' | 'album' | 'playlist' | null 
 
 // Apple Music link detection (second SpotiFLAC front-end, ADR-019). Mirrors
 // backend/core/apple_music.py `parse_apple_url` — keep the two in sync.
-const APPLE_RE = /music\.apple\.com\/(?:[a-z]{2}\/)?(song|album|playlist)\/[^/]+\/([A-Za-z0-9.\-]+)/i;
+const APPLE_RE = /music\.apple\.com\/(?:[a-z]{2}\/)?(song|album|playlist)\/[^/]+\/([A-Za-z0-9.-]+)/i;
 
 /** Returns the Apple Music entity kind for a link, or null if it isn't one. */
 export function appleKind(raw: string): 'track' | 'album' | 'playlist' | null {
