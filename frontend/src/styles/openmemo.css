@@ -3577,6 +3577,29 @@ input, textarea { font: inherit; color: inherit; }
 [data-theme="hi"][data-bg="image"] .om-app::before { filter: blur(var(--bg-blur, 64px)) saturate(110%) brightness(0.42); }
 [data-theme="hi"][data-bg="random"] .om-app::before { opacity: 0.55; }
 
+/* ─ Cloud-shader background (OPNMMO-0048) ──────────────────────────────── */
+/* Color mode — a single flat color from --bg-solid. Also the fallback floor. */
+[data-bg="color"] .om-app::before {
+  opacity: 1;
+  background: var(--bg-solid);
+  filter: none;
+  animation: none;
+}
+/* Cloud / Live modes — the old blob ::before is hidden; the canvas paints it. */
+[data-bg="cloud"] .om-app::before,
+[data-bg="live"] .om-app::before { opacity: 0; animation: none; }
+
+/* The cloud backdrop wrapper sits in the same z=0 band as ::before, behind the
+   UI. It always carries a STATIC sky gradient (--sky-bottom -> --sky-top), so if
+   WebGPU is missing or still booting a day-appropriate sky shows instead of a
+   blank panel. The canvas paints clouds on top when the shader is live. */
+.om-cloud-bg {
+  position: fixed; inset: 0; z-index: 0; pointer-events: none;
+  background: linear-gradient(to top, var(--sky-bottom, #1a2444), var(--sky-top, #0a0e22));
+}
+.om-cloud-canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
+@media (prefers-reduced-motion: reduce) { .om-cloud-canvas { /* renderer freezes one frame */ } }
+
 /* ─ Appearance Panel — Background controls ─────────────────────────────── */
 .om-add-segment.two { grid-template-columns: repeat(2, 1fr); }
 
@@ -3664,6 +3687,35 @@ input, textarea { font: inherit; color: inherit; }
 .om-ap-bg-roll:hover { background: var(--accent-soft); color: var(--accent); border-color: color-mix(in oklab, var(--accent) 30%, transparent); }
 .om-ap-bg-roll .mono { font-size: 9.5px; color: var(--text-4); letter-spacing: 0.02em; }
 [data-theme="light"] .om-ap-bg-roll { background: rgba(0,0,0,0.05); border-color: rgba(0,0,0,0.08); }
+
+/* Cloud-shader panel controls (OPNMMO-0048). */
+.om-ap-color-row { display: flex; align-items: center; gap: 10px; }
+.om-ap-color-row .mono { font-size: 11px; color: var(--text-3); letter-spacing: 0.04em; }
+.om-ap-color-swatch {
+  position: relative; width: 36px; height: 36px; border-radius: 10px;
+  border: 1px solid var(--border); cursor: pointer; overflow: hidden; flex: 0 0 auto;
+}
+.om-ap-color-swatch input[type="color"] {
+  position: absolute; inset: -4px; width: calc(100% + 8px); height: calc(100% + 8px);
+  border: none; padding: 0; background: none; cursor: pointer; opacity: 0;
+}
+.om-ap-cloud { display: flex; flex-direction: column; gap: 8px; }
+.om-ap-cloud-note {
+  font-size: 10px; line-height: 1.4; color: var(--text-4);
+  background: var(--surface-2); border: 1px solid var(--border);
+  border-radius: 8px; padding: 7px 9px;
+}
+.om-ap-sky { display: flex; flex-wrap: wrap; gap: 5px; }
+.om-ap-sky-chip {
+  font-size: 10.5px; padding: 5px 9px; border-radius: 8px;
+  border: 1px solid var(--border); background: var(--surface-2);
+  color: var(--text-3); cursor: pointer; transition: background .15s ease, color .15s ease, border-color .15s ease;
+}
+.om-ap-sky-chip:hover { color: var(--text-1); border-color: color-mix(in oklab, var(--accent) 28%, var(--border)); }
+.om-ap-sky-chip.active {
+  background: var(--accent-soft); color: var(--accent);
+  border-color: color-mix(in oklab, var(--accent) 40%, transparent);
+}
 
 /* ─ Sparse-grid guard ───────────────────────────────────────────────────────
    When a section has fewer memos than columns, react-masonry-css stretches the
