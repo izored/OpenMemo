@@ -57,7 +57,16 @@ export function MemoGrid({ memos: serverMemos }: MemoGridProps) {
   const queryClient = useQueryClient();
   const tweaks = useAppStore((s) => s.tweaks);
   const columns = useViewportColumns(tweaks.gridColumns || 4);
-  const gap = tweaks.density === 'compact' ? 12 : tweaks.density === 'roomy' ? 28 : 20;
+  // Edge is a gapless image wall — every card butts up against its neighbours
+  // with zero gutter. Other styles derive the gutter from density.
+  const gap =
+    tweaks.cardStyle === 'edge'
+      ? 0
+      : tweaks.density === 'compact'
+        ? 12
+        : tweaks.density === 'roomy'
+          ? 28
+          : 20;
 
   const dndBus = useDndBus();
   const [activeId, setActiveId] = useState<string | null>(null);

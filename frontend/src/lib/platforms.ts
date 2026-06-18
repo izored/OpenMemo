@@ -30,8 +30,12 @@ interface PlatformDef extends PlatformMeta {
   /** Substrings matched against the (www-stripped, lowercased) hostname. */
   hosts: string[];
   embed?: EmbedFn;
-  /** Portrait platforms (Instagram, TikTok) need a 9/16 container, not 16/9. */
-  embedOrientation?: 'portrait';
+  /** Embed container shape:
+   *  - 'portrait' (Instagram, TikTok) → 9/16 box
+   *  - 'card' (X/Twitter, …) → variable-height post card, not a fixed-aspect
+   *    video; rendered in a width-capped, auto-height frame so it never clips.
+   *  Omitted = a standard 16/9 video. */
+  embedOrientation?: 'portrait' | 'card';
   /** Query fragment that turns autoplay ON (appended only when the caller asks
    *  for it — the lightbox wants it, the detail page must NOT autoplay on load).
    *  `off` is for players that autoplay by default (Twitch) and need an
@@ -112,6 +116,9 @@ const PLATFORMS: PlatformDef[] = [
     glyph: 'twitterX',
     brandClass: 'om-brand-x',
     hosts: ['twitter.com', 'x.com'],
+    // A tweet is a variable-height card, not a 16/9 video — give it an
+    // auto-height frame so the post (and any media inside) never gets clipped.
+    embedOrientation: 'card',
     embed: (_raw, u) => {
       const m = u.pathname.match(/\/status(?:es)?\/(\d+)/);
       return m
@@ -252,6 +259,21 @@ export function embedAspectRatio(memo: Memo): '9/16' | '16/9' {
   if (!url) return '16/9';
   const def = defFor(url);
   return def?.embedOrientation === 'portrait' ? '9/16' : '16/9';
+}
+
+/**
+ * Layout shape for an embed container.
+ * - 'video'    → fixed 16/9 frame (YouTube, Vimeo, …)
+ * - 'portrait' → fixed 9/16 frame (Instagram, TikTok)
+ * - 'card'     → variable-height post card (X/Twitter), width-capped + auto height
+ */
+export function embedKind(memo: Memo): 'video' | 'portrait' | 'card' {
+  const url = memo.source_url;
+  if (!url) return 'video';
+  const def = defFor(url);
+  if (def?.embedOrientation === 'card') return 'card';
+  if (def?.embedOrientation === 'portrait') return 'portrait';
+  return 'video';
 }
 
 /** True if we can play this memo somewhere (local file or a platform embed). */

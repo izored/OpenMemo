@@ -290,6 +290,7 @@ export function Sidebar() {
         {navItems.map((n) => (
           <button
             key={n.id}
+            data-tour={`nav-${n.id}`}
             className={cn(
               'om-nav-item',
               (location.pathname === n.path ||
@@ -474,6 +475,15 @@ export function Sidebar() {
               </div>
               {!libCollapsed && (
                 <div className="om-collection-list">
+                  {others.length === 0 && !isMobile && (
+                    <button
+                      className="om-space-empty-cta"
+                      onClick={() => { setEditingCollection(null); setCollectionModalOpen(true); }}
+                    >
+                      <Icon name="plus" size={11} />
+                      <span>Create your first collection</span>
+                    </button>
+                  )}
                   {visibleOthers.map((c: Collection) => (
                     <CollectionRow
                       key={c.id}
