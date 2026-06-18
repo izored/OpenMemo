@@ -71,6 +71,7 @@ export function VolumeControl({ children, className, size = 18 }: VolumeControlP
 
   // Track the rest level (volume drag / mute changes the waves immediately).
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- mirror the external rest level into the wave state
     setWaves(rest);
   }, [rest]);
 
