@@ -1,5 +1,7 @@
 # OPNMMO-0048 · Cloud shader background
 
+**Status: Shipped (2026-06-17).** Blob drift is retired. The Appearance panel offers Color / Cloud / Live / Image; the WebGPU cloud renderer (`lib/cloudShader.ts`, `components/CloudBackground.tsx`, `lib/skyPalette.ts`) paints Cloud/Live with a static-sky fallback when WebGPU is absent. Saved `bgMode: 'random'` migrates to `cloud` on load, so existing users stop seeing blobs without touching settings. The notes below are the original plan, kept for context.
+
 Plan for replacing the "blob drift" backdrop with a noise-based cloud shader, plus a custom-background section in the Appearance panel: Color, Cloud, and a time-aware Live mode.
 
 ## Where we are today
