@@ -50,6 +50,7 @@ Three big pushes. The Settings page is rebuilt as a bento with the live appearan
 
 ### Fixed
 
+- 🔽 **The Ask Memo model dropdown stops getting eaten by the composer.** The model picker opened upward but vanished behind the input field, because the composer's blur and the colorful border beam each box their own stacking layer and trapped the menu under the beam's glow. The dropdown now renders straight to the page, above everything, so the full model list is visible again.
 - 🧹 **Ask Memo sits right at the bottom.** The Ask page drops the global New Memo "+" (it has its own composer) and the faint gradient band that used to sit behind the input. In a live discussion the composer was floating a full density-gutter above the bottom edge; it now rests cleanly at the bottom of the viewport with the same 24px gutter as the bottom bar, and the colorful beam hugs the field instead of floating above it.
 - 🐦 **X and Twitter posts stop getting clipped on the memo page.** A tweet is a tall card, not a 16/9 video, so it used to get cut off inside the fixed video frame. The embed now grows to the post's own height (the embed reports it) and centers like a real tweet, so nothing is lost. It is keyed off the platform registry, so any "card" style embed gets the same treatment, not just X.
 - 🎯 **The lightbox centers in the visible area.** Social embeds (Instagram, X, and the rest) are now sized to the space beside the sidebar instead of the full window, so they stay centered whether the sidebar is open or collapsed.
