@@ -1,77 +1,33 @@
 import { useMemo, useRef, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useQuery, useInfiniteQuery } from '@tanstack/react-query';
-import { motion } from 'framer-motion';
-import {
-  DndContext,
-  closestCenter,
-  PointerSensor,
-  useSensor,
-  useSensors,
-  type DragEndEvent,
-} from '@dnd-kit/core';
-import {
-  SortableContext,
-  horizontalListSortingStrategy,
-  useSortable,
-  arrayMove,
-} from '@dnd-kit/sortable';
-import { CSS } from '@dnd-kit/utilities';
 import { MemoGrid } from '@/components/MemoGrid';
-import { PageHeader } from '@/components/PageHeader';
+import { BottomBar } from '@/components/BottomBar';
+import { BottomBarFilters } from '@/components/BottomBarFilters';
+import { IslandFab } from '@/components/IslandFab';
+import { AddMemoPanel } from '@/components/AddMemoPanel';
 import { Icon } from '@/components/Icon';
 import { useAppStore } from '@/stores/appStore';
 import { memoApi, collectionApi } from '@/lib/api';
 import { MEMO_FILTERS, filterToParams, type MemoFilterDef } from '@/lib/memoFilters';
-import { cn } from '@/lib/utils';
 import type { Collection } from '@/types';
 
-type FilterDef = MemoFilterDef;
-
-// One draggable filter tab. distance:8 on the sensor keeps plain clicks
-// (selecting a filter) working — only a real drag starts a reorder.
-function SortableFilterTab({ f, active, onSelect }: { f: FilterDef; active: boolean; onSelect: () => void }) {
-  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: f.id });
-  return (
-    <button
-      ref={setNodeRef}
-      className={cn('om-filter-tab', active && 'active')}
-      onClick={onSelect}
-      style={{
-        position: 'relative',
-        transform: CSS.Transform.toString(transform),
-        transition,
-        zIndex: isDragging ? 2 : undefined,
-        cursor: isDragging ? 'grabbing' : 'pointer',
-      }}
-      {...attributes}
-      {...listeners}
-    >
-      {active && (
-        <motion.span
-          layoutId="om-filter-pill"
-          className="om-filter-pill"
-          transition={{ type: 'spring', stiffness: 480, damping: 38 }}
-        />
-      )}
-      <span style={{ position: 'relative', zIndex: 1 }}>{f.label}</span>
-    </button>
-  );
-}
-
-// The filter set + the id→params mapping live in @/lib/memoFilters so the
-// Space home (SpacePage) shows the exact same tabs.
-const FILTERS = MEMO_FILTERS;
+const FILTERS: MemoFilterDef[] = MEMO_FILTERS;
 
 export function Dashboard() {
-  const { activeFilter, setActiveFilter, activeCollection, setActiveCollection, filterOrder, setFilterOrder } = useAppStore();
+  const {
+    activeFilter, setActiveFilter,
+    activeCollection, setActiveCollection,
+    filterOrder,
+    setAddPanelOpen,
+    addPanelOpen,
+  } = useAppStore();
 
-  // Apply the user's saved tab order, reconciled with the current FILTERS set
-  // (new tabs like Code/Audio get appended; removed ids are dropped).
+  // Apply saved tab order without drag-to-reorder (DnD re-added in next iteration).
   const orderedFilters = useMemo(() => {
     const byId = new Map(FILTERS.map((f) => [f.id, f]));
     const seen = new Set<string>();
-    const out: FilterDef[] = [];
+    const out: MemoFilterDef[] = [];
     for (const id of filterOrder) {
       const f = byId.get(id);
       if (f && !seen.has(id)) { out.push(f); seen.add(id); }
@@ -79,18 +35,6 @@ export function Dashboard() {
     for (const f of FILTERS) if (!seen.has(f.id)) out.push(f);
     return out;
   }, [filterOrder]);
-
-  const tabSensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 8 } }));
-
-  const handleTabDragEnd = (e: DragEndEvent) => {
-    const { active, over } = e;
-    if (!over || active.id === over.id) return;
-    const ids = orderedFilters.map((f) => f.id);
-    const from = ids.indexOf(String(active.id));
-    const to = ids.indexOf(String(over.id));
-    if (from === -1 || to === -1) return;
-    setFilterOrder(arrayMove(ids, from, to));
-  };
 
   const { data: collections = [] } = useQuery({
     queryKey: ['collections'],
@@ -142,55 +86,59 @@ export function Dashboard() {
   const collection = activeCollection
     ? collections.find((c: Collection) => c.id === activeCollection)
     : null;
+
   const today = new Date().toLocaleDateString('en-US', {
-    weekday: 'long',
-    month: 'long',
-    day: 'numeric',
+    weekday: 'long', month: 'long', day: 'numeric',
   });
 
-  return (
-    <>
-      <PageHeader
-        eyebrow={today}
-        title={<>{collection ? collection.name : 'Today'}{import.meta.env.DEV && <span style={{color:'red',fontSize:'0.5em'}}> DEV</span>}</>}
-        sub={collection ? `Everything filed under ${collection.name}.` : "A quiet place for what you're keeping."}
-        back={collection ? { label: 'Back to Collections', onClick: () => { setActiveCollection(null); navigate('/collections'); } } : undefined}
-      >
-        <DndContext sensors={tabSensors} collisionDetection={closestCenter} onDragEnd={handleTabDragEnd}>
-          <SortableContext items={orderedFilters.map((f) => f.id)} strategy={horizontalListSortingStrategy}>
-            <div className="om-filter-tabs">
-              {orderedFilters.map((f) => (
-                <SortableFilterTab
-                  key={f.id}
-                  f={f}
-                  active={activeFilter === f.id}
-                  onSelect={() => setActiveFilter(f.id)}
-                />
-              ))}
-            </div>
-          </SortableContext>
-        </DndContext>
-      </PageHeader>
+  const barLabel = collection ? collection.name : today;
 
-      {isLoading ? (
-        <div className="om-empty">
-          <div className="om-empty-mark">
-            <Icon name="refresh" size={24} />
-          </div>
-          <p>Loading Memos…</p>
-        </div>
-      ) : (
-        <>
-          <MemoGrid memos={memos} />
-          <div ref={sentinelRef} style={{ height: 1 }} />
-          {isFetchingNextPage && (
-            <div className="om-empty">
-              <div className="om-empty-mark"><Icon name="refresh" size={24} /></div>
-              <p>Loading more…</p>
+  // The FAB IS the New Memo modal, collapsed (ADR-021). IslandFab grows the
+  // little square up-and-left into the embedded form (true single-surface morph),
+  // and the bar drops its filters to shrink to the cog while open.
+  const fab = (
+    <IslandFab open={addPanelOpen} onOpenChange={setAddPanelOpen} icon="plus" label="New Memo">
+      <AddMemoPanel embedded />
+    </IslandFab>
+  );
+
+  return (
+    <div className="om-bbar-page">
+      <div style={{ flex: 1, minHeight: 0 }}>
+        {isLoading ? (
+          <div className="om-empty">
+            <div className="om-empty-mark">
+              <Icon name="refresh" size={24} />
             </div>
-          )}
-        </>
-      )}
-    </>
+            <p>Loading Memos…</p>
+          </div>
+        ) : (
+          <>
+            <MemoGrid memos={memos} />
+            <div ref={sentinelRef} style={{ height: 1 }} />
+            {isFetchingNextPage && (
+              <div className="om-empty">
+                <div className="om-empty-mark"><Icon name="refresh" size={24} /></div>
+                <p>Loading more…</p>
+              </div>
+            )}
+          </>
+        )}
+      </div>
+
+      <BottomBar label={barLabel} fab={fab} fabExpanded={addPanelOpen}>
+        <BottomBarFilters
+          filters={orderedFilters}
+          active={activeFilter}
+          onChange={(id) => {
+            setActiveFilter(id);
+            if (activeCollection) {
+              setActiveCollection(null);
+              navigate('/');
+            }
+          }}
+        />
+      </BottomBar>
+    </div>
   );
 }
