@@ -1,6 +1,7 @@
 import { useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Icon } from './Icon';
+import { useBeamConfig } from '@/lib/beamConfig';
 import { cn } from '@/lib/utils';
 
 interface IslandFabProps {
@@ -20,6 +21,9 @@ interface IslandFabProps {
    *  (for a fab at the right end of the bar). 'center': grows symmetrically from
    *  the button's center (for a lone, centered fab like the Music page). */
   anchor?: 'right' | 'center';
+  /** Drives the brighter "working" border-beam while a memo is being pulled
+   *  in the background (OPNMMO-0051). Ambient beam shows regardless. */
+  working?: boolean;
   /** Expanded content — the form the button grows into. */
   children: React.ReactNode;
 }
@@ -32,7 +36,8 @@ const SPRING = { type: 'spring' as const, stiffness: 520, damping: 40 };
  * it is the rounded square, open it grows up and to the left into the full form
  * (Framer Motion `layout` animates the box). iOS Dynamic Island style.
  */
-export function IslandFab({ open, onOpenChange, icon = 'plus', label = 'New', hoverOpen, openWidth = 296, anchor = 'right', children }: IslandFabProps) {
+export function IslandFab({ open, onOpenChange, icon = 'plus', label = 'New', hoverOpen, openWidth = 296, anchor = 'right', working, children }: IslandFabProps) {
+  const beam = useBeamConfig();
   const rootRef = useRef<HTMLDivElement>(null);
   const pinnedRef = useRef(false); // clicked open → don't auto-collapse on mouse leave
   const hoverTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -57,6 +62,12 @@ export function IslandFab({ open, onOpenChange, icon = 'plus', label = 'New', ho
       document.removeEventListener('keydown', onKey);
     };
   }, [open, onOpenChange]);
+
+  // Drive the hover-lighten easing from the beam config so it transitions
+  // smoothly instead of snapping (tunable in the dev panel).
+  useEffect(() => {
+    document.documentElement.style.setProperty('--beam-hover-ms', `${beam.hoverTransitionMs}ms`);
+  }, [beam.hoverTransitionMs]);
 
   useEffect(() => () => { if (hoverTimer.current) clearTimeout(hoverTimer.current); }, []);
   useEffect(() => { if (!open) pinnedRef.current = false; }, [open]);
@@ -86,8 +97,14 @@ export function IslandFab({ open, onOpenChange, icon = 'plus', label = 'New', ho
     >
       <motion.div
         layout
-        className={cn('om-island', open && 'open', anchor === 'center' && 'center')}
-        style={{ ['--island-w' as string]: `${openWidth}px` }}
+        className={cn('om-island', 'om-accent-beam', open && 'open', anchor === 'center' && 'center', working && 'working')}
+        style={{
+          ['--island-w' as string]: `${openWidth}px`,
+          // Mono accent beam — opacity / speed / glow driven by the beam config.
+          ['--om-beam-op' as string]: working ? beam.workingStrength : beam.ambientStrength,
+          ['--om-beam-dur' as string]: `${working ? beam.workingDuration : beam.ambientDuration}s`,
+          ['--om-beam-glow' as string]: `${Math.round((working ? beam.workingBrightness : beam.ambientBrightness) * 8)}px`,
+        }}
         transition={SPRING}
       >
         <AnimatePresence mode="popLayout" initial={false}>
