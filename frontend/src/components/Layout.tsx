@@ -248,6 +248,9 @@ export function Layout() {
       </AnimatePresence>
 
       {(() => {
+        // Ask Memo has its own composer at the bottom — the global New-Memo FAB
+        // would just clutter that page, so it steps aside entirely there.
+        if (location.pathname.startsWith('/ask')) return null;
         // On the Music page the FAB opens the dedicated music modal (SpotiFLAC,
         // uploads, playlists) instead of the generic New-Memo panel.
         const onMusic = location.pathname.startsWith('/music');

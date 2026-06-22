@@ -22,6 +22,7 @@ export function Dashboard() {
     setAddPanelOpen,
     addPanelOpen,
   } = useAppStore();
+  const addMemoBusy = useAppStore((s) => s.addMemoBusy);
 
   // Apply saved tab order without drag-to-reorder (DnD re-added in next iteration).
   const orderedFilters = useMemo(() => {
@@ -97,7 +98,7 @@ export function Dashboard() {
   // little square up-and-left into the embedded form (true single-surface morph),
   // and the bar drops its filters to shrink to the cog while open.
   const fab = (
-    <IslandFab open={addPanelOpen} onOpenChange={setAddPanelOpen} icon="plus" label="New Memo">
+    <IslandFab open={addPanelOpen} onOpenChange={setAddPanelOpen} icon="plus" label="New Memo" working={addMemoBusy}>
       <AddMemoPanel embedded />
     </IslandFab>
   );
