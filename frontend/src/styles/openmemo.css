@@ -2087,6 +2087,20 @@ input, textarea { font: inherit; color: inherit; }
   box-shadow: var(--shadow-elev);
 }
 .om-ask-composer input { flex: 1; background: none; border: 0; outline: none; font-size: 15px; }
+/* BorderBeam wrapper must not shrink the composer — fill the dock width.
+   The composer bg goes translucent so the beam's inner glow bleeds through
+   (an opaque surface would bury it). */
+.om-beam-wrap { display: block; width: 100%; }
+.om-beam-wrap > .om-ask-composer {
+  width: 100%;
+  /* No margin inside the wrap — the beam hugs the wrap's box, so any margin
+     here would leave the glow floating above the field (the spacing lives on
+     the wrap instead). */
+  margin: 0;
+  background: color-mix(in oklab, var(--elev) 78%, transparent);
+  -webkit-backdrop-filter: blur(20px) saturate(150%);
+          backdrop-filter: blur(20px) saturate(150%);
+}
 .om-send {
   width: 36px; height: 36px; border-radius: 10px;
   background: var(--text); color: var(--bg);
@@ -2506,7 +2520,13 @@ body.om-has-bbar .om-fab { display: none !important; }
   flex-direction: column;
   flex: 1;
   min-height: 0;
+  /* Bottom bar now lives in-page, so the grid needs a top gutter that matches
+     the inter-card gap (density-aware) — memos shouldn't kiss the top edge. */
+  padding-top: 20px;
 }
+[data-density="compact"] .om-bbar-page { padding-top: 12px; }
+[data-density="roomy"]   .om-bbar-page { padding-top: 28px; }
+[data-card="edge"]       .om-bbar-page { padding-top: 0; }
 .om-bbar-page > *:not(.om-bbar-area) {
   flex: 1;
   min-height: 0;
@@ -2530,7 +2550,9 @@ body.om-has-bbar .om-fab { display: none !important; }
   overflow: hidden;
   pointer-events: auto;
   z-index: 95;
-  transition: background 0.14s, border-color 0.14s;
+  transition:
+    background var(--beam-hover-ms, 300ms) cubic-bezier(.2, .7, .2, 1),
+    border-color var(--beam-hover-ms, 300ms) cubic-bezier(.2, .7, .2, 1);
 }
 /* Hover on the collapsed button — slight lighten, like every other control. */
 .om-island:not(.open):hover {
@@ -2552,7 +2574,46 @@ body.om-has-bbar .om-fab { display: none !important; }
   display: flex; align-items: center; justify-content: center;
   border: none; background: transparent; color: var(--text); cursor: pointer;
 }
-.om-island-body { display: flex; min-height: 0; }
+.om-island-body { display: flex; min-height: 0; width: 100%; }
+/* Collapsed (the + button): let the beam's accent glow bloom OUTSIDE the 50px
+   box so it actually reads. While open, overflow:hidden returns to keep the
+   morphing form cleanly clipped. */
+.om-island:not(.open) { overflow: visible; }
+
+/* ── Accent border beam (OPNMMO-0051) — the New Memo button's mono beam, wired
+   straight to the appearance accent (--accent). A comet of accent light rides
+   the border; a blurred copy trails as a soft halo. Speed/opacity/glow come
+   from the dev-panel beam config via the inline --om-beam-* vars. ─────────── */
+@property --om-beam-rot { syntax: '<angle>'; initial-value: 0deg; inherits: false; }
+.om-accent-beam::after {
+  content: ''; position: absolute; inset: 0; border-radius: inherit;
+  padding: 1.5px; pointer-events: none; z-index: 3;
+  background: conic-gradient(
+    from var(--om-beam-rot),
+    transparent 0deg,
+    var(--accent) 22deg,
+    transparent 46deg,
+    transparent 360deg
+  );
+  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+          mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor; mask-composite: exclude;
+  opacity: var(--om-beam-op, 0.75);
+  animation: omBeamRot var(--om-beam-dur, 2.6s) linear infinite;
+}
+/* Soft accent halo — sits just inside, blurred, so the glow is visible even on
+   the small collapsed button. */
+.om-accent-beam::before {
+  content: ''; position: absolute; inset: 0; border-radius: inherit;
+  pointer-events: none; z-index: 2;
+  box-shadow: 0 0 var(--om-beam-glow, 10px) 0
+    color-mix(in oklab, var(--accent) 70%, transparent);
+  opacity: calc(var(--om-beam-op, 0.75) * 0.7);
+}
+@keyframes omBeamRot { to { --om-beam-rot: 360deg; } }
+@media (prefers-reduced-motion: reduce) {
+  .om-accent-beam::after { animation: none; }
+}
 
 /* Embedded form — the island owns the glass surface + the morph, so the form
    itself is just the flowing content (no fixed aside, no scale animation). */
@@ -4354,10 +4415,14 @@ body.om-has-bbar .om-fab { display: none !important; }
 .om-add-coll-flyout-new svg { color: var(--accent); }
 
 /* ─ Ask memo — history pane + centered→docked composer ─────────────────── */
+/* Ask owns its own bottom dock, so drop the main pane's bottom padding here —
+   otherwise the sticky composer floats a full density-gutter above the bottom
+   edge. The dock then carries the 24px gutter itself. */
+.om-main:has(.om-ask-shell) { padding-bottom: 0 !important; }
 .om-ask-shell {
   display: grid; grid-template-columns: 1fr 0;
   gap: 0;
-  height: calc(100vh - 96px);
+  height: 100vh;
   padding: 24px 0 0;
   transition: grid-template-columns .25s cubic-bezier(.2,.7,.2,1), gap .25s;
 }
@@ -4386,12 +4451,25 @@ body.om-has-bbar .om-fab { display: none !important; }
 .om-model-btn:hover { background: var(--surface-2); color: var(--text); }
 .om-model-menu {
   position: absolute; right: 0; bottom: calc(100% + 6px); z-index: 10;
-  min-width: 200px; max-height: 280px; overflow-y: auto; padding: 4px;
+  min-width: 220px; max-width: 320px; max-height: 280px;
+  overflow-y: auto; overflow-x: hidden; padding: 4px;
   background: var(--elev); border: 1px solid var(--border-2);
   border-radius: 10px; box-shadow: var(--shadow-elev);
   display: flex; flex-direction: column; gap: 1px;
   animation: omPopUp .15s ease;
 }
+/* Model picker rows — left-aligned, compact, mono id (matches .om-model-btn). */
+.om-model-opt {
+  display: flex; align-items: center; gap: 8px;
+  width: 100%; text-align: left;
+  padding: 7px 9px; border-radius: 8px;
+  font-size: 11.5px; color: var(--text-2);
+  white-space: nowrap; transition: background .12s, color .12s;
+}
+.om-model-opt .mono { overflow: hidden; text-overflow: ellipsis; }
+.om-model-opt :last-child:not(.mono) { margin-left: auto; color: var(--accent); flex-shrink: 0; }
+.om-model-opt:hover { background: var(--surface-2); color: var(--text); }
+.om-model-opt.active { color: var(--text); }
 .om-ask-newchat {
   display: inline-flex; align-items: center; gap: 8px;
   padding: 9px 12px; border-radius: 10px;
@@ -4415,7 +4493,8 @@ body.om-has-bbar .om-fab { display: none !important; }
   display: flex; flex-direction: column; gap: 12px;
   text-align: center; align-items: center;
 }
-.om-ask-hero .om-ask-composer { width: 100%; margin-top: 8px; }
+.om-ask-hero .om-ask-composer { width: 100%; margin: 0; }
+.om-ask-hero .om-beam-wrap { margin-top: 8px; width: 100%; }
 .om-ask-main .om-ask-thread {
   flex: 1; overflow-y: auto; min-height: 0;
   display: flex; flex-direction: column; gap: 28px;
@@ -4423,9 +4502,9 @@ body.om-has-bbar .om-fab { display: none !important; }
 }
 .om-ask-composer-dock {
   position: sticky; bottom: 0;
-  padding: 14px 0 20px;
+  padding: 14px 0 24px;
   max-width: 760px; width: 100%; margin: 0 auto;
-  background: linear-gradient(to top, var(--bg) 70%, transparent);
+  background: transparent;
 }
 @media (max-width: 1000px) {
   .om-ask-shell { grid-template-columns: 1fr; }
@@ -5579,6 +5658,38 @@ button.om-add-link { background: none; border: 0; padding: 0; cursor: pointer; f
   font-size: 12px; color: var(--text-2); cursor: pointer; user-select: none;
 }
 .om-add-pl-dl input { accent-color: var(--accent); width: 13px; height: 13px; cursor: pointer; }
+
+/* ── Branded toggle switch (replaces native checkboxes in the add panel) ─── */
+.om-switch-row {
+  display: flex; align-items: center; gap: 9px; margin-top: 8px;
+  font-size: 12px; color: var(--text-2); cursor: pointer; user-select: none;
+}
+.om-switch-input { position: absolute; opacity: 0; width: 0; height: 0; }
+.om-switch {
+  position: relative; flex-shrink: 0;
+  width: 30px; height: 18px; border-radius: 999px;
+  background: var(--surface-3, var(--surface-2));
+  border: 1px solid var(--border-2);
+  transition: background .18s, border-color .18s;
+}
+.om-switch-dot {
+  position: absolute; top: 2px; left: 2px;
+  width: 12px; height: 12px; border-radius: 50%;
+  background: var(--text-3);
+  transition: transform .18s cubic-bezier(.2,.8,.2,1), background .18s;
+}
+.om-switch-input:checked + .om-switch {
+  background: var(--accent); border-color: var(--accent);
+}
+.om-switch-input:checked + .om-switch .om-switch-dot {
+  transform: translateX(12px); background: #fff;
+}
+.om-switch-input:focus-visible + .om-switch {
+  outline: 2px solid var(--accent); outline-offset: 2px;
+}
+.om-switch-label { display: inline-flex; align-items: center; gap: 5px; }
+.om-switch-label svg { opacity: 0.4; }
+.om-switch-row:hover .om-switch-label svg { opacity: 0.7; }
 
 /* ════════════════════════════════════════════════════════════════════════
    Mobile chrome (ADR-009 / mobile plan) — MUST stay at the end of the file so

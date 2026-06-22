@@ -6,6 +6,8 @@ import { useAppStore } from '@/stores/appStore';
 import { chatApi, systemApi, settingsApi } from '@/lib/api';
 import type { ChatSource, OllamaModel } from '@/types';
 import ReactMarkdown from 'react-markdown';
+import { BorderBeam } from 'border-beam';
+import { useBeamConfig, resolveBeamTheme } from '@/lib/beamConfig';
 import { cn } from '@/lib/utils';
 
 interface Message {
@@ -29,6 +31,8 @@ const SUGGESTIONS = [
 
 export function AskMemoPage() {
   const { chatModel, setChatModel } = useAppStore();
+  const theme = useAppStore((s) => s.tweaks.theme);
+  const beam = useBeamConfig();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const [messages, setMessages] = useState<Message[]>([]);
@@ -159,7 +163,7 @@ export function AskMemoPage() {
 
   const hasThread = messages.length > 0;
 
-  const composer = (
+  const composerInner = (
     <div className="om-ask-composer">
       <Icon name="sparkles" size={14} />
       <input
@@ -191,13 +195,14 @@ export function AskMemoPage() {
                 {(modelsData?.models || []).map((m: OllamaModel) => (
                   <button
                     key={m.name}
-                    className={cn('om-sort-opt mono', chatModel === m.name && 'active')}
+                    className={cn('om-model-opt', chatModel === m.name && 'active')}
                     onClick={() => {
                       setChatModel(m.name);
                       setModelOpen(false);
                     }}
+                    title={m.name}
                   >
-                    {m.name}
+                    <span className="mono">{m.name}</span>
                     {chatModel === m.name && <Icon name="check" size={11} />}
                   </button>
                 ))}
@@ -210,6 +215,25 @@ export function AskMemoPage() {
         <Icon name="send" size={13} />
       </button>
     </div>
+  );
+
+  const composer = (
+    <BorderBeam
+      className="om-beam-wrap"
+      size={beam.composerSize}
+      colorVariant="colorful"
+      theme={resolveBeamTheme(beam.themeMode, theme === 'light' ? 'light' : 'dark')}
+      borderRadius={18}
+      active
+      staticColors={beam.staticColors}
+      saturation={beam.saturation}
+      hueRange={beam.hueRange}
+      strength={streaming ? beam.workingStrength : beam.ambientStrength}
+      brightness={streaming ? beam.workingBrightness : beam.ambientBrightness}
+      duration={streaming ? beam.workingDuration : beam.ambientDuration}
+    >
+      {composerInner}
+    </BorderBeam>
   );
 
   return (

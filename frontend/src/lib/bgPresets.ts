@@ -15,7 +15,7 @@ const COLOR_ACCENT: Record<string, string> = {
   orange: '#F4825A',
   yellow: '#E8D77B',
   blue: '#7DB9E8',
-  green: '#C3F26B',
+  green: '#A8CE7C',
   purple: '#B79CED',
   rose: '#E8889C',
 };

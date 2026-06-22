@@ -227,7 +227,7 @@ export function applyTweaks(t: Tweaks) {
   root.style.setProperty('--sky-stop', `${Math.round(12 + (1 - grad) * 76)}%`);
 }
 
-export const ACCENT_OPTIONS = ['#F4825A', '#E8D77B', '#7DB9E8', '#C3F26B', '#71717A'];
+export const ACCENT_OPTIONS = ['#F4825A', '#E8D77B', '#7DB9E8', '#A8CE7C', '#71717A'];
 
 export const DEFAULT_TWEAKS: Tweaks = {
   theme: 'light',

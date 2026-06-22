@@ -41,6 +41,7 @@ export function AddMemoPanel({ embedded = false }: { embedded?: boolean } = {}) 
   const setOpen = useAppStore((s) => s.setAddPanelOpen);
   const bottomBarPresent = useAppStore((s) => s.bottomBarPresent);
   const setWriterOpen = useAppStore((s) => s.setWriterOpen);
+  const setAddMemoBusy = useAppStore((s) => s.setAddMemoBusy);
   const setCollectionModalOpen = useAppStore((s) => s.setCollectionModalOpen);
   const setEditingCollection = useAppStore((s) => s.setEditingCollection);
   const lastCreatedCollectionId = useAppStore((s) => s.lastCreatedCollectionId);
@@ -167,6 +168,7 @@ export function AddMemoPanel({ embedded = false }: { embedded?: boolean } = {}) 
 
   const save = async () => {
     setBusy(true);
+    setAddMemoBusy(true);
     setError('');
     try {
       if (tab === 'link') {
@@ -196,6 +198,7 @@ export function AddMemoPanel({ embedded = false }: { embedded?: boolean } = {}) 
       setError((e as Error).message || 'Failed to save');
     } finally {
       setBusy(false);
+      setAddMemoBusy(false);
     }
   };
 
@@ -416,13 +419,15 @@ export function AddMemoPanel({ embedded = false }: { embedded?: boolean } = {}) 
                       </div>
                       {plChoice === 'playlist' && (
                         <>
-                          <label className="om-add-pl-dl">
+                          <label className="om-switch-row">
                             <input
                               type="checkbox"
+                              className="om-switch-input"
                               checked={plDownload}
                               onChange={(e) => setPlDownload(e.target.checked)}
                             />
-                            <span>Download tracks to this device now</span>
+                            <span className="om-switch"><span className="om-switch-dot" /></span>
+                            <span className="om-switch-label">Download tracks to this device now</span>
                           </label>
                           <p className="om-add-hint mono">
                             {plDownload
@@ -435,21 +440,26 @@ export function AddMemoPanel({ embedded = false }: { embedded?: boolean } = {}) 
                   )}
                 </div>
               ) : (
-                <>
-                  <label className="om-add-pl-dl">
-                    <input
-                      type="checkbox"
-                      checked={noPull}
-                      onChange={(e) => setNoPull(e.target.checked)}
-                    />
-                    <span>Don't pull content, just save the link</span>
-                  </label>
-                  <p className="om-add-hint mono">
-                    {noPull
+                <label
+                  className="om-switch-row"
+                  title={
+                    noPull
                       ? 'Saves the bookmark with its title and icon. No preview, no media scrape — for links that fail or that you only want to keep.'
-                      : 'Preview, metadata, and a screenshot will be captured automatically.'}
-                  </p>
-                </>
+                      : 'Preview, metadata, and a screenshot will be captured automatically.'
+                  }
+                >
+                  <input
+                    type="checkbox"
+                    className="om-switch-input"
+                    checked={noPull}
+                    onChange={(e) => setNoPull(e.target.checked)}
+                  />
+                  <span className="om-switch"><span className="om-switch-dot" /></span>
+                  <span className="om-switch-label">
+                    Don't pull content, just save the link
+                    <Icon name="info" size={11} />
+                  </span>
+                </label>
               )}
             </div>
           )}
