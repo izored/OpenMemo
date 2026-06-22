@@ -2316,6 +2316,266 @@ input, textarea { font: inherit; color: inherit; }
 }
 .om-fab-icon { display: inline-flex; align-items: center; justify-content: center; }
 
+/* Hide global FAB and expand main bottom padding when a page renders BottomBar. */
+body.om-has-bbar .om-fab { display: none !important; }
+
+/* ── Bottom Bar ──────────────────────────────────────────────────────────── */
+.om-bbar-area {
+  position: sticky;
+  bottom: 0;
+  z-index: 90;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  padding: 0 24px 24px;
+  pointer-events: none;
+}
+
+.om-bbar-label {
+  font-size: 11px;
+  font-family: var(--font-mono, monospace);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text-3);
+  margin: 0;
+  pointer-events: none;
+  user-select: none;
+}
+
+.om-bbar-row {
+  display: flex;
+  align-items: flex-end;
+  gap: 8px;
+}
+
+/* Glass pill */
+.om-bbar {
+  display: flex;
+  align-items: center;
+  background: color-mix(in oklab, var(--surface) 55%, transparent);
+  backdrop-filter: blur(24px);
+  -webkit-backdrop-filter: blur(24px);
+  border: 0.5px solid var(--border);
+  border-radius: 16px;
+  overflow: hidden;
+  pointer-events: auto;
+  width: fit-content;
+}
+
+/* Left: cog + separator */
+.om-bbar-lead {
+  display: flex;
+  align-items: center;
+  padding: 6px 0 6px 6px;
+  flex-shrink: 0;
+}
+
+.om-bbar-sep {
+  display: block;
+  width: 0.5px;
+  height: 20px;
+  background: var(--border);
+  margin: 0 4px;
+  flex-shrink: 0;
+}
+
+/* Scrollable center */
+.om-bbar-scroll-wrap {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.om-bbar-scroll {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  overflow-x: auto;
+  scrollbar-width: none;
+  padding: 6px;
+  max-width: min(520px, 55vw);
+}
+.om-bbar-scroll::-webkit-scrollbar { display: none; }
+/* While the pill is shrunk to clear the modal, the overflowing filters fade out
+   under the right edge instead of hard-cutting mid-icon (ADR-021). */
+.om-bbar-scroll.covered {
+  overflow-x: hidden;
+  -webkit-mask-image: linear-gradient(to right, #000 calc(100% - 22px), transparent);
+          mask-image: linear-gradient(to right, #000 calc(100% - 22px), transparent);
+}
+
+/* Edge scroll hints */
+.om-bbar-hint {
+  position: absolute;
+  top: 0; bottom: 0;
+  width: 40px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-3);
+  pointer-events: none;
+  z-index: 2;
+}
+.om-bbar-hint--l {
+  left: 0;
+  background: linear-gradient(to right, color-mix(in oklab, var(--surface) 90%, transparent) 0%, transparent 100%);
+}
+.om-bbar-hint--r {
+  right: 0;
+  background: linear-gradient(to left, color-mix(in oklab, var(--surface) 90%, transparent) 0%, transparent 100%);
+}
+
+/* Icon button */
+.om-bbar-ib {
+  position: relative;
+  width: 38px;
+  height: 38px;
+  border-radius: 9px;
+  border: none;
+  background: transparent;
+  color: var(--text-3);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  transition: color 0.12s;
+}
+.om-bbar-ib:hover { color: var(--text-2); }
+.om-bbar-ib.active { color: var(--text); }
+
+/* Shared animated active pill (Framer Motion layoutId "om-bbar-pill") */
+.om-bbar-pill {
+  position: absolute;
+  inset: 0;
+  border-radius: 9px;
+  background: var(--surface-2);
+  pointer-events: none;
+}
+
+.om-bbar-ib-ico {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
+}
+
+/* FAB — glass rounded square, mirrors bar blur */
+.om-bbar-fab {
+  width: 50px;
+  height: 50px;
+  border-radius: 14px;
+  border: 0.5px solid var(--border);
+  background: color-mix(in oklab, var(--surface) 55%, transparent);
+  backdrop-filter: blur(24px);
+  -webkit-backdrop-filter: blur(24px);
+  color: var(--text);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  pointer-events: auto;
+  flex-shrink: 0;
+  transition: background 0.14s, border-color 0.14s;
+}
+.om-bbar-fab:hover {
+  background: color-mix(in oklab, var(--surface) 74%, transparent);
+  border-color: var(--border-2, var(--border));
+}
+
+/* Mobile: full-width scroll, smaller outer padding */
+@media (max-width: 768px) {
+  .om-bbar-area { padding: 0 12px 16px; }
+  .om-bbar-scroll { max-width: calc(100vw - 120px); }
+}
+
+/* Dashboard page wrapper — a flex column that fills om-main so the bar sits at
+   the very bottom of the content area (sidebar-aware), not floating mid-page.
+   Scoped via :has so the global .om-main-inner is untouched on other pages. */
+.om-main:has(.om-bbar-page) { padding-bottom: 0 !important; }
+.om-main:has(.om-bbar-page) .om-main-inner {
+  display: flex;
+  flex-direction: column;
+  min-height: 100%;
+}
+.om-bbar-page {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+}
+.om-bbar-page > *:not(.om-bbar-area) {
+  flex: 1;
+  min-height: 0;
+}
+
+/* ── IslandFab (ADR-021) — the New Memo / Add-music button that morphs into its
+   modal. A fixed 50×50 footprint in the bar's trailing slot holds one box pinned
+   bottom-right; Framer Motion `layout` grows it up-and-left into the form. */
+.om-island-root { position: relative; width: 50px; height: 50px; flex-shrink: 0; }
+.om-island {
+  position: absolute; bottom: 0; right: 0;
+  width: 50px; height: 50px;
+  display: flex;
+  border-radius: 14px;
+  /* Match the bar's glass exactly (same 55% surface mix). */
+  background: color-mix(in oklab, var(--surface) 55%, transparent);
+  -webkit-backdrop-filter: blur(24px) saturate(160%);
+          backdrop-filter: blur(24px) saturate(160%);
+  border: 0.5px solid var(--border);
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.18);
+  overflow: hidden;
+  pointer-events: auto;
+  z-index: 95;
+  transition: background 0.14s, border-color 0.14s;
+}
+/* Hover on the collapsed button — slight lighten, like every other control. */
+.om-island:not(.open):hover {
+  background: color-mix(in oklab, var(--surface) 74%, transparent);
+  border-color: var(--border-2, var(--border));
+}
+/* Open width is a FIXED px set per content via --island-w (296 New Memo, 320
+   Music). Fixed, not auto — Framer Motion's layout animation mis-measures auto
+   and leaves the collapsed button stuck stretched. */
+.om-island.open { width: var(--island-w, 296px); height: auto; border-radius: 16px; }
+/* Center anchor (lone fab, e.g. Music): grow symmetrically from the button's
+   center. `left:50%` + a negative half-width margin centers the box on the 50px
+   root even when it is wider than the root (margin:auto can't — it falls back to
+   left-aligned). No transform, so it never fights FM's layout animation. */
+.om-island.center { left: 50%; right: auto; margin-left: -25px; }
+.om-island.center.open { margin-left: calc(var(--island-w, 296px) / -2); }
+.om-island-trigger {
+  width: 100%; height: 100%;
+  display: flex; align-items: center; justify-content: center;
+  border: none; background: transparent; color: var(--text); cursor: pointer;
+}
+.om-island-body { display: flex; min-height: 0; }
+
+/* Embedded form — the island owns the glass surface + the morph, so the form
+   itself is just the flowing content (no fixed aside, no scale animation). */
+.om-add-embedded {
+  display: flex; flex-direction: column;
+  width: 296px; max-height: min(72vh, 560px); min-height: 0;
+  overflow: hidden;
+  color: var(--text); font: 11.5px/1.4 var(--font-ui);
+}
+.om-add-embedded.om-mm-panel { width: 320px; height: min(404px, 72vh); }
+
+/* Mobile: the open island becomes a near-full-width bottom sheet */
+@media (max-width: 768px) {
+  .om-island.open,
+  .om-island.center.open {
+    position: fixed; left: 8px; right: 8px; bottom: 8px;
+    width: auto; margin-left: 0; border-radius: 18px;
+  }
+  .om-island.open .om-island-body,
+  .om-island.open .om-add-embedded,
+  .om-island.open .om-add-embedded.om-mm-panel { width: 100%; max-height: 80vh; height: auto; }
+}
+
 .om-add-panel {
   position: fixed; right: 16px; bottom: 16px; z-index: 61;
   width: 296px;
