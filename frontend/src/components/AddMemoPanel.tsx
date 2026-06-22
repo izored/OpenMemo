@@ -34,9 +34,12 @@ function AnimatedHeight({ tabKey, children }: { tabKey: string; children: React.
   );
 }
 
-export function AddMemoPanel() {
+// `embedded` (ADR-021): render only the form content, no fixed aside / scale
+// animation — the bottom-bar IslandFab owns the glass surface and the morph.
+export function AddMemoPanel({ embedded = false }: { embedded?: boolean } = {}) {
   const open = useAppStore((s) => s.addPanelOpen);
   const setOpen = useAppStore((s) => s.setAddPanelOpen);
+  const bottomBarPresent = useAppStore((s) => s.bottomBarPresent);
   const setWriterOpen = useAppStore((s) => s.setWriterOpen);
   const setCollectionModalOpen = useAppStore((s) => s.setCollectionModalOpen);
   const setEditingCollection = useAppStore((s) => s.setEditingCollection);
@@ -269,9 +272,13 @@ export function AddMemoPanel() {
     { id: 'voice', icon: 'mic', label: 'Voice' },
   ];
 
+  // The global corner instance steps aside on bottom-bar pages — the island
+  // renders this same component with `embedded` instead (ADR-021).
+  if (!embedded && bottomBarPresent) return null;
+
   return (
     <>
-    {open && collOpen && (
+    {(open || embedded) && collOpen && (
       <aside className="om-add-coll-flyout" aria-label="Choose collection">
         <div className="om-add-head">
           <div className="om-add-head-l">
@@ -320,7 +327,10 @@ export function AddMemoPanel() {
         </button>
       </aside>
     )}
-    <aside className={cn('om-add-panel', open && 'open')} aria-hidden={!open}>
+    <aside
+      className={cn(embedded ? 'om-add-embedded' : 'om-add-panel', (open || embedded) && 'open')}
+      aria-hidden={embedded ? undefined : !open}
+    >
       <div className="om-add-head">
         <div className="om-add-head-l">
           <b>New Memo</b>

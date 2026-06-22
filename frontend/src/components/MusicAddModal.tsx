@@ -33,9 +33,13 @@ const PROVIDER_LABEL: Record<'spotify' | 'apple', string> = {
  *   · spin up an empty playlist.
  * A gear in the header reveals the auto-download-linked-audio setting.
  */
-export function MusicAddModal() {
+// `embedded` (ADR-021): render only the panel content — the bottom-bar IslandFab
+// owns the glass surface + the morph. The global instance steps aside on
+// bottom-bar pages so the two never double up.
+export function MusicAddModal({ embedded = false }: { embedded?: boolean } = {}) {
   const open = useAppStore((s) => s.musicModalOpen);
   const setOpen = useAppStore((s) => s.setMusicModalOpen);
+  const bottomBarPresent = useAppStore((s) => s.bottomBarPresent);
   const queryClient = useQueryClient();
   const navigate = useNavigate();
 
@@ -224,8 +228,14 @@ export function MusicAddModal() {
     || (tab === 'link' && !url.trim())
     || (tab === 'playlist' && !plName.trim());
 
+  // The global corner instance steps aside on bottom-bar pages (ADR-021).
+  if (!embedded && bottomBarPresent) return null;
+
   return (
-    <aside className={cn('om-add-panel om-mm-panel', open && 'open')} aria-hidden={!open}>
+    <aside
+      className={cn(embedded ? 'om-add-embedded om-mm-panel' : 'om-add-panel om-mm-panel', (open || embedded) && 'open')}
+      aria-hidden={embedded ? undefined : !open}
+    >
       <div className="om-add-head">
         <div className="om-add-head-l">
           <Icon name="music" size={13} />

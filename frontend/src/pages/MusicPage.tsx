@@ -6,6 +6,9 @@ import { SortableContext, rectSortingStrategy, useSortable, arrayMove } from '@d
 import { CSS } from '@dnd-kit/utilities';
 import { MemoGrid } from '@/components/MemoGrid';
 import { PageHeader } from '@/components/PageHeader';
+import { BottomBar } from '@/components/BottomBar';
+import { IslandFab } from '@/components/IslandFab';
+import { MusicAddModal } from '@/components/MusicAddModal';
 import { Icon } from '@/components/Icon';
 import { musicApi, memoApi, collectionApi } from '@/lib/api';
 import { useAudioPlayer, type AudioTrack } from '@/lib/audioPlayer';
@@ -423,6 +426,7 @@ export function MusicPage() {
   const queryClient = useQueryClient();
   const { playlistId } = useParams();
   const setMusicModalOpen = useAppStore((s) => s.setMusicModalOpen);
+  const musicModalOpen = useAppStore((s) => s.musicModalOpen);
   const openThumbEdit = useAppStore((s) => s.openThumbEdit);
   const showNotice = useAppStore((s) => s.showNotice);
   const { playQueue, toggle, isActive, playing, queueSource } = useAudioPlayer();
@@ -933,9 +937,10 @@ export function MusicPage() {
   const heroItems = playlists.slice(0, 4);
   const showHero = playlists.length > 0 || library.length > 0;
   return (
+    <div className="om-bbar-page">
     <div className="om-music">
       {/* Same header as every page; the Music page's own add-modal (SpotiFLAC,
-          uploads, playlists) opens from this action and the FAB. */}
+          uploads, playlists) opens from this action and the bottom-bar island. */}
       <PageHeader eyebrow="Music library" title="Music" sub="Every song you saved, ready to play.">
         <button className="om-btn-primary" onClick={() => setMusicModalOpen(true)} title="Add music">
           <Icon name="plus" size={13} />
@@ -1103,6 +1108,17 @@ export function MusicPage() {
           </>
         )}
       </section>
+    </div>
+
+    {/* Add-music FAB as the bottom-bar island (ADR-021). It morphs into the
+        embedded MusicAddModal; the header "Add music" button opens the same one. */}
+    <BottomBar
+      fab={
+        <IslandFab open={musicModalOpen} onOpenChange={setMusicModalOpen} icon="plus" label="Add music" openWidth={320} anchor="center">
+          <MusicAddModal embedded />
+        </IslandFab>
+      }
+    />
     </div>
   );
 }

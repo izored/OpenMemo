@@ -115,6 +115,17 @@ interface AppState {
   addPanelOpen: boolean;
   setAddPanelOpen: (open: boolean) => void;
 
+  // True while a page renders the bottom bar (ADR-021). The bottom bar owns the
+  // New-Memo / Add-music flow through its IslandFab, so the GLOBAL corner panels
+  // (AddMemoPanel, MusicAddModal) step aside and render null to avoid doubling.
+  bottomBarPresent: boolean;
+  setBottomBarPresent: (present: boolean) => void;
+
+  // True while a New-Memo save is in flight / a memo is being pulled in the
+  // background (OPNMMO-0051). Drives the BorderBeam "working" glow on the island.
+  addMemoBusy: boolean;
+  setAddMemoBusy: (busy: boolean) => void;
+
   // Music add-modal (Music page + button — SpotiFLAC, uploads, playlists)
   musicModalOpen: boolean;
   setMusicModalOpen: (open: boolean) => void;
@@ -234,6 +245,12 @@ export const useAppStore = create<AppState>((set) => ({
 
   addPanelOpen: false,
   setAddPanelOpen: (open) => set({ addPanelOpen: open }),
+
+  bottomBarPresent: false,
+  setBottomBarPresent: (present) => set({ bottomBarPresent: present }),
+
+  addMemoBusy: false,
+  setAddMemoBusy: (busy) => set({ addMemoBusy: busy }),
 
   musicModalOpen: false,
   setMusicModalOpen: (open) => set({ musicModalOpen: open }),
