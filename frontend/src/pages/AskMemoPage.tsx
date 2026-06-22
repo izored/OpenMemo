@@ -1,4 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
 import { Icon } from '@/components/Icon';
@@ -41,6 +42,8 @@ export function AskMemoPage() {
   const [sessionId, setSessionId] = useState<string | null>(null);
   const [historyOpen, setHistoryOpen] = useState(false);
   const [modelOpen, setModelOpen] = useState(false);
+  const [menuPos, setMenuPos] = useState<{ bottom: number; right: number } | null>(null);
+  const modelBtnRef = useRef<HTMLButtonElement>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
 
   const { data: modelsData } = useQuery({ queryKey: ['models'], queryFn: systemApi.models });
@@ -85,6 +88,21 @@ export function AskMemoPage() {
     setMessages([]);
     setSessionId(null);
     setInput('');
+  };
+
+  // Anchor the model menu in fixed coords off the button rect, then portal it to
+  // <body>. The composer's backdrop-filter + the BorderBeam wrap (isolation:isolate
+  // with glow layers) form stacking contexts that trap an in-flow dropdown behind
+  // the beam — a portal is the only reliable escape.
+  const toggleModelMenu = () => {
+    setModelOpen((v) => {
+      const next = !v;
+      if (next && modelBtnRef.current) {
+        const r = modelBtnRef.current.getBoundingClientRect();
+        setMenuPos({ bottom: window.innerHeight - r.top + 6, right: window.innerWidth - r.right });
+      }
+      return next;
+    });
   };
 
   const handleSend = async (preset?: string) => {
@@ -177,38 +195,50 @@ export function AskMemoPage() {
       {(modelsData?.models || []).length > 0 && (
         <div style={{ position: 'relative' }}>
           <button
+            ref={modelBtnRef}
             type="button"
             className="om-model-btn mono"
-            onClick={() => setModelOpen((v) => !v)}
+            onClick={toggleModelMenu}
             title="Model"
           >
             <span>{chatModel || 'model'}</span>
             <Icon name="chevronDown" size={10} />
           </button>
-          {modelOpen && (
-            <>
-              <div
-                style={{ position: 'fixed', inset: 0, zIndex: 9 }}
-                onClick={() => setModelOpen(false)}
-              />
-              <div className="om-model-menu">
-                {(modelsData?.models || []).map((m: OllamaModel) => (
-                  <button
-                    key={m.name}
-                    className={cn('om-model-opt', chatModel === m.name && 'active')}
-                    onClick={() => {
-                      setChatModel(m.name);
-                      setModelOpen(false);
-                    }}
-                    title={m.name}
-                  >
-                    <span className="mono">{m.name}</span>
-                    {chatModel === m.name && <Icon name="check" size={11} />}
-                  </button>
-                ))}
-              </div>
-            </>
-          )}
+          {modelOpen &&
+            menuPos &&
+            createPortal(
+              <>
+                <div
+                  style={{ position: 'fixed', inset: 0, zIndex: 399 }}
+                  onClick={() => setModelOpen(false)}
+                />
+                <div
+                  className="om-model-menu"
+                  style={{
+                    position: 'fixed',
+                    bottom: menuPos.bottom,
+                    right: menuPos.right,
+                    zIndex: 400,
+                  }}
+                >
+                  {(modelsData?.models || []).map((m: OllamaModel) => (
+                    <button
+                      key={m.name}
+                      className={cn('om-model-opt', chatModel === m.name && 'active')}
+                      onClick={() => {
+                        setChatModel(m.name);
+                        setModelOpen(false);
+                      }}
+                      title={m.name}
+                    >
+                      <span className="mono">{m.name}</span>
+                      {chatModel === m.name && <Icon name="check" size={11} />}
+                    </button>
+                  ))}
+                </div>
+              </>,
+              document.body
+            )}
         </div>
       )}
       <button className="om-send" onClick={() => handleSend()} disabled={streaming}>
