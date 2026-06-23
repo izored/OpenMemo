@@ -1,4 +1,5 @@
 import { useRef, useEffect, useState, type SyntheticEvent } from 'react';
+import { motion, AnimatePresence } from 'framer-motion';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useQuery, useInfiniteQuery, useQueryClient } from '@tanstack/react-query';
 import { useDroppable } from '@dnd-kit/core';
@@ -66,11 +67,11 @@ function isReady(m: Memo): boolean {
   return !!m.file_path || m.localize_status === 'done';
 }
 
-function PlaylistCover({ covers, size = 'md', kind = 'playlist', override = null, onEdit }: { covers: string[]; size?: 'md' | 'lg'; kind?: 'album' | 'playlist'; override?: string | null; onEdit?: () => void }) {
+function PlaylistCover({ covers, size = 'md', kind = 'playlist', override = null, onEdit }: { covers: string[]; size?: 'md' | 'lg'; kind?: 'album' | 'playlist' | 'hero'; override?: string | null; onEdit?: () => void }) {
   // A hand-set cover wins over everything and always renders as a single image.
-  // Otherwise: an album is one release with one artwork (single cover); the
-  // 4-up collage is reserved for playlists, whose tracks have mixed art.
-  const single = !!override || kind === 'album' || covers.length < 4;
+  // Otherwise: an album (or a custom hero card) is one artwork (single cover);
+  // the 4-up collage is reserved for playlists, whose tracks have mixed art.
+  const single = !!override || kind === 'album' || kind === 'hero' || covers.length < 4;
   const src = override || covers[0];
   return (
     <div className={cn('om-pl-cover', `om-pl-cover-${size}`, single && 'few', onEdit && 'is-editable')}>
@@ -279,16 +280,29 @@ function MusicTile({ m, index, active, playing, onPlay, onDownload, onRemove, on
 
 // Big hero card (Apple-Music-style top rail): full-bleed art, gradient veil,
 // kind eyebrow + name + track count pinned bottom-left, play on hover.
-function HeroCard({ p, onOpen, onPlay, isCurrent = false, playing = false }: {
+// `layout` + AnimatePresence let a freshly-pinned card slide the row right
+// (the prepend animation, OPNMMO music hero). Pinned cards also get hover
+// tools: change the background image and unpin/remove from the rail.
+function HeroCard({ p, onOpen, onPlay, isCurrent = false, playing = false, onEditCover, onUnpin }: {
   p: MusicPlaylist; onOpen: () => void; onPlay: () => void; isCurrent?: boolean; playing?: boolean;
+  onEditCover?: () => void; onUnpin?: () => void;
 }) {
-  const kindLabel = p.music_kind === 'album' ? 'Album' : 'Playlist';
+  const isHero = p.music_kind === 'hero';
+  const kindLabel = isHero ? 'Pinned' : p.music_kind === 'album' ? 'Album' : 'Playlist';
   // A hand-set cover wins; otherwise a 4-up collage for art-mixed playlists.
   const collage = !p.cover_url && p.music_kind === 'playlist' && p.covers.length >= 4;
   const single = p.cover_url || p.covers[0];
+  // Custom hero cards start empty (image-only); only show play once they hold
+  // real tracks. Albums/playlists always have a queue to play.
+  const canPlay = p.track_count > 0;
   return (
-    <div
-      className={cn('om-hero-card', isCurrent && 'is-playing')}
+    <motion.div
+      layout
+      initial={{ opacity: 0, scale: 0.85 }}
+      animate={{ opacity: 1, scale: 1 }}
+      exit={{ opacity: 0, scale: 0.85 }}
+      transition={{ type: 'spring', stiffness: 420, damping: 34 }}
+      className={cn('om-hero-card', isCurrent && 'is-playing', isHero && 'is-hero')}
       onClick={onOpen}
       role="button"
       tabIndex={0}
@@ -296,7 +310,7 @@ function HeroCard({ p, onOpen, onPlay, isCurrent = false, playing = false }: {
     >
       <div className="om-hero-art">
         {!single ? (
-          <span className="om-hero-glyph"><Icon name="music" size={40} /></span>
+          <span className="om-hero-glyph"><Icon name={isHero ? 'image' : 'music'} size={40} /></span>
         ) : collage ? (
           <PlaylistCover covers={p.covers} kind="playlist" />
         ) : (
@@ -304,25 +318,176 @@ function HeroCard({ p, onOpen, onPlay, isCurrent = false, playing = false }: {
         )}
       </div>
       <div className="om-hero-veil" />
+      {(onEditCover || onUnpin) && (
+        <div className="om-hero-tools">
+          {onEditCover && (
+            <button
+              className="om-hero-tool"
+              onClick={(e) => { e.stopPropagation(); onEditCover(); }}
+              title="Change background image"
+              aria-label={`Change image for ${p.name}`}
+            >
+              <Icon name="image" size={14} />
+            </button>
+          )}
+          {onUnpin && (
+            <button
+              className="om-hero-tool"
+              onClick={(e) => { e.stopPropagation(); onUnpin(); }}
+              title={isHero ? 'Delete this card' : 'Unpin from hero'}
+              aria-label={isHero ? `Delete ${p.name}` : `Unpin ${p.name}`}
+            >
+              <Icon name={isHero ? 'trash' : 'x'} size={14} />
+            </button>
+          )}
+        </div>
+      )}
       <div className="om-hero-cap">
         <span className="om-hero-eyebrow mono">{kindLabel}</span>
         <span className="om-hero-name">{p.name}</span>
-        <span className="om-hero-meta">{p.track_count} track{p.track_count === 1 ? '' : 's'}</span>
+        <span className="om-hero-meta">
+          {isHero && p.track_count === 0 ? 'Custom card' : `${p.track_count} track${p.track_count === 1 ? '' : 's'}`}
+        </span>
       </div>
-      <button
-        className="om-hero-play"
-        onClick={(e) => { e.stopPropagation(); onPlay(); }}
-        title={isCurrent ? (playing ? 'Pause' : 'Resume') : `Play ${p.name}`}
-        aria-label={isCurrent ? (playing ? `Pause ${p.name}` : `Resume ${p.name}`) : `Play ${p.name}`}
-      >
-        <Icon
-          name={isCurrent && playing ? 'pause' : 'play'}
-          size={17}
-          stroke={0}
-          style={{ fill: 'currentColor', marginLeft: isCurrent && playing ? 0 : 2 }}
-        />
-      </button>
-    </div>
+      {canPlay && (
+        <button
+          className="om-hero-play"
+          onClick={(e) => { e.stopPropagation(); onPlay(); }}
+          title={isCurrent ? (playing ? 'Pause' : 'Resume') : `Play ${p.name}`}
+          aria-label={isCurrent ? (playing ? `Pause ${p.name}` : `Resume ${p.name}`) : `Play ${p.name}`}
+        >
+          <Icon
+            name={isCurrent && playing ? 'pause' : 'play'}
+            size={17}
+            stroke={0}
+            style={{ fill: 'currentColor', marginLeft: isCurrent && playing ? 0 : 2 }}
+          />
+        </button>
+      )}
+    </motion.div>
+  );
+}
+
+// Dashed "pin something" placeholder that closes the hero rail — same role as
+// the New collection / New space tiles. Opens the pin picker.
+function HeroAddCard({ onClick }: { onClick: () => void }) {
+  return (
+    <motion.div
+      layout
+      className="om-hero-card om-hero-add"
+      onClick={onClick}
+      role="button"
+      tabIndex={0}
+      onKeyDown={(e) => e.key === 'Enter' && onClick()}
+      title="Pin an album, playlist, or a custom card to the hero"
+    >
+      <Icon name="plus" size={26} />
+      <span>Pin to hero</span>
+    </motion.div>
+  );
+}
+
+// Pin picker (OPNMMO music hero): pin an existing album/playlist, or spin up a
+// custom image card. Reuses the shared modal shell.
+function PinHeroModal({ candidates, onPin, onCreate, onClose }: {
+  candidates: MusicPlaylist[];
+  onPin: (p: MusicPlaylist) => void;
+  onCreate: (name: string) => void;
+  onClose: () => void;
+}) {
+  const [tab, setTab] = useState<'existing' | 'custom'>(candidates.length ? 'existing' : 'custom');
+  const [name, setName] = useState('');
+  useEffect(() => {
+    const h = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
+    window.addEventListener('keydown', h);
+    return () => window.removeEventListener('keydown', h);
+  }, [onClose]);
+  return (
+    <>
+      <div className="om-backdrop" onClick={onClose} />
+      <div className="om-modal" role="dialog" aria-modal="true" aria-label="Pin to hero" style={{ width: 'min(460px, calc(100vw - 32px))' }}>
+        <div className="om-modal-head">
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+            <span className="mono om-modal-eyebrow">Music hero</span>
+            <b style={{ fontSize: 16, fontWeight: 600 }}>Pin to hero</b>
+          </div>
+          <button className="om-icon-btn" onClick={onClose} aria-label="Close"><Icon name="x" size={14} /></button>
+        </div>
+
+        <div className="om-pinhero-tabs">
+          <button
+            className={cn('om-pinhero-tab', tab === 'existing' && 'active')}
+            onClick={() => setTab('existing')}
+            disabled={!candidates.length}
+          >
+            Pin existing
+          </button>
+          <button
+            className={cn('om-pinhero-tab', tab === 'custom' && 'active')}
+            onClick={() => setTab('custom')}
+          >
+            Create card
+          </button>
+        </div>
+
+        <div className="om-modal-body" style={{ gap: 12 }}>
+          {tab === 'existing' ? (
+            candidates.length === 0 ? (
+              <p className="mono" style={{ margin: 0, fontSize: 12, color: 'var(--text-4)', textAlign: 'center' }}>
+                Everything is already pinned. Create a custom card instead.
+              </p>
+            ) : (
+              <div className="om-pinhero-list">
+                {candidates.map((p) => {
+                  const art = p.cover_url || p.covers[0];
+                  return (
+                    <button key={p.id} className="om-pinhero-item" onClick={() => onPin(p)} title={`Pin ${p.name}`}>
+                      <span className="om-pinhero-art">
+                        {art ? (
+                          <img src={art} alt="" loading="lazy" onError={(e) => ((e.target as HTMLImageElement).style.visibility = 'hidden')} />
+                        ) : (
+                          <Icon name="music" size={16} />
+                        )}
+                      </span>
+                      <span className="om-pinhero-meta">
+                        <span className="om-pinhero-name">{p.name}</span>
+                        <span className="om-pinhero-kind mono">{p.music_kind === 'album' ? 'Album' : 'Playlist'} · {p.track_count} track{p.track_count === 1 ? '' : 's'}</span>
+                      </span>
+                      <Icon name="pin" size={14} className="om-pinhero-pin" />
+                    </button>
+                  );
+                })}
+              </div>
+            )
+          ) : (
+            <>
+              <input
+                className="om-pl-edit-name"
+                value={name}
+                autoFocus
+                onChange={(e) => setName(e.target.value)}
+                onKeyDown={(e) => { if (e.key === 'Enter' && name.trim()) onCreate(name.trim()); }}
+                placeholder="Card name (e.g. On Repeat)"
+                maxLength={200}
+                aria-label="Custom card name"
+              />
+              <p className="mono" style={{ margin: 0, fontSize: 11, color: 'var(--text-4)' }}>
+                You'll pick the background image next.
+              </p>
+            </>
+          )}
+        </div>
+
+        {tab === 'custom' && (
+          <div className="om-modal-foot">
+            <button className="om-btn-ghost" onClick={onClose}>Cancel</button>
+            <button className="om-btn-primary" onClick={() => name.trim() && onCreate(name.trim())} disabled={!name.trim()}>
+              Create &amp; pin
+            </button>
+          </div>
+        )}
+      </div>
+    </>
   );
 }
 
@@ -331,7 +496,8 @@ function HeroCard({ p, onOpen, onPlay, isCurrent = false, playing = false }: {
 // liked ones). Art is a brand gradient + heart, like Apple's starred card.
 function HeroLikedCard({ onPlay, onShuffle }: { onPlay: () => void; onShuffle: () => void }) {
   return (
-    <div
+    <motion.div
+      layout
       className="om-hero-card om-hero-liked"
       onClick={onPlay}
       role="button"
@@ -356,7 +522,7 @@ function HeroLikedCard({ onPlay, onShuffle }: { onPlay: () => void; onShuffle: (
       >
         <Icon name="shuffle" size={15} />
       </button>
-    </div>
+    </motion.div>
   );
 }
 
@@ -700,6 +866,60 @@ export function MusicPage() {
     } catch { /* keep the input so the name survives a retry */ }
   };
 
+  // ── Music hero rail pinning (OPNMMO) ──
+  // The top rail is curated: Favourite Songs (always first), then items the
+  // user pinned, then newest albums/playlists fill the rest so it's never bare.
+  const [pinModalOpen, setPinModalOpen] = useState(false);
+  // The hero CTA next to "Add music" only shows once the rail scrolls away.
+  const [heroVisible, setHeroVisible] = useState(true);
+  const heroSectionRef = useRef<HTMLElement>(null);
+  useEffect(() => {
+    const el = heroSectionRef.current;
+    if (!el) return;
+    const io = new IntersectionObserver(([e]) => setHeroVisible(e.isIntersecting), { rootMargin: '-72px 0px 0px 0px' });
+    io.observe(el);
+    return () => io.disconnect();
+  }, []);
+
+  // Pin an existing album/playlist to the hero (repurposed Collection.pinned).
+  const pinToHero = async (p: MusicPlaylist) => {
+    setPinModalOpen(false);
+    try {
+      await collectionApi.update(p.id, { pinned: true });
+    } catch { /* surfaced by refetch */ }
+    queryClient.invalidateQueries({ queryKey: ['music-playlists'] });
+  };
+
+  // Unpin: an existing album/playlist just leaves the rail (stays in its
+  // library row); a custom 'hero' card has nowhere else to live, so remove it.
+  const unpinFromHero = async (p: MusicPlaylist) => {
+    try {
+      if (p.music_kind === 'hero') {
+        if (!window.confirm(`Delete the pinned card "${p.name}"?`)) return;
+        await collectionApi.delete(p.id);
+      } else {
+        await collectionApi.update(p.id, { pinned: false });
+      }
+    } catch { /* surfaced by refetch */ }
+    queryClient.invalidateQueries({ queryKey: ['music-playlists'] });
+  };
+
+  // Create a custom hero card — an empty pinned playlist tagged music_kind
+  // 'hero'. Right after, open the cover editor so the user sets its image (3.2).
+  const createHeroCard = async (name: string) => {
+    setPinModalOpen(false);
+    try {
+      const created = await collectionApi.create({ name, kind: 'playlist', music_kind: 'hero', pinned: true });
+      queryClient.invalidateQueries({ queryKey: ['music-playlists'] });
+      openCoverEdit({
+        id: created.id, name, music_kind: 'hero', pinned: true,
+        cover_url: null, covers: [], track_count: 0,
+        created_at: new Date().toISOString(),
+        progress: { total: 0, done: 0, error: 0, pending: 0 },
+      });
+    } catch { /* surfaced by refetch */ }
+  };
+
   // Edit a playlist's name + description, inline in the hero. Description seeds
   // from the source link on import; the user can rewrite it here either way.
   const [editingPl, setEditingPl] = useState(false);
@@ -952,8 +1172,16 @@ export function MusicPage() {
   // rail scrolls sideways.
   const albums = playlists.filter((p) => p.music_kind === 'album');
   const plOnly = playlists.filter((p) => p.music_kind === 'playlist');
-  // Hero features the newest few saves (API order = newest first), any kind.
-  const heroItems = playlists.slice(0, 4);
+  // Hero rail = pinned items first (backend orders pinned→newest), then newest
+  // albums/playlists fill the rest so the rail is never bare. Custom 'hero'
+  // cards only ever live here. Favourite Songs is prepended separately.
+  const HERO_MAX = 6;
+  const pinnedHero = playlists.filter((p) => p.pinned);
+  const heroFillPool = playlists.filter((p) => !p.pinned && p.music_kind !== 'hero');
+  const heroFill = heroFillPool.slice(0, Math.max(0, HERO_MAX - pinnedHero.length));
+  const heroCards = [...pinnedHero, ...heroFill];
+  // Candidates the pin picker can add (not already pinned, real album/playlist).
+  const pinCandidates = playlists.filter((p) => !p.pinned && p.music_kind !== 'hero');
   const showHero = playlists.length > 0 || library.length > 0;
   return (
     <div className="om-bbar-page">
@@ -961,6 +1189,25 @@ export function MusicPage() {
       {/* Same header as every page; the Music page's own add-modal (SpotiFLAC,
           uploads, playlists) opens from this action and the bottom-bar island. */}
       <PageHeader eyebrow="Music library" title="Music" sub="Every song you saved, ready to play.">
+        {/* The hero pin shortcut surfaces only once the rail scrolls out of
+            view, so you can keep curating it from anywhere on the page. */}
+        <AnimatePresence>
+          {showHero && !heroVisible && (
+            <motion.button
+              key="hero-cta"
+              initial={{ opacity: 0, scale: 0.9, width: 0 }}
+              animate={{ opacity: 1, scale: 1, width: 'auto' }}
+              exit={{ opacity: 0, scale: 0.9, width: 0 }}
+              transition={{ duration: 0.18 }}
+              className="om-btn-secondary om-hero-cta"
+              onClick={() => setPinModalOpen(true)}
+              title="Pin an album, playlist, or a custom card to the hero"
+            >
+              <Icon name="pin" size={13} />
+              <span>Pin to hero</span>
+            </motion.button>
+          )}
+        </AnimatePresence>
         <button className="om-btn-primary" onClick={() => setMusicModalOpen(true)} title="Add music">
           <Icon name="plus" size={13} />
           <span>Add music</span>
@@ -968,19 +1215,24 @@ export function MusicPage() {
       </PageHeader>
 
       {showHero && (
-        <section className="om-music-sect">
+        <section className="om-music-sect" ref={heroSectionRef}>
           <div className="om-hero-row" ref={bindRailWheel}>
             <HeroLikedCard onPlay={() => playLiked()} onShuffle={() => playLiked({ shuffle: true })} />
-            {heroItems.map((p) => (
-              <HeroCard
-                key={p.id}
-                p={p}
-                onOpen={() => navigate(`/music/${p.id}`)}
-                onPlay={() => playOrToggle(p)}
-                isCurrent={isPlayingSource(p.id)}
-                playing={playing}
-              />
-            ))}
+            <AnimatePresence mode="popLayout" initial={false}>
+              {heroCards.map((p) => (
+                <HeroCard
+                  key={p.id}
+                  p={p}
+                  onOpen={() => navigate(`/music/${p.id}`)}
+                  onPlay={() => playOrToggle(p)}
+                  isCurrent={isPlayingSource(p.id)}
+                  playing={playing}
+                  onEditCover={p.pinned ? () => openCoverEdit(p) : undefined}
+                  onUnpin={p.pinned ? () => unpinFromHero(p) : undefined}
+                />
+              ))}
+            </AnimatePresence>
+            <HeroAddCard onClick={() => setPinModalOpen(true)} />
           </div>
         </section>
       )}
@@ -1138,6 +1390,15 @@ export function MusicPage() {
         </IslandFab>
       }
     />
+
+    {pinModalOpen && (
+      <PinHeroModal
+        candidates={pinCandidates}
+        onPin={pinToHero}
+        onCreate={createHeroCard}
+        onClose={() => setPinModalOpen(false)}
+      />
+    )}
     </div>
   );
 }
