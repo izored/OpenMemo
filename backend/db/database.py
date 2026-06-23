@@ -11,6 +11,15 @@ engine = create_async_engine(
     settings.DATABASE_URL,
     echo=False,
     future=True,
+    # The aiosqlite dialect defaults to NullPool — a fresh connection per
+    # checkout, closed on return — so there is no fixed-size pool to exhaust.
+    # That makes releasing the DB session BEFORE a media stream begins the real
+    # fix (see api/memos.get_memo_file, OPNMMO-0052): otherwise every lingering
+    # iOS/Cloudflare audio connection pins an open SQLite connection (+ its
+    # worker thread + file descriptors) for the whole song, and the accumulation
+    # eventually starves the process. pool_recycle drops any connection idle for
+    # too long as a backstop; NullPool rejects pool_size/max_overflow/timeout.
+    pool_recycle=1800,
 )
 
 AsyncSessionLocal = async_sessionmaker(
@@ -41,6 +50,15 @@ async def _run_migrations():
     
     db_path = str(settings.DATA_DIR / "openmemo.db")
     async with aiosqlite.connect(db_path) as db:
+        # WAL persists in the DB file header, so setting it once here applies to
+        # every later connection: readers no longer block the single writer (and
+        # vice-versa), which matters when many media streams hold connections at
+        # once. busy_timeout lets a contended write wait briefly instead of
+        # erroring "database is locked" outright.
+        await db.execute("PRAGMA journal_mode=WAL")
+        await db.execute("PRAGMA busy_timeout=5000")
+        await db.commit()
+
         # Check if memos table has notes column
         cursor = await db.execute("PRAGMA table_info(memos)")
         columns = [row[1] for row in await cursor.fetchall()]
