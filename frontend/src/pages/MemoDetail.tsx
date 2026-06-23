@@ -1315,6 +1315,7 @@ export function MemoDetail() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const openThumbEdit = useAppStore((s) => s.openThumbEdit);
+  const setActiveCollection = useAppStore((s) => s.setActiveCollection);
   const isMobile = useIsMobile();
   const [isEditing, setIsEditing] = useState(false);
   const [noteContent, setNoteContent] = useState('');
@@ -1673,17 +1674,17 @@ export function MemoDetail() {
               </button>
             )}
 
-            {/* Meta */}
+            {/* Meta — two clusters: descriptive facts (what this memo is) on the
+                left, actions (what you can do) pushed to the right (OPNMMO-0042). */}
             <div className="om-detail-meta" style={{ marginBottom: '24px' }}>
-              {/* Memo type leads the metadata line (OPNMMO-0042). */}
-              <span className="om-section-h">{memo.type}</span>
-              <span style={{ color: 'var(--text-4)' }}>•</span>
-              <span className="mono" style={{ fontSize: '11px', color: 'var(--text-4)' }}>
-                {new Date(memo.created_at).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })}
-              </span>
-              {memo.source_domain && !isEditing && (
-                <>
-                  <span style={{ color: 'var(--text-4)' }}>•</span>
+              {/* Facts: type · date · source · collections · tags */}
+              <div className="om-detail-meta-facts">
+                <span className="om-section-h">{memo.type}</span>
+                <span className="om-meta-dot">•</span>
+                <span className="mono om-meta-date">
+                  {new Date(memo.created_at).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })}
+                </span>
+                {memo.source_domain && !isEditing && (
                   <a
                     href={memo.source_url}
                     target="_blank"
@@ -1694,11 +1695,37 @@ export function MemoDetail() {
                     {memo.source_domain}
                     <ExternalLink size={12} />
                   </a>
-                </>
-              )}
+                )}
+                {!isEditing && memo.collections?.map((c) => {
+                  const full = collections.find((fc: Collection) => fc.id === c.id);
+                  return (
+                    <button
+                      key={c.id}
+                      className="om-meta-coll"
+                      onClick={() => { setActiveCollection(c.id); navigate('/'); }}
+                      title={`View “${c.name}”`}
+                    >
+                      <span className="om-meta-coll-emoji">{full?.emoji || '📁'}</span>
+                      {c.name}
+                    </button>
+                  );
+                })}
+                {!isEditing && memo.tags?.map((tag: string) => (
+                  <span key={tag} className="om-tag">{tag}</span>
+                ))}
+                {isEditing && (
+                  <input
+                    value={editSourceUrl}
+                    onChange={(e) => setEditSourceUrl(e.target.value)}
+                    placeholder="Source URL"
+                    className="om-detail-url-input"
+                  />
+                )}
+              </div>
+
+              {/* Actions: pin / export */}
               {!isEditing && (
-                <>
-                  <span style={{ color: 'var(--text-4)' }}>•</span>
+                <div className="om-detail-meta-actions">
                   <button
                     className="om-meta-action"
                     onClick={togglePin}
@@ -1709,41 +1736,17 @@ export function MemoDetail() {
                     <span>{memo.pinned ? 'Unpin' : 'Pin to sidebar'}</span>
                   </button>
                   {memo.file_path && (
-                    <>
-                      <span style={{ color: 'var(--text-4)' }}>•</span>
-                      <a
-                        className="om-meta-action"
-                        href={`/api/memos/${memo.id}/file?download=1`}
-                        download
-                        title="Export this memo to your device"
-                      >
-                        <Download size={13} />
-                        <span>Export this memo</span>
-                      </a>
-                    </>
+                    <a
+                      className="om-meta-action"
+                      href={`/api/memos/${memo.id}/file?download=1`}
+                      download
+                      title="Export this memo to your device"
+                    >
+                      <Download size={13} />
+                      <span>Export this memo</span>
+                    </a>
                   )}
-                </>
-              )}
-              {isEditing && (
-                <>
-                  <span style={{ color: 'var(--text-4)' }}>•</span>
-                  <input
-                    value={editSourceUrl}
-                    onChange={(e) => setEditSourceUrl(e.target.value)}
-                    placeholder="Source URL"
-                    className="om-detail-url-input"
-                  />
-                </>
-              )}
-              {!isEditing && memo.tags?.length > 0 && (
-                <>
-                  <span style={{ color: 'var(--text-4)' }}>•</span>
-                  <div style={{ display: 'flex', gap: '4px', flexWrap: 'wrap' }}>
-                    {memo.tags.map((tag: string) => (
-                      <span key={tag} className="om-tag">{tag}</span>
-                    ))}
-                  </div>
-                </>
+                </div>
               )}
             </div>
 

@@ -89,6 +89,9 @@ export interface MusicPlaylist {
   music_kind: 'album' | 'playlist';
   created_at: string;
   track_count: number;
+  /** A hand-set cover image (cache-busted), or null. When present it overrides
+   *  the track-art collage everywhere the playlist's art is shown. */
+  cover_url?: string | null;
   /** Up to 4 track cover URLs for the collage. */
   covers: string[];
   /** Download progress derived from per-track localize_status. `pending`

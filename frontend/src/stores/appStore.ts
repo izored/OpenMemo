@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import type { Collection, Memo, Space } from '@/types';
+import type { Collection, Memo, MusicPlaylist, Space } from '@/types';
 import { DEFAULT_TWEAKS, applyTweaks, type Tweaks } from '@/lib/appearance';
 
 // Ids of the step-by-step guides the GuideModal can render. Add new guides here.
@@ -157,6 +157,11 @@ interface AppState {
   openThumbEdit: (memo: Memo) => void;
   closeThumbEdit: () => void;
 
+  // Playlist/album cover editor: the playlist whose cover is being edited (null = closed).
+  editCoverPlaylist: MusicPlaylist | null;
+  openCoverEdit: (playlist: MusicPlaylist) => void;
+  closeCoverEdit: () => void;
+
   // Media lightbox (shared across grid — supports prev/next navigation)
   lightboxGroup: Memo[];
   lightboxIndex: number;
@@ -274,6 +279,10 @@ export const useAppStore = create<AppState>((set) => ({
   editThumbMemo: null,
   openThumbEdit: (memo) => set({ editThumbMemo: memo }),
   closeThumbEdit: () => set({ editThumbMemo: null }),
+
+  editCoverPlaylist: null,
+  openCoverEdit: (playlist) => set({ editCoverPlaylist: playlist }),
+  closeCoverEdit: () => set({ editCoverPlaylist: null }),
 
   lightboxGroup: [],
   lightboxIndex: -1,
