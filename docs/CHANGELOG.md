@@ -42,6 +42,10 @@ Three big pushes. The Settings page is rebuilt as a bento with the live appearan
 
 ### Changed
 
+- 🧱 **Edge is a real masonry wall now, not a grid of squares.** Edge cards used to be forced into uniform squares. Each tile now keeps its source proportions: an uploaded portrait photo stays tall, a 16:9 video thumbnail stays wide, music cover art stays square, all sharing the same gapless columns, so the wall reads as true masonry. Image tiles read their exact aspect ratio on load.
+- 📰 **The memo page title gets room to breathe.** The title used to wrap onto a second line early because it was capped at the content column's width. It now runs the full width of the page (content plus tool rail) before wrapping, and the meta line below it owns the whole row so the tags flow free instead of getting squeezed.
+- 📌 **Pin and Export are header icons now.** Pin-to-sidebar and Export moved out of the meta line and into the header's icon cluster next to delete, as icon buttons with the label on hover. Clears the meta row so collections and tags wrap cleanly under the title.
+- 🎞️ **Tool rail sections open and close smoothly.** Expanding or collapsing a card in the memo tool rail (Description, AI Summary, Transcript, Ask, …) now glides with a height-and-fade animation and a rotating chevron instead of snapping open.
 - 🎛️ **The add panel's checkboxes are branded toggles, with the fine print on hover.** The "Don't pull content" and "Download tracks now" checkboxes are now proper accent switches instead of bare browser boxes. The "Don't pull" explainer no longer sits as a permanent paragraph under the toggle either: it moved onto an info hint beside the label, surfacing as a tooltip when you need it and staying out of the way when you don't.
 - 🤖 **The model picker reads cleanly.** The Ask Memo model dropdown was center-aligned with oversized text that wrapped long model ids. It is now a tidy left-aligned list in the app's mono id style, sized to match the model button, with the active model checked.
 - 🌿 **A calmer green.** The preset green accent was a neon lime; it is now a softer, less flashy green that sits better against the backgrounds.

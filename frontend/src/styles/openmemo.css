@@ -1027,16 +1027,22 @@ input, textarea { font: inherit; color: inherit; }
 /* Backdrop dominant-color glow doesn't fit a tight wall. */
 [data-card="edge"] .om-card-dom { display: none; }
 
-/* Square tiles for every media type — a uniform contact-sheet grid. */
+/* Masonry wall — tiles keep their source proportions, not forced squares.
+   Images use the real aspect captured on load (--card-ar); video/link thumbs
+   are 16:9; audio cover art stays square. The gapless columns + varied heights
+   give a true masonry gallery (the user's portrait-next-to-video ask). */
 [data-card="edge"] .om-card-image .om-image-frame,
-[data-card="edge"] .om-card-image .om-image-frame[data-orient="portrait"],
 [data-card="edge"] .om-card-video .om-video-frame,
 [data-card="edge"] .om-card-link .om-card-hero,
 [data-card="edge"] .om-card-audio .om-audio-frame {
   margin: 0;
   border-radius: 0;
-  aspect-ratio: 1 / 1;
 }
+[data-card="edge"] .om-card-image .om-image-frame { aspect-ratio: var(--card-ar, 1); }
+[data-card="edge"] .om-card-image .om-image-frame[data-orient="portrait"] { aspect-ratio: var(--card-ar, 3 / 4); }
+[data-card="edge"] .om-card-video .om-video-frame,
+[data-card="edge"] .om-card-link .om-card-hero { aspect-ratio: 16 / 9; }
+[data-card="edge"] .om-card-audio .om-audio-frame { aspect-ratio: 1 / 1; }
 [data-card="edge"] .om-card-image .om-image-frame img,
 [data-card="edge"] .om-card-video .om-video-frame img,
 [data-card="edge"] .om-card-link .om-card-hero img,
@@ -1493,7 +1499,10 @@ input, textarea { font: inherit; color: inherit; }
   max-width: 1352px;
 }
 .om-detail-head-block { grid-area: head; }
-.om-detail-content.has-rail .om-detail-head-block { max-width: 720px; justify-self: start; }
+/* Head block spans the full width of both columns (content + rail) so the title
+   runs across the whole row before wrapping, instead of breaking early at the
+   720px content edge. Meta row below wraps naturally within the same width. */
+.om-detail-content.has-rail .om-detail-head-block { max-width: none; justify-self: stretch; }
 /* Left column groups media + notes so the rail is a fully independent column —
    opening a rail card grows the rail only, never shifting the notes (point 1). */
 .om-detail-content.has-rail .om-detail-col-main { grid-area: colmain; min-width: 0; display: flex; flex-direction: column; }
