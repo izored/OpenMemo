@@ -1243,6 +1243,177 @@ async def ingest_file(
     return {"id": memo.id, "title": memo.title, "type": memo_type, "status": "processing"}
 
 
+# --- Album / playlist upload (local files → auto-grouped collection) ---
+
+# Image extensions accepted as a cover alongside the audio in an album upload.
+_COVER_EXTS = {".jpg", ".jpeg", ".png", ".webp", ".gif", ".avif", ".bmp"}
+_COVER_MIME = {
+    ".jpg": "image/jpeg", ".jpeg": "image/jpeg", ".png": "image/png",
+    ".webp": "image/webp", ".gif": "image/gif", ".avif": "image/avif",
+    ".bmp": "image/bmp",
+}
+
+
+def _save_cover_bytes(data: bytes, mime: str) -> Optional[str]:
+    """Persist cover image bytes under the thumbs dir; return its serve URL."""
+    if not data:
+        return None
+    THUMBS_DIR.mkdir(parents=True, exist_ok=True)
+    ext = {
+        "image/jpeg": ".jpg", "image/png": ".png", "image/webp": ".webp",
+        "image/gif": ".gif", "image/avif": ".avif", "image/bmp": ".bmp",
+    }.get((mime or "").split(";")[0].strip(), ".jpg")
+    name = f"{uuid.uuid4().hex}{ext}"
+    (THUMBS_DIR / name).write_bytes(data)
+    return f"/api/files/thumb/{name}"
+
+
+@router.post("/album")
+async def ingest_album(
+    background_tasks: BackgroundTasks,
+    files: list[UploadFile] = File(...),
+    workspace_id: str = Form(default="default"),
+    mode: str = Form(default="album"),
+    name: Optional[str] = Form(default=None),
+    db: AsyncSession = Depends(get_db),
+):
+    """Import local audio files as an auto-grouped album (or one playlist).
+
+    Drop a bunch of tracks (optionally with a cover image, or images embedded in
+    the files) and this builds playable music with no manual tagging:
+
+    · **mode="album"** — tracks are grouped by their embedded *album* tag; each
+      distinct album becomes its own ``music_kind="album"`` collection. Files
+      with no album tag fall into one album named from ``name`` (or "Untitled
+      Album"). Tracks order by their tag track-number.
+    · **mode="playlist"** — every track lands in a single ``music_kind=
+      "playlist"`` collection named from ``name`` (or "New Playlist").
+
+    Cover precedence (per the product call): a **dropped image wins** — if any
+    image file is in the upload it is the cover for everything created; only when
+    no image is supplied do we fall back to art embedded in the tracks.
+
+    Tracks are stored local + playable immediately (no download step) and are
+    ``playlist_born`` so they live inside their collection, Spotify-style.
+    """
+    from sqlalchemy import insert
+
+    from backend.core.audio_meta import read_audio_tags, extract_cover_bytes
+    from backend.core.security.upload import categorize_extension
+
+    ws = sanitize_workspace_id(workspace_id)
+    mode = mode if mode in ("album", "playlist") else "album"
+
+    # 1) Split the upload into audio tracks (saved to disk) and a dropped cover.
+    saved_tracks: list[dict] = []   # {path, filename, tags}
+    dropped_cover: Optional[tuple[bytes, str]] = None
+    for up in files:
+        ext = Path(up.filename or "").suffix.lower()
+        if ext in _COVER_EXTS:
+            if dropped_cover is None:  # first image is the cover
+                data = await up.read()
+                if data:
+                    dropped_cover = (data, _COVER_MIME.get(ext, "image/jpeg"))
+            continue
+        if categorize_extension(ext) != "audio":
+            continue  # skip anything that isn't audio or a cover image
+        result = await _upload_handler.save(up, workspace_id=ws)
+        saved_tracks.append({
+            "path": result.path,
+            "filename": result.filename,
+            "tags": read_audio_tags(result.path),
+        })
+
+    if not saved_tracks:
+        raise HTTPException(status_code=400, detail="No audio files in the upload")
+
+    # 2) Group the tracks into collections.
+    fallback_name = (name or "").strip() or ("New Playlist" if mode == "playlist" else "Untitled Album")
+    groups: dict[str, dict] = {}
+    for t in saved_tracks:
+        if mode == "playlist":
+            key, display = "__playlist__", fallback_name
+        else:
+            album = (t["tags"].get("album") or "").strip()
+            key = album.lower() if album else "__untitled__"
+            display = album or fallback_name
+        g = groups.setdefault(key, {"name": display, "tracks": []})
+        g["tracks"].append(t)
+
+    # 3) A dropped image is the cover for everything; resolve it once.
+    shared_cover_url = _save_cover_bytes(*dropped_cover) if dropped_cover else None
+
+    now = datetime.utcnow()
+    created: list[dict] = []
+    for g in groups.values():
+        tracks = g["tracks"]
+        # Order by tag track-number, untagged tracks trailing in upload order.
+        tracks.sort(key=lambda t: (t["tags"].get("track") is None, t["tags"].get("track") or 0))
+
+        # Cover: dropped image wins; otherwise the first track's embedded art.
+        cover_url = shared_cover_url
+        if cover_url is None:
+            for t in tracks:
+                emb = extract_cover_bytes(t["path"])
+                if emb:
+                    cover_url = _save_cover_bytes(*emb)
+                    break
+
+        collection = Collection(
+            id=str(uuid.uuid4()),
+            workspace_id=ws,
+            name=g["name"][:200] or fallback_name,
+            emoji="🎵",
+            kind="playlist",
+            music_kind="playlist" if mode == "playlist" else "album",
+        )
+        db.add(collection)
+
+        memo_ids: list[str] = []
+        for i, t in enumerate(tracks):
+            tags = t["tags"]
+            memo = Memo(
+                id=Path(t["path"]).stem,
+                workspace_id=ws,
+                type="audio",
+                audio_kind="music",
+                playlist_born=True,
+                title=(tags.get("title") or Path(t["filename"]).stem)[:300],
+                audio_artist=(tags.get("artist") or None),
+                audio_album=(g["name"] if mode == "album" else (tags.get("album") or None)),
+                file_path=t["path"],
+                thumbnail_path=cover_url,
+                created_at=now,
+                updated_at=now,
+                recency_at=now - timedelta(seconds=i),
+            )
+            db.add(memo)
+            memo_ids.append(memo.id)
+
+        await db.flush()
+        if memo_ids:
+            await db.execute(
+                insert(memo_collections),
+                [{"memo_id": mid, "collection_id": collection.id} for mid in memo_ids],
+            )
+        created.append({"collection_id": collection.id, "title": collection.name, "tracks": len(memo_ids)})
+
+    await db.commit()
+
+    # Embed each track's (sparse) text so it is searchable like any memo.
+    for t in saved_tracks:
+        background_tasks.add_task(process_memo, Path(t["path"]).stem)
+
+    first = created[0]
+    return {
+        "collection_id": first["collection_id"],
+        "title": first["title"],
+        "total": sum(c["tracks"] for c in created),
+        "collections": created,
+        "status": "saved",
+    }
+
+
 async def transcribe_memo_task(memo_id: str):
     """Background: transcribe an audio memo, store the cleaned text in
     content_text (so it embeds + is searchable), record the detected language,
