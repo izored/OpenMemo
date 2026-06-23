@@ -1342,7 +1342,7 @@ function AskRailTool({ memoId, open, onToggle }: { memoId: string; open: boolean
       size={beam.composerSize}
       colorVariant="colorful"
       theme={resolveBeamTheme(beam.themeMode, theme === 'light' ? 'light' : 'dark')}
-      borderRadius={14}
+      borderRadius={20}
       active
       staticColors={beam.staticColors}
       saturation={beam.saturation}

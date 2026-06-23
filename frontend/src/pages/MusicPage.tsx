@@ -374,6 +374,7 @@ function HeroAddCard({ onClick }: { onClick: () => void }) {
   return (
     <motion.div
       layout
+      data-hero-add
       className="om-hero-card om-hero-add"
       onClick={onClick}
       role="button"
@@ -881,6 +882,54 @@ export function MusicPage() {
     return () => io.disconnect();
   }, []);
 
+  // The dashed "Pin to hero" placeholder only earns a spot at the end of the
+  // rail when it can sit fully inside the viewport. Once the real cards fill the
+  // rail's width, the placeholder would push past the right edge (forcing the
+  // rail to overflow), so we drop it and surface the header CTA instead. We
+  // measure the rail's real content against its visible width with a
+  // ResizeObserver (cards/viewport changes) + window resize, rAF-debounced.
+  const heroRowRef = useRef<HTMLDivElement>(null);
+  const [heroAddFits, setHeroAddFits] = useState(true);
+  // Number of real hero cards actually rendered (Favourite Songs + pinned, then
+  // newest fill up to the rail cap). A primitive so the measure effect re-runs
+  // on pin/unpin/fill — derived here, ahead of the hub-only `heroCards` which is
+  // declared after the playlist-view early return. Cap mirrors HERO_MAX (6).
+  const heroPinnedCount = playlists.filter((p) => p.pinned).length;
+  const heroFillCount = Math.min(
+    Math.max(0, 6 - heroPinnedCount),
+    playlists.filter((p) => !p.pinned && p.music_kind !== 'hero').length,
+  );
+  const heroCardCount = 1 + heroPinnedCount + heroFillCount;
+  useEffect(() => {
+    const el = heroRowRef.current;
+    if (!el) return;
+    let raf = 0;
+    const measure = () => {
+      raf = 0;
+      // Reserve the placeholder's footprint: 200px tile (150px on a phone) plus
+      // the rail's 16px gap — matches .om-hero-add in openmemo.css.
+      const addW = 16 + (window.innerWidth <= 640 ? 150 : 200);
+      // Intrinsic width of the rail's real content (scrollWidth is scroll-
+      // position independent, and folds in the rail's own side padding). The
+      // placeholder, when currently rendered, contributes addW to scrollWidth —
+      // subtract it so the fits-check can't oscillate with its own output.
+      const addPresent = !!el.querySelector('[data-hero-add]');
+      const realWidth = el.scrollWidth - (addPresent ? addW : 0);
+      // It fits only if adding it back stays inside the rail's visible width.
+      setHeroAddFits(realWidth + addW <= el.clientWidth);
+    };
+    const schedule = () => { if (!raf) raf = requestAnimationFrame(measure); };
+    const ro = new ResizeObserver(schedule);
+    ro.observe(el);
+    window.addEventListener('resize', schedule);
+    schedule();
+    return () => { ro.disconnect(); window.removeEventListener('resize', schedule); if (raf) cancelAnimationFrame(raf); };
+    // Re-measure when the card set changes (pin/unpin/fill) so the placeholder
+    // appears or yields as the rail's real width shifts. `library.length` is in
+    // here so the observer (re)attaches when the rail first mounts on a page
+    // that has a library but no playlists yet (showHero flips true).
+  }, [heroCardCount, library.length]);
+
   // Pin an existing album/playlist to the hero (repurposed Collection.pinned).
   const pinToHero = async (p: MusicPlaylist) => {
     setPinModalOpen(false);
@@ -1189,10 +1238,11 @@ export function MusicPage() {
       {/* Same header as every page; the Music page's own add-modal (SpotiFLAC,
           uploads, playlists) opens from this action and the bottom-bar island. */}
       <PageHeader eyebrow="Music library" title="Music" sub="Every song you saved, ready to play.">
-        {/* The hero pin shortcut surfaces only once the rail scrolls out of
-            view, so you can keep curating it from anywhere on the page. */}
+        {/* The hero pin shortcut surfaces when the dashed placeholder can't —
+            either the rail scrolled out of view, or it ran out of horizontal
+            room for the placeholder to sit on screen (heroAddFits is false). */}
         <AnimatePresence>
-          {showHero && !heroVisible && (
+          {showHero && (!heroVisible || !heroAddFits) && (
             <motion.button
               key="hero-cta"
               initial={{ opacity: 0, scale: 0.9, width: 0 }}
@@ -1216,7 +1266,10 @@ export function MusicPage() {
 
       {showHero && (
         <section className="om-music-sect" ref={heroSectionRef}>
-          <div className="om-hero-row" ref={bindRailWheel}>
+          <div
+            className="om-hero-row"
+            ref={(el) => { bindRailWheel(el); heroRowRef.current = el; }}
+          >
             <HeroLikedCard onPlay={() => playLiked()} onShuffle={() => playLiked({ shuffle: true })} />
             <AnimatePresence mode="popLayout" initial={false}>
               {heroCards.map((p) => (
@@ -1232,7 +1285,9 @@ export function MusicPage() {
                 />
               ))}
             </AnimatePresence>
-            <HeroAddCard onClick={() => setPinModalOpen(true)} />
+            {/* Only render the dashed placeholder when it fits fully on screen;
+                otherwise the header "Pin to hero" CTA takes over (see effect). */}
+            {heroAddFits && <HeroAddCard onClick={() => setPinModalOpen(true)} />}
           </div>
         </section>
       )}
