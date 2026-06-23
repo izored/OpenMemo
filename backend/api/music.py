@@ -73,6 +73,7 @@ async def list_playlists(db: AsyncSession = Depends(get_db)):
     # A single track grabbed from its tile also goes pending/processing, but
     # that is not a bulk pass — the Pause control keys off `active`, not pending.
     from backend.api.ingest import playlist_download_active
+    from backend.api.collections import collection_cover_url
 
     return [
         {
@@ -82,6 +83,8 @@ async def list_playlists(db: AsyncSession = Depends(get_db)):
             "source_url": p.source_url,
             # NULL predates the column (or a hand-made playlist) → playlist.
             "music_kind": p.music_kind or "playlist",
+            # A hand-set cover overrides the track-art collage when present.
+            "cover_url": collection_cover_url(p),
             "created_at": p.created_at.isoformat(),
             "track_count": by_playlist[p.id]["total"],
             "covers": by_playlist[p.id]["covers"],

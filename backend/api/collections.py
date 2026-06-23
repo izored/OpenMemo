@@ -1,18 +1,43 @@
 """Collections CRUD API."""
 import uuid
 from datetime import datetime
+from pathlib import Path
 from typing import Optional
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, File, UploadFile
+from fastapi.responses import FileResponse
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from pydantic import BaseModel
 
+from backend.config import settings
 from backend.db.database import get_db
 from backend.db.models import Collection, memo_collections
 from backend.core.security import sanitize_workspace_id
 
 router = APIRouter(prefix="/api/collections", tags=["collections"])
+
+# Custom playlist/album covers live next to the DB, one per collection:
+# DATA_DIR/playlist_covers/<id>.<ext> (mirrors the Space cover convention).
+_COVER_DIR = Path(settings.DATA_DIR) / "playlist_covers"
+_COVER_EXTS = {"jpg", "jpeg", "png", "webp", "gif", "avif"}
+_COVER_MAX = 12 * 1024 * 1024  # 12 MB
+
+
+def _cover_path(collection_id: str, ext: str) -> Path:
+    return _COVER_DIR / f"{collection_id}.{ext}"
+
+
+def collection_cover_url(c: Collection) -> Optional[str]:
+    """Cache-busted URL for a collection's hand-set cover, or None."""
+    if not getattr(c, "cover_ext", None):
+        return None
+    p = _cover_path(c.id, c.cover_ext)
+    try:
+        v = int(p.stat().st_mtime)
+    except OSError:
+        v = 0
+    return f"/api/collections/{c.id}/cover?v={v}"
 
 
 class CollectionCreate(BaseModel):
@@ -73,6 +98,7 @@ async def list_collections(
             "color": c.color,
             "kind": c.kind or "standard",
             "source_url": c.source_url,
+            "cover_url": collection_cover_url(c),
             "pinned": c.pinned,
             "sort_order": c.sort_order,
             "created_at": c.created_at.isoformat(),
@@ -133,10 +159,67 @@ async def delete_collection(collection_id: str, db: AsyncSession = Depends(get_d
     collection = await db.get(Collection, collection_id)
     if not collection:
         raise HTTPException(status_code=404, detail="Collection not found")
-    
+
+    # Drop any hand-set cover file so it doesn't orphan on disk.
+    if collection.cover_ext:
+        _cover_path(collection_id, collection.cover_ext).unlink(missing_ok=True)
     await db.delete(collection)
     await db.commit()
     return {"status": "deleted"}
+
+
+@router.post("/{collection_id}/cover")
+async def upload_cover(
+    collection_id: str,
+    file: UploadFile = File(...),
+    db: AsyncSession = Depends(get_db),
+):
+    """Set a custom cover image for a playlist/album (already cropped client-side)."""
+    collection = await db.get(Collection, collection_id)
+    if not collection:
+        raise HTTPException(status_code=404, detail="Collection not found")
+
+    ext = (Path(file.filename or "").suffix.lstrip(".") or "").lower()
+    if ext == "jpe":
+        ext = "jpg"
+    if ext not in _COVER_EXTS:
+        raise HTTPException(status_code=400, detail=f"Unsupported image type '.{ext}'. Use JPG, PNG, WebP, GIF, or AVIF.")
+    raw = await file.read()
+    if len(raw) > _COVER_MAX:
+        raise HTTPException(status_code=400, detail="Cover image over 12 MB.")
+
+    _COVER_DIR.mkdir(parents=True, exist_ok=True)
+    # Drop any previous cover (extension may differ) before writing the new one.
+    if collection.cover_ext and collection.cover_ext != ext:
+        _cover_path(collection_id, collection.cover_ext).unlink(missing_ok=True)
+    _cover_path(collection_id, ext).write_bytes(raw)
+    collection.cover_ext = ext
+    await db.commit()
+    return {"id": collection.id, "cover_url": collection_cover_url(collection)}
+
+
+@router.get("/{collection_id}/cover")
+async def read_cover(collection_id: str, db: AsyncSession = Depends(get_db)):
+    collection = await db.get(Collection, collection_id)
+    if not collection or not collection.cover_ext:
+        raise HTTPException(status_code=404, detail="No cover set.")
+    p = _cover_path(collection_id, collection.cover_ext)
+    if not p.exists():
+        raise HTTPException(status_code=404, detail="No cover set.")
+    return FileResponse(p)
+
+
+@router.delete("/{collection_id}/cover")
+async def delete_cover(collection_id: str, db: AsyncSession = Depends(get_db)):
+    """Remove the custom cover, falling back to the track-art collage."""
+    collection = await db.get(Collection, collection_id)
+    if not collection:
+        raise HTTPException(status_code=404, detail="Collection not found")
+    if collection.cover_ext:
+        _cover_path(collection_id, collection.cover_ext).unlink(missing_ok=True)
+        collection.cover_ext = None
+        await db.commit()
+    return {"id": collection.id, "cover_url": None}
 
 
 @router.post("/{collection_id}/memos/{memo_id}")

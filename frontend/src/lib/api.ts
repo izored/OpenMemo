@@ -266,6 +266,17 @@ export const collectionApi = {
     fetchJSON<any>(`/collections/${collectionId}/memos/${memoId}`, { method: 'POST' }),
   removeMemo: (collectionId: string, memoId: string) =>
     fetchJSON<any>(`/collections/${collectionId}/memos/${memoId}`, { method: 'DELETE' }),
+  // Custom playlist/album cover (already cropped client-side). Multipart — no
+  // Content-Type header so the browser sets the multipart boundary.
+  uploadCover: async (id: string, file: Blob): Promise<{ cover_url: string | null }> => {
+    const form = new FormData();
+    form.append('file', file, 'cover');
+    const resp = await fetch(`${API_BASE}/collections/${id}/cover`, { method: 'POST', body: form });
+    if (!resp.ok) throw new Error((await resp.json().catch(() => ({}))).detail || 'Cover upload failed');
+    return resp.json();
+  },
+  deleteCover: (id: string) =>
+    fetchJSON<{ cover_url: null }>(`/collections/${id}/cover`, { method: 'DELETE' }),
 };
 
 // Music page (ADR-015). Tracks come from memoApi.list (type=audio,

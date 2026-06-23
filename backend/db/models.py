@@ -172,6 +172,10 @@ class Collection(Base):
     # 'playlist'. Albums render a single cover and an "Album" label instead of
     # the 4-cover collage. NULL (legacy/standard rows) means 'playlist'.
     music_kind = Column(String, nullable=True)
+    # Custom cover image extension for a playlist/album whose art the user set by
+    # hand (Notion-style). NULL = no custom cover (fall back to the track-art
+    # collage). The file lives at DATA_DIR/playlist_covers/<id>.<ext>.
+    cover_ext = Column(String, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
     
     workspace = relationship("Workspace", back_populates="collections")

@@ -25,6 +25,7 @@ import { AddSpaceModal } from './AddSpaceModal';
 import { Lightbox } from './Lightbox';
 import { GuideHost } from './GuideHost';
 import { ThumbnailEditHost } from './ThumbnailEditHost';
+import { PlaylistCoverHost } from './PlaylistCoverHost';
 import { DeleteToast } from './DeleteToast';
 import { NoticeToast } from './NoticeToast';
 import { AudioPlayerProvider } from '@/lib/audioPlayer';
@@ -273,6 +274,7 @@ export function Layout() {
       <Lightbox />
       <GuideHost />
       <ThumbnailEditHost />
+      <PlaylistCoverHost />
       <DeleteToast />
       <NoticeToast />
 
