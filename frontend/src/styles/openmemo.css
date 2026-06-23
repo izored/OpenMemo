@@ -1814,6 +1814,29 @@ input, textarea { font: inherit; color: inherit; }
 }
 .mdxeditor .cm-editor .cm-cursor { border-left-color: var(--text) !important; }
 
+/* Brand the whole MDXEditor to the app surface + user theme, and ease the
+   colors when the theme flips (OPNMMO). MarkdownEditor adds `dark-theme` on a
+   non-light theme so the editor's own palette goes dark instead of shipping the
+   default white toolbar; these map its chrome onto app tokens for cohesion and
+   carry a transition so a theme switch glides rather than snaps. */
+.om-md-editor .mdxeditor {
+  --baseBg: transparent;
+  background: transparent;
+  font-family: inherit;
+}
+.om-md-editor .mdxeditor,
+.om-md-editor .mdxeditor [class*="_toolbarRoot"],
+.om-md-editor .mdxeditor [class*="_toolbarRoot"] button,
+.om-md-editor .mdxeditor [class*="_selectTrigger"] {
+  transition: background-color .35s ease, color .35s ease, border-color .35s ease, fill .35s ease;
+}
+.om-md-editor .mdxeditor [class*="_toolbarRoot"] {
+  background: var(--surface) !important;
+  border-bottom: 1px solid var(--border) !important;
+}
+.om-md-editor .mdxeditor [class*="_toolbarRoot"] button { color: var(--text-3); }
+.om-md-editor .mdxeditor [class*="_toolbarRoot"] button:hover { color: var(--text); }
+
 /* Code blocks for ReactMarkdown in MemoDetail / AskMemoPanel */
 .om-code-inline     { background: var(--surface-3); color: var(--text); padding: 1px 5px;
                       border-radius: 4px; font-size: 11px; font-family: var(--font-mono); }
@@ -2125,6 +2148,9 @@ input, textarea { font: inherit; color: inherit; }
    The composer bg goes translucent so the beam's inner glow bleeds through
    (an opaque surface would bury it). */
 .om-beam-wrap { display: block; width: 100%; }
+/* Ask rail card wears the composer beam at 20% (strength prop). The wrap is a
+   plain block so the card keeps its rail-column geometry. */
+.om-rail-beam { display: block; width: 100%; }
 .om-beam-wrap > .om-ask-composer {
   width: 100%;
   /* No margin inside the wrap — the beam hugs the wrap's box, so any margin

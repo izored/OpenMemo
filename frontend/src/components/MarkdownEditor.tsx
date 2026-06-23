@@ -25,7 +25,9 @@ import {
 } from '@mdxeditor/editor';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
+import { motion, AnimatePresence } from 'framer-motion';
 import { cn } from '@/lib/utils';
+import { useAppStore } from '@/stores/appStore';
 import '@mdxeditor/editor/style.css';
 
 // CommonMark collapses a lone newline into a space, so single line breaks in
@@ -91,6 +93,10 @@ export function MarkdownEditor({
   const [clickedToEdit, setClickedToEdit] = useState(false);
   const [focused, setFocused] = useState(false);
   const [savedFlash, setSavedFlash] = useState(false);
+  // Editor chrome follows the app theme (MDXEditor ships light by default, so it
+  // looked white-on-dark). Any non-light theme → dark-theme class (OPNMMO).
+  const theme = useAppStore((s) => s.tweaks.theme);
+  const isDark = theme !== 'light';
   const lastSyncedRef = useRef<string>(value ?? '');
   const dirtyRef = useRef(false);
   const justClickedRef = useRef(false);
@@ -205,43 +211,57 @@ export function MarkdownEditor({
     setClickedToEdit(true);
   };
 
-  // View mode: rendered ReactMarkdown, click to edit
-  if (viewFirst && !clickedToEdit) {
-    return (
-      <div className={cn('relative', className)} onClick={handleViewClick}>
-        {value ? (
-          <div className="om-prose max-w-none cursor-text">
-            <ReactMarkdown remarkPlugins={[remarkGfm]}>{preserveLineBreaks(value)}</ReactMarkdown>
-          </div>
-        ) : (
-          <p className="text-[var(--text-4)] italic cursor-text px-1 py-2">{placeholder}</p>
-        )}
-        {savedFlash && (
-          <div className="absolute bottom-2 right-3 text-[11px] font-medium text-[var(--color-status)] animate-in fade-in slide-in-from-bottom-1 duration-300">
-            Saved ✓
-          </div>
-        )}
-      </div>
-    );
-  }
-
-  // Edit mode: MDXEditor with toolbar
+  // View ↔ edit crossfade (OPNMMO): one AnimatePresence holds both states so
+  // opening the editor eases in instead of snapping. popLayout keeps the editor
+  // in document flow the instant it mounts, so the click-to-edit auto-focus
+  // still lands. initial={false} skips the animation on first paint.
   return (
-    <div
-      ref={wrapperRef}
-      className={cn(
-        'relative rounded-2xl transition-all',
-        focused
-          ? 'border border-[var(--color-border)] bg-[var(--surface)]'
-          : 'border border-transparent bg-transparent',
-        className
-      )}
-      onFocus={() => setFocused(true)}
-      onBlur={handleBlur}
-      tabIndex={-1}
-    >
+    <AnimatePresence mode="popLayout" initial={false}>
+      {viewFirst && !clickedToEdit ? (
+        <motion.div
+          key="md-view"
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
+          transition={{ duration: 0.15, ease: 'easeOut' }}
+          className={cn('relative', className)}
+          onClick={handleViewClick}
+        >
+          {value ? (
+            <div className="om-prose max-w-none cursor-text">
+              <ReactMarkdown remarkPlugins={[remarkGfm]}>{preserveLineBreaks(value)}</ReactMarkdown>
+            </div>
+          ) : (
+            <p className="text-[var(--text-4)] italic cursor-text px-1 py-2">{placeholder}</p>
+          )}
+          {savedFlash && (
+            <div className="absolute bottom-2 right-3 text-[11px] font-medium text-[var(--color-status)] animate-in fade-in slide-in-from-bottom-1 duration-300">
+              Saved ✓
+            </div>
+          )}
+        </motion.div>
+      ) : (
+        <motion.div
+          key="md-edit"
+          ref={wrapperRef}
+          initial={{ opacity: 0, y: 6 }}
+          animate={{ opacity: 1, y: 0 }}
+          exit={{ opacity: 0, y: 6 }}
+          transition={{ type: 'spring', stiffness: 420, damping: 32 }}
+          className={cn(
+            'relative rounded-2xl transition-all om-md-editor',
+            focused
+              ? 'border border-[var(--color-border)] bg-[var(--surface)]'
+              : 'border border-transparent bg-transparent',
+            className
+          )}
+          onFocus={() => setFocused(true)}
+          onBlur={handleBlur}
+          tabIndex={-1}
+        >
       <MDXEditor
         ref={ref}
+        className={cn('om-mdx', isDark && 'dark-theme')}
         markdown={value}
         onChange={handleChange}
         placeholder={placeholder}
@@ -383,6 +403,8 @@ export function MarkdownEditor({
           Saved ✓
         </div>
       )}
-    </div>
+        </motion.div>
+      )}
+    </AnimatePresence>
   );
 }
