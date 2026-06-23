@@ -153,11 +153,35 @@ export function MarkdownEditor({
     setTimeout(() => setSavedFlash(false), 1500);
   }, [onSave]);
 
-  const handleBlur = useCallback(() => {
-    setFocused(false);
-    saveIfDirty();
-    if (viewFirst) setClickedToEdit(false);
-  }, [saveIfDirty, viewFirst]);
+  // Focus moving into an MDXEditor portal (the block-type dropdown, link dialog,
+  // table popover) lives OUTSIDE the wrapper, so a naive blur handler would
+  // collapse the editor the instant the user opens the BlockTypeSelect
+  // (OPNMMO). Treat focus that lands inside the wrapper OR any MDXEditor portal
+  // as "still editing" and skip the collapse; only save+collapse on a real exit.
+  const focusStillInEditor = useCallback((next: Element | null) => {
+    if (!next) return false;
+    if (wrapperRef.current?.contains(next)) return true;
+    // Portaled MDXEditor surfaces use stable module class fragments; match them
+    // (plus the Radix listbox/dialog roles) so any popover keeps the editor open.
+    return !!next.closest(
+      '[class*="selectContainer"],[class*="SelectContainer"],[class*="selectContent"],[class*="selectItem"],[class*="SelectItem"],[class*="popupContainer"],[class*="popoverContent"],[class*="PopoverContent"],[class*="dialogContent"],[class*="DialogContent"],[role="listbox"],[role="dialog"]'
+    );
+  }, []);
+
+  const handleBlur = useCallback(
+    (e: React.FocusEvent) => {
+      // `relatedTarget` is where focus is heading; on some interactions it is
+      // null, so fall back to a deferred activeElement check next frame.
+      if (focusStillInEditor(e.relatedTarget as Element | null)) return;
+      requestAnimationFrame(() => {
+        if (focusStillInEditor(document.activeElement)) return;
+        setFocused(false);
+        saveIfDirty();
+        if (viewFirst) setClickedToEdit(false);
+      });
+    },
+    [focusStillInEditor, saveIfDirty, viewFirst]
+  );
 
   // Intercept paste in MDXEditor: treat plain-text paste as markdown so syntax (#, **, >, lists)
   // becomes proper nodes instead of being escaped as literal text.
@@ -251,7 +275,7 @@ export function MarkdownEditor({
           className={cn(
             'relative rounded-2xl transition-all om-md-editor',
             focused
-              ? 'border border-[var(--color-border)] bg-[var(--surface)]'
+              ? 'border border-[var(--border)] bg-[var(--surface)]'
               : 'border border-transparent bg-transparent',
             className
           )}
@@ -373,7 +397,7 @@ export function MarkdownEditor({
           markdownShortcutPlugin(),
           toolbarPlugin({
             toolbarContents: () => (
-              <div className="flex flex-wrap items-center gap-1 px-2 py-1.5 border-b border-[var(--color-border)]">
+              <div className="flex flex-wrap items-center gap-1 px-2 py-1.5 border-b border-[var(--border)]">
                 {compact ? (
                   <BoldItalicUnderlineToggles />
                 ) : (
