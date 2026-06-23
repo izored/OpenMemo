@@ -60,9 +60,14 @@ export function MusicAddModal({ embedded = false }: { embedded?: boolean } = {})
   const [llProbe, setLlProbe] = useState<LosslessProbe | null>(null);
   const [llProbing, setLlProbing] = useState(false);
 
-  // Upload tab
+  // Upload tab. `uploadMode` decides how a dropped batch is filed:
+  //   album    — auto-group by each file's embedded album tag (one+ albums)
+  //   playlist — everything into one new playlist
+  //   tracks   — loose songs straight into the library, no collection
   const fileRef = useRef<HTMLInputElement>(null);
   const [progress, setProgress] = useState<{ done: number; total: number } | null>(null);
+  const [uploadMode, setUploadMode] = useState<'album' | 'playlist' | 'tracks'>('album');
+  const [uploadName, setUploadName] = useState('');
 
   // Playlist tab
   const [plName, setPlName] = useState('');
@@ -123,6 +128,7 @@ export function MusicAddModal({ embedded = false }: { embedded?: boolean } = {})
     setError('');
     setProgress(null);
     setShowSettings(false);
+    setUploadName('');
   };
 
   const refreshMusic = () => {
@@ -165,18 +171,43 @@ export function MusicAddModal({ embedded = false }: { embedded?: boolean } = {})
 
   const onFiles = async (files: FileList | null) => {
     if (!files || !files.length) return;
+    const arr = Array.from(files);
     setBusy(true);
     setError('');
-    const arr = Array.from(files);
-    setProgress({ done: 0, total: arr.length });
-    const failed: string[] = [];
-    for (let i = 0; i < arr.length; i++) {
+
+    // Album / playlist: one request groups the batch (and any dropped cover
+    // image) into collection(s) server-side.
+    if (uploadMode !== 'tracks') {
+      setProgress({ done: 0, total: arr.length });
       try {
-        await ingestApi.file(arr[i], undefined, undefined, { audioKind: 'music' });
-      } catch {
-        failed.push(arr[i].name);
+        const res = await ingestApi.album(arr, {
+          mode: uploadMode,
+          name: uploadName.trim() || undefined,
+        });
+        setProgress(null);
+        setBusy(false);
+        refreshMusic();
+        close();
+        if (res.collection_id) navigate(`/music/${res.collection_id}`);
+      } catch (e) {
+        setProgress(null);
+        setBusy(false);
+        setError((e as Error).message || 'Could not import that album');
       }
-      setProgress({ done: i + 1, total: arr.length });
+      return;
+    }
+
+    // Loose tracks: each file becomes a standalone library song.
+    const audio = arr.filter((f) => !f.type.startsWith('image/'));
+    setProgress({ done: 0, total: audio.length });
+    const failed: string[] = [];
+    for (let i = 0; i < audio.length; i++) {
+      try {
+        await ingestApi.file(audio[i], undefined, undefined, { audioKind: 'music' });
+      } catch {
+        failed.push(audio[i].name);
+      }
+      setProgress({ done: i + 1, total: audio.length });
     }
     setProgress(null);
     setBusy(false);
@@ -185,7 +216,7 @@ export function MusicAddModal({ embedded = false }: { embedded?: boolean } = {})
       close();
       return;
     }
-    setError(`${failed.length} of ${arr.length} failed to upload`);
+    setError(`${failed.length} of ${audio.length} failed to upload`);
   };
 
   const createPlaylist = async () => {
@@ -362,6 +393,38 @@ export function MusicAddModal({ embedded = false }: { embedded?: boolean } = {})
 
         {tab === 'upload' && (
           <div className="om-add-tab-pane">
+            <div className="om-add-tabs" role="tablist">
+              {([
+                { id: 'album', icon: 'layers', label: 'Album' },
+                { id: 'playlist', icon: 'listMusic', label: 'Playlist' },
+                { id: 'tracks', icon: 'music', label: 'Tracks' },
+              ] as const).map((m) => (
+                <button
+                  key={m.id}
+                  role="tab"
+                  aria-selected={uploadMode === m.id}
+                  className={cn('om-add-tab', uploadMode === m.id && 'active')}
+                  onClick={() => { setUploadMode(m.id); setError(''); }}
+                  title={m.label}
+                >
+                  <Icon name={m.icon} size={13} />
+                  <span>{m.label}</span>
+                </button>
+              ))}
+            </div>
+
+            {uploadMode !== 'tracks' && (
+              <div className="om-add-input">
+                <Icon name={uploadMode === 'album' ? 'layers' : 'listMusic'} size={13} />
+                <input
+                  value={uploadName}
+                  onChange={(e) => setUploadName(e.target.value)}
+                  placeholder={uploadMode === 'album' ? 'Album name (optional)' : 'Playlist name (optional)'}
+                  maxLength={200}
+                />
+              </div>
+            )}
+
             <div
               className="om-add-dropzone"
               onClick={() => fileRef.current?.click()}
@@ -374,13 +437,21 @@ export function MusicAddModal({ embedded = false }: { embedded?: boolean } = {})
                   <p>Uploading {progress.done} / {progress.total}…</p>
                   <span className="mono">Keep this open until it finishes</span>
                 </>
-              ) : (
+              ) : uploadMode === 'tracks' ? (
                 <>
                   <p>Drop audio or <span className="om-add-link">browse</span></p>
                   <span className="mono">MP3 · FLAC · WAV · M4A · OGG</span>
                 </>
+              ) : (
+                <>
+                  <p>Drop {uploadMode === 'album' ? 'an album' : 'tracks'} or <span className="om-add-link">browse</span></p>
+                  <span className="mono">Audio + an optional cover image</span>
+                </>
               )}
             </div>
+            {uploadMode === 'album' && !progress && (
+              <p className="om-mm-hint mono">Grouped by each file’s album tag. Cover: dropped image, else embedded art.</p>
+            )}
           </div>
         )}
 
@@ -405,7 +476,14 @@ export function MusicAddModal({ embedded = false }: { embedded?: boolean } = {})
         {error && <p className="om-add-hint mono" style={{ color: '#EF5048' }}>{error}</p>}
       </div>
 
-      <input ref={fileRef} type="file" multiple accept="audio/*" hidden onChange={(e) => onFiles(e.target.files)} />
+      <input
+        ref={fileRef}
+        type="file"
+        multiple
+        accept={uploadMode === 'tracks' ? 'audio/*' : 'audio/*,image/*'}
+        hidden
+        onChange={(e) => onFiles(e.target.files)}
+      />
 
       <div className="om-add-foot">
         <button className="om-add-foot-btn ghost" onClick={close}>Cancel</button>
