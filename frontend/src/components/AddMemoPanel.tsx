@@ -281,55 +281,6 @@ export function AddMemoPanel({ embedded = false }: { embedded?: boolean } = {}) 
 
   return (
     <>
-    {(open || embedded) && collOpen && (
-      <aside className="om-add-coll-flyout" aria-label="Choose collection">
-        <div className="om-add-head">
-          <div className="om-add-head-l">
-            <b>Collection</b>
-          </div>
-          <button className="om-add-x" onClick={() => setCollOpen(false)} aria-label="Close">
-            <Icon name="x" size={13} />
-          </button>
-        </div>
-        <div className="om-add-coll-flyout-list">
-          <button
-            className={cn('om-add-coll-opt', !collection && 'active')}
-            onClick={() => {
-              setCollection('');
-              setCollOpen(false);
-            }}
-          >
-            <Icon name="inbox" size={11} />
-            <span>No collection</span>
-            <span className="mono" />
-          </button>
-          {collections.map((c: Collection) => (
-            <button
-              key={c.id}
-              className={cn('om-add-coll-opt', collection === c.id && 'active')}
-              onClick={() => {
-                setCollection(c.id);
-                setCollOpen(false);
-              }}
-            >
-              <span>{c.emoji || '📁'}</span>
-              <span>{c.name}</span>
-              <span className="mono" />
-            </button>
-          ))}
-        </div>
-        <button
-          className="om-add-coll-flyout-new"
-          onClick={() => {
-            setEditingCollection(null);
-            setCollectionModalOpen(true);
-          }}
-        >
-          <Icon name="plus" size={12} />
-          <span>New collection…</span>
-        </button>
-      </aside>
-    )}
     <aside
       className={cn(embedded ? 'om-add-embedded' : 'om-add-panel', (open || embedded) && 'open')}
       aria-hidden={embedded ? undefined : !open}
@@ -560,7 +511,7 @@ export function AddMemoPanel({ embedded = false }: { embedded?: boolean } = {}) 
 
         <div className="om-add-sect mono">Collection</div>
         <div className="om-add-coll-wrap">
-          <button className="om-add-select" onClick={() => setCollOpen((v) => !v)}>
+          <button className="om-add-select" onClick={() => setCollOpen((v) => !v)} aria-expanded={collOpen}>
             <Icon name="folder" size={12} />
             <span>{activeColl ? activeColl.name : 'No collection'}</span>
             <Icon
@@ -569,6 +520,36 @@ export function AddMemoPanel({ embedded = false }: { embedded?: boolean } = {}) 
               style={{ marginLeft: 'auto', opacity: 0.55, transform: collOpen ? 'rotate(180deg)' : 'none', transition: 'transform .15s' }}
             />
           </button>
+          {collOpen && (
+            <div className="om-add-coll-pop" role="listbox" aria-label="Choose collection">
+              <button
+                className={cn('om-add-coll-opt', !collection && 'active')}
+                onClick={() => { setCollection(''); setCollOpen(false); }}
+              >
+                <Icon name="inbox" size={11} />
+                <span>No collection</span>
+                <span className="mono" />
+              </button>
+              {collections.map((c: Collection) => (
+                <button
+                  key={c.id}
+                  className={cn('om-add-coll-opt', collection === c.id && 'active')}
+                  onClick={() => { setCollection(c.id); setCollOpen(false); }}
+                >
+                  <span>{c.emoji || '📁'}</span>
+                  <span>{c.name}</span>
+                  <span className="mono" />
+                </button>
+              ))}
+              <button
+                className="om-add-coll-opt new"
+                onClick={() => { setEditingCollection(null); setCollectionModalOpen(true); setCollOpen(false); }}
+              >
+                <Icon name="plus" size={12} />
+                <span>New collection…</span>
+              </button>
+            </div>
+          )}
         </div>
 
         <div className="om-add-sect mono">Tags</div>

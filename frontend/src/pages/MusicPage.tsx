@@ -66,22 +66,36 @@ function isReady(m: Memo): boolean {
   return !!m.file_path || m.localize_status === 'done';
 }
 
-function PlaylistCover({ covers, size = 'md', kind = 'playlist' }: { covers: string[]; size?: 'md' | 'lg'; kind?: 'album' | 'playlist' }) {
-  // An album is one release with one artwork — always a single cover. The
+function PlaylistCover({ covers, size = 'md', kind = 'playlist', override = null, onEdit }: { covers: string[]; size?: 'md' | 'lg'; kind?: 'album' | 'playlist'; override?: string | null; onEdit?: () => void }) {
+  // A hand-set cover wins over everything and always renders as a single image.
+  // Otherwise: an album is one release with one artwork (single cover); the
   // 4-up collage is reserved for playlists, whose tracks have mixed art.
-  const single = kind === 'album' || covers.length < 4;
+  const single = !!override || kind === 'album' || covers.length < 4;
+  const src = override || covers[0];
   return (
-    <div className={cn('om-pl-cover', `om-pl-cover-${size}`, single && 'few')}>
-      {covers.length === 0 && (
+    <div className={cn('om-pl-cover', `om-pl-cover-${size}`, single && 'few', onEdit && 'is-editable')}>
+      {!override && covers.length === 0 && (
         <span className="om-pl-cover-glyph"><Icon name="music" size={size === 'lg' ? 28 : 22} /></span>
       )}
-      {covers.length > 0 && single && (
-        <img src={covers[0]} alt="" loading="lazy" onError={(e) => ((e.target as HTMLImageElement).style.visibility = 'hidden')} />
+      {single && src && (
+        <img src={src} alt="" loading="lazy" onError={(e) => ((e.target as HTMLImageElement).style.visibility = 'hidden')} />
       )}
       {!single && covers.length >= 4 &&
         covers.slice(0, 4).map((c, i) => (
           <img key={i} src={c} alt="" loading="lazy" onError={(e) => ((e.target as HTMLImageElement).style.visibility = 'hidden')} />
         ))}
+      {onEdit && (
+        <button
+          type="button"
+          className="om-pl-cover-edit"
+          onClick={(e) => { e.stopPropagation(); onEdit(); }}
+          title="Change cover"
+          aria-label="Change cover"
+        >
+          <Icon name="image" size={size === 'lg' ? 18 : 15} />
+          <span>Change cover</span>
+        </button>
+      )}
     </div>
   );
 }
@@ -113,7 +127,7 @@ function PlaylistCard({ p, onOpen, onPlay, isCurrent = false, playing = false }:
       onKeyDown={(e) => e.key === 'Enter' && onOpen()}
     >
       <div className="om-pl-card-art">
-        <PlaylistCover covers={p.covers} kind={p.music_kind} />
+        <PlaylistCover covers={p.covers} kind={p.music_kind} override={p.cover_url} />
         {/* The currently-playing playlist keeps its badge pinned (not hover-only)
             and toggles play/pause; any other card just starts this playlist. */}
         <button
@@ -269,7 +283,9 @@ function HeroCard({ p, onOpen, onPlay, isCurrent = false, playing = false }: {
   p: MusicPlaylist; onOpen: () => void; onPlay: () => void; isCurrent?: boolean; playing?: boolean;
 }) {
   const kindLabel = p.music_kind === 'album' ? 'Album' : 'Playlist';
-  const collage = p.music_kind === 'playlist' && p.covers.length >= 4;
+  // A hand-set cover wins; otherwise a 4-up collage for art-mixed playlists.
+  const collage = !p.cover_url && p.music_kind === 'playlist' && p.covers.length >= 4;
+  const single = p.cover_url || p.covers[0];
   return (
     <div
       className={cn('om-hero-card', isCurrent && 'is-playing')}
@@ -279,12 +295,12 @@ function HeroCard({ p, onOpen, onPlay, isCurrent = false, playing = false }: {
       onKeyDown={(e) => e.key === 'Enter' && onOpen()}
     >
       <div className="om-hero-art">
-        {p.covers.length === 0 ? (
+        {!single ? (
           <span className="om-hero-glyph"><Icon name="music" size={40} /></span>
         ) : collage ? (
           <PlaylistCover covers={p.covers} kind="playlist" />
         ) : (
-          <img src={p.covers[0]} alt="" loading="lazy" onError={(e) => ((e.target as HTMLImageElement).style.visibility = 'hidden')} />
+          <img src={single} alt="" loading="lazy" onError={(e) => ((e.target as HTMLImageElement).style.visibility = 'hidden')} />
         )}
       </div>
       <div className="om-hero-veil" />
@@ -428,6 +444,7 @@ export function MusicPage() {
   const setMusicModalOpen = useAppStore((s) => s.setMusicModalOpen);
   const musicModalOpen = useAppStore((s) => s.musicModalOpen);
   const openThumbEdit = useAppStore((s) => s.openThumbEdit);
+  const openCoverEdit = useAppStore((s) => s.openCoverEdit);
   const showNotice = useAppStore((s) => s.showNotice);
   const { playQueue, toggle, isActive, playing, queueSource } = useAudioPlayer();
   // True when the live queue was started from this playlist/album card.
@@ -754,6 +771,8 @@ export function MusicPage() {
             covers={playlist?.covers ?? tracks.filter((t) => t.thumbnail_path).slice(0, 4).map((t) => t.thumbnail_path!)}
             size="lg"
             kind={playlist?.music_kind}
+            override={playlist?.cover_url}
+            onEdit={playlist ? () => openCoverEdit(playlist) : undefined}
           />
           <div className="om-pl-hero-body">
             <span className="om-greet-eyebrow mono">

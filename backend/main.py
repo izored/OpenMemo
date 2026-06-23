@@ -94,7 +94,7 @@ async def lifespan(app: FastAPI):
             # API's default kind filter can use a plain equality.
             ccols = (await db.execute(_sql_text("PRAGMA table_info(collections)"))).fetchall()
             cnames = {c[1] for c in ccols}
-            for col in ("kind", "source_url", "music_kind"):
+            for col in ("kind", "source_url", "music_kind", "cover_ext"):
                 if col not in cnames:
                     await db.execute(_sql_text(f"ALTER TABLE collections ADD COLUMN {col} VARCHAR"))
             await db.execute(_sql_text(
