@@ -411,6 +411,9 @@ export function MemoCard({ memo, dragHandleProps, lightboxGroup }: CardProps) {
   const showNotice = useAppStore((s) => s.showNotice);
   const { play, playing, isActive } = useAudioPlayer();
   const [imageOrient, setImageOrient] = React.useState<'landscape' | 'portrait'>('landscape');
+  // Real width/height ratio, captured on load. Drives edge-mode masonry so each
+  // tile keeps its source proportions instead of a forced square.
+  const [imageAR, setImageAR] = React.useState<number | null>(null);
   const [confirmDeleteOpen, setConfirmDeleteOpen] = React.useState(false);
 
   const showInLightbox = () => {
@@ -552,7 +555,7 @@ export function MemoCard({ memo, dragHandleProps, lightboxGroup }: CardProps) {
           onOpen={goDetail}
           confirmOverlay={confirmOverlay}
         >
-          <div className="om-image-frame" data-orient={imageOrient} style={{ background: heroBg }}>
+          <div className="om-image-frame" data-orient={imageOrient} style={{ background: heroBg, ...(imageAR ? { ['--card-ar']: imageAR } : {}) } as React.CSSProperties}>
             {src ? (
               <img
                 src={src}
@@ -561,6 +564,7 @@ export function MemoCard({ memo, dragHandleProps, lightboxGroup }: CardProps) {
                 onLoad={(e) => {
                   const img = e.target as HTMLImageElement;
                   setImageOrient(img.naturalHeight > img.naturalWidth ? 'portrait' : 'landscape');
+                  if (img.naturalWidth && img.naturalHeight) setImageAR(img.naturalWidth / img.naturalHeight);
                 }}
                 onError={(e) => ((e.target as HTMLImageElement).style.display = 'none')}
               />

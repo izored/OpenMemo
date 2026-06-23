@@ -50,6 +50,7 @@ import { Marquee } from '@/components/Marquee';
 import { VolumeControl } from '@/components/VolumeControl';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
+import { motion, AnimatePresence } from 'framer-motion';
 import type { Memo, Collection, CollectionRef, SummaryMode } from '@/types';
 
 // A signal to seek the open player (embed iframe or local <video>). The nonce
@@ -1074,9 +1075,11 @@ function SummaryPanel({
         <Sparkles size={16} className="om-accent-icon" />
         <span className="om-rail-title">AI Summary</span>
         {hasSummary && <Check size={14} className="om-rail-check" />}
-        <span className="om-rail-head-chev">{open ? <ChevronUp size={16} /> : <ChevronDown size={16} />}</span>
+        <motion.span className="om-rail-head-chev" animate={{ rotate: open ? 180 : 0 }} transition={{ duration: 0.28, ease: [0.25, 1, 0.5, 1] }}>
+          <ChevronDown size={16} />
+        </motion.span>
       </button>
-      {open && (
+      <RailCollapse open={open}>
         <div className="om-rail-card-body">
           <div className="om-localize-modes" style={{ marginBottom: 12 }}>
             {options.map((o) => (
@@ -1121,7 +1124,7 @@ function SummaryPanel({
             </button>
           )}
         </div>
-      )}
+      </RailCollapse>
     </section>
   );
 }
@@ -1151,6 +1154,29 @@ function DescriptionText({ text, onSeek }: { text: string; onSeek?: (sec: number
         return <React.Fragment key={i}>{p}</React.Fragment>;
       })}
     </p>
+  );
+}
+
+// Smooth height collapse for a rail card body (framer-motion). Mounts/unmounts
+// the body with an animated 0↔auto height + fade so opening/closing a section
+// glides instead of snapping. overflow:hidden contains the body's top margin so
+// it collapses with the height.
+function RailCollapse({ open, children }: { open: boolean; children: React.ReactNode }) {
+  return (
+    <AnimatePresence initial={false}>
+      {open && (
+        <motion.div
+          key="body"
+          initial={{ height: 0, opacity: 0 }}
+          animate={{ height: 'auto', opacity: 1 }}
+          exit={{ height: 0, opacity: 0 }}
+          transition={{ height: { duration: 0.28, ease: [0.25, 1, 0.5, 1] }, opacity: { duration: 0.2 } }}
+          style={{ overflow: 'hidden' }}
+        >
+          {children}
+        </motion.div>
+      )}
+    </AnimatePresence>
   );
 }
 
@@ -1189,9 +1215,13 @@ function RailCard({
         <span className="om-rail-title">{title}</span>
         {done && <Check size={14} className="om-rail-check" />}
         {badge}
-        <span className="om-rail-head-chev">{open ? <ChevronUp size={16} /> : <ChevronDown size={16} />}</span>
+        <motion.span className="om-rail-head-chev" animate={{ rotate: open ? 180 : 0 }} transition={{ duration: 0.28, ease: [0.25, 1, 0.5, 1] }}>
+          <ChevronDown size={16} />
+        </motion.span>
       </button>
-      {open && <div className="om-rail-card-body">{children}</div>}
+      <RailCollapse open={open}>
+        <div className="om-rail-card-body">{children}</div>
+      </RailCollapse>
     </section>
   );
 }
@@ -1601,6 +1631,30 @@ export function MemoDetail() {
                 )}
               </div>
             )}
+            {/* Pin + Export as header icon buttons (tooltip via title), next to
+                delete — moved out of the meta row so tags flow free below. */}
+            {!isEditing && (
+              <button
+                className={cn('om-icon-btn', memo.pinned && 'active')}
+                onClick={togglePin}
+                title={memo.pinned ? 'Unpin from sidebar' : 'Pin to sidebar'}
+                aria-label={memo.pinned ? 'Unpin from sidebar' : 'Pin to sidebar'}
+                aria-pressed={!!memo.pinned}
+              >
+                {memo.pinned ? <PinOff size={15} /> : <Pin size={15} />}
+              </button>
+            )}
+            {!isEditing && memo.file_path && (
+              <a
+                className="om-icon-btn"
+                href={`/api/memos/${memo.id}/file?download=1`}
+                download
+                title="Export this memo"
+                aria-label="Export this memo"
+              >
+                <Download size={15} />
+              </a>
+            )}
             {!isEditing ? (
               <button
                 onClick={() => setIsEditing(true)}
@@ -1722,32 +1776,8 @@ export function MemoDetail() {
                   />
                 )}
               </div>
-
-              {/* Actions: pin / export */}
-              {!isEditing && (
-                <div className="om-detail-meta-actions">
-                  <button
-                    className="om-meta-action"
-                    onClick={togglePin}
-                    title={memo.pinned ? 'Unpin from sidebar' : 'Pin to sidebar'}
-                    aria-pressed={!!memo.pinned}
-                  >
-                    {memo.pinned ? <PinOff size={13} /> : <Pin size={13} />}
-                    <span>{memo.pinned ? 'Unpin' : 'Pin to sidebar'}</span>
-                  </button>
-                  {memo.file_path && (
-                    <a
-                      className="om-meta-action"
-                      href={`/api/memos/${memo.id}/file?download=1`}
-                      download
-                      title="Export this memo to your device"
-                    >
-                      <Download size={13} />
-                      <span>Export this memo</span>
-                    </a>
-                  )}
-                </div>
-              )}
+              {/* Pin / Export moved to the header icon cluster (next to delete).
+                  The facts cluster now owns the full row so tags wrap freely. */}
             </div>
 
             {/* Edit: Tags */}
