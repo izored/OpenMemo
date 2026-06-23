@@ -85,8 +85,11 @@ export interface MusicPlaylist {
   description?: string | null;
   source_url?: string | null;
   /** What the source was: an album shows a single cover + "Album" label,
-   *  a playlist keeps the 4-cover collage. */
-  music_kind: 'album' | 'playlist';
+   *  a playlist keeps the 4-cover collage. 'hero' = a custom pinned hero card
+   *  (image + name, no real tracks) shown only in the Music hero rail. */
+  music_kind: 'album' | 'playlist' | 'hero';
+  /** Pinned to the Music hero rail (curated top row). */
+  pinned?: boolean;
   created_at: string;
   track_count: number;
   /** A hand-set cover image (cache-busted), or null. When present it overrides

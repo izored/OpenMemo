@@ -47,6 +47,10 @@ class CollectionCreate(BaseModel):
     color: Optional[str] = "#D97706"
     # 'standard' (default) or 'playlist' (music playlist, ADR-015).
     kind: Optional[str] = "standard"
+    # Playlist sub-kind: 'album' | 'playlist' | 'hero' (custom pinned hero card).
+    music_kind: Optional[str] = None
+    # Pin straight to the Music hero rail on create (custom hero cards do this).
+    pinned: Optional[bool] = None
     # Playlists: the source playlist URL they were ingested from.
     source_url: Optional[str] = None
     workspace_id: Optional[str] = None
@@ -118,6 +122,8 @@ async def create_collection(data: CollectionCreate, db: AsyncSession = Depends(g
         description=data.description,
         color=data.color,
         kind=data.kind if data.kind in ("standard", "playlist") else "standard",
+        music_kind=data.music_kind if data.music_kind in ("album", "playlist", "hero") else None,
+        pinned=bool(data.pinned),
         source_url=data.source_url,
     )
     db.add(collection)

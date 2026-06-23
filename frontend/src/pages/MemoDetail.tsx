@@ -3,6 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   MessageSquare,
+  Bot,
   Sparkles,
   Loader2,
   ExternalLink,
@@ -38,6 +39,8 @@ import { BackButton } from '@/components/BackButton';
 import { MarkdownEditor } from '@/components/MarkdownEditor';
 import { memoApi, collectionApi } from '@/lib/api';
 import { AskMemoPanel } from '@/components/AskMemoPanel';
+import { BorderBeam } from 'border-beam';
+import { useBeamConfig, resolveBeamTheme } from '@/lib/beamConfig';
 import { useIsMobile } from '@/lib/useBreakpoint';
 import { audioEmbed, audioPlatformMeta, canMakeLocal, canTranscript, canSummarize, audioKind } from '@/lib/media';
 import { videoEmbedUrl, embedKind, platformMeta } from '@/lib/platforms';
@@ -1328,15 +1331,35 @@ function TranscriptCard({ memo, onSeek, open, onToggle }: { memo: Memo; onSeek?:
 // "Ask this memo" as a rail card (OPNMMO-0042): a collapsed toggle that opens
 // into the chat (input + thread), part of the rail accordion like the others.
 function AskRailTool({ memoId, open, onToggle }: { memoId: string; open: boolean; onToggle: () => void }) {
+  // The Ask card wears the same colorful border-beam as the Ask composer, but
+  // dialed to 20% (strength only touches the beam/glow, not the card). Its head
+  // glyph is the Ask robot, matching the panel's own icon (OPNMMO).
+  const beam = useBeamConfig();
+  const theme = useAppStore((s) => s.tweaks.theme);
   return (
-    <RailCard
-      icon={<MessageSquare size={16} className="om-accent-icon" />}
-      title="Ask this memo"
-      open={open}
-      onToggle={onToggle}
+    <BorderBeam
+      className="om-rail-beam"
+      size={beam.composerSize}
+      colorVariant="colorful"
+      theme={resolveBeamTheme(beam.themeMode, theme === 'light' ? 'light' : 'dark')}
+      borderRadius={14}
+      active
+      staticColors={beam.staticColors}
+      saturation={beam.saturation}
+      hueRange={beam.hueRange}
+      strength={0.2}
+      brightness={beam.ambientBrightness}
+      duration={beam.ambientDuration}
     >
-      <AskMemoPanel memoId={memoId} />
-    </RailCard>
+      <RailCard
+        icon={<Bot size={16} className="om-accent-icon" />}
+        title="Ask this memo"
+        open={open}
+        onToggle={onToggle}
+      >
+        <AskMemoPanel memoId={memoId} />
+      </RailCard>
+    </BorderBeam>
   );
 }
 

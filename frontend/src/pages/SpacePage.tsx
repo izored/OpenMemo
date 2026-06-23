@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { useParams } from 'react-router-dom';
-import { useQuery, useInfiniteQuery, useQueryClient } from '@tanstack/react-query';
+import { useQuery, useInfiniteQuery, useQueryClient, keepPreviousData } from '@tanstack/react-query';
 import { motion } from 'framer-motion';
 import { MemoGrid } from '@/components/MemoGrid';
 import { Icon } from '@/components/Icon';
@@ -78,6 +78,8 @@ export function SpacePage() {
     },
     staleTime: 5 * 60 * 1000,
     enabled: !!id,
+    // Keep the grid on screen during a filter refetch so it can crossfade.
+    placeholderData: keepPreviousData,
   });
 
   const memos = data?.pages.flatMap((p) => p.items) ?? [];
@@ -269,7 +271,7 @@ export function SpacePage() {
         </div>
       ) : (
         <>
-          <MemoGrid memos={memos} />
+          <MemoGrid memos={memos} transitionKey={`${id}:${activeFilter}:${activeCollection ?? ''}`} />
           <div ref={sentinelRef} style={{ height: 1 }} />
           {isFetchingNextPage && (
             <div className="om-empty">

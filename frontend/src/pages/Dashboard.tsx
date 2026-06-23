@@ -1,6 +1,6 @@
 import { useMemo, useRef, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useQuery, useInfiniteQuery } from '@tanstack/react-query';
+import { useQuery, useInfiniteQuery, keepPreviousData } from '@tanstack/react-query';
 import { MemoGrid } from '@/components/MemoGrid';
 import { BottomBar } from '@/components/BottomBar';
 import { BottomBarFilters } from '@/components/BottomBarFilters';
@@ -65,6 +65,9 @@ export function Dashboard() {
     },
     staleTime: 5 * 60 * 1000,
     gcTime: 10 * 60 * 1000,
+    // Keep the current grid on screen while the next filter's page loads — no
+    // spinner flash, so the grid can crossfade between sets (OPNMMO).
+    placeholderData: keepPreviousData,
   });
 
   const memos = data?.pages.flatMap((p) => p.items) ?? [];
@@ -115,7 +118,7 @@ export function Dashboard() {
           </div>
         ) : (
           <>
-            <MemoGrid memos={memos} />
+            <MemoGrid memos={memos} transitionKey={`${activeFilter}:${activeCollection ?? ''}`} />
             <div ref={sentinelRef} style={{ height: 1 }} />
             {isFetchingNextPage && (
               <div className="om-empty">
