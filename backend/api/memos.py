@@ -13,7 +13,7 @@ from sqlalchemy.orm import selectinload, load_only
 from pydantic import BaseModel
 
 from backend.config import settings
-from backend.db.database import get_db
+from backend.db.database import get_db, AsyncSessionLocal
 from backend.db.models import Memo, Collection, Tag, memo_collections, memo_tags
 from backend.core.security import sanitize_workspace_id
 from backend.core.file_paths import resolve_memo_path
@@ -348,7 +348,6 @@ async def get_memo_file(
     request: Request,
     memo_id: str,
     download: bool = False,
-    db: AsyncSession = Depends(get_db),
 ):
     """Serve the original uploaded file for a memo.
 
@@ -357,14 +356,32 @@ async def get_memo_file(
     (206 Partial Content) so audio/video can seek — we don't rely on the
     framework's implicit Range handling, which proved unreliable behind the
     proxy. Always advertises Accept-Ranges so players show a seekable scrubber.
-    """
-    memo = (
-        await db.execute(select(Memo).where(Memo.id == memo_id))
-    ).scalar_one_or_none()
-    if not memo or not memo.file_path:
-        raise HTTPException(status_code=404, detail="File not found")
 
-    p = resolve_memo_path(memo.file_path)
+    Critically, this route does NOT take a `Depends(get_db)` session: FastAPI
+    keeps a yielded dependency open until the response *finishes streaming*, so a
+    media stream would pin a DB connection for the entire song. The aiosqlite
+    engine uses NullPool (a real connection — plus its worker thread and file
+    descriptors — per checkout), and iOS Safari + Cloudflare tunnel leave many
+    audio range-connections lingering/abandoned. Each abandoned stream then held
+    a connection that never returned; the accumulation starved the process of
+    threads / file descriptors until every request failed, unrecoverable even by
+    refresh, until the sockets finally timed out. We instead open a short-lived
+    session, read only what we need, and release it BEFORE the stream begins, so
+    a long or abandoned stream holds no DB connection at all (OPNMMO-0052).
+    """
+    async with AsyncSessionLocal() as db:
+        memo = (
+            await db.execute(select(Memo).where(Memo.id == memo_id))
+        ).scalar_one_or_none()
+        if not memo or not memo.file_path:
+            raise HTTPException(status_code=404, detail="File not found")
+        file_path = memo.file_path
+        memo_type = memo.type
+        memo_title = memo.title
+    # DB session released here — the (possibly long-lived) stream below holds no
+    # pooled connection.
+
+    p = resolve_memo_path(file_path)
     if p is None:
         raise HTTPException(status_code=404, detail="File not found")
 
@@ -372,13 +389,13 @@ async def get_memo_file(
     media_type = mimetypes.guess_type(str(p))[0] or "application/octet-stream"
     # Audio memos: always serve an audio/* type so <audio> will play them.
     # (A .webm recording is stored as type "audio" but guesses to video/webm.)
-    if memo.type == "audio" and ext in _AUDIO_MIME:
+    if memo_type == "audio" and ext in _AUDIO_MIME:
         media_type = _AUDIO_MIME[ext]
     elif ext in _AUDIO_MIME and media_type in (None, "application/octet-stream"):
         media_type = _AUDIO_MIME[ext]
 
     if download:
-        filename = (memo.title or p.name).replace('"', "")
+        filename = (memo_title or p.name).replace('"', "")
         return FileResponse(str(p), media_type=media_type, filename=filename)
 
     file_size = p.stat().st_size

@@ -220,6 +220,35 @@ export const ingestApi = {
     }
     return resp.json();
   },
+  // Import local audio as an auto-grouped album (or one playlist) in a single
+  // request. Drop tracks plus an optional cover image; mode="album" groups by
+  // each file's embedded album tag, mode="playlist" makes one playlist. A
+  // dropped image wins as the cover, else embedded art is used.
+  album: async (
+    files: File[],
+    opts?: { mode?: 'album' | 'playlist'; name?: string; workspace_id?: string },
+  ) => {
+    const form = new FormData();
+    for (const f of files) form.append('files', f);
+    form.append('mode', opts?.mode ?? 'album');
+    if (opts?.name) form.append('name', opts.name);
+    if (opts?.workspace_id) form.append('workspace_id', opts.workspace_id);
+    const resp = await fetch(`${API_BASE}/ingest/album`, { method: 'POST', body: form });
+    if (!resp.ok) {
+      const ct = resp.headers.get('content-type') || '';
+      const detail = ct.includes('application/json')
+        ? (await resp.json().catch(() => ({ detail: resp.statusText }))).detail
+        : `${resp.status} ${resp.statusText}`;
+      throw new Error(detail || 'Album upload failed');
+    }
+    return resp.json() as Promise<{
+      collection_id: string;
+      title: string;
+      total: number;
+      collections: { collection_id: string; title: string; tracks: number }[];
+      status: string;
+    }>;
+  },
 };
 
 // Collections
