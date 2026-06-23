@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Send, Bot, Loader2, Globe } from 'lucide-react';
+import { Send, Bot, Loader2, Globe, AlertTriangle } from 'lucide-react';
 import { chatApi } from '@/lib/api';
 import { useAppStore } from '@/stores/appStore';
 import type { ChatSource } from '@/types';
@@ -28,6 +28,25 @@ export function AskMemoPanel({ memoId, collectionId }: AskMemoPanelProps) {
   useEffect(() => {
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: 'smooth' });
   }, [messages]);
+
+  // Working indicator (terminal-style). The last assistant message is "live"
+  // while we stream. Until a token lands the status cycles connecting → thinking;
+  // once text arrives we drop the spinner row and show a blinking caret on the
+  // streamed text instead. An `Error:` reply ends the run with a danger line.
+  const last = messages[messages.length - 1];
+  const liveAssistant = streaming && last?.role === 'assistant' ? last : null;
+  const hasTokens = !!liveAssistant && !liveAssistant.content.startsWith('Error:') && liveAssistant.content.length > 0;
+  const isThinking = !!liveAssistant && !hasTokens && !liveAssistant.content.startsWith('Error:');
+
+  // Pre-token status flips connecting → thinking after a short beat so the user
+  // sees the handshake before the model "thinks". Reset whenever a run starts.
+  const [phase, setPhase] = useState<'connecting' | 'thinking'>('connecting');
+  useEffect(() => {
+    if (!isThinking) return;
+    setPhase('connecting');
+    const t = setTimeout(() => setPhase('thinking'), 900);
+    return () => clearTimeout(t);
+  }, [isThinking, liveAssistant?.id]);
 
   const handleSend = async () => {
     if (!input.trim() || streaming) return;
@@ -128,40 +147,70 @@ export function AskMemoPanel({ memoId, collectionId }: AskMemoPanelProps) {
             <p className="om-ask-panel-empty-hint">Ask questions about this content</p>
           </div>
         )}
-        {messages.map((msg) => (
-          <div key={msg.id} className={`om-panel-msg${msg.role === 'user' ? ' user' : ''}`}>
-            {msg.role === 'assistant' && (
-              <div className="om-panel-msg-avatar">
-                <Bot size={12} className="om-accent-icon" />
+        {messages.map((msg) => {
+          const isError = msg.role === 'assistant' && msg.content.startsWith('Error:');
+          // Error replies render as a compact danger status line instead of a
+          // normal bubble — clearer and quieter in a narrow panel.
+          if (isError) {
+            return (
+              <div key={msg.id} className="om-ask-status om-ask-status-error" role="alert">
+                <AlertTriangle size={13} />
+                <span>{msg.content.replace(/^Error:\s*/, '')}</span>
               </div>
-            )}
-            <div className={`om-panel-bubble ${msg.role === 'user' ? 'user' : 'assistant'}`}>
-              {msg.role === 'assistant' ? (
-                <div className="om-prose om-prose-chat">
-                  <ReactMarkdown components={{
-                    code: ({ children, className }: { children?: React.ReactNode; className?: string }) => (
-                      <code className={`om-code-inline ${className || ''}`}>{children}</code>
-                    ),
-                    pre: ({ children }: { children?: React.ReactNode }) => (
-                      <pre className="om-code-block">{children}</pre>
-                    )
-                  }}>{msg.content || '...'}</ReactMarkdown>
+            );
+          }
+          const isLive = msg.id === liveAssistant?.id;
+          // Empty live assistant slot → render the terminal-style thinking row
+          // in place of an empty bubble.
+          if (msg.role === 'assistant' && isLive && !hasTokens) {
+            return (
+              <div key={msg.id} className="om-ask-status" aria-live="polite">
+                <Loader2 size={13} className="om-spin om-accent-icon" />
+                <span className="om-ask-status-label">
+                  {phase === 'connecting' ? 'Connecting to Ollama' : 'Thinking'}
+                  {chatModel ? <span className="om-ask-status-model"> · {chatModel}</span> : null}
+                </span>
+                <span className="om-ask-caret" aria-hidden="true" />
+              </div>
+            );
+          }
+          return (
+            <div key={msg.id} className={`om-panel-msg${msg.role === 'user' ? ' user' : ''}`}>
+              {msg.role === 'assistant' && (
+                <div className="om-panel-msg-avatar">
+                  <Bot size={12} className="om-accent-icon" />
                 </div>
-              ) : (
-                msg.content
               )}
-              {msg.sources && msg.sources.length > 0 && (
-                <div style={{ marginTop: '8px', display: 'flex', flexWrap: 'wrap', gap: '4px' }}>
-                  {msg.sources.map((s, i) => (
-                    <span key={i} className="om-citation-chip">
-                      <Globe size={8} /> [{i + 1}]
-                    </span>
-                  ))}
-                </div>
-              )}
+              <div className={`om-panel-bubble ${msg.role === 'user' ? 'user' : 'assistant'}`}>
+                {msg.role === 'assistant' ? (
+                  <div className="om-prose om-prose-chat">
+                    <ReactMarkdown components={{
+                      code: ({ children, className }: { children?: React.ReactNode; className?: string }) => (
+                        <code className={`om-code-inline ${className || ''}`}>{children}</code>
+                      ),
+                      pre: ({ children }: { children?: React.ReactNode }) => (
+                        <pre className="om-code-block">{children}</pre>
+                      )
+                    }}>{msg.content}</ReactMarkdown>
+                    {/* Blinking block caret tails the text while it streams in. */}
+                    {isLive && <span className="om-ask-caret om-ask-caret-inline" aria-hidden="true" />}
+                  </div>
+                ) : (
+                  msg.content
+                )}
+                {msg.sources && msg.sources.length > 0 && (
+                  <div style={{ marginTop: '8px', display: 'flex', flexWrap: 'wrap', gap: '4px' }}>
+                    {msg.sources.map((s, i) => (
+                      <span key={i} className="om-citation-chip">
+                        <Globe size={8} /> [{i + 1}]
+                      </span>
+                    ))}
+                  </div>
+                )}
+              </div>
             </div>
-          </div>
-        ))}
+          );
+        })}
       </div>
 
       <div className="om-ask-panel-composer">

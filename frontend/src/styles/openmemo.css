@@ -361,6 +361,11 @@ input, textarea { font: inherit; color: inherit; }
   right: calc(var(--header-bleed, 48px) * -1);
   -webkit-backdrop-filter: blur(8px);
           backdrop-filter: blur(8px);
+  /* Fade the blur vertically: full strength under the title/eyebrow up top,
+     feathering to nothing right where the header ends so it never leaves a hard
+     blurred band across the page just above the cards/grid. */
+  -webkit-mask-image: linear-gradient(to bottom, #000 0%, #000 35%, transparent 100%);
+          mask-image: linear-gradient(to bottom, #000 0%, #000 35%, transparent 100%);
   z-index: -1;
   pointer-events: none;
 }
@@ -899,6 +904,13 @@ input, textarea { font: inherit; color: inherit; }
 }
 [data-card="minimal"] .om-min-domain { display: flex; }
 [data-card="normal"]  .om-min-domain { display: none; }
+/* Light theme: dark glyph/favicon needs a light chip to read. Frosted white
+   base + dark text, still blurred so it stays legible over photo thumbnails.
+   Dark + high-contrast keep the dark frosted chip above. */
+[data-theme="light"] .om-min-domain {
+  background: rgba(255,255,255,0.72);
+  color: rgba(26,23,20,0.92);
+}
 
 /* Image/Video/Audio pill: icon-only by default, expands to show title on hover */
 [data-card="minimal"] .om-card-image .om-min-domain,
@@ -1837,6 +1849,65 @@ input, textarea { font: inherit; color: inherit; }
 .om-md-editor .mdxeditor [class*="_toolbarRoot"] button { color: var(--text-3); }
 .om-md-editor .mdxeditor [class*="_toolbarRoot"] button:hover { color: var(--text); }
 
+/* MDXEditor ships `--basePageBg: white` hardcoded on its editor root (even under
+   .dark-theme), and its slate `--base*` border tokens read light — that white
+   leaks onto the toolbar select trigger and dropdown. Remap the base palette to
+   app tokens so nothing renders white-on-dark (OPNMMO bug 5a/5b). */
+.om-mdx.dark-theme,
+.om-mdx {
+  --basePageBg: var(--surface-2);
+  --baseBg: var(--surface-3);
+  --baseBgSubtle: var(--surface-2);
+  --baseBorder: var(--border);
+  --baseBorderHover: var(--border-2);
+  --baseText: var(--text-2);
+  --baseTextContrast: var(--text);
+}
+/* Block-type select TRIGGER (inside the toolbar): app surface + themed border so
+   there's no white pill, accent on hover/open. Targets MDXEditor's stable module
+   class fragments. */
+.om-md-editor .mdxeditor [class*="NodeKindSelectTrigger"],
+.om-md-editor .mdxeditor [class*="selectTrigger"] {
+  background: var(--surface-3) !important;
+  color: var(--text-2) !important;
+  border: 1px solid var(--border) !important;
+}
+.om-md-editor .mdxeditor [class*="NodeKindSelectTrigger"]:hover,
+.om-md-editor .mdxeditor [class*="selectTrigger"]:hover {
+  color: var(--text) !important;
+  border-color: var(--border-2) !important;
+}
+.om-md-editor .mdxeditor [class*="NodeKindSelectTrigger"][data-state="open"],
+.om-md-editor .mdxeditor [class*="selectTrigger"][data-state="open"] {
+  color: var(--accent) !important;
+  border-color: var(--accent) !important;
+}
+
+/* Block-type select PORTAL (Radix renders the dropdown OUTSIDE .om-mdx, on the
+   body) — scope to MDXEditor's module classes and only force the app's dark
+   surface when the app theme is dark; light theme keeps MDXEditor's own light. */
+[data-theme="hi"] [class*="NodeKindSelectContainer"],
+[data-theme="hi"] [class*="selectContainer"],
+[data-theme="hi"] [class*="ButtonDropdownContainer"] {
+  background: var(--surface-2) !important;
+  border: 1px solid var(--border) !important;
+  color: var(--text-2) !important;
+}
+[data-theme="hi"] [class*="NodeKindSelectItem"],
+[data-theme="hi"] [class*="selectItem"] {
+  color: var(--text-2) !important;
+}
+[data-theme="hi"] [class*="NodeKindSelectItem"][data-highlighted],
+[data-theme="hi"] [class*="selectItem"][data-highlighted] {
+  background: color-mix(in oklab, var(--accent) 16%, var(--surface-2)) !important;
+  color: var(--text) !important;
+}
+[data-theme="hi"] [class*="NodeKindSelectItem"][data-state="checked"],
+[data-theme="hi"] [class*="selectItem"][data-state="checked"] {
+  background: color-mix(in oklab, var(--accent) 22%, var(--surface-2)) !important;
+  color: var(--accent) !important;
+}
+
 /* Code blocks for ReactMarkdown in MemoDetail / AskMemoPanel */
 .om-code-inline     { background: var(--surface-3); color: var(--text); padding: 1px 5px;
                       border-radius: 4px; font-size: 11px; font-family: var(--font-mono); }
@@ -1901,6 +1972,28 @@ input, textarea { font: inherit; color: inherit; }
 .om-citation-chip     { display: inline-flex; align-items: center; gap: 3px; padding: 2px 7px;
                         background: var(--surface-3); border: 1px solid var(--border);
                         border-radius: 999px; font-size: 10px; color: var(--text-3); }
+
+/* Terminal-style working indicator (OPNMMO): a small status row shown while the
+   reply is still empty, then a blinking block caret tailing the streamed text.
+   Reuses the .om-spin keyframes; tones come from accent + muted text so it sits
+   right in both light and dark. */
+.om-ask-status        { display: flex; align-items: center; gap: 7px;
+                        font-family: var(--font-mono); font-size: 11.5px;
+                        color: var(--text-3); padding: 2px 2px; }
+.om-ask-status .om-spin { flex-shrink: 0; }
+.om-ask-status-label  { display: inline-flex; align-items: baseline; gap: 0;
+                        letter-spacing: .01em; }
+.om-ask-status-model  { color: var(--text-4); }
+.om-ask-status-error  { color: var(--om-err, #e5484d); }
+.om-ask-status-error svg { flex-shrink: 0; }
+.om-ask-status-error span { color: var(--text-3); }
+/* Blinking block caret — terminal vibe. Inline variant tails streamed text. */
+.om-ask-caret         { display: inline-block; width: 7px; height: 13px;
+                        background: var(--accent); border-radius: 1px;
+                        animation: om-caret-blink 1.05s steps(1) infinite; }
+.om-ask-caret-inline  { width: 6px; height: 1.05em; margin-left: 2px;
+                        vertical-align: text-bottom; transform: translateY(1px); }
+@keyframes om-caret-blink { 0%, 49% { opacity: 1; } 50%, 100% { opacity: 0; } }
 
 .om-ask-panel-composer { padding: 10px 12px; border-top: 1px solid var(--border);
                          display: flex; gap: 8px; flex-shrink: 0; }
@@ -2176,9 +2269,12 @@ input, textarea { font: inherit; color: inherit; }
 .om-setting-eyebrow { font-size: 10px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--text-4); }
 .om-setting-title { margin: 0; font-size: 18px; font-weight: 500; letter-spacing: -0.012em; }
 .om-setting-body { display: flex; flex-direction: column; gap: 8px; }
-.om-setting-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 10px 0; border-top: 1px solid var(--border); }
+.om-setting-row { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; padding: 10px 0; border-top: 1px solid var(--border); }
 .om-setting-row:first-child { border-top: 0; padding-top: 0; }
-.om-setting-row-text { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+/* flex:1 makes the text block claim the row width so the control is pushed hard
+   to the right edge; with top-aligned rows the toggle/button sits top-right
+   instead of floating vertically centered against a tall multi-line description. */
+.om-setting-row-text { flex: 1; display: flex; flex-direction: column; gap: 2px; min-width: 0; }
 .om-setting-row-text p { margin: 0; font-size: 13.5px; }
 .om-setting-row-text span { font-size: 11px; color: var(--text-4); }
 .om-setting-val { font-size: 11.5px; color: var(--text-2); }
@@ -3681,14 +3777,13 @@ body.om-has-bbar .om-fab { display: none !important; }
 @media (prefers-reduced-motion: reduce) {
   .om-card-aura::before, .om-card-aura::after { animation: none; }
 }
-/* Minimal mode: keep the title + meta visible (audio cards are unlabeled
-   otherwise) — waveform strip on top, title row below, like the doc card. */
-[data-card="minimal"] .om-card-audio:not(.has-cover) { background-image: none; display: flex; flex-direction: column; min-height: 200px; }
+/* Minimal mode: clean image-only tile like other minimal media cards — the
+   cover/waveform fills the card, no bottom info strip, no separator line. The
+   floating .om-min-domain hover pill carries the source/title instead. */
+[data-card="minimal"] .om-card-audio:not(.has-cover) { background-image: none; display: flex; flex-direction: column; }
 [data-card="minimal"] .om-card-audio:not(.has-cover)::after { content: none; }
-[data-card="minimal"] .om-card-audio:not(.has-cover) .om-audio-frame { aspect-ratio: auto; flex: 1; min-height: 120px; border-radius: var(--r-xl) var(--r-xl) 0 0; }
-[data-card="minimal"] .om-card-audio:not(.has-cover) .om-card-body { display: block; padding: 12px 16px 14px; border-top: 1px solid var(--border); background: transparent; }
-[data-card="minimal"] .om-card-audio:not(.has-cover) .om-card-title { font-size: 13px; }
-[data-card="minimal"] .om-card-audio:not(.has-cover) .om-meta { display: none; }
+[data-card="minimal"] .om-card-audio:not(.has-cover) .om-audio-frame { aspect-ratio: auto; flex: 1; min-height: 120px; border-radius: var(--r-xl); }
+[data-card="minimal"] .om-card-audio:not(.has-cover) .om-card-body { display: none; }
 
 /* Make it local — download panel on the memo detail page */
 /* .om-localize card shell now comes from the shared rail-tool rule (OPNMMO-0042). */
@@ -4338,7 +4433,7 @@ body.om-has-bbar .om-fab { display: none !important; }
 }
 @media (max-width: 900px) { .om-settings-bottom { grid-template-columns: 1fr; } }
 .om-built-with-lead {
-  margin: 0 0 14px; font-size: 13px; line-height: 1.55; color: var(--text-2);
+  margin: 0 0 7px; font-size: 13px; line-height: 1.55; color: var(--text-2);
 }
 .om-built-with-grid {
   display: flex; flex-wrap: wrap; gap: 6px;
@@ -5350,8 +5445,24 @@ body.om-has-bbar .om-fab { display: none !important; }
 .om-pinhero-tab:disabled { opacity: 0.4; cursor: not-allowed; }
 .om-pinhero-list {
   display: flex; flex-direction: column; gap: 4px;
-  max-height: 340px; overflow-y: auto; margin: 0 -6px; padding: 0 6px;
+  /* Bounded + own scroll so a long candidate list scrolls inside the body
+     instead of overflowing the modal. The body keeps the tabs/head fixed;
+     only this list scrolls. min(52vh, 420px) tracks short viewports too. */
+  max-height: min(52vh, 420px); overflow-y: auto; margin: 0 -6px; padding: 0 6px;
+  /* Thin branded scrollbar, consistent with the rails / add panel. */
+  scrollbar-width: thin;
+  scrollbar-color: var(--border-2) transparent;
 }
+.om-pinhero-list::-webkit-scrollbar { width: 8px; }
+.om-pinhero-list::-webkit-scrollbar-track { background: transparent; }
+.om-pinhero-list::-webkit-scrollbar-thumb {
+  background: var(--border-2); border-radius: 999px;
+  border: 2px solid transparent; background-clip: content-box;
+}
+.om-pinhero-list:hover::-webkit-scrollbar-thumb { background: var(--text-4); background-clip: content-box; }
+/* The list owns the scroll — keep the body that wraps it from clipping the
+   bounded list or stacking a second scrollbar around it. */
+.om-modal-body:has(> .om-pinhero-list) { overflow: visible; }
 .om-pinhero-item {
   display: flex; align-items: center; gap: 12px; width: 100%;
   padding: 8px; border: 0; cursor: pointer; text-align: left;
