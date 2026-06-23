@@ -840,7 +840,7 @@ input, textarea { font: inherit; color: inherit; }
 
 /* Audio card minimal — waveform background tile + play button stub.
    Play button is visual only; inline playback wiring is a future feature. */
-[data-card="minimal"] .om-card-audio {
+[data-card="minimal"] .om-card-audio:not(.has-cover) {
   background-color: var(--bg-rail);
   background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 200 60' fill='none'%3E%3Crect x='10' y='24' width='4' height='12' rx='2' fill='%23ffffff' opacity='0.18'/%3E%3Crect x='20' y='18' width='4' height='24' rx='2' fill='%23ffffff' opacity='0.18'/%3E%3Crect x='30' y='10' width='4' height='40' rx='2' fill='%23ffffff' opacity='0.18'/%3E%3Crect x='40' y='20' width='4' height='20' rx='2' fill='%23ffffff' opacity='0.18'/%3E%3Crect x='50' y='14' width='4' height='32' rx='2' fill='%23ffffff' opacity='0.18'/%3E%3Crect x='60' y='22' width='4' height='16' rx='2' fill='%23ffffff' opacity='0.18'/%3E%3Crect x='70' y='8' width='4' height='44' rx='2' fill='%23ffffff' opacity='0.18'/%3E%3Crect x='80' y='16' width='4' height='28' rx='2' fill='%23ffffff' opacity='0.18'/%3E%3Crect x='90' y='24' width='4' height='12' rx='2' fill='%23ffffff' opacity='0.18'/%3E%3Crect x='100' y='12' width='4' height='36' rx='2' fill='%23ffffff' opacity='0.18'/%3E%3Crect x='110' y='20' width='4' height='20' rx='2' fill='%23ffffff' opacity='0.18'/%3E%3Crect x='120' y='6' width='4' height='48' rx='2' fill='%23ffffff' opacity='0.18'/%3E%3Crect x='130' y='18' width='4' height='24' rx='2' fill='%23ffffff' opacity='0.18'/%3E%3Crect x='140' y='26' width='4' height='8' rx='2' fill='%23ffffff' opacity='0.18'/%3E%3Crect x='150' y='14' width='4' height='32' rx='2' fill='%23ffffff' opacity='0.18'/%3E%3Crect x='160' y='22' width='4' height='16' rx='2' fill='%23ffffff' opacity='0.18'/%3E%3Crect x='170' y='10' width='4' height='40' rx='2' fill='%23ffffff' opacity='0.18'/%3E%3Crect x='180' y='20' width='4' height='20' rx='2' fill='%23ffffff' opacity='0.18'/%3E%3C/svg%3E");
   background-repeat: repeat-x;
@@ -850,7 +850,7 @@ input, textarea { font: inherit; color: inherit; }
   position: relative;
 }
 /* Play button — fades in on hover, wiring deferred to audio player feature */
-[data-card="minimal"] .om-card-audio::after {
+[data-card="minimal"] .om-card-audio:not(.has-cover)::after {
   content: "";
   position: absolute;
   top: 50%; left: 50%;
@@ -869,7 +869,7 @@ input, textarea { font: inherit; color: inherit; }
   pointer-events: none;
   z-index: 2;
 }
-[data-card="minimal"] .om-card-audio:hover::after { opacity: 1; }
+[data-card="minimal"] .om-card-audio:not(.has-cover):hover::after { opacity: 1; }
 
 /* Brand glyphs in the minimal video pill — official-ish brand tints. The pill
    has a dark frosted bg, so both read clearly. */
@@ -3657,12 +3657,12 @@ body.om-has-bbar .om-fab { display: none !important; }
 }
 /* Minimal mode: keep the title + meta visible (audio cards are unlabeled
    otherwise) — waveform strip on top, title row below, like the doc card. */
-[data-card="minimal"] .om-card-audio { background-image: none; display: flex; flex-direction: column; min-height: 200px; }
-[data-card="minimal"] .om-card-audio::after { content: none; }
-[data-card="minimal"] .om-card-audio .om-audio-frame { aspect-ratio: auto; flex: 1; min-height: 120px; border-radius: var(--r-xl) var(--r-xl) 0 0; }
-[data-card="minimal"] .om-card-audio .om-card-body { display: block; padding: 12px 16px 14px; border-top: 1px solid var(--border); background: transparent; }
-[data-card="minimal"] .om-card-audio .om-card-title { font-size: 13px; }
-[data-card="minimal"] .om-card-audio .om-meta { display: none; }
+[data-card="minimal"] .om-card-audio:not(.has-cover) { background-image: none; display: flex; flex-direction: column; min-height: 200px; }
+[data-card="minimal"] .om-card-audio:not(.has-cover)::after { content: none; }
+[data-card="minimal"] .om-card-audio:not(.has-cover) .om-audio-frame { aspect-ratio: auto; flex: 1; min-height: 120px; border-radius: var(--r-xl) var(--r-xl) 0 0; }
+[data-card="minimal"] .om-card-audio:not(.has-cover) .om-card-body { display: block; padding: 12px 16px 14px; border-top: 1px solid var(--border); background: transparent; }
+[data-card="minimal"] .om-card-audio:not(.has-cover) .om-card-title { font-size: 13px; }
+[data-card="minimal"] .om-card-audio:not(.has-cover) .om-meta { display: none; }
 
 /* Make it local — download panel on the memo detail page */
 /* .om-localize card shell now comes from the shared rail-tool rule (OPNMMO-0042). */
@@ -5263,6 +5263,88 @@ body.om-has-bbar .om-fab { display: none !important; }
 @media (max-width: 640px) {
   .om-hero-card { flex-basis: 220px; }
 }
+
+/* ── Music hero pinning (OPNMMO) ─────────────────────────────────────────────
+   Curated top rail: hover tools on pinned cards (swap image / unpin), a dashed
+   "Pin to hero" tile that closes the row, a header CTA when the rail scrolls
+   away, and the pin picker modal. */
+
+/* Hover tools — top-right cluster on pinned hero cards. Frosted, fade in. */
+.om-hero-tools {
+  position: absolute; top: 10px; right: 10px; z-index: 3;
+  display: flex; gap: 6px;
+  opacity: 0; transform: translateY(-4px);
+  transition: opacity .15s ease, transform .15s ease;
+}
+.om-hero-card:hover .om-hero-tools,
+.om-hero-card:focus-within .om-hero-tools { opacity: 1; transform: none; }
+@media (hover: none) { .om-hero-tools { opacity: 1; transform: none; } }
+.om-hero-tool {
+  width: 30px; height: 30px; border-radius: 50%; border: 0; cursor: pointer;
+  display: grid; place-items: center;
+  background: rgba(0, 0, 0, 0.42); color: rgba(255, 255, 255, 0.92);
+  -webkit-backdrop-filter: blur(6px); backdrop-filter: blur(6px);
+  transition: background .15s ease, transform .15s ease;
+}
+.om-hero-tool:hover { background: rgba(0, 0, 0, 0.62); }
+.om-hero-tool:active { transform: scale(0.92); }
+
+/* Custom card eyebrow gets the accent so it reads as user-made, not imported. */
+.om-hero-card.is-hero .om-hero-eyebrow { color: color-mix(in oklab, var(--accent-ink, var(--accent)) 70%, #fff); }
+
+/* Dashed "Pin to hero" tile — hero analogue of the New collection card. */
+.om-hero-add {
+  flex: 0 0 200px; aspect-ratio: 4 / 5;
+  background: transparent; border: 1.5px dashed var(--border-2);
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px;
+  color: var(--text-3); font-size: 13px; font-weight: 500;
+}
+.om-hero-add:hover {
+  border-color: var(--accent); color: var(--accent);
+  background: var(--accent-soft); transform: translateY(-3px);
+}
+@media (max-width: 640px) { .om-hero-add { flex-basis: 150px; } }
+
+/* Header CTA — appears beside Add music once the rail leaves the viewport.
+   nowrap so the width animation (collapse → auto) stays clean. */
+.om-hero-cta { white-space: nowrap; overflow: hidden; }
+
+/* Pin picker modal */
+.om-pinhero-tabs {
+  display: flex; gap: 6px; padding: 0 16px; margin-top: -4px;
+}
+.om-pinhero-tab {
+  flex: 1; padding: 9px 10px; border: 0; cursor: pointer;
+  background: var(--surface-2); color: var(--text-3);
+  border-radius: 9px; font-size: 12.5px; font-weight: 600;
+  transition: background .15s ease, color .15s ease;
+}
+.om-pinhero-tab:hover:not(:disabled) { color: var(--text); }
+.om-pinhero-tab.active { background: var(--accent); color: var(--accent-text, #fff); }
+.om-pinhero-tab:disabled { opacity: 0.4; cursor: not-allowed; }
+.om-pinhero-list {
+  display: flex; flex-direction: column; gap: 4px;
+  max-height: 340px; overflow-y: auto; margin: 0 -6px; padding: 0 6px;
+}
+.om-pinhero-item {
+  display: flex; align-items: center; gap: 12px; width: 100%;
+  padding: 8px; border: 0; cursor: pointer; text-align: left;
+  background: transparent; border-radius: 10px;
+  transition: background .15s ease;
+}
+.om-pinhero-item:hover { background: var(--surface-2); }
+.om-pinhero-art {
+  flex: 0 0 44px; width: 44px; height: 44px; border-radius: 8px; overflow: hidden;
+  display: grid; place-items: center;
+  background: color-mix(in oklab, var(--accent) 14%, var(--surface-2)); color: var(--text-3);
+}
+.om-pinhero-art img { width: 100%; height: 100%; object-fit: cover; }
+.om-pinhero-meta { display: flex; flex-direction: column; gap: 2px; min-width: 0; flex: 1; }
+.om-pinhero-name { font-size: 13.5px; font-weight: 600; color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.om-pinhero-kind { font-size: 10.5px; color: var(--text-4); }
+.om-pinhero-pin { color: var(--text-4); flex-shrink: 0; }
+.om-pinhero-item:hover .om-pinhero-pin { color: var(--accent); }
+
 .om-pl-card {
   flex: 0 0 168px; cursor: pointer; border-radius: var(--r-lg, 14px);
   display: flex; flex-direction: column; gap: 8px; padding: 8px;
@@ -5530,23 +5612,32 @@ button.om-add-link { background: none; border: 0; padding: 0; cursor: pointer; f
 .om-track-grid > div:has(.om-mtile.is-liked) { grid-column: span 2; }
 .om-mtile.is-liked { aspect-ratio: 2.08 / 1; height: 100%; }
 
-/* Full-bleed music memo cards (user feedback on 0023, normal card style):
+/* Full-bleed music memo cards — MINIMAL card style (theme swap, OPNMMO):
    square cover edge-to-edge, title + meta on a bottom gradient overlay —
-   no separate body bar. Voice + cover-less audio keep the classic tile. */
-[data-card="normal"] .om-card-audio.is-music.has-cover .om-audio-frame {
+   no separate body bar, like the screenshot. The play button stays hover-only
+   in minimal (see [data-card="minimal"] .om-play above) — never always-on.
+   Voice + cover-less audio keep the classic waveform tile + bottom lip. */
+[data-card="minimal"] .om-card-audio.is-music.has-cover .om-audio-frame {
   aspect-ratio: 1 / 1;
   border-radius: var(--r-xl);
+  flex: none;
 }
-[data-card="normal"] .om-card-audio.is-music.has-cover .om-card-body {
+[data-card="minimal"] .om-card-audio.is-music.has-cover .om-card-body {
   position: absolute; left: 0; right: 0; bottom: 0; z-index: 1;
   padding: 30px 14px 12px; pointer-events: none;
   background: linear-gradient(to top, rgba(0, 0, 0, 0.72), rgba(0, 0, 0, 0.32) 58%, transparent);
   border-radius: 0 0 var(--r-xl) var(--r-xl);
+  border-top: 0;
 }
-[data-card="normal"] .om-card-audio.is-music.has-cover .om-card-title { color: #fff; }
-[data-card="normal"] .om-card-audio.is-music.has-cover .om-kind-icon { color: rgba(255, 255, 255, 0.85); }
-[data-card="normal"] .om-card-audio.is-music.has-cover .om-meta,
-[data-card="normal"] .om-card-audio.is-music.has-cover .om-meta-domain { color: rgba(255, 255, 255, 0.68); }
+[data-card="minimal"] .om-card-audio.is-music.has-cover .om-card-title { color: #fff; }
+[data-card="minimal"] .om-card-audio.is-music.has-cover .om-kind-icon { color: rgba(255, 255, 255, 0.85); }
+[data-card="minimal"] .om-card-audio.is-music.has-cover .om-meta,
+[data-card="minimal"] .om-card-audio.is-music.has-cover .om-meta-domain { color: rgba(255, 255, 255, 0.68); }
+/* Keep the cover crisp on hover (minimal link/video blur their media — music
+   shows its title over the art, so blur would muddy it). */
+[data-card="minimal"] .om-card-audio.is-music.has-cover:hover .om-media-img {
+  filter: none; transform: scale(1.05);
+}
 
 /* Sidebar player queue row (big layout) — prev / position / next. */
 .om-sb-player-queue { display: flex; align-items: center; justify-content: center; gap: 10px; }
