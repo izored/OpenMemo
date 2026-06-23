@@ -5,7 +5,7 @@ import {
   type DragOverEvent,
 } from '@dnd-kit/core';
 import { SortableContext, verticalListSortingStrategy, useSortable, arrayMove } from '@dnd-kit/sortable';
-import { motion } from 'framer-motion';
+import { motion, AnimatePresence } from 'framer-motion';
 import Masonry from 'react-masonry-css';
 import { useState, useEffect, useRef } from 'react';
 import { MemoCard } from './MemoCard';
@@ -18,15 +18,21 @@ import { useDndBus } from '@/lib/dndBus';
 
 interface MemoGridProps {
   memos: Memo[];
+  /** Changes when the active filter/collection changes → the grid crossfades to
+   *  the new set as one layer (O(1), scales to thousands of memos). */
+  transitionKey?: string;
 }
 
-function SortableMemoCard({ memo, anyDragActive, lightboxGroup }: { memo: Memo; anyDragActive: boolean; lightboxGroup: Memo[] }) {
+function SortableMemoCard({ memo, anyDragActive, lightboxGroup, transitionKey }: { memo: Memo; anyDragActive: boolean; lightboxGroup: Memo[]; transitionKey?: string }) {
   const { attributes, listeners, setNodeRef, isDragging } = useSortable({ id: memo.id });
   return (
     <motion.div
       ref={setNodeRef}
       layout={!anyDragActive}
-      layoutId={memo.id}
+      // Namespace the layoutId per filter set so cards don't fly between two
+      // different filters' grids (shared-element match). Within a set it stays
+      // stable, so drag-to-reorder still animates.
+      layoutId={transitionKey ? `${transitionKey}:${memo.id}` : memo.id}
       transition={{ layout: { duration: 0.25, ease: [0.25, 1, 0.5, 1] } }}
       style={{ opacity: isDragging ? 0 : 1 }}
     >
@@ -53,7 +59,7 @@ function useViewportColumns(userCols: number): number {
   return Math.min(userCols, cap);
 }
 
-export function MemoGrid({ memos: serverMemos }: MemoGridProps) {
+export function MemoGrid({ memos: serverMemos, transitionKey }: MemoGridProps) {
   const queryClient = useQueryClient();
   const tweaks = useAppStore((s) => s.tweaks);
   const columns = useViewportColumns(tweaks.gridColumns || 4);
@@ -189,18 +195,33 @@ export function MemoGrid({ memos: serverMemos }: MemoGridProps) {
     <>
       <SortableContext items={localMemos.map((m) => m.id)} strategy={verticalListSortingStrategy}>
         <div className="om-grid-wrap">
-          <Masonry
-            breakpointCols={breakpointCols}
-            className="om-masonry"
-            columnClassName="om-masonry-col"
-            style={{ gap }}
-          >
-            {localMemos.map((memo) => (
-              <div key={memo.id} style={{ marginBottom: gap }}>
-                <SortableMemoCard memo={memo} anyDragActive={!!activeId} lightboxGroup={mediaGroup} />
-              </div>
-            ))}
-          </Masonry>
+          {/* One keyed layer per filter set: the whole grid crossfades on a
+              filter change instead of snapping. Only this wrapper animates — the
+              thousands of cards inside don't each animate — so it stays cheap.
+              mode="wait" means the old set is gone before the new mounts (never
+              both at once). */}
+          <AnimatePresence mode="wait" initial={false}>
+            <motion.div
+              key={transitionKey ?? 'all'}
+              initial={{ opacity: 0, y: 8 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -8 }}
+              transition={{ duration: 0.18, ease: [0.25, 1, 0.5, 1] }}
+            >
+              <Masonry
+                breakpointCols={breakpointCols}
+                className="om-masonry"
+                columnClassName="om-masonry-col"
+                style={{ gap }}
+              >
+                {localMemos.map((memo) => (
+                  <div key={memo.id} style={{ marginBottom: gap }}>
+                    <SortableMemoCard memo={memo} anyDragActive={!!activeId} lightboxGroup={mediaGroup} transitionKey={transitionKey} />
+                  </div>
+                ))}
+              </Masonry>
+            </motion.div>
+          </AnimatePresence>
         </div>
       </SortableContext>
 
