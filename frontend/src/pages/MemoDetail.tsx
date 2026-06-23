@@ -50,7 +50,7 @@ import { Marquee } from '@/components/Marquee';
 import { VolumeControl } from '@/components/VolumeControl';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
-import type { Memo, Collection, SummaryMode } from '@/types';
+import type { Memo, Collection, CollectionRef, SummaryMode } from '@/types';
 
 // A signal to seek the open player (embed iframe or local <video>). The nonce
 // lets the same timestamp fire repeated seeks (OPNMMO-0042).
@@ -1696,7 +1696,7 @@ export function MemoDetail() {
                     <ExternalLink size={12} />
                   </a>
                 )}
-                {!isEditing && memo.collections?.map((c) => {
+                {!isEditing && memo.collections?.map((c: CollectionRef) => {
                   const full = collections.find((fc: Collection) => fc.id === c.id);
                   return (
                     <button
