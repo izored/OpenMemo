@@ -23,11 +23,13 @@ router = APIRouter(prefix="/api/music", tags=["music"])
 @router.get("/playlists")
 async def list_playlists(db: AsyncSession = Depends(get_db)):
     """All music playlists with track count, up to 4 covers, and progress."""
+    # Pinned-to-hero first (OPNMMO music hero), newest within each group. The
+    # Music page builds its hero rail from the leading pinned run.
     playlists = (
         await db.execute(
             select(Collection)
             .where(Collection.kind == "playlist")
-            .order_by(desc(Collection.created_at))
+            .order_by(Collection.pinned.desc(), desc(Collection.created_at))
         )
     ).scalars().all()
     if not playlists:
@@ -82,9 +84,13 @@ async def list_playlists(db: AsyncSession = Depends(get_db)):
             "description": p.description,
             "source_url": p.source_url,
             # NULL predates the column (or a hand-made playlist) → playlist.
+            # 'hero' = a custom pinned hero card (image + name, no real tracks).
             "music_kind": p.music_kind or "playlist",
             # A hand-set cover overrides the track-art collage when present.
             "cover_url": collection_cover_url(p),
+            # Pinned to the Music hero rail (repurposed Collection.pinned —
+            # playlist-kind collections never show in the sidebar).
+            "pinned": bool(p.pinned),
             "created_at": p.created_at.isoformat(),
             "track_count": by_playlist[p.id]["total"],
             "covers": by_playlist[p.id]["covers"],
