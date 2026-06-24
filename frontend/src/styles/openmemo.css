@@ -5255,7 +5255,10 @@ body.om-has-bbar .om-fab { display: none !important; }
 .om-cpick { position: relative; display: inline-flex; }
 .om-cpick-trigger { padding: 0; border: 0; background: none; cursor: pointer; display: inline-flex; line-height: 0; }
 .om-cpick-pop {
-  position: absolute; top: calc(100% + 8px); left: 0; z-index: 60;
+  /* Portaled to <body> with inline position:fixed (left/top from the trigger
+     rect) so it escapes the panel's overflow clipping. z-index sits above
+     .om-add-panel (61) so it isn't painted behind the panel. */
+  z-index: 70;
   width: 220px; padding: 12px; border-radius: var(--r-md);
   background: var(--surface-2); border: 1px solid var(--border);
   box-shadow: var(--shadow-card-hover);
