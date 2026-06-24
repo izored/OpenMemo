@@ -84,7 +84,20 @@ Opened from the hero (or the sidebar). Everything previews live as you change it
 written to the persisted `tweaks` in the app store and applied to `<html>`.
 
 Controls: Theme, Accent (with two custom slots), Card style, Layout, Player size,
-Grid columns, Background, Animation speed.
+Grid columns, Gutter, Background, Animation speed.
+
+**Gutter** is a 0–40px slider (`tweaks.gutter`) for the space between memo tiles,
+applied to every card style — pull it to 0 on Edge for a gapless wall, or open it
+up for breathing room. Existing layouts keep their old spacing on first load
+(Edge stayed gapless, the rest at the roomy 28px) until the slider is moved.
+
+**Color picks** (custom accent slots, background Color mode) open the in-app
+`ColorPicker` (`components/ColorPicker.tsx`) — an SV square + hue bar + hex field
+styled to the app — instead of the native `<input type="color">` OS dialog.
+
+**Sliders** all use `.om-ap-range`: the track is drawn on the runnable-track with
+the input padding-insetting the thumb radius, so the handle never clips at the
+ends, and a `--pct` inline var fills the track to the value's position.
 
 ### Accent contrast (`--accent-ink`)
 

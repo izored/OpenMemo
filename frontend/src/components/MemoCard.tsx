@@ -6,6 +6,7 @@ import { Icon } from './Icon';
 import { cn } from '@/lib/utils';
 import { memoApi } from '@/lib/api';
 import { mediaSrc, audioKind, isMemoWorking } from '@/lib/media';
+import { imgAspect, aspectToOrient } from '@/lib/aspect';
 import { useCoverMood, type CoverMood } from '@/lib/coverMood';
 import { platformMeta, videoEmbedUrl } from '@/lib/platforms';
 import { useAppStore } from '@/stores/appStore';
@@ -412,8 +413,11 @@ export function MemoCard({ memo, dragHandleProps, lightboxGroup }: CardProps) {
   const { play, playing, isActive } = useAudioPlayer();
   const [imageOrient, setImageOrient] = React.useState<'landscape' | 'portrait'>('landscape');
   // Real width/height ratio, captured on load. Drives edge-mode masonry so each
-  // tile keeps its source proportions instead of a forced square.
+  // tile keeps its source proportions instead of a forced square. Video tracks
+  // its own (a thumbnail/reel is not always 16:9) via the same shared checker.
   const [imageAR, setImageAR] = React.useState<number | null>(null);
+  const [videoOrient, setVideoOrient] = React.useState<'landscape' | 'portrait'>('landscape');
+  const [videoAR, setVideoAR] = React.useState<number | null>(null);
   const [confirmDeleteOpen, setConfirmDeleteOpen] = React.useState(false);
 
   const showInLightbox = () => {
@@ -562,9 +566,9 @@ export function MemoCard({ memo, dragHandleProps, lightboxGroup }: CardProps) {
                 alt=""
                 className="om-media-img"
                 onLoad={(e) => {
-                  const img = e.target as HTMLImageElement;
-                  setImageOrient(img.naturalHeight > img.naturalWidth ? 'portrait' : 'landscape');
-                  if (img.naturalWidth && img.naturalHeight) setImageAR(img.naturalWidth / img.naturalHeight);
+                  const ar = imgAspect(e.currentTarget);
+                  setImageOrient(aspectToOrient(ar));
+                  if (ar) setImageAR(ar);
                 }}
                 onError={(e) => ((e.target as HTMLImageElement).style.display = 'none')}
               />
@@ -603,12 +607,17 @@ export function MemoCard({ memo, dragHandleProps, lightboxGroup }: CardProps) {
           onOpen={goDetail}
           confirmOverlay={confirmOverlay}
         >
-          <div className="om-video-frame" style={{ background: heroBg }}>
+          <div className="om-video-frame" data-orient={videoOrient} style={{ background: heroBg, ...(videoAR ? { ['--card-ar']: videoAR } : {}) } as React.CSSProperties}>
             {src ? (
               <img
                 src={src}
                 alt=""
                 className="om-media-img"
+                onLoad={(e) => {
+                  const ar = imgAspect(e.currentTarget);
+                  setVideoOrient(aspectToOrient(ar));
+                  if (ar) setVideoAR(ar);
+                }}
                 onError={(e) => ((e.target as HTMLImageElement).style.display = 'none')}
               />
             ) : (

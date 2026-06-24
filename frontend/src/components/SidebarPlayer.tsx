@@ -1,6 +1,7 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useQueryClient } from '@tanstack/react-query';
+import { motion, AnimatePresence } from 'framer-motion';
 import { Icon } from './Icon';
 import { cn } from '@/lib/utils';
 import { memoApi } from '@/lib/api';
@@ -250,13 +251,20 @@ export function SidebarPlayer() {
     </div>
   ) : null;
 
+  // Three layouts share one animated shell: switching size (or collapsing the
+  // sidebar) crossfades + height-morphs via framer-motion instead of snapping.
+  // popLayout pops the outgoing layout so the wrapper tweens to the incoming one.
+  let variant: 'mini' | 'big' | 'small';
+  let content: React.ReactNode;
+
   // ── Collapsed sidebar: cover + progress ring, tap to play/pause ──
   // Collapse is a desktop-only concept; in the full-screen mobile drawer we skip
   // the mini and always show the full player.
   if (collapsed && !isMobile) {
+    variant = 'mini';
     const R = 18;
     const C = 2 * Math.PI * R;
-    return (
+    content = (
       <button
         className={cn('om-sb-player-mini', playing && 'playing')}
         onClick={(e) => {
@@ -282,13 +290,12 @@ export function SidebarPlayer() {
         </span>
       </button>
     );
-  }
-
-  // ── Big: full cover, corner transport cluster, scrubber + volume below
-  //    (ADR-010). Play hugs the top-right corner; pin + repeat are satellites;
-  //    the close X moves to the top-LEFT so it never collides with the cluster. ──
-  if ((playerSize === 'big' || isMobile) && hasCover) {
-    return (
+  } else if ((playerSize === 'big' || isMobile) && hasCover) {
+    // ── Big: full cover, corner transport cluster, scrubber + volume below
+    //    (ADR-010). Play hugs the top-right corner; pin + repeat are satellites;
+    //    the close X moves to the top-LEFT so it never collides with the cluster. ──
+    variant = 'big';
+    content = (
       <div
         className={cn('om-sb-player', 'om-sb-player-big', mood && 'is-tinted', !controlsOn && 'controls-off')}
         role="region"
@@ -363,10 +370,10 @@ export function SidebarPlayer() {
         </div>
       </div>
     );
-  }
-
-  // ── Small (default): cover thumbnail + title + scrubber + transport ──
-  return (
+  } else {
+    // ── Small (default): cover thumbnail + title + scrubber + transport ──
+    variant = 'small';
+    content = (
     <div
       className={cn('om-sb-player', isMusic && 'is-music', mood && 'is-tinted')}
       role="region"
@@ -399,6 +406,29 @@ export function SidebarPlayer() {
       {transport}
       {plMenuOpen && <PlaylistMenu memoId={track.memoId} onClose={() => setPlMenuOpen(false)} />}
     </div>
+    );
+  }
+
+  return (
+    <motion.div
+      className="om-sb-player-wrap"
+      layout
+      transition={{ layout: { duration: 0.34, ease: [0.16, 0.84, 0.34, 1] } }}
+    >
+      <AnimatePresence mode="popLayout" initial={false}>
+        <motion.div
+          key={variant}
+          layout
+          initial={{ opacity: 0, scale: 0.96 }}
+          animate={{ opacity: 1, scale: 1 }}
+          exit={{ opacity: 0, scale: 0.96 }}
+          transition={{ duration: 0.22, ease: [0.16, 0.84, 0.34, 1] }}
+          style={{ transformOrigin: 'bottom center' }}
+        >
+          {content}
+        </motion.div>
+      </AnimatePresence>
+    </motion.div>
   );
 }
 

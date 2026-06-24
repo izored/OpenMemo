@@ -111,3 +111,23 @@ The `.om-min-hover` overlay fades in on card hover (opacity 0 → 1). Gradient a
 | `om-card-doc` | doc frame + body | compact: title only · scales down slightly on hover |
 
 > **Audio cards:** the play button in minimal is intended for inline playback within the card — no lightbox, no navigation. Full audio player feature is planned separately.
+
+---
+
+## Tile aspect ratios (Minimal + Edge)
+
+Both Minimal and Edge let media keep its **real** proportions instead of forcing a
+fixed shape. Image and video frames carry a `--card-ar` CSS var and a
+`data-orient` attribute, set on load from the source's measured size; the frame's
+`aspect-ratio` reads `var(--card-ar, <fallback>)`. So a portrait photo stays tall
+and a vertical reel stays portrait, next to a wide clip.
+
+- **One shared checker** — `frontend/src/lib/aspect.ts` (`imgAspect` / `videoAspect`
+  / `aspectToOrient`) is the single source of truth for "what shape is this media?".
+  Image and video cards both feed it from their thumbnail's `onLoad`. Don't assume a
+  type-based default (a video is **not** always 16:9).
+- **Fallbacks** apply only until the size is known: image 4/3 (portrait 3/4), video
+  16/9 (portrait 9/16), audio cover 1/1.
+- **Gutter** — the space between tiles is the `tweaks.gutter` slider (Appearance),
+  applied to every style including Edge (0 = gapless wall). Drives the masonry gap
+  in `MemoGrid`.

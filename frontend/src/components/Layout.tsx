@@ -70,6 +70,13 @@ export function Layout() {
   const prevTheme = useRef(tweaks.theme);
   const mounted = useRef(false);
   const mainRef = useRef<HTMLElement | null>(null);
+  // Live Lenis instance for the current route's pane (null on memo/mobile where
+  // Lenis is skipped) — the scroll-restore effect uses it to jump instantly.
+  const lenisRef = useRef<Lenis | null>(null);
+  // Last scroll offset per route path, so navigating back to a list lands where
+  // you left off instead of the top. Layout stays mounted across routes (only
+  // <main> is keyed/recreated), so this Map survives navigation.
+  const scrollPositions = useRef<Map<string, number>>(new Map());
   const colorTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const txConfigRef = useRef(txConfig);
   // eslint-disable-next-line react-hooks/refs -- intentional render-time mirror so the theme-transition effect reads the latest config synchronously
@@ -104,6 +111,7 @@ export function Layout() {
       wheelMultiplier: 1,
       touchMultiplier: 1.5,
     });
+    lenisRef.current = lenis;
     let raf = 0;
     const tick = (time: number) => {
       lenis.raf(time);
@@ -113,8 +121,46 @@ export function Layout() {
     return () => {
       cancelAnimationFrame(raf);
       lenis.destroy();
+      lenisRef.current = null;
     };
   }, [location.pathname, isMobile]);
+
+  // Scroll restoration. <main> is recreated per route (key=pathname), so this
+  // re-binds each route: it saves the pane's scrollTop as you scroll and, on
+  // mount, restores the saved offset for this path — so back-from-a-memo (any
+  // type) returns you to where you were reading, not the top. Async grids may
+  // not be tall enough on the first frame, so the restore retries over a few
+  // frames until the content height can hold the target.
+  useEffect(() => {
+    const wrapper = mainRef.current;
+    if (!wrapper) return;
+    const path = location.pathname;
+    const target = scrollPositions.current.get(path) ?? 0;
+    const onScroll = () => { scrollPositions.current.set(path, wrapper.scrollTop); };
+    wrapper.addEventListener('scroll', onScroll, { passive: true });
+
+    let raf = 0;
+    let tries = 0;
+    const jump = (y: number) => {
+      // Use Lenis when it owns this pane so its internal offset stays in sync;
+      // otherwise (mobile/native) set scrollTop directly.
+      if (lenisRef.current) lenisRef.current.scrollTo(y, { immediate: true, force: true });
+      else wrapper.scrollTop = y;
+    };
+    const restore = () => {
+      if (target <= 0) return;
+      const max = wrapper.scrollHeight - wrapper.clientHeight;
+      if (max >= target - 4) { jump(target); return; }
+      if (tries++ < 30) { raf = requestAnimationFrame(restore); return; }
+      if (max > 0) jump(Math.min(target, max)); // content shorter now — clamp
+    };
+    raf = requestAnimationFrame(restore);
+
+    return () => {
+      cancelAnimationFrame(raf);
+      wrapper.removeEventListener('scroll', onScroll);
+    };
+  }, [location.pathname]);
 
   // Drive theme / accent / background CSS vars from persisted tweaks.
   useEffect(() => {

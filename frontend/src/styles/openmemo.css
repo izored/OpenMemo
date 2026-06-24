@@ -791,25 +791,32 @@ input, textarea { font: inherit; color: inherit; }
 }
 [data-card="minimal"] .om-card-note:hover .om-note-text { opacity: 1; }
 
-/* Image: full-bleed, natural orientation, no body.
-   aspect-ratio drives height — override card min-height. */
+/* Image: full-bleed, natural orientation, no body. The frame follows the real
+   thumbnail aspect (--card-ar, measured on load) like the Edge wall — fixed
+   4/3 (portrait 3/4) is only the fallback until the image reports its size. */
 [data-card="minimal"] .om-card-image { min-height: 0; }
 [data-card="minimal"] .om-card-image .om-image-frame {
-  margin: 0; border-radius: var(--r-xl); aspect-ratio: 4/3;
+  margin: 0; border-radius: var(--r-xl); aspect-ratio: var(--card-ar, 4 / 3);
 }
-[data-card="minimal"] .om-card-image .om-image-frame[data-orient="portrait"] { aspect-ratio: 3/4; }
+[data-card="minimal"] .om-card-image .om-image-frame[data-orient="portrait"] { aspect-ratio: var(--card-ar, 3 / 4); }
 [data-card="minimal"] .om-card-image .om-image-frame img { width: 100%; height: 100%; object-fit: cover; display: block; }
 [data-card="minimal"] .om-card-image .om-card-body { display: none; }
 
-/* Video: full-bleed, play hidden until hover, no body.
-   Override card min-height — video uses its own aspect ratio, no padding below. */
+/* Video: full-bleed, play hidden until hover, no body. Follows the real
+   thumbnail aspect (--card-ar) too — a reel stays portrait. 16/9 (portrait
+   9/16) is only the fallback until the thumbnail reports its size. */
 [data-card="minimal"] .om-card-video { min-height: 0; }
 [data-card="minimal"] .om-card-video .om-video-frame {
-  margin: 0; border-radius: var(--r-xl); aspect-ratio: 16/9;
+  margin: 0; border-radius: var(--r-xl); aspect-ratio: var(--card-ar, 16 / 9);
 }
+[data-card="minimal"] .om-card-video .om-video-frame[data-orient="portrait"] { aspect-ratio: var(--card-ar, 9 / 16); }
 [data-card="minimal"] .om-card-video .om-card-body { display: none; }
 [data-card="minimal"] .om-play { opacity: 0; transform: translate(-50%, -50%) scale(0.8); transition: opacity .2s, transform .2s; }
 [data-card="minimal"] .om-card:hover .om-play { opacity: 1; transform: translate(-50%, -50%) scale(1); }
+/* Minimal: nudge the centred play button + the bottom title pill a touch smaller
+   so a long title's expanded pill never collides with the play button. */
+[data-card="minimal"] .om-play { width: 44px; height: 44px; }
+[data-card="minimal"] .om-min-domain { font-size: 10px; padding: 4px 9px; }
 
 /* Link/Article: full-bleed hero, no body, domain pill always visible */
 [data-card="minimal"] .om-card-link { min-height: 0; }
@@ -1052,7 +1059,10 @@ input, textarea { font: inherit; color: inherit; }
 }
 [data-card="edge"] .om-card-image .om-image-frame { aspect-ratio: var(--card-ar, 1); }
 [data-card="edge"] .om-card-image .om-image-frame[data-orient="portrait"] { aspect-ratio: var(--card-ar, 3 / 4); }
-[data-card="edge"] .om-card-video .om-video-frame,
+/* Video keeps the pulled media's real shape (measured from its thumbnail) — a
+   reel stays 9:16, a clip stays wide. Falls back to 16:9 only until measured. */
+[data-card="edge"] .om-card-video .om-video-frame { aspect-ratio: var(--card-ar, 16 / 9); }
+[data-card="edge"] .om-card-video .om-video-frame[data-orient="portrait"] { aspect-ratio: var(--card-ar, 9 / 16); }
 [data-card="edge"] .om-card-link .om-card-hero { aspect-ratio: 16 / 9; }
 [data-card="edge"] .om-card-audio .om-audio-frame { aspect-ratio: 1 / 1; }
 [data-card="edge"] .om-card-image .om-image-frame img,
@@ -3189,6 +3199,16 @@ body.om-has-bbar .om-fab { display: none !important; }
 .om-add-toggle-switch.on .om-add-toggle-knob { transform: translateX(14px); }
 .om-add-toggle-label { display: flex; flex-direction: column; gap: 1px; font-size: 12px; color: var(--text); font-weight: 500; }
 .om-add-toggle-label .mono { font-size: 9.5px; color: var(--text-4); font-weight: 400; }
+/* In a Settings two-column row the toggle is just the switch on the right (the
+   label lives in .om-setting-row-text). The modal's full-width `width:100%`
+   would make this flex item eat the whole row and crush the text column to one
+   word per line — pin it to content width instead. */
+.om-setting-row .om-add-toggle { width: auto; flex-shrink: 0; margin-top: 0; padding: 2px; }
+
+/* Animated shell around the now-playing player: lets framer-motion height-morph
+   + crossfade between the small / big / collapsed layouts instead of snapping.
+   Relative so the popLayout exiting child (absolute) stays contained. */
+.om-sb-player-wrap { position: relative; width: 100%; }
 
 /* Persistent mini-player — pinned top-right of the shell, shown while a track
    is loaded (playing or paused) until the user closes it. */
@@ -5192,22 +5212,82 @@ body.om-has-bbar .om-fab { display: none !important; }
 .om-coach-actions { display: flex; align-items: center; justify-content: space-between; margin-top: 8px; }
 .om-coach-actions .om-add-foot-btn { height: 28px; padding: 0 12px; font-size: 12px; border-radius: 8px; }
 
-/* Appearance range slider */
+/* Appearance range slider — branded percentage slider.
+   PREVENTION (recurring bug): a 14px thumb centred on the track ends puts its
+   outer half (7px) outside the track at min/max, so it overflowed the box and a
+   scroll/panel edge sliced the circle. The fix is structural, not per-slider:
+   the input reserves the thumb radius as its OWN `padding-inline`, and the track
+   is drawn on the runnable-track (which lives inside that padding). The thumb can
+   never leave the input box, wherever the slider sits. Don't put the track on the
+   input element or reintroduce a full-width track.
+   The filled portion is painted from `--pct` (0–100%, set inline = the value's
+   position) so the handle, the fill, and the displayed value always agree. */
 .om-ap-range {
   -webkit-appearance: none; appearance: none;
-  width: 100%; height: 4px; border-radius: 999px;
-  background: var(--surface-3);
-  outline: none; cursor: pointer;
+  display: block; box-sizing: border-box;
+  width: 100%; height: 16px;
+  padding-inline: 7px;
+  background: transparent; outline: none; cursor: pointer;
+}
+.om-ap-range::-webkit-slider-runnable-track {
+  height: 4px; border-radius: 999px;
+  background: linear-gradient(to right, var(--accent) var(--pct, 0%), var(--surface-3) var(--pct, 0%));
 }
 .om-ap-range::-webkit-slider-thumb {
   -webkit-appearance: none; appearance: none;
+  margin-top: -5px; /* centre the 14px thumb on the 4px track */
   width: 14px; height: 14px; border-radius: 50%;
   background: var(--accent);
   box-shadow: 0 1px 3px rgba(0,0,0,0.3);
 }
+.om-ap-range::-moz-range-track {
+  height: 4px; border-radius: 999px; background: var(--surface-3);
+}
+.om-ap-range::-moz-range-progress {
+  height: 4px; border-radius: 999px; background: var(--accent);
+}
 .om-ap-range::-moz-range-thumb {
   width: 14px; height: 14px; border: 0; border-radius: 50%;
-  background: var(--accent);
+  background: var(--accent); box-shadow: 0 1px 3px rgba(0,0,0,0.3);
+}
+
+/* ── Branded color picker (replaces native <input type="color">) ──────────── */
+.om-cpick { position: relative; display: inline-flex; }
+.om-cpick-trigger { padding: 0; border: 0; background: none; cursor: pointer; display: inline-flex; line-height: 0; }
+.om-cpick-pop {
+  position: absolute; top: calc(100% + 8px); left: 0; z-index: 60;
+  width: 220px; padding: 12px; border-radius: var(--r-md);
+  background: var(--surface-2); border: 1px solid var(--border);
+  box-shadow: var(--shadow-card-hover);
+  display: flex; flex-direction: column; gap: 12px;
+}
+.om-cpick-sv {
+  position: relative; width: 100%; height: 120px; border-radius: var(--r-sm);
+  overflow: hidden; cursor: crosshair; touch-action: none;
+}
+.om-cpick-sv-white { position: absolute; inset: 0; background: linear-gradient(to right, #fff, transparent); }
+.om-cpick-sv-black { position: absolute; inset: 0; background: linear-gradient(to top, #000, transparent); }
+.om-cpick-sv-handle {
+  position: absolute; width: 14px; height: 14px; border-radius: 50%;
+  border: 2px solid #fff; box-shadow: 0 0 0 1px rgba(0,0,0,0.35);
+  transform: translate(-50%, -50%); pointer-events: none;
+}
+.om-cpick-controls { display: flex; align-items: center; gap: 10px; }
+.om-cpick-preview { width: 26px; height: 26px; border-radius: 50%; flex: none; border: 1px solid var(--border); }
+.om-cpick-hue {
+  position: relative; flex: 1; height: 12px; border-radius: 999px; cursor: pointer; touch-action: none;
+  background: linear-gradient(to right, #f00 0%, #ff0 17%, #0f0 33%, #0ff 50%, #00f 67%, #f0f 83%, #f00 100%);
+}
+.om-cpick-hue-handle {
+  position: absolute; top: 50%; width: 14px; height: 14px; border-radius: 50%;
+  background: #fff; border: 2px solid #fff; box-shadow: 0 0 0 1px rgba(0,0,0,0.35), 0 1px 3px rgba(0,0,0,0.3);
+  transform: translate(-50%, -50%); pointer-events: none;
+}
+.om-cpick-hexrow { display: flex; align-items: center; gap: 6px; border: 1px solid var(--border); border-radius: var(--r-sm); padding: 6px 9px; }
+.om-cpick-hex-ico { color: var(--text-4); font-size: 12px; }
+.om-cpick-hex {
+  flex: 1; min-width: 0; border: 0; background: none; outline: none;
+  color: var(--text); font-family: var(--font-mono); font-size: 12px; text-transform: uppercase;
 }
 
 /* ─ Music page (Music Experience V2, OPNMMO-0023 / ADR-015) ────────────────
@@ -5750,10 +5830,14 @@ button.om-add-link { background: none; border: 0; padding: 0; cursor: pointer; f
 .om-mtile.is-liked { aspect-ratio: 2.08 / 1; height: 100%; }
 
 /* Full-bleed music memo cards — MINIMAL card style (theme swap, OPNMMO):
-   square cover edge-to-edge, title + meta on a bottom gradient overlay —
-   no separate body bar, like the screenshot. The play button stays hover-only
-   in minimal (see [data-card="minimal"] .om-play above) — never always-on.
+   square cover edge-to-edge, kind icon + title on a bottom gradient overlay —
+   NO separate body bar, NO meta row, like the screenshot. min-height:0 lets the
+   square aspect-ratio drive the card height (matches image/video/link minimal) —
+   without it the card keeps its 260px floor and an empty surface band shows below
+   the cover where the overlay lands. The play button stays hover-only in minimal
+   (see [data-card="minimal"] .om-play above) — never always-on.
    Voice + cover-less audio keep the classic waveform tile + bottom lip. */
+[data-card="minimal"] .om-card-audio.is-music.has-cover { min-height: 0; }
 [data-card="minimal"] .om-card-audio.is-music.has-cover .om-audio-frame {
   aspect-ratio: 1 / 1;
   border-radius: var(--r-xl);
@@ -5766,6 +5850,8 @@ button.om-add-link { background: none; border: 0; padding: 0; cursor: pointer; f
   border-radius: 0 0 var(--r-xl) var(--r-xl);
   border-top: 0;
 }
+/* Footer is icon + title only — drop the meta (mic · Audio · date) row. */
+[data-card="minimal"] .om-card-audio.is-music.has-cover .om-meta { display: none; }
 [data-card="minimal"] .om-card-audio.is-music.has-cover .om-card-title { color: #fff; }
 [data-card="minimal"] .om-card-audio.is-music.has-cover .om-kind-icon { color: rgba(255, 255, 255, 0.85); }
 [data-card="minimal"] .om-card-audio.is-music.has-cover .om-meta,
