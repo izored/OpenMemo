@@ -1,4 +1,5 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { forwardRef, useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 
 // Branded color picker (replaces the native <input type="color">, which pops the
 // browser's default OS picker and breaks the app's look). A swatch trigger opens
@@ -54,11 +55,17 @@ export function ColorPicker({
 }) {
   const [open, setOpen] = useState(false);
   const wrapRef = useRef<HTMLDivElement>(null);
+  const popRef = useRef<HTMLDivElement>(null);
 
+  // Outside-click / Escape closes. The popover is portaled to <body>, so it is
+  // NOT a DOM descendant of the trigger — check both refs before closing.
   useEffect(() => {
     if (!open) return;
     const onDown = (e: MouseEvent) => {
-      if (wrapRef.current && !wrapRef.current.contains(e.target as Node)) setOpen(false);
+      const tgt = e.target as Node;
+      if (wrapRef.current?.contains(tgt)) return;
+      if (popRef.current?.contains(tgt)) return;
+      setOpen(false);
     };
     const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') setOpen(false); };
     window.addEventListener('mousedown', onDown);
@@ -77,12 +84,35 @@ export function ColorPicker({
       >
         {children}
       </button>
-      {open && <ColorPopover value={value} onChange={onChange} />}
+      {open && (
+        <ColorPopover
+          ref={popRef}
+          anchor={wrapRef.current}
+          value={value}
+          onChange={onChange}
+        />
+      )}
     </div>
   );
 }
 
-function ColorPopover({ value, onChange }: { value: string; onChange: (hex: string) => void }) {
+// Compute a fixed (viewport) position from the trigger rect, clamped on-screen
+// and flipped above the trigger when there isn't room below.
+const POP_W = 220;
+const POP_H = 250;
+function placePop(anchor: HTMLElement | null) {
+  if (!anchor) return { left: 0, top: 0 };
+  const r = anchor.getBoundingClientRect();
+  const left = Math.min(Math.max(8, r.left), window.innerWidth - POP_W - 8);
+  const below = r.bottom + 8;
+  const top = below + POP_H > window.innerHeight - 8 && r.top - 8 - POP_H > 8
+    ? r.top - 8 - POP_H
+    : below;
+  return { left, top };
+}
+
+const ColorPopover = forwardRef<HTMLDivElement, { value: string; onChange: (hex: string) => void; anchor: HTMLElement | null }>(
+  function ColorPopover({ value, onChange, anchor }, ref) {
   const [r, g, b] = hexToRgb(value || '#888888');
   const [h0, s0, v0] = rgbToHsv(r, g, b);
   // Hue is kept in its own state so dragging to pure black/white doesn't reset it.
@@ -93,6 +123,17 @@ function ColorPopover({ value, onChange }: { value: string; onChange: (hex: stri
   const svRef = useRef<HTMLDivElement>(null);
   const hueRef = useRef<HTMLDivElement>(null);
   const dragging = useRef<'sv' | 'hue' | null>(null);
+
+  // Fixed viewport position off the trigger. Recompute before paint and on any
+  // scroll/resize so it tracks the trigger even inside scrolling panels.
+  const [pos, setPos] = useState(() => placePop(anchor));
+  useLayoutEffect(() => {
+    const sync = () => setPos(placePop(anchor));
+    sync();
+    window.addEventListener('scroll', sync, true);
+    window.addEventListener('resize', sync);
+    return () => { window.removeEventListener('scroll', sync, true); window.removeEventListener('resize', sync); };
+  }, [anchor]);
 
   // Push an hsv change up as hex (and sync the hex field).
   const emit = useCallback((nh: number, ns: number, nv: number) => {
@@ -147,8 +188,14 @@ function ColorPopover({ value, onChange }: { value: string; onChange: (hex: stri
 
   const swatch = rgbToHex(...hsvToRgb(hue, sat, val));
 
-  return (
-    <div className="om-cpick-pop" data-lenis-prevent onMouseDown={(e) => e.stopPropagation()}>
+  return createPortal(
+    <div
+      ref={ref}
+      className="om-cpick-pop"
+      data-lenis-prevent
+      style={{ position: 'fixed', left: pos.left, top: pos.top }}
+      onMouseDown={(e) => e.stopPropagation()}
+    >
       <div
         className="om-cpick-sv"
         ref={svRef}
@@ -182,6 +229,7 @@ function ColorPopover({ value, onChange }: { value: string; onChange: (hex: stri
           aria-label="Hex color"
         />
       </div>
-    </div>
+    </div>,
+    document.body,
   );
-}
+});
