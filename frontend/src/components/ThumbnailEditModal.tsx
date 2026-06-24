@@ -222,7 +222,7 @@ export function ThumbnailEditModal({ memo, onClose }: { memo: Memo; onClose: () 
               <input
                 type="range" min={1} max={3} step={0.01} value={zoom}
                 onChange={(e) => onZoom(parseFloat(e.target.value))}
-                className="om-ap-range" style={{ flex: 1 }} aria-label="Zoom"
+                className="om-ap-range" style={{ flex: 1, ['--pct' as string]: `${((zoom - 1) / 2) * 100}%` }} aria-label="Zoom"
               />
               <button className="om-btn-ghost" onClick={() => fileRef.current?.click()}>Replace</button>
             </div>

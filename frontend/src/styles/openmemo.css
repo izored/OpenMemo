@@ -5212,30 +5212,82 @@ body.om-has-bbar .om-fab { display: none !important; }
 .om-coach-actions { display: flex; align-items: center; justify-content: space-between; margin-top: 8px; }
 .om-coach-actions .om-add-foot-btn { height: 28px; padding: 0 12px; font-size: 12px; border-radius: 8px; }
 
-/* Appearance range slider.
-   PREVENTION (recurring bug): the 14px thumb is centred on the track ends, so at
-   min/max its outer half (7px) sits OUTSIDE the track box. With width:100% the
-   thumb then overflows the container's content box and a scroll container
-   (overflow-y:auto computes overflow-x:auto) clips it — the "cut-off circle".
-   Insetting the track by the thumb radius keeps the thumb inside the box at both
-   extremes, so ANY .om-ap-range is safe wherever it's dropped. Don't reintroduce
-   width:100% here. */
+/* Appearance range slider — branded percentage slider.
+   PREVENTION (recurring bug): a 14px thumb centred on the track ends puts its
+   outer half (7px) outside the track at min/max, so it overflowed the box and a
+   scroll/panel edge sliced the circle. The fix is structural, not per-slider:
+   the input reserves the thumb radius as its OWN `padding-inline`, and the track
+   is drawn on the runnable-track (which lives inside that padding). The thumb can
+   never leave the input box, wherever the slider sits. Don't put the track on the
+   input element or reintroduce a full-width track.
+   The filled portion is painted from `--pct` (0–100%, set inline = the value's
+   position) so the handle, the fill, and the displayed value always agree. */
 .om-ap-range {
   -webkit-appearance: none; appearance: none;
-  width: calc(100% - 14px); margin-inline: 7px;
+  display: block; box-sizing: border-box;
+  width: 100%; height: 16px;
+  padding-inline: 7px;
+  background: transparent; outline: none; cursor: pointer;
+}
+.om-ap-range::-webkit-slider-runnable-track {
   height: 4px; border-radius: 999px;
-  background: var(--surface-3);
-  outline: none; cursor: pointer;
+  background: linear-gradient(to right, var(--accent) var(--pct, 0%), var(--surface-3) var(--pct, 0%));
 }
 .om-ap-range::-webkit-slider-thumb {
   -webkit-appearance: none; appearance: none;
+  margin-top: -5px; /* centre the 14px thumb on the 4px track */
   width: 14px; height: 14px; border-radius: 50%;
   background: var(--accent);
   box-shadow: 0 1px 3px rgba(0,0,0,0.3);
 }
+.om-ap-range::-moz-range-track {
+  height: 4px; border-radius: 999px; background: var(--surface-3);
+}
+.om-ap-range::-moz-range-progress {
+  height: 4px; border-radius: 999px; background: var(--accent);
+}
 .om-ap-range::-moz-range-thumb {
   width: 14px; height: 14px; border: 0; border-radius: 50%;
-  background: var(--accent);
+  background: var(--accent); box-shadow: 0 1px 3px rgba(0,0,0,0.3);
+}
+
+/* ── Branded color picker (replaces native <input type="color">) ──────────── */
+.om-cpick { position: relative; display: inline-flex; }
+.om-cpick-trigger { padding: 0; border: 0; background: none; cursor: pointer; display: inline-flex; line-height: 0; }
+.om-cpick-pop {
+  position: absolute; top: calc(100% + 8px); left: 0; z-index: 60;
+  width: 220px; padding: 12px; border-radius: var(--r-md);
+  background: var(--surface-2); border: 1px solid var(--border);
+  box-shadow: var(--shadow-card-hover);
+  display: flex; flex-direction: column; gap: 12px;
+}
+.om-cpick-sv {
+  position: relative; width: 100%; height: 120px; border-radius: var(--r-sm);
+  overflow: hidden; cursor: crosshair; touch-action: none;
+}
+.om-cpick-sv-white { position: absolute; inset: 0; background: linear-gradient(to right, #fff, transparent); }
+.om-cpick-sv-black { position: absolute; inset: 0; background: linear-gradient(to top, #000, transparent); }
+.om-cpick-sv-handle {
+  position: absolute; width: 14px; height: 14px; border-radius: 50%;
+  border: 2px solid #fff; box-shadow: 0 0 0 1px rgba(0,0,0,0.35);
+  transform: translate(-50%, -50%); pointer-events: none;
+}
+.om-cpick-controls { display: flex; align-items: center; gap: 10px; }
+.om-cpick-preview { width: 26px; height: 26px; border-radius: 50%; flex: none; border: 1px solid var(--border); }
+.om-cpick-hue {
+  position: relative; flex: 1; height: 12px; border-radius: 999px; cursor: pointer; touch-action: none;
+  background: linear-gradient(to right, #f00 0%, #ff0 17%, #0f0 33%, #0ff 50%, #00f 67%, #f0f 83%, #f00 100%);
+}
+.om-cpick-hue-handle {
+  position: absolute; top: 50%; width: 14px; height: 14px; border-radius: 50%;
+  background: #fff; border: 2px solid #fff; box-shadow: 0 0 0 1px rgba(0,0,0,0.35), 0 1px 3px rgba(0,0,0,0.3);
+  transform: translate(-50%, -50%); pointer-events: none;
+}
+.om-cpick-hexrow { display: flex; align-items: center; gap: 6px; border: 1px solid var(--border); border-radius: var(--r-sm); padding: 6px 9px; }
+.om-cpick-hex-ico { color: var(--text-4); font-size: 12px; }
+.om-cpick-hex {
+  flex: 1; min-width: 0; border: 0; background: none; outline: none;
+  color: var(--text); font-family: var(--font-mono); font-size: 12px; text-transform: uppercase;
 }
 
 /* ─ Music page (Music Experience V2, OPNMMO-0023 / ADR-015) ────────────────

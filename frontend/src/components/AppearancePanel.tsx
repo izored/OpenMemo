@@ -7,7 +7,11 @@ import { BG_PRESETS, type BgPreset } from '@/lib/bgPresets';
 import { SKY_BANDS } from '@/lib/skyPalette';
 import { CloudRenderer } from '@/lib/cloudShader';
 import { AnimatedHeight } from './AnimatedHeight';
+import { ColorPicker } from './ColorPicker';
 import { settingsApi } from '@/lib/api';
+
+// Thumb position (and fill) for a percentage-style range slider, 0–100%.
+const pctOf = (v: number, min: number, max: number) => `${((v - min) / (max - min)) * 100}%`;
 
 export function AppearancePanel() {
   const open = useAppStore((s) => s.appearancePanelOpen);
@@ -125,22 +129,20 @@ export function AppearancePanel() {
             {customAccents.map((c, i) => {
               if (!c) {
                 return (
-                  <label key={`cu-${i}`} className="om-ap-swatch custom empty" aria-label="Add custom accent">
-                    <input
-                      type="color"
-                      defaultValue="#888888"
-                      onChange={(e) => {
-                        const arr: [string, string] = [customAccents[0], customAccents[1]];
-                        arr[i] = e.target.value;
-                        setTweak({
-                          accent: e.target.value,
-                          customAccents: arr,
-                          bgPalette: accentHarmony(e.target.value),
-                        });
-                      }}
-                    />
-                    <Icon name="plus" size={12} />
-                  </label>
+                  <ColorPicker
+                    key={`cu-${i}`}
+                    value="#888888"
+                    ariaLabel="Add custom accent"
+                    onChange={(hex) => {
+                      const arr: [string, string] = [customAccents[0], customAccents[1]];
+                      arr[i] = hex;
+                      setTweak({ accent: hex, customAccents: arr, bgPalette: accentHarmony(hex) });
+                    }}
+                  >
+                    <span className="om-ap-swatch custom empty">
+                      <Icon name="plus" size={12} />
+                    </span>
+                  </ColorPicker>
                 );
               }
               return (
@@ -277,6 +279,7 @@ export function AppearancePanel() {
             value={t.gutter ?? 20}
             onChange={(e) => setTweak('gutter', parseInt(e.target.value, 10))}
             className="om-ap-range"
+            style={{ ['--pct' as string]: pctOf(t.gutter ?? 20, 0, 40) }}
             aria-label="Gutter between memos"
           />
         </div>
@@ -307,17 +310,16 @@ export function AppearancePanel() {
 
             <AnimatedHeight tabKey={t.bgMode}>
             {t.bgMode === 'color' && (
-              <label className="om-ap-color-row">
-                <span className="om-ap-color-swatch" style={{ background: t.bgSolid || '#0E1116' }}>
-                  <input
-                    type="color"
-                    value={t.bgSolid || '#0E1116'}
-                    onChange={(e) => setTweak('bgSolid', e.target.value)}
-                    aria-label="Background color"
-                  />
-                </span>
+              <div className="om-ap-color-row">
+                <ColorPicker
+                  value={t.bgSolid || '#0E1116'}
+                  onChange={(hex) => setTweak('bgSolid', hex)}
+                  ariaLabel="Background color"
+                >
+                  <span className="om-ap-color-swatch" style={{ background: t.bgSolid || '#0E1116' }} />
+                </ColorPicker>
                 <span className="mono">{(t.bgSolid || '#0E1116').toUpperCase()}</span>
-              </label>
+              </div>
             )}
 
             {t.bgMode === 'cloud' && (
@@ -363,6 +365,7 @@ export function AppearancePanel() {
                       value={(t[s.k] as number) ?? s.d}
                       onChange={(e) => setTweak(s.k, parseFloat(e.target.value))}
                       className="om-ap-range"
+                      style={{ ['--pct' as string]: pctOf((t[s.k] as number) ?? s.d, 0, 1) }}
                       aria-label={s.l}
                     />
                   </div>
@@ -444,6 +447,7 @@ export function AppearancePanel() {
                     value={t.bgBlur ?? 64}
                     onChange={(e) => setTweak('bgBlur', parseInt(e.target.value))}
                     className="om-ap-range"
+                    style={{ ['--pct' as string]: pctOf(t.bgBlur ?? 64, 0, 120) }}
                     aria-label="Background blur"
                   />
                 </div>
@@ -468,6 +472,7 @@ export function AppearancePanel() {
             value={t.bgFade ?? 0}
             onChange={(e) => setTweak('bgFade', parseFloat(e.target.value))}
             className="om-ap-range"
+            style={{ ['--pct' as string]: pctOf(t.bgFade ?? 0, 0, 1) }}
             aria-label="Background fade"
           />
         </div>
