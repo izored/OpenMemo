@@ -152,6 +152,10 @@ worth knowing:
   `transition: width` so it doesn't jump between memo types. The hero holds
   `opacity: 0` until the cover has loaded and its aspect is known, then fades in, so
   the width settles while hidden and nothing pops in piecemeal.
+  - **Editing the thumbnail preserves that aspect.** `ThumbnailEditModal` crops to a
+    frame that follows the loaded image's native aspect (snapped to a clean ratio),
+    not a fixed 3:2 — so re-cropping a 16:9 music cover stays 16:9 and the hero keeps
+    its 80% panel instead of collapsing to the narrow one. Zoom is centre-anchored.
 
 ### Music description, not a transcript (ADR-010)
 
