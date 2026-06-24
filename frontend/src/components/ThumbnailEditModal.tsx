@@ -6,18 +6,31 @@ import { mediaSrc } from '@/lib/media';
 import type { Memo } from '@/types';
 
 // Notion-header-style thumbnail editor: drop in a new image (or reposition /
-// zoom the current one inside a fixed 3:2 frame), edit the title, and bake the
-// framed crop to a JPEG that overrides the memo's thumbnail. Works for any memo
-// type (a note/doc with no thumbnail simply starts from the upload prompt).
-const FRAME_W = 384;
-const FRAME_H = 256; // 3:2
-const OUT_W = 900;
-const OUT_H = 600;
+// zoom the current one), edit the title, and bake the framed crop to a JPEG that
+// overrides the memo's thumbnail. Works for any memo type (a note/doc with no
+// thumbnail simply starts from the upload prompt).
+//
+// The crop frame FOLLOWS the loaded image's native aspect (ADR-010): a 16:9
+// video / localized-YouTube cover keeps 16:9, square album art keeps 1:1, etc.
+// This matters because MusicDetailPlayer sizes its hero panel from the baked
+// thumbnail's aspect (wide → 80%, square → 40%) — forcing a fixed 3:2 here used
+// to squash a 16:9 music cover into a squarer crop and flip the hero to the
+// narrow layout. The frame is fit inside a max box so any aspect stays sane.
+const FRAME_MAX = 384; // on-screen crop box, longest side
+const OUT_MAX = 900; // baked JPEG, longest side
+// Aspect ratios we snap a loaded image to, so the crop reads as a clean shape.
+const SNAP = [9 / 16, 3 / 4, 1 / 1, 4 / 3, 3 / 2, 16 / 9];
+const DEFAULT_ASPECT = 3 / 2; // before any image loads (matches the old behavior)
+
+function snapAspect(a: number): number {
+  return SNAP.reduce((best, r) => (Math.abs(r - a) < Math.abs(best - a) ? r : best), SNAP[0]);
+}
 
 export function ThumbnailEditModal({ memo, onClose }: { memo: Memo; onClose: () => void }) {
   const qc = useQueryClient();
   const [title, setTitle] = useState(memo.title);
   const [img, setImg] = useState<HTMLImageElement | null>(null);
+  const [aspect, setAspect] = useState(DEFAULT_ASPECT);
   const [zoom, setZoom] = useState(1);
   const [off, setOff] = useState({ x: 0, y: 0 });
   const [saving, setSaving] = useState(false);
@@ -25,7 +38,13 @@ export function ThumbnailEditModal({ memo, onClose }: { memo: Memo; onClose: () 
   const fileRef = useRef<HTMLInputElement>(null);
   const drag = useRef<{ x: number; y: number; ox: number; oy: number } | null>(null);
 
-  const baseScale = img ? Math.max(FRAME_W / img.naturalWidth, FRAME_H / img.naturalHeight) : 1;
+  // Crop box + bake size, both fit inside their max box for the current aspect.
+  const frameW = aspect >= 1 ? FRAME_MAX : Math.round(FRAME_MAX * aspect);
+  const frameH = aspect >= 1 ? Math.round(FRAME_MAX / aspect) : FRAME_MAX;
+  const outW = aspect >= 1 ? OUT_MAX : Math.round(OUT_MAX * aspect);
+  const outH = aspect >= 1 ? Math.round(OUT_MAX / aspect) : OUT_MAX;
+
+  const baseScale = img ? Math.max(frameW / img.naturalWidth, frameH / img.naturalHeight) : 1;
   const scale = baseScale * zoom;
   const drawW = img ? img.naturalWidth * scale : 0;
   const drawH = img ? img.naturalHeight * scale : 0;
@@ -33,10 +52,10 @@ export function ThumbnailEditModal({ memo, onClose }: { memo: Memo; onClose: () 
   // Keep the image covering the frame (no empty edges).
   const clamp = useCallback(
     (x: number, y: number) => ({
-      x: Math.min(0, Math.max(FRAME_W - drawW, x)),
-      y: Math.min(0, Math.max(FRAME_H - drawH, y)),
+      x: Math.min(0, Math.max(frameW - drawW, x)),
+      y: Math.min(0, Math.max(frameH - drawH, y)),
     }),
-    [drawW, drawH],
+    [frameW, frameH, drawW, drawH],
   );
 
   const loadFromBlob = useCallback((blob: Blob) => {
@@ -44,12 +63,16 @@ export function ThumbnailEditModal({ memo, onClose }: { memo: Memo; onClose: () 
     const url = URL.createObjectURL(blob);
     const image = new Image();
     image.onload = () => {
-      const bs = Math.max(FRAME_W / image.naturalWidth, FRAME_H / image.naturalHeight);
+      const a = snapAspect(image.naturalWidth / image.naturalHeight);
+      const fW = a >= 1 ? FRAME_MAX : Math.round(FRAME_MAX * a);
+      const fH = a >= 1 ? Math.round(FRAME_MAX / a) : FRAME_MAX;
+      const bs = Math.max(fW / image.naturalWidth, fH / image.naturalHeight);
       const dW = image.naturalWidth * bs;
       const dH = image.naturalHeight * bs;
       setImg(image);
+      setAspect(a);
       setZoom(1);
-      setOff({ x: (FRAME_W - dW) / 2, y: (FRAME_H - dH) / 2 });
+      setOff({ x: (fW - dW) / 2, y: (fH - dH) / 2 });
     };
     image.onerror = () => setErr('Could not load that image.');
     image.src = url;
@@ -68,18 +91,25 @@ export function ThumbnailEditModal({ memo, onClose }: { memo: Memo; onClose: () 
     return () => { alive = false; };
   }, [memo, loadFromBlob]);
 
-  // Change zoom and re-clamp the offset in one step (the new drawn size depends
-  // on the new zoom), avoiding a setState-in-effect.
+  // Change zoom and re-anchor on the FRAME CENTRE (not the top-left corner), so
+  // zooming magnifies what's in the middle of the crop instead of drifting the
+  // image toward a corner. Re-clamps so the frame stays covered.
   const onZoom = (z: number) => {
+    if (!img) { setZoom(z); return; }
+    const oldS = baseScale * zoom;
+    const newS = baseScale * z;
+    setOff((o) => {
+      // Image-space point currently under the frame centre.
+      const cx = (frameW / 2 - o.x) / oldS;
+      const cy = (frameH / 2 - o.y) / oldS;
+      const dW = img.naturalWidth * newS;
+      const dH = img.naturalHeight * newS;
+      return {
+        x: Math.min(0, Math.max(frameW - dW, frameW / 2 - cx * newS)),
+        y: Math.min(0, Math.max(frameH - dH, frameH / 2 - cy * newS)),
+      };
+    });
     setZoom(z);
-    if (!img) return;
-    const s = baseScale * z;
-    const dW = img.naturalWidth * s;
-    const dH = img.naturalHeight * s;
-    setOff((o) => ({
-      x: Math.min(0, Math.max(FRAME_W - dW, o.x)),
-      y: Math.min(0, Math.max(FRAME_H - dH, o.y)),
-    }));
   };
 
   useEffect(() => {
@@ -112,11 +142,11 @@ export function ThumbnailEditModal({ memo, onClose }: { memo: Memo; onClose: () 
       let changed = false;
       if (img) {
         const c = document.createElement('canvas');
-        c.width = OUT_W;
-        c.height = OUT_H;
+        c.width = outW;
+        c.height = outH;
         const ctx = c.getContext('2d');
         if (!ctx) throw new Error('Canvas unavailable.');
-        const ratio = OUT_W / FRAME_W;
+        const ratio = outW / frameW;
         ctx.drawImage(img, off.x * ratio, off.y * ratio, drawW * ratio, drawH * ratio);
         const blob: Blob = await new Promise((res, rej) =>
           c.toBlob((b) => (b ? res(b) : rej(new Error('Encode failed.'))), 'image/jpeg', 0.9),
@@ -156,7 +186,7 @@ export function ThumbnailEditModal({ memo, onClose }: { memo: Memo; onClose: () 
           <input ref={fileRef} type="file" accept="image/*" onChange={onPick} hidden />
           <div
             style={{
-              position: 'relative', width: FRAME_W, height: FRAME_H, maxWidth: '100%',
+              position: 'relative', width: frameW, height: frameH, maxWidth: '100%',
               margin: '0 auto', borderRadius: 12, overflow: 'hidden',
               background: 'var(--surface-2)', cursor: img ? 'grab' : 'default',
               touchAction: 'none', userSelect: 'none',

@@ -791,25 +791,32 @@ input, textarea { font: inherit; color: inherit; }
 }
 [data-card="minimal"] .om-card-note:hover .om-note-text { opacity: 1; }
 
-/* Image: full-bleed, natural orientation, no body.
-   aspect-ratio drives height — override card min-height. */
+/* Image: full-bleed, natural orientation, no body. The frame follows the real
+   thumbnail aspect (--card-ar, measured on load) like the Edge wall — fixed
+   4/3 (portrait 3/4) is only the fallback until the image reports its size. */
 [data-card="minimal"] .om-card-image { min-height: 0; }
 [data-card="minimal"] .om-card-image .om-image-frame {
-  margin: 0; border-radius: var(--r-xl); aspect-ratio: 4/3;
+  margin: 0; border-radius: var(--r-xl); aspect-ratio: var(--card-ar, 4 / 3);
 }
-[data-card="minimal"] .om-card-image .om-image-frame[data-orient="portrait"] { aspect-ratio: 3/4; }
+[data-card="minimal"] .om-card-image .om-image-frame[data-orient="portrait"] { aspect-ratio: var(--card-ar, 3 / 4); }
 [data-card="minimal"] .om-card-image .om-image-frame img { width: 100%; height: 100%; object-fit: cover; display: block; }
 [data-card="minimal"] .om-card-image .om-card-body { display: none; }
 
-/* Video: full-bleed, play hidden until hover, no body.
-   Override card min-height — video uses its own aspect ratio, no padding below. */
+/* Video: full-bleed, play hidden until hover, no body. Follows the real
+   thumbnail aspect (--card-ar) too — a reel stays portrait. 16/9 (portrait
+   9/16) is only the fallback until the thumbnail reports its size. */
 [data-card="minimal"] .om-card-video { min-height: 0; }
 [data-card="minimal"] .om-card-video .om-video-frame {
-  margin: 0; border-radius: var(--r-xl); aspect-ratio: 16/9;
+  margin: 0; border-radius: var(--r-xl); aspect-ratio: var(--card-ar, 16 / 9);
 }
+[data-card="minimal"] .om-card-video .om-video-frame[data-orient="portrait"] { aspect-ratio: var(--card-ar, 9 / 16); }
 [data-card="minimal"] .om-card-video .om-card-body { display: none; }
 [data-card="minimal"] .om-play { opacity: 0; transform: translate(-50%, -50%) scale(0.8); transition: opacity .2s, transform .2s; }
 [data-card="minimal"] .om-card:hover .om-play { opacity: 1; transform: translate(-50%, -50%) scale(1); }
+/* Minimal: nudge the centred play button + the bottom title pill a touch smaller
+   so a long title's expanded pill never collides with the play button. */
+[data-card="minimal"] .om-play { width: 44px; height: 44px; }
+[data-card="minimal"] .om-min-domain { font-size: 10px; padding: 4px 9px; }
 
 /* Link/Article: full-bleed hero, no body, domain pill always visible */
 [data-card="minimal"] .om-card-link { min-height: 0; }
@@ -1052,7 +1059,10 @@ input, textarea { font: inherit; color: inherit; }
 }
 [data-card="edge"] .om-card-image .om-image-frame { aspect-ratio: var(--card-ar, 1); }
 [data-card="edge"] .om-card-image .om-image-frame[data-orient="portrait"] { aspect-ratio: var(--card-ar, 3 / 4); }
-[data-card="edge"] .om-card-video .om-video-frame,
+/* Video keeps the pulled media's real shape (measured from its thumbnail) — a
+   reel stays 9:16, a clip stays wide. Falls back to 16:9 only until measured. */
+[data-card="edge"] .om-card-video .om-video-frame { aspect-ratio: var(--card-ar, 16 / 9); }
+[data-card="edge"] .om-card-video .om-video-frame[data-orient="portrait"] { aspect-ratio: var(--card-ar, 9 / 16); }
 [data-card="edge"] .om-card-link .om-card-hero { aspect-ratio: 16 / 9; }
 [data-card="edge"] .om-card-audio .om-audio-frame { aspect-ratio: 1 / 1; }
 [data-card="edge"] .om-card-image .om-image-frame img,
@@ -3189,6 +3199,16 @@ body.om-has-bbar .om-fab { display: none !important; }
 .om-add-toggle-switch.on .om-add-toggle-knob { transform: translateX(14px); }
 .om-add-toggle-label { display: flex; flex-direction: column; gap: 1px; font-size: 12px; color: var(--text); font-weight: 500; }
 .om-add-toggle-label .mono { font-size: 9.5px; color: var(--text-4); font-weight: 400; }
+/* In a Settings two-column row the toggle is just the switch on the right (the
+   label lives in .om-setting-row-text). The modal's full-width `width:100%`
+   would make this flex item eat the whole row and crush the text column to one
+   word per line — pin it to content width instead. */
+.om-setting-row .om-add-toggle { width: auto; flex-shrink: 0; margin-top: 0; padding: 2px; }
+
+/* Animated shell around the now-playing player: lets framer-motion height-morph
+   + crossfade between the small / big / collapsed layouts instead of snapping.
+   Relative so the popLayout exiting child (absolute) stays contained. */
+.om-sb-player-wrap { position: relative; width: 100%; }
 
 /* Persistent mini-player — pinned top-right of the shell, shown while a track
    is loaded (playing or paused) until the user closes it. */
@@ -5192,10 +5212,18 @@ body.om-has-bbar .om-fab { display: none !important; }
 .om-coach-actions { display: flex; align-items: center; justify-content: space-between; margin-top: 8px; }
 .om-coach-actions .om-add-foot-btn { height: 28px; padding: 0 12px; font-size: 12px; border-radius: 8px; }
 
-/* Appearance range slider */
+/* Appearance range slider.
+   PREVENTION (recurring bug): the 14px thumb is centred on the track ends, so at
+   min/max its outer half (7px) sits OUTSIDE the track box. With width:100% the
+   thumb then overflows the container's content box and a scroll container
+   (overflow-y:auto computes overflow-x:auto) clips it — the "cut-off circle".
+   Insetting the track by the thumb radius keeps the thumb inside the box at both
+   extremes, so ANY .om-ap-range is safe wherever it's dropped. Don't reintroduce
+   width:100% here. */
 .om-ap-range {
   -webkit-appearance: none; appearance: none;
-  width: 100%; height: 4px; border-radius: 999px;
+  width: calc(100% - 14px); margin-inline: 7px;
+  height: 4px; border-radius: 999px;
   background: var(--surface-3);
   outline: none; cursor: pointer;
 }
@@ -5750,10 +5778,14 @@ button.om-add-link { background: none; border: 0; padding: 0; cursor: pointer; f
 .om-mtile.is-liked { aspect-ratio: 2.08 / 1; height: 100%; }
 
 /* Full-bleed music memo cards — MINIMAL card style (theme swap, OPNMMO):
-   square cover edge-to-edge, title + meta on a bottom gradient overlay —
-   no separate body bar, like the screenshot. The play button stays hover-only
-   in minimal (see [data-card="minimal"] .om-play above) — never always-on.
+   square cover edge-to-edge, kind icon + title on a bottom gradient overlay —
+   NO separate body bar, NO meta row, like the screenshot. min-height:0 lets the
+   square aspect-ratio drive the card height (matches image/video/link minimal) —
+   without it the card keeps its 260px floor and an empty surface band shows below
+   the cover where the overlay lands. The play button stays hover-only in minimal
+   (see [data-card="minimal"] .om-play above) — never always-on.
    Voice + cover-less audio keep the classic waveform tile + bottom lip. */
+[data-card="minimal"] .om-card-audio.is-music.has-cover { min-height: 0; }
 [data-card="minimal"] .om-card-audio.is-music.has-cover .om-audio-frame {
   aspect-ratio: 1 / 1;
   border-radius: var(--r-xl);
@@ -5766,6 +5798,8 @@ button.om-add-link { background: none; border: 0; padding: 0; cursor: pointer; f
   border-radius: 0 0 var(--r-xl) var(--r-xl);
   border-top: 0;
 }
+/* Footer is icon + title only — drop the meta (mic · Audio · date) row. */
+[data-card="minimal"] .om-card-audio.is-music.has-cover .om-meta { display: none; }
 [data-card="minimal"] .om-card-audio.is-music.has-cover .om-card-title { color: #fff; }
 [data-card="minimal"] .om-card-audio.is-music.has-cover .om-kind-icon { color: rgba(255, 255, 255, 0.85); }
 [data-card="minimal"] .om-card-audio.is-music.has-cover .om-meta,

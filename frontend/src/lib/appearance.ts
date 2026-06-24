@@ -116,6 +116,9 @@ export interface Tweaks {
   typePair: 'satoshi' | 'general' | 'cabinet';
   layout: 'boxed' | 'full';
   gridColumns: number;
+  // Gap between memo tiles in px (the grid gutter). User-controlled slider in
+  // Appearance; applies to every card style, Edge included (0 = gapless wall).
+  gutter: number;
   // 'random' is the legacy "blob drift". 'color' = flat single color, 'cloud' =
   // WebGPU noise-cloud shader, 'live' = cloud shader with a clock-tracked sky
   // (OPNMMO-0048, ADR-021).
@@ -237,6 +240,7 @@ export const DEFAULT_TWEAKS: Tweaks = {
   typePair: 'cabinet',
   layout: 'boxed',
   gridColumns: 4,
+  gutter: 20,
   bgMode: 'cloud',
   bgImage: '',
   bgPreset: '',

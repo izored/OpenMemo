@@ -263,6 +263,24 @@ export function AppearancePanel() {
           </div>
         </div>
 
+        {/* Gutter — space between memo tiles in the grid (Edge included) */}
+        <div className="om-ap-row">
+          <div className="om-ap-label">
+            <p>Gutter</p>
+            <span className="mono">{t.gutter ?? 20}px between memos</span>
+          </div>
+          <input
+            type="range"
+            min={0}
+            max={40}
+            step={2}
+            value={t.gutter ?? 20}
+            onChange={(e) => setTweak('gutter', parseInt(e.target.value, 10))}
+            className="om-ap-range"
+            aria-label="Gutter between memos"
+          />
+        </div>
+
         {/* Custom background */}
         <div className="om-ap-row">
           <div className="om-ap-label">

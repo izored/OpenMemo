@@ -15,6 +15,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import type { Memo } from '@/types';
 import { useAppStore } from '@/stores/appStore';
 import { useDndBus } from '@/lib/dndBus';
+import { useIsMobile } from '@/lib/useBreakpoint';
 
 interface MemoGridProps {
   memos: Memo[];
@@ -23,8 +24,8 @@ interface MemoGridProps {
   transitionKey?: string;
 }
 
-function SortableMemoCard({ memo, anyDragActive, lightboxGroup, transitionKey }: { memo: Memo; anyDragActive: boolean; lightboxGroup: Memo[]; transitionKey?: string }) {
-  const { attributes, listeners, setNodeRef, isDragging } = useSortable({ id: memo.id });
+function SortableMemoCard({ memo, anyDragActive, lightboxGroup, transitionKey, dragDisabled }: { memo: Memo; anyDragActive: boolean; lightboxGroup: Memo[]; transitionKey?: string; dragDisabled?: boolean }) {
+  const { attributes, listeners, setNodeRef, isDragging } = useSortable({ id: memo.id, disabled: dragDisabled });
   return (
     <motion.div
       ref={setNodeRef}
@@ -63,18 +64,14 @@ export function MemoGrid({ memos: serverMemos, transitionKey }: MemoGridProps) {
   const queryClient = useQueryClient();
   const tweaks = useAppStore((s) => s.tweaks);
   const columns = useViewportColumns(tweaks.gridColumns || 4);
-  // Edge is a gapless image wall — every card butts up against its neighbours
-  // with zero gutter. Other styles derive the gutter from density.
-  const gap =
-    tweaks.cardStyle === 'edge'
-      ? 0
-      : tweaks.density === 'compact'
-        ? 12
-        : tweaks.density === 'roomy'
-          ? 28
-          : 20;
+  // Gutter between tiles is user-controlled (Appearance slider), applied to
+  // every card style — Edge included, so the wall can be gapless (0) or spaced.
+  const gap = tweaks.gutter ?? 20;
 
   const dndBus = useDndBus();
+  // Drag-to-reorder is a desktop affordance. On tablet/phone it fights native
+  // scroll, so disable it below the desktop breakpoint (ADR-009).
+  const dragDisabled = useIsMobile();
   const [activeId, setActiveId] = useState<string | null>(null);
   const [localMemos, setLocalMemos] = useState(serverMemos);
   const reorderingRef = useRef(false);
@@ -216,7 +213,7 @@ export function MemoGrid({ memos: serverMemos, transitionKey }: MemoGridProps) {
               >
                 {localMemos.map((memo) => (
                   <div key={memo.id} style={{ marginBottom: gap }}>
-                    <SortableMemoCard memo={memo} anyDragActive={!!activeId} lightboxGroup={mediaGroup} transitionKey={transitionKey} />
+                    <SortableMemoCard memo={memo} anyDragActive={!!activeId} lightboxGroup={mediaGroup} transitionKey={transitionKey} dragDisabled={dragDisabled} />
                   </div>
                 ))}
               </Masonry>

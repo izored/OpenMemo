@@ -84,7 +84,12 @@ Opened from the hero (or the sidebar). Everything previews live as you change it
 written to the persisted `tweaks` in the app store and applied to `<html>`.
 
 Controls: Theme, Accent (with two custom slots), Card style, Layout, Player size,
-Grid columns, Background, Animation speed.
+Grid columns, Gutter, Background, Animation speed.
+
+**Gutter** is a 0–40px slider (`tweaks.gutter`) for the space between memo tiles,
+applied to every card style — pull it to 0 on Edge for a gapless wall, or open it
+up for breathing room. Existing layouts keep their old spacing on first load
+(Edge stayed gapless, the rest at the roomy 28px) until the slider is moved.
 
 ### Accent contrast (`--accent-ink`)
 

@@ -185,19 +185,20 @@ function TrashRow() {
     queryFn: memoApi.listDeleted,
   });
 
+  // No own `om-setting-row` — the caller already wraps this in one. A nested
+  // row would collapse to content width inside the parent's space-between flex,
+  // so "Open trash" wouldn't right-align with the other controls.
   return (
     <>
-      <div className="om-setting-row">
-        <div className="om-setting-row-text">
-          <p>Recently deleted</p>
-          {isLoading ? (
-            <span className="om-skel" />
-          ) : (
-            <span className="mono">{deleted.length} deleted memo{deleted.length === 1 ? '' : 's'} can be restored</span>
-          )}
-        </div>
-        <button className="om-btn-secondary" onClick={() => setOpen(true)}>Open trash</button>
+      <div className="om-setting-row-text">
+        <p>Recently deleted</p>
+        {isLoading ? (
+          <span className="om-skel" />
+        ) : (
+          <span className="mono">{deleted.length} deleted memo{deleted.length === 1 ? '' : 's'} can be restored</span>
+        )}
       </div>
+      <button className="om-btn-secondary" onClick={() => setOpen(true)}>Open trash</button>
       {open && <RecentlyDeletedModal onClose={() => setOpen(false)} />}
     </>
   );
@@ -243,7 +244,7 @@ function ModelSelect({ models }: { models: OllamaModel[] }) {
         <Icon name="chevronDown" size={13} />
       </button>
       {open && (
-        <div className="om-model-select-menu" role="listbox">
+        <div className="om-model-select-menu" role="listbox" data-lenis-prevent>
           {models.map((m) => (
             <button
               key={m.name}

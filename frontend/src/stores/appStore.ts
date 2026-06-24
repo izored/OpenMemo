@@ -19,6 +19,9 @@ const loadTweaks = (): Tweaks => {
       // 'live' is no longer a top-level mode — it's the 'auto' sky band inside
       // Cloud. Fold saved live into cloud + auto so it keeps tracking the clock.
       if (parsed.bgMode === 'live') { parsed.bgMode = 'cloud'; parsed.skyBand = 'auto'; }
+      // Gutter is new: seed it from the old per-style gap so existing layouts
+      // don't jump (Edge was gapless, everything else the roomy 28px).
+      if (typeof parsed.gutter !== 'number') parsed.gutter = parsed.cardStyle === 'edge' ? 0 : 28;
       return { ...DEFAULT_TWEAKS, ...parsed, density: 'roomy' as const };
     }
   } catch {
