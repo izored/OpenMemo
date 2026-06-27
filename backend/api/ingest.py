@@ -296,7 +296,8 @@ async def ingest_url(
             else:
                 extracted = await extract_url(data.url)
         except Exception as e:
-            raise HTTPException(status_code=400, detail=f"Failed to extract: {str(e)}")
+            log.warning("URL extraction failed for %s: %s", data.url, e)
+            raise HTTPException(status_code=400, detail="Failed to extract content from this URL")
 
     memo = Memo(
         id=str(uuid.uuid4()),
@@ -397,7 +398,8 @@ async def probe_playlist_url(data: PlaylistProbe, db: AsyncSession = Depends(get
     try:
         result = await probe_playlist(data.url)
     except PlaylistError as e:
-        raise HTTPException(status_code=400, detail=str(e))
+        log.warning("Playlist probe failed for %s: %s", data.url, e)
+        raise HTTPException(status_code=400, detail="Could not read playlist from this URL")
     # Already pulled? The panel tells the user instead of letting them mint a
     # duplicate; the ingest endpoint enforces the same rule server-side.
     existing = await _find_saved_playlist(db, data.url)
@@ -447,7 +449,8 @@ async def ingest_playlist(
     try:
         probed = await probe_playlist(data.url)
     except PlaylistError as e:
-        raise HTTPException(status_code=400, detail=str(e))
+        log.warning("Playlist ingest failed for %s: %s", data.url, e)
+        raise HTTPException(status_code=400, detail="Could not read playlist from this URL")
 
     ws = sanitize_workspace_id(data.workspace_id)
     collection = Collection(
@@ -591,7 +594,8 @@ async def probe_spotify_url(data: SpotifyProbe, db: AsyncSession = Depends(get_d
     try:
         meta = await asyncio.to_thread(_fetch)
     except Exception as e:
-        raise HTTPException(status_code=400, detail=f"Could not read Spotify link: {e}")
+        log.warning("Spotify probe failed: %s", e)
+        raise HTTPException(status_code=400, detail="Could not read this Spotify link")
 
     if meta["kind"] == "track":
         return {
@@ -661,7 +665,8 @@ async def ingest_spotify(
         try:
             meta = await asyncio.to_thread(_meta)
         except Exception as e:
-            raise HTTPException(status_code=400, detail=f"Could not read Spotify track: {e}")
+            log.warning("Spotify track ingest failed: %s", e)
+            raise HTTPException(status_code=400, detail="Could not read this Spotify track")
 
         now = datetime.utcnow()
         memo = Memo(
@@ -705,7 +710,8 @@ async def ingest_spotify(
     try:
         probed = await asyncio.to_thread(_coll)
     except Exception as e:
-        raise HTTPException(status_code=400, detail=f"Could not read Spotify {kind}: {e}")
+        log.warning("Spotify %s ingest failed: %s", kind, e)
+        raise HTTPException(status_code=400, detail=f"Could not read this Spotify {kind}")
 
     if not probed["tracks"]:
         raise HTTPException(status_code=400, detail="No tracks found in this Spotify link")
@@ -844,7 +850,8 @@ async def probe_apple_url(data: SpotifyProbe, db: AsyncSession = Depends(get_db)
     try:
         meta = await asyncio.to_thread(_fetch)
     except Exception as e:
-        raise HTTPException(status_code=400, detail=f"Could not read Apple Music link: {e}")
+        log.warning("Apple Music probe failed: %s", e)
+        raise HTTPException(status_code=400, detail="Could not read this Apple Music link")
 
     if meta["kind"] == "track":
         return {
@@ -913,7 +920,8 @@ async def ingest_apple(
         try:
             meta = await asyncio.to_thread(_meta)
         except Exception as e:
-            raise HTTPException(status_code=400, detail=f"Could not read Apple Music track: {e}")
+            log.warning("Apple Music track ingest failed: %s", e)
+            raise HTTPException(status_code=400, detail="Could not read this Apple Music track")
 
         now = datetime.utcnow()
         memo = Memo(
@@ -960,7 +968,8 @@ async def ingest_apple(
     try:
         probed = await asyncio.to_thread(_coll)
     except Exception as e:
-        raise HTTPException(status_code=400, detail=f"Could not read Apple Music {kind}: {e}")
+        log.warning("Apple Music %s ingest failed: %s", kind, e)
+        raise HTTPException(status_code=400, detail=f"Could not read this Apple Music {kind}")
 
     if not probed["tracks"]:
         raise HTTPException(status_code=400, detail="No tracks found in this Apple Music link")
