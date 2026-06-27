@@ -1,7 +1,10 @@
 """OpenMemo - Local AI Knowledge OS powered by Ollama."""
 import asyncio
+import logging
 import time
 import uuid
+
+logger = logging.getLogger(__name__)
 from contextlib import asynccontextmanager
 from pathlib import Path
 
@@ -29,11 +32,11 @@ async def _run_reclassify_job():
         async with AsyncSessionLocal() as db:
             result = await reclassify_all(db)
         if result.get("changed"):
-            print(f"[sorter] reclassified {result['changed']} memo(s): {result['changes']}")
+            logger.info("[sorter] reclassified %d memo(s): %s", result["changed"], result["changes"])
         else:
-            print("[sorter] all memos already correctly typed")
+            logger.debug("[sorter] all memos already correctly typed")
     except Exception as e:  # never let the scheduler die on a bad run
-        print(f"[sorter] reclassify job failed (non-critical): {e}")
+        logger.warning("[sorter] reclassify job failed (non-critical): %s", e)
 
 
 @asynccontextmanager
@@ -51,7 +54,7 @@ async def lifespan(app: FastAPI):
     try:
         await init_fts5()
     except Exception as e:
-        print(f"FTS5 init warning (non-critical): {e}")
+        logger.warning("FTS5 init warning (non-critical): %s", e)
 
     # Lightweight additive migrations (no migration framework — see CLAUDE.md).
     # Add transcript columns to existing memos tables if missing.
@@ -140,7 +143,7 @@ async def lifespan(app: FastAPI):
             ))
             await db.commit()
     except Exception as e:
-        print(f"Schema migration warning (non-critical): {e}")
+        logger.warning("Schema migration warning (non-critical): %s", e)
 
     # Performance indexes for the memo feed. Without these, every list/sort is a
     # full table scan — fine at 60 memos, painful at thousands. Idempotent:
@@ -159,7 +162,7 @@ async def lifespan(app: FastAPI):
                 await db.execute(_sql_text(stmt))
             await db.commit()
     except Exception as e:
-        print(f"Index creation warning (non-critical): {e}")
+        logger.warning("Index creation warning (non-critical): %s", e)
 
     # Orphaned downloads (no job table — see music.py). A track left in
     # 'pending'/'processing' when the server stopped has no background task to
@@ -177,7 +180,7 @@ async def lifespan(app: FastAPI):
             ))
             await db.commit()
     except Exception as e:
-        print(f"Orphaned-download recovery warning (non-critical): {e}")
+        logger.warning("Orphaned-download recovery warning (non-critical): %s", e)
 
     # Create default user and workspace if not exist
     async with AsyncSessionLocal() as db:
@@ -343,7 +346,17 @@ async def serve_file(file_path: str):
         if not memo:
             raise HTTPException(status_code=404, detail="File not found")
 
-    return FileResponse(str(target))
+    import mimetypes as _mimetypes
+    _media_type = _mimetypes.guess_type(str(target))[0] or "application/octet-stream"
+    _SAFE_INLINE = {"image/", "audio/", "video/", "application/pdf"}
+    _inline = any(_media_type.startswith(p) for p in _SAFE_INLINE)
+    if _inline:
+        return FileResponse(str(target), media_type=_media_type)
+    return FileResponse(
+        str(target),
+        media_type=_media_type,
+        headers={"Content-Disposition": f'attachment; filename="{target.name}"'},
+    )
 
 
 @app.get("/api/proxy/image")
@@ -353,9 +366,9 @@ async def proxy_image(url: str, memo_id: str | None = None):
     import httpx
     from starlette.responses import StreamingResponse
     from backend.api.ingest import _download_thumb, _thumb_headers, THUMBS_DIR
+    from backend.core.security import validate_proxy_url
 
-    if not url.startswith("http"):
-        raise HTTPException(status_code=400, detail="Invalid URL")
+    validate_proxy_url(url)
 
     # Try to cache if we have a memo_id and it's not already cached
     if memo_id:
@@ -392,7 +405,8 @@ async def proxy_image(url: str, memo_id: str | None = None):
                 headers={"Cache-Control": "public, max-age=86400"},
             )
     except Exception as e:
-        raise HTTPException(status_code=502, detail=f"Proxy failed: {e}")
+        logger.warning("Image proxy failed for %s: %s", url, e)
+        raise HTTPException(status_code=502, detail="Failed to fetch image")
 
 
 # Register routers
@@ -570,7 +584,8 @@ async def list_models():
         ]
         return {"models": chat_models}
     except Exception as e:
-        return {"models": [], "error": str(e)}
+        logger.warning("Failed to list Ollama models: %s", e)
+        return {"models": [], "error": "Could not reach Ollama"}
 
 
 

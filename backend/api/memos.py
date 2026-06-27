@@ -1,6 +1,9 @@
 """Memo CRUD API endpoints."""
+import logging
 import mimetypes
 import uuid
+
+logger = logging.getLogger(__name__)
 from datetime import datetime
 from pathlib import Path
 from typing import Optional
@@ -195,8 +198,9 @@ async def list_memos(
             memo_collections.c.collection_id == collection_id
         )
     if search:
+        safe = search.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
         query = query.where(
-            Memo.title.ilike(f"%{search}%") | Memo.content_text.ilike(f"%{search}%")
+            Memo.title.ilike(f"%{safe}%", escape="\\") | Memo.content_text.ilike(f"%{safe}%", escape="\\")
         )
 
     # Count total
@@ -775,7 +779,7 @@ async def delete_memo(memo_id: str, db: AsyncSession = Depends(get_db)):
         await delete_memo_embeddings(memo_id)
     except Exception as e:
         # Non-fatal: a reindex sweeps any stragglers.
-        print(f"Embedding purge failed for {memo_id}: {e}")
+        logger.warning("Embedding purge failed for %s: %s", memo_id, e)
     return {"status": "deleted"}
 
 
@@ -896,7 +900,8 @@ async def generate_memo_summary(
     try:
         summary = await generate_summary(source, mode=body.mode, model=body.model)
     except OllamaModelMissing as e:
-        raise HTTPException(status_code=502, detail=str(e))
+        logger.warning("Ollama model missing: %s", e)
+        raise HTTPException(status_code=502, detail="The selected model is not available in Ollama")
     except httpx.ConnectError:
         raise HTTPException(
             status_code=503,
@@ -908,7 +913,8 @@ async def generate_memo_summary(
             detail="Ollama timed out generating the summary. The model may be loading — try again.",
         )
     except httpx.HTTPStatusError as e:
-        raise HTTPException(status_code=502, detail=f"Ollama error: {e.response.text[:300]}")
+        logger.warning("Ollama HTTP error during summary: %s", e.response.text[:300])
+        raise HTTPException(status_code=502, detail="LLM service returned an error")
 
     # Cache per-mode. dict(...) forces a new object so SQLAlchemy detects the
     # change on the JSON column (in-place mutation of a JSON dict isn't tracked).
