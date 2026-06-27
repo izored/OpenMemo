@@ -19,7 +19,9 @@ import {
   verifyPin,
   setPin,
   disableLock,
+  WindowState,
 } from './settings-store';
+import { checkForUpdates } from './update-notifier';
 
 let mainWindow: BrowserWindow | null = null;
 let backend: StartedBackend | null = null;
@@ -27,17 +29,33 @@ const bootLog: string[] = [];
 // Resolver for the app-lock gate — fulfilled when the correct PIN is entered.
 let lockResolve: ((ok: boolean) => void) | null = null;
 
+/** Persisted shell log, for diagnosing a failed launch after the fact. */
+function logFile(): string {
+  return path.join(app.getPath('userData'), 'logs', 'openmemo.log');
+}
+
 function appendLog(line: string): void {
   bootLog.push(line);
   if (bootLog.length > 400) bootLog.shift();
   // Mirror to the loading screen if it's still showing.
   mainWindow?.webContents.send('boot:log', line);
+  // Persist (best-effort) so a failed boot can be inspected later.
+  try {
+    const f = logFile();
+    fs.mkdirSync(path.dirname(f), { recursive: true });
+    fs.appendFileSync(f, line.endsWith('\n') ? line : line + '\n');
+  } catch {
+    /* logging must never throw */
+  }
 }
 
 function createWindow(): void {
+  const saved = loadSettings().windowState;
   mainWindow = new BrowserWindow({
-    width: 1280,
-    height: 860,
+    width: saved?.width ?? 1280,
+    height: saved?.height ?? 860,
+    x: saved?.x,
+    y: saved?.y,
     minWidth: 880,
     minHeight: 600,
     backgroundColor: '#0b0b0f',
@@ -49,8 +67,20 @@ function createWindow(): void {
       nodeIntegration: false,
     },
   });
+  if (saved?.maximized) mainWindow.maximize();
 
   mainWindow.once('ready-to-show', () => mainWindow?.show());
+
+  // Remember size/position for next launch (store the normal bounds, not the
+  // maximized ones, plus the maximized flag).
+  const persistBounds = () => {
+    if (!mainWindow) return;
+    const maximized = mainWindow.isMaximized();
+    const b = mainWindow.getNormalBounds();
+    const state: WindowState = { x: b.x, y: b.y, width: b.width, height: b.height, maximized };
+    saveSettings({ windowState: state });
+  };
+  mainWindow.on('close', persistBounds);
 
   // Open target=_blank / external links in the system browser, never in-app.
   mainWindow.webContents.setWindowOpenHandler(({ url }) => {
@@ -118,6 +148,8 @@ async function boot(): Promise<void> {
     maybeInstallChromium(); // first-run, background, non-blocking
     const target = rendererOverride ?? backend.url;
     await mainWindow?.loadURL(target);
+    // Quietly check GitHub for a newer release once the app is up (packaged only).
+    if (app.isPackaged) void checkForUpdates({ silent: true });
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
     appendLog(`[shell] FAILED: ${msg}\n`);
@@ -232,6 +264,10 @@ function buildMenu(): void {
             label: app.name,
             submenu: [
               { role: 'about' as const },
+              {
+                label: 'Check for Updates…',
+                click: () => void checkForUpdates({ silent: false }),
+              },
               { type: 'separator' as const },
               {
                 label: 'Ollama Host…',
@@ -241,6 +277,10 @@ function buildMenu(): void {
               {
                 label: 'App Lock (PIN)…',
                 click: () => openPinConfigDialog(),
+              },
+              {
+                label: 'Open Logs Folder',
+                click: () => void shell.openPath(path.dirname(logFile())),
               },
               { type: 'separator' as const },
               { role: 'hide' as const },
@@ -340,6 +380,12 @@ if (!app.requestSingleInstanceLock()) {
   });
 
   app.whenReady().then(() => {
+    app.setAboutPanelOptions({
+      applicationName: 'OpenMemo',
+      applicationVersion: app.getVersion(),
+      copyright: '© izo.studio',
+      credits: 'Your local AI knowledge OS. Bring your own Ollama.',
+    });
     buildMenu();
     registerIpc();
     createWindow();

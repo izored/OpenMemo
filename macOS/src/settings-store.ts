@@ -13,6 +13,14 @@ import crypto from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
 
+export interface WindowState {
+  x?: number;
+  y?: number;
+  width: number;
+  height: number;
+  maximized?: boolean;
+}
+
 export interface ShellSettings {
   /** Ollama base URL the backend is told to use (OLLAMA_HOST). */
   ollamaHost: string;
@@ -20,6 +28,10 @@ export interface ShellSettings {
   lockEnabled?: boolean;
   /** Encrypted {salt,hash} blob — see encryptBlob/decryptBlob. */
   lockBlob?: string;
+  /** Last window size/position, restored on next launch. */
+  windowState?: WindowState;
+  /** A release version the user chose to skip in the update notifier. */
+  updateSkipVersion?: string;
 }
 
 const DEFAULTS: ShellSettings = {
