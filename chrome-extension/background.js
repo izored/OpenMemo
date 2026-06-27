@@ -1,6 +1,8 @@
 // OpenMemo Chrome Extension - Background Service Worker
 
-const DEFAULT_API_BASE = 'http://localhost:8091/api';
+// Default to :8099 — the port the macOS app and the dev server both use.
+// Docker users point this at :8091 via the options page (chrome.storage).
+const DEFAULT_API_BASE = 'http://localhost:8099/api';
 
 async function getApiBase() {
   const stored = await chrome.storage.sync.get('apiBase');

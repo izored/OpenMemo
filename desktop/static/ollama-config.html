@@ -1,0 +1,65 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Ollama Host</title>
+    <style>
+      :root { color-scheme: dark; }
+      * { box-sizing: border-box; }
+      body {
+        margin: 0; height: 100vh; background: #14141a; color: #e9e9f0;
+        font: 13px/1.5 -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
+        display: flex; flex-direction: column; gap: 14px; padding: 22px;
+      }
+      h1 { font-size: 15px; margin: 0; font-weight: 600; }
+      p { margin: 0; color: #9a9aa8; font-size: 12px; }
+      input {
+        width: 100%; padding: 9px 11px; border-radius: 8px;
+        border: 1px solid #2c2c36; background: #0f0f14; color: #e9e9f0;
+        font-size: 13px; outline: none;
+      }
+      input:focus { border-color: #7c6cf0; }
+      .row { display: flex; gap: 8px; justify-content: flex-end; margin-top: auto; }
+      button {
+        padding: 8px 16px; border-radius: 8px; border: 1px solid #2c2c36;
+        background: #1c1c24; color: #e9e9f0; font-size: 13px; cursor: pointer;
+      }
+      button.primary { background: #7c6cf0; border-color: #7c6cf0; color: #fff; }
+      button:disabled { opacity: 0.5; cursor: default; }
+      .err { color: #f87171; font-size: 12px; min-height: 16px; }
+    </style>
+  </head>
+  <body>
+    <h1>Point OpenMemo at your Ollama</h1>
+    <p>OpenMemo uses your own Ollama. Enter its address (default shown).</p>
+    <input id="host" type="text" placeholder="http://localhost:11434" />
+    <div class="err" id="err"></div>
+    <div class="row">
+      <button id="cancel">Cancel</button>
+      <button id="save" class="primary">Save &amp; Restart</button>
+    </div>
+    <script>
+      const hostEl = document.getElementById('host');
+      const errEl = document.getElementById('err');
+      const saveBtn = document.getElementById('save');
+
+      window.openmemo.getHost().then((h) => { hostEl.value = h || ''; hostEl.focus(); });
+      document.getElementById('cancel').onclick = () => window.openmemo.close();
+
+      saveBtn.onclick = async () => {
+        errEl.textContent = '';
+        saveBtn.disabled = true;
+        saveBtn.textContent = 'Restarting…';
+        const res = await window.openmemo.saveHost(hostEl.value);
+        if (res.ok) {
+          window.openmemo.close();
+        } else {
+          errEl.textContent = res.error || 'Could not apply.';
+          saveBtn.disabled = false;
+          saveBtn.textContent = 'Save & Restart';
+        }
+      };
+      hostEl.addEventListener('keydown', (e) => { if (e.key === 'Enter') saveBtn.click(); });
+    </script>
+  </body>
+</html>

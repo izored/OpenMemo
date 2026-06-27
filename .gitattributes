@@ -1,0 +1,5 @@
+# Keep Unix line endings on files that are executed by a shell — CRLF breaks the
+# shebang / `bash` parsing on macOS and Linux. The repo is developed on Windows,
+# so without this git's autocrlf could rewrite them on checkout.
+*.sh        text eol=lf
+*.command   text eol=lf
