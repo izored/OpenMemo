@@ -12,11 +12,20 @@ import path from 'node:path';
 import fs from 'node:fs';
 import { startBackend, stopBackend, restartBackend, StartedBackend } from './backend';
 import { resolvePaths, staticDir } from './paths';
-import { loadSettings, saveSettings } from './settings-store';
+import {
+  loadSettings,
+  saveSettings,
+  isLockEnabled,
+  verifyPin,
+  setPin,
+  disableLock,
+} from './settings-store';
 
 let mainWindow: BrowserWindow | null = null;
 let backend: StartedBackend | null = null;
 const bootLog: string[] = [];
+// Resolver for the app-lock gate — fulfilled when the correct PIN is entered.
+let lockResolve: ((ok: boolean) => void) | null = null;
 
 function appendLog(line: string): void {
   bootLog.push(line);
@@ -52,12 +61,44 @@ function createWindow(): void {
     return { action: 'deny' };
   });
 
+  // Never let the window itself navigate away from the local app (a stray link
+  // click shouldn't replace the UI with a remote page). External URLs open in
+  // the system browser instead.
+  mainWindow.webContents.on('will-navigate', (e, url) => {
+    const local =
+      url.startsWith('http://127.0.0.1') ||
+      url.startsWith('http://localhost') ||
+      url.startsWith('file://');
+    if (!local) {
+      e.preventDefault();
+      shell.openExternal(url);
+    }
+  });
+
   mainWindow.on('closed', () => {
     mainWindow = null;
   });
 }
 
+/** Show the PIN lock screen and resolve once the correct PIN is entered. */
+function showLockGate(): Promise<boolean> {
+  return new Promise((resolve) => {
+    lockResolve = resolve;
+    void mainWindow?.loadFile(path.join(staticDir(), 'lock.html'));
+  });
+}
+
 async function boot(): Promise<void> {
+  // App lock: gate everything behind the PIN. The backend isn't even started
+  // until the user unlocks, so a locked app exposes nothing on localhost.
+  if (isLockEnabled()) {
+    const unlocked = await showLockGate();
+    if (!unlocked) {
+      app.quit();
+      return;
+    }
+  }
+
   // Show the loading screen immediately so launch never looks frozen.
   await mainWindow?.loadFile(path.join(staticDir(), 'loading.html'));
 
@@ -67,7 +108,7 @@ async function boot(): Promise<void> {
   if (!rendererOverride && !fs.existsSync(path.join(frontendDist, 'index.html'))) {
     if (!app.isPackaged) {
       appendLog(`[shell] No built frontend at ${frontendDist}\n`);
-      appendLog('[shell] Run:  npm run build:frontend   (in desktop/)\n');
+      appendLog('[shell] Run:  npm run build:frontend   (in macOS/)\n');
     }
   }
 
@@ -160,6 +201,28 @@ function openOllamaHostDialog(): void {
   win.loadFile(path.join(staticDir(), 'ollama-config.html'));
 }
 
+/** Modal to set / change / turn off the 4-digit app-lock PIN. */
+function openPinConfigDialog(): void {
+  const win = new BrowserWindow({
+    width: 440,
+    height: 300,
+    parent: mainWindow ?? undefined,
+    modal: true,
+    resizable: false,
+    minimizable: false,
+    maximizable: false,
+    title: 'App Lock',
+    backgroundColor: '#14141a',
+    webPreferences: {
+      preload: path.join(__dirname, 'config-preload.js'),
+      contextIsolation: true,
+      nodeIntegration: false,
+    },
+  });
+  win.setMenuBarVisibility(false);
+  win.loadFile(path.join(staticDir(), 'pin-config.html'));
+}
+
 function buildMenu(): void {
   const isMac = process.platform === 'darwin';
   const template: Electron.MenuItemConstructorOptions[] = [
@@ -174,6 +237,10 @@ function buildMenu(): void {
                 label: 'Ollama Host…',
                 accelerator: 'Cmd+,',
                 click: () => openOllamaHostDialog(),
+              },
+              {
+                label: 'App Lock (PIN)…',
+                click: () => openPinConfigDialog(),
               },
               { type: 'separator' as const },
               { role: 'hide' as const },
@@ -232,21 +299,60 @@ function registerIpc(): void {
       return { ok: false, error: err instanceof Error ? err.message : String(err) };
     }
   });
+
+  // --- app-lock PIN ---------------------------------------------------------
+  ipcMain.handle('lock:verify', (_evt, pin: string) => {
+    if (verifyPin(pin)) {
+      lockResolve?.(true);
+      lockResolve = null;
+      return { ok: true };
+    }
+    return { ok: false };
+  });
+  ipcMain.handle('lock:status', () => ({ enabled: isLockEnabled() }));
+  ipcMain.handle('lock:set', (_evt, { current, next }: { current: string; next: string }) => {
+    if (isLockEnabled() && !verifyPin(current)) {
+      return { ok: false, error: 'Current PIN is incorrect' };
+    }
+    const pin = (next || '').trim();
+    if (!/^\d{4}$/.test(pin)) return { ok: false, error: 'PIN must be exactly 4 digits' };
+    setPin(pin);
+    return { ok: true };
+  });
+  ipcMain.handle('lock:disable', (_evt, current: string) => {
+    if (!isLockEnabled()) return { ok: true };
+    if (!verifyPin(current)) return { ok: false, error: 'Current PIN is incorrect' };
+    disableLock();
+    return { ok: true };
+  });
 }
 
-app.whenReady().then(() => {
-  buildMenu();
-  registerIpc();
-  createWindow();
-  void boot();
-
-  app.on('activate', () => {
-    if (BrowserWindow.getAllWindows().length === 0) {
-      createWindow();
-      void boot();
+// Single-instance: a second launch would spawn a second backend fighting for the
+// same port. Bounce it and focus the existing window instead.
+if (!app.requestSingleInstanceLock()) {
+  app.quit();
+} else {
+  app.on('second-instance', () => {
+    if (mainWindow) {
+      if (mainWindow.isMinimized()) mainWindow.restore();
+      mainWindow.focus();
     }
   });
-});
+
+  app.whenReady().then(() => {
+    buildMenu();
+    registerIpc();
+    createWindow();
+    void boot();
+
+    app.on('activate', () => {
+      if (BrowserWindow.getAllWindows().length === 0) {
+        createWindow();
+        void boot();
+      }
+    });
+  });
+}
 
 // Backend is a child process — always tear it down with the app.
 app.on('window-all-closed', () => {

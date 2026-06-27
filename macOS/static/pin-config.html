@@ -1,0 +1,111 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>App Lock</title>
+    <style>
+      :root { color-scheme: dark; }
+      * { box-sizing: border-box; }
+      body {
+        margin: 0; height: 100vh; background: #14141a; color: #e9e9f0;
+        font: 13px -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
+        display: flex; flex-direction: column; gap: 12px; padding: 22px;
+      }
+      h1 { font-size: 15px; margin: 0; font-weight: 600; }
+      p { margin: 0; color: #9a9aa8; font-size: 12px; }
+      label { font-size: 12px; color: #9a9aa8; display: block; margin-bottom: 4px; }
+      input {
+        width: 100%; padding: 9px 11px; border-radius: 8px; letter-spacing: 6px;
+        border: 1px solid #2c2c36; background: #0f0f14; color: #e9e9f0;
+        font-size: 15px; outline: none; text-align: center;
+      }
+      input:focus { border-color: #f4825a; }
+      .row { display: flex; gap: 8px; justify-content: flex-end; margin-top: auto; }
+      button {
+        padding: 8px 14px; border-radius: 8px; border: 1px solid #2c2c36;
+        background: #1c1c24; color: #e9e9f0; font-size: 13px; cursor: pointer;
+      }
+      button.primary { background: #f4825a; border-color: #f4825a; color: #1a0e08; font-weight: 600; }
+      button.danger { color: #f87171; border-color: #4a2a2a; }
+      button:disabled { opacity: 0.5; cursor: default; }
+      .err { color: #f87171; font-size: 12px; min-height: 16px; }
+      .ok { color: #5ad19a; font-size: 12px; min-height: 16px; }
+      .field { display: none; }
+      .field.show { display: block; }
+    </style>
+  </head>
+  <body>
+    <h1 id="title">Set an app PIN</h1>
+    <p id="sub">A 4-digit PIN locks OpenMemo each time it launches.</p>
+
+    <div class="field" id="currentField">
+      <label for="current">Current PIN</label>
+      <input id="current" type="password" inputmode="numeric" maxlength="4" placeholder="••••" />
+    </div>
+    <div class="field show" id="newField">
+      <label for="newpin" id="newLabel">New 4-digit PIN</label>
+      <input id="newpin" type="password" inputmode="numeric" maxlength="4" placeholder="••••" />
+    </div>
+
+    <div class="err" id="err"></div>
+
+    <div class="row">
+      <button id="disable" class="danger" style="margin-right:auto;display:none">Turn off lock</button>
+      <button id="cancel">Cancel</button>
+      <button id="save" class="primary">Set PIN</button>
+    </div>
+
+    <script>
+      const els = {
+        title: document.getElementById('title'),
+        sub: document.getElementById('sub'),
+        currentField: document.getElementById('currentField'),
+        current: document.getElementById('current'),
+        newpin: document.getElementById('newpin'),
+        newLabel: document.getElementById('newLabel'),
+        err: document.getElementById('err'),
+        save: document.getElementById('save'),
+        disable: document.getElementById('disable'),
+      };
+      let enabled = false;
+
+      window.openmemo.lockStatus().then((s) => {
+        enabled = s.enabled;
+        if (enabled) {
+          els.title.textContent = 'Change app PIN';
+          els.sub.textContent = 'Enter your current PIN, then a new one.';
+          els.currentField.classList.add('show');
+          els.newLabel.textContent = 'New 4-digit PIN';
+          els.save.textContent = 'Change PIN';
+          els.disable.style.display = 'inline-block';
+          els.current.focus();
+        } else {
+          els.newpin.focus();
+        }
+      });
+
+      function valid4(v) { return /^\d{4}$/.test(v); }
+
+      els.save.onclick = async () => {
+        els.err.textContent = '';
+        const next = els.newpin.value.trim();
+        if (!valid4(next)) { els.err.textContent = 'PIN must be exactly 4 digits.'; return; }
+        const current = enabled ? els.current.value.trim() : '';
+        const res = await window.openmemo.lockSet(current, next);
+        if (res.ok) window.openmemo.close();
+        else els.err.textContent = res.error || 'Could not save.';
+      };
+
+      els.disable.onclick = async () => {
+        els.err.textContent = '';
+        const current = els.current.value.trim();
+        if (!valid4(current)) { els.err.textContent = 'Enter your current PIN to turn off the lock.'; return; }
+        const res = await window.openmemo.lockDisable(current);
+        if (res.ok) window.openmemo.close();
+        else els.err.textContent = res.error || 'Could not turn off the lock.';
+      };
+
+      document.getElementById('cancel').onclick = () => window.openmemo.close();
+    </script>
+  </body>
+</html>
