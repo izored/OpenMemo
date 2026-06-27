@@ -232,7 +232,7 @@ async def _download_hls(
 
     async def _run(codec_args: list[str]) -> bool:
         proc = await asyncio.create_subprocess_exec(
-            "ffmpeg", "-y",
+            settings.FFMPEG_BIN, "-y",
             # -headers covers Referer; -user_agent sets the UA the segment
             # fetches use. ffmpeg auto-selects one video + one audio stream.
             "-headers", headers,

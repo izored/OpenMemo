@@ -588,4 +588,39 @@ async def list_models():
         return {"models": [], "error": "Could not reach Ollama"}
 
 
+# --- Single-process SPA serving (desktop app) --------------------------------
+# When FRONTEND_DIST points at the built frontend, the backend serves the SPA
+# from its own origin so the macOS .app's Electron window can load
+# http://127.0.0.1:<port>/ and have every relative /api URL, /api/files asset,
+# upload, and SSE stream work same-origin — no nginx, no Vite proxy, no CORS.
+# No-op when unset: Docker keeps using nginx and dev keeps the Vite proxy.
+# Registered LAST so every /api route above wins; this catch-all only handles
+# the SPA shell and its static assets.
+if settings.FRONTEND_DIST:
+    _frontend_dist = Path(settings.FRONTEND_DIST)
+    if _frontend_dist.is_dir():
+        _dist_root = _frontend_dist.resolve()
+        _spa_index = _dist_root / "index.html"
+
+        @app.get("/{full_path:path}")
+        async def serve_spa(full_path: str):
+            # /api/* is registered above and matches first; anything reaching
+            # here under api/ is a real 404, not a client route.
+            if full_path.startswith("api/"):
+                raise HTTPException(status_code=404, detail="Not found")
+            # Serve a real built asset (hashed JS/CSS, icons) when the path maps
+            # to a file inside dist — with a traversal guard so nothing outside
+            # the dist dir is ever served.
+            candidate = (_dist_root / full_path).resolve()
+            if full_path and _dist_root in candidate.parents and candidate.is_file():
+                return FileResponse(str(candidate))
+            # Otherwise it's a client-side route (/settings, /space/x …) — hand
+            # back index.html and let React Router resolve it.
+            return FileResponse(str(_spa_index))
+    else:
+        logger.warning(
+            "FRONTEND_DIST=%s is not a directory; SPA not served", settings.FRONTEND_DIST
+        )
+
+
 

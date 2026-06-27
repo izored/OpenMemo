@@ -76,6 +76,53 @@ ollama pull qwen2.5:32b
 
 ---
 
+## macOS (Apple Silicon) — Quick Start
+
+OpenMemo runs natively on M-series Macs. Everything it needs ships an arm64
+build; nothing has to be replaced. Ollama is **not** installed by OpenMemo — run
+your own and point the app at it.
+
+### One-time setup
+
+```bash
+# from the repo root
+bash scripts/setup-mac.sh
+```
+
+This installs the toolchain via Homebrew (`python@3.12`, `node`, `ffmpeg`),
+creates `backend/.venv`, installs the Python + frontend deps, and pulls the
+headless Chromium used by the link scraper. It does **not** touch Ollama.
+
+### Run it (dev)
+
+```bash
+bash scripts/dev-mac.sh      # or double-click dev.command in Finder
+```
+
+Open **`http://localhost:3000`**. Backend is on `:8099`, Vite proxies `/api` and
+`/files` to it automatically.
+
+> First run only — make the scripts executable:
+> `chmod +x dev.command scripts/*.sh`
+
+### Ollama (user-provided)
+
+OpenMemo talks to your own Ollama. Defaults expect it on
+`http://localhost:11434`; set `OLLAMA_HOST` (in `backend/.env` or the
+environment) if yours is elsewhere.
+
+| Task | Model |
+|------|-------|
+| Embeddings | `nomic-embed-text` |
+| Chat / vision | **Gemma 4** recommended (e.g. `gemma4:e4b`) |
+
+### Native `.app` / `.dmg`
+
+A double-click Mac app (the whole UI in its own window, no browser) is built
+from `desktop/`. See **[MACOS.md](MACOS.md)** for building and installing it.
+
+---
+
 ## Development Setup
 
 ### 1. Backend
