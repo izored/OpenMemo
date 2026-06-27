@@ -12,7 +12,9 @@ copyright: © izo.studio
 
 directories:
   output: release
-  buildResources: build
+  # NOT "build" — the repo's root .gitignore ignores build/, which would drop
+  # the icon + entitlements from version control.
+  buildResources: buildResources
 
 # What goes inside the asar (the shell itself). The Python runtime, backend
 # source, built SPA, and ffmpeg are added as extraResources below.
@@ -37,7 +39,7 @@ npmRebuild: false
 
 mac:
   category: public.app-category.productivity
-  icon: build/icon.png   # electron-builder generates the .icns from this 1024px PNG
+  icon: buildResources/icon.png   # electron-builder generates the .icns from this 1024px PNG
   extendInfo:
     NSHumanReadableCopyright: "© izo.studio"
     CFBundleDisplayName: OpenMemo
@@ -51,8 +53,8 @@ mac:
   # CSC_IDENTITY_AUTO_DISCOVERY=false env at build time.
   hardenedRuntime: false
   gatekeeperAssess: false
-  entitlements: build/entitlements.mac.plist
-  entitlementsInherit: build/entitlements.mac.plist
+  entitlements: buildResources/entitlements.mac.plist
+  entitlementsInherit: buildResources/entitlements.mac.plist
 
 dmg:
   title: OpenMemo
