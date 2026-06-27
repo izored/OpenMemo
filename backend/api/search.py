@@ -14,6 +14,10 @@ from backend.core.security import sanitize_workspace_id
 router = APIRouter(prefix="/api/search", tags=["search"])
 
 
+def _escape_like(s: str) -> str:
+    return s.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+
+
 @router.get("")
 async def hybrid_search(
     q: str,
@@ -92,8 +96,8 @@ async def hybrid_search(
                 ft_result = await db.execute(
                     select(Memo).where(
                         or_(
-                            Memo.title.ilike(f"%{q}%"),
-                            Memo.content_text.ilike(f"%{q}%"),
+                            Memo.title.ilike(f"%{_escape_like(q)}%", escape="\\"),
+                            Memo.content_text.ilike(f"%{_escape_like(q)}%", escape="\\"),
                         )
                     ).where(Memo.workspace_id == workspace_id, Memo.is_deleted == False).limit(limit)  # noqa: E712
                 )

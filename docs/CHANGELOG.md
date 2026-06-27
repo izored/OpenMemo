@@ -5,6 +5,12 @@ All notable changes to OpenMemo are documented here.
 ---
 ## [2.3.0] - Unreleased
 
+### Fixed
+
+- 🔒 **Exception messages no longer leak internals to the client.** Eleven error paths across the ingest, memo, and proxy endpoints used to forward raw exception strings straight into API responses, handing an observer the internal library names, file paths, and failure details. Each one now logs the real error server-side and returns a plain, generic message instead.
+- 🔒 **LIKE injection fixed in search.** The search filter and the hybrid search fallback sent user input directly into `ilike()` without escaping SQL wildcard characters, so a query full of `%` could force unexpected matches or an expensive table scan. Input is now escaped before it reaches the query.
+- 🔒 **Security headers added to nginx.** Both the proxy and frontend nginx configs now send `X-Frame-Options`, `X-Content-Type-Options`, `X-XSS-Protection`, `Referrer-Policy`, and `Permissions-Policy` on every response.
+
 Three big pushes. The Settings page is rebuilt as a bento with the live appearance preview as its hero. Restricted videos stop being a dead end: when "Make it local" fails behind a sign-in (age-restricted or private), the panel walks you through the fix instead of a bare "Try again", and yt-dlp can authenticate with your own browser cookies. And the Music page learns to speak Spotify and Apple Music: paste a Spotify or Apple Music track, album, or playlist and get it back in lossless FLAC, through a brand-new add panel of its own.
 
 ### Added

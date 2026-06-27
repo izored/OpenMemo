@@ -1,7 +1,10 @@
 """OpenMemo - Local AI Knowledge OS powered by Ollama."""
 import asyncio
+import logging
 import time
 import uuid
+
+logger = logging.getLogger(__name__)
 from contextlib import asynccontextmanager
 from pathlib import Path
 
@@ -392,7 +395,8 @@ async def proxy_image(url: str, memo_id: str | None = None):
                 headers={"Cache-Control": "public, max-age=86400"},
             )
     except Exception as e:
-        raise HTTPException(status_code=502, detail=f"Proxy failed: {e}")
+        logger.warning("Image proxy failed for %s: %s", url, e)
+        raise HTTPException(status_code=502, detail="Failed to fetch image")
 
 
 # Register routers
@@ -570,7 +574,8 @@ async def list_models():
         ]
         return {"models": chat_models}
     except Exception as e:
-        return {"models": [], "error": str(e)}
+        logger.warning("Failed to list Ollama models: %s", e)
+        return {"models": [], "error": "Could not reach Ollama"}
 
 
 
