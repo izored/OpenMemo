@@ -2745,6 +2745,10 @@ body.om-has-bbar .om-fab { display: none !important; }
    box so it actually reads. While open, overflow:hidden returns to keep the
    morphing form cleanly clipped. */
 .om-island:not(.open) { overflow: visible; }
+/* During layout animation (open→close or close→open) force overflow:hidden so
+   the form content cannot bleed outside the shrinking/growing box and create
+   visible stretch artifacts. The glow is only needed at rest, not mid-morph. */
+.om-island.om-island--clipping { overflow: hidden; }
 
 /* ── Accent border beam (OPNMMO-0051) — the New Memo button's mono beam, wired
    straight to the appearance accent (--accent). A comet of accent light rides
