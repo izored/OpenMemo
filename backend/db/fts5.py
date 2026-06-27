@@ -1,7 +1,10 @@
 """SQLite FTS5 full-text search helpers."""
 import asyncio
+import logging
 from sqlalchemy import text
 from backend.db.database import AsyncSessionLocal, engine
+
+logger = logging.getLogger(__name__)
 
 
 async def init_fts5():
@@ -88,5 +91,5 @@ async def search_fts5(query: str, workspace_id: str, limit: int = 20) -> list[di
             return [{"memo_id": row[0], "rank": row[1]} for row in rows]
         except Exception as e:
             # FTS5 may not be available or table not set up
-            print(f"FTS5 search error: {e}")
+            logger.warning("FTS5 search error: %s", e)
             return []

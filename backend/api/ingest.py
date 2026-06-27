@@ -208,7 +208,7 @@ async def _localize_memo_task(memo_id: str):
 
         await localize_memo(memo_id)
     except Exception as e:
-        print(f"Localize failed for {memo_id}: {e}")
+        log.warning("Localize failed for %s: %s", memo_id, e)
 
 
 async def process_memo(memo_id: str):
@@ -239,7 +239,7 @@ async def process_memo(memo_id: str):
             memo.updated_at = datetime.utcnow()
             await db.commit()
         except Exception as e:
-            print(f"Error processing memo {memo_id}: {e}")
+            log.error("Error processing memo %s: %s", memo_id, e)
 
 
 # --- Routes ---
@@ -296,7 +296,8 @@ async def ingest_url(
             else:
                 extracted = await extract_url(data.url)
         except Exception as e:
-            raise HTTPException(status_code=400, detail=f"Failed to extract: {str(e)}")
+            log.warning("URL extraction failed for %s: %s", data.url, e)
+            raise HTTPException(status_code=400, detail="Failed to extract content from this URL")
 
     memo = Memo(
         id=str(uuid.uuid4()),
@@ -397,7 +398,8 @@ async def probe_playlist_url(data: PlaylistProbe, db: AsyncSession = Depends(get
     try:
         result = await probe_playlist(data.url)
     except PlaylistError as e:
-        raise HTTPException(status_code=400, detail=str(e))
+        log.warning("Playlist probe failed for %s: %s", data.url, e)
+        raise HTTPException(status_code=400, detail="Could not read playlist from this URL")
     # Already pulled? The panel tells the user instead of letting them mint a
     # duplicate; the ingest endpoint enforces the same rule server-side.
     existing = await _find_saved_playlist(db, data.url)
@@ -447,7 +449,8 @@ async def ingest_playlist(
     try:
         probed = await probe_playlist(data.url)
     except PlaylistError as e:
-        raise HTTPException(status_code=400, detail=str(e))
+        log.warning("Playlist ingest failed for %s: %s", data.url, e)
+        raise HTTPException(status_code=400, detail="Could not read playlist from this URL")
 
     ws = sanitize_workspace_id(data.workspace_id)
     collection = Collection(
@@ -591,7 +594,8 @@ async def probe_spotify_url(data: SpotifyProbe, db: AsyncSession = Depends(get_d
     try:
         meta = await asyncio.to_thread(_fetch)
     except Exception as e:
-        raise HTTPException(status_code=400, detail=f"Could not read Spotify link: {e}")
+        log.warning("Spotify probe failed: %s", e)
+        raise HTTPException(status_code=400, detail="Could not read this Spotify link")
 
     if meta["kind"] == "track":
         return {
@@ -661,7 +665,8 @@ async def ingest_spotify(
         try:
             meta = await asyncio.to_thread(_meta)
         except Exception as e:
-            raise HTTPException(status_code=400, detail=f"Could not read Spotify track: {e}")
+            log.warning("Spotify track ingest failed: %s", e)
+            raise HTTPException(status_code=400, detail="Could not read this Spotify track")
 
         now = datetime.utcnow()
         memo = Memo(
@@ -705,7 +710,8 @@ async def ingest_spotify(
     try:
         probed = await asyncio.to_thread(_coll)
     except Exception as e:
-        raise HTTPException(status_code=400, detail=f"Could not read Spotify {kind}: {e}")
+        log.warning("Spotify %s ingest failed: %s", kind, e)
+        raise HTTPException(status_code=400, detail=f"Could not read this Spotify {kind}")
 
     if not probed["tracks"]:
         raise HTTPException(status_code=400, detail="No tracks found in this Spotify link")
@@ -844,7 +850,8 @@ async def probe_apple_url(data: SpotifyProbe, db: AsyncSession = Depends(get_db)
     try:
         meta = await asyncio.to_thread(_fetch)
     except Exception as e:
-        raise HTTPException(status_code=400, detail=f"Could not read Apple Music link: {e}")
+        log.warning("Apple Music probe failed: %s", e)
+        raise HTTPException(status_code=400, detail="Could not read this Apple Music link")
 
     if meta["kind"] == "track":
         return {
@@ -913,7 +920,8 @@ async def ingest_apple(
         try:
             meta = await asyncio.to_thread(_meta)
         except Exception as e:
-            raise HTTPException(status_code=400, detail=f"Could not read Apple Music track: {e}")
+            log.warning("Apple Music track ingest failed: %s", e)
+            raise HTTPException(status_code=400, detail="Could not read this Apple Music track")
 
         now = datetime.utcnow()
         memo = Memo(
@@ -960,7 +968,8 @@ async def ingest_apple(
     try:
         probed = await asyncio.to_thread(_coll)
     except Exception as e:
-        raise HTTPException(status_code=400, detail=f"Could not read Apple Music {kind}: {e}")
+        log.warning("Apple Music %s ingest failed: %s", kind, e)
+        raise HTTPException(status_code=400, detail=f"Could not read this Apple Music {kind}")
 
     if not probed["tracks"]:
         raise HTTPException(status_code=400, detail="No tracks found in this Apple Music link")
@@ -1064,7 +1073,7 @@ async def cache_playlist_thumbs_task(memo_ids: list[str]):
         try:
             await cache_thumbnail(memo_id)
         except Exception as e:
-            print(f"Playlist thumbnail cache failed for {memo_id}: {e}")
+            log.warning("Playlist thumbnail cache failed for %s: %s", memo_id, e)
 
 
 # ── Bulk playlist-download control (restart-safe, no job table) ──
@@ -1115,18 +1124,18 @@ async def download_playlist_task(collection_id: str, memo_ids: list[str]):
         try:
             await localize_memo_task(memo_id, "audio")
         except Exception as e:
-            print(f"Playlist track download crashed for {memo_id}: {e}")
+            log.warning("Playlist track download crashed for %s: %s", memo_id, e)
         try:
             await cache_thumbnail(memo_id)
         except Exception as e:
-            print(f"Playlist thumbnail cache failed for {memo_id}: {e}")
+            log.warning("Playlist thumbnail cache failed for %s: %s", memo_id, e)
 
     _ACTIVE_PLAYLIST_DOWNLOADS.add(collection_id)
     _PAUSED_PLAYLIST_DOWNLOADS.discard(collection_id)
     try:
         for memo_id in memo_ids:
             if collection_id in _PAUSED_PLAYLIST_DOWNLOADS:
-                print(f"Playlist {collection_id}: download paused")
+                log.info("Playlist %s: download paused", collection_id)
                 return
             await _download_one(memo_id)
 
@@ -1136,15 +1145,15 @@ async def download_playlist_task(collection_id: str, memo_ids: list[str]):
             )
             failed = [r[0] for r in rows]
         if failed and collection_id not in _PAUSED_PLAYLIST_DOWNLOADS:
-            print(f"Playlist {collection_id}: retrying {len(failed)} failed track(s) after cooldown")
+            log.info("Playlist %s: retrying %d failed track(s) after cooldown", collection_id, len(failed))
             await asyncio.sleep(90)
             for memo_id in failed:
                 if collection_id in _PAUSED_PLAYLIST_DOWNLOADS:
-                    print(f"Playlist {collection_id}: download paused")
+                    log.info("Playlist %s: download paused", collection_id)
                     return
                 await _download_one(memo_id)
 
-        print(f"Playlist {collection_id}: download pass finished ({len(memo_ids)} track(s))")
+        log.info("Playlist %s: download pass finished (%d track(s))", collection_id, len(memo_ids))
     finally:
         _ACTIVE_PLAYLIST_DOWNLOADS.discard(collection_id)
         _PAUSED_PLAYLIST_DOWNLOADS.discard(collection_id)
@@ -1437,7 +1446,7 @@ async def transcribe_memo_task(memo_id: str):
         lang = result.get("language")
         status = "done"
     except Exception as e:
-        print(f"Transcription failed for {memo_id}: {e}")
+        log.warning("Transcription failed for %s: %s", memo_id, e)
         text, lang, status = "", None, "error"
 
     async with AsyncSessionLocal() as db:
@@ -1483,7 +1492,7 @@ async def transcript_memo_task(memo_id: str):
         source = result.get("source")
         status = "done" if text else "error"
     except Exception as e:
-        print(f"Transcript failed for {memo_id}: {e}")
+        log.warning("Transcript failed for %s: %s", memo_id, e)
         text, lang, source, status = "", None, None, "error"
 
     async with AsyncSessionLocal() as db:
@@ -1678,7 +1687,7 @@ async def localize_memo_task(memo_id: str, mode: str, quality: int = 1080):
     try:
         result = await localize_media(url, ws, mode, quality)
     except LocalizeError as e:
-        print(f"Localize failed for {memo_id}: {e}")
+        log.warning("Localize failed for %s: %s", memo_id, e)
         async with AsyncSessionLocal() as db:
             memo = await db.get(Memo, memo_id)
             if memo:
@@ -1688,7 +1697,7 @@ async def localize_memo_task(memo_id: str, mode: str, quality: int = 1080):
                 await db.commit()
         return
     except Exception as e:
-        print(f"Localize crashed for {memo_id}: {e}")
+        log.error("Localize crashed for %s: %s", memo_id, e)
         async with AsyncSessionLocal() as db:
             memo = await db.get(Memo, memo_id)
             if memo:
@@ -1745,7 +1754,7 @@ async def localize_memo_task(memo_id: str, mode: str, quality: int = 1080):
                             memo.updated_at = datetime.utcnow()
                             await db.commit()
         except Exception as e:
-            print(f"Thumbnail after localize failed for {memo_id}: {e}")
+            log.warning("Thumbnail after localize failed for %s: %s", memo_id, e)
 
 
 # Map code/text extensions to a Markdown fence language for syntax rendering.
@@ -1866,7 +1875,7 @@ async def process_file_memo(memo_id: str, file_path: str, memo_type: str):
                 # Now embed
                 await process_memo(memo_id)
         except Exception as e:
-            print(f"Error processing file {file_path}: {e}")
+            log.error("Error processing file %s: %s", file_path, e)
 
 
 @router.post("/ai")
