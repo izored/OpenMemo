@@ -1,7 +1,10 @@
 """Hybrid search API - semantic + full-text (FTS5)."""
+import logging
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query
+
+logger = logging.getLogger(__name__)
 from sqlalchemy import select, or_, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -63,7 +66,7 @@ async def hybrid_search(
                             "match_type": "semantic",
                         })
     except Exception as e:
-        print(f"Semantic search error: {e}")
+        logger.warning("Semantic search error: %s", e)
     
     # --- Full-text search (FTS5 preferred, ilike fallback) ---
     try:
@@ -117,6 +120,6 @@ async def hybrid_search(
                             "match_type": "fulltext",
                         })
     except Exception as e:
-        print(f"Full-text search error: {e}")
+        logger.warning("Full-text search error: %s", e)
     
     return {"results": results, "total": len(results)}

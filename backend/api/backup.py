@@ -107,6 +107,10 @@ async def restore_backup(file: UploadFile = File(...)):
         tmp_db = Path(tmp) / "openmemo.db"
         tmp_db.write_bytes(zf.read(_DB))
 
+        # Validate SQLite magic bytes before touching the live database.
+        if tmp_db.read_bytes()[:16] != b"SQLite format 3\x00":
+            raise HTTPException(status_code=400, detail="Database file is not a valid SQLite database")
+
         # Release all pooled connections before replacing the file.
         from backend.db.database import engine
         await engine.dispose()
@@ -115,6 +119,7 @@ async def restore_backup(file: UploadFile = File(...)):
         shutil.copy2(tmp_db, db_path)
 
     if scope == "full":
+        files_dir_resolved = files_dir.resolve()
         files_dir.mkdir(parents=True, exist_ok=True)
         # Remove existing files but keep the thumbs cache directory structure.
         for item in files_dir.iterdir():
@@ -127,7 +132,12 @@ async def restore_backup(file: UploadFile = File(...)):
         for name in names:
             if name.startswith(_FILES_PREFIX) and not name.endswith("/"):
                 rel = name[len(_FILES_PREFIX):]
-                dest = files_dir / rel
+                dest = (files_dir / rel).resolve()
+                # Reject path traversal attempts in zip entries.
+                try:
+                    dest.relative_to(files_dir_resolved)
+                except ValueError:
+                    continue
                 dest.parent.mkdir(parents=True, exist_ok=True)
                 dest.write_bytes(zf.read(name))
 

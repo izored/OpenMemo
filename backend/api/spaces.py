@@ -11,8 +11,11 @@ UI. A Space-scoped export (GET .../export) lets the user back everything up firs
 """
 import io
 import json
+import logging
 import uuid
 import zipfile
+
+logger = logging.getLogger(__name__)
 from datetime import datetime
 from pathlib import Path
 from typing import Optional
@@ -322,7 +325,7 @@ async def delete_space(space_id: str, data: SpaceDelete, db: AsyncSession = Depe
             for mid in memo_ids:
                 await delete_memo_embeddings(mid)
         except Exception as e:
-            print(f"Space delete: embedding purge warning: {e}")
+            logger.warning("Space delete: embedding purge warning: %s", e)
 
     # Join rows first (no cascade configured on the association tables).
     if memo_ids:

@@ -139,9 +139,29 @@ def validate_url(url: str) -> str:
     if not parsed.netloc:
         raise HTTPException(status_code=400, detail="Invalid URL: missing domain")
 
-    # Reject localhost / private IPs in production
-    # (kept simple for local-first app; can be tightened later)
+    return url
 
+
+import ipaddress as _ipaddress
+
+
+def validate_proxy_url(url: str) -> str:
+    """Like validate_url but also blocks localhost and RFC-1918 / loopback targets.
+
+    Used by proxy endpoints to prevent SSRF: even though openMemo is local-only,
+    the proxy must not be used to probe other services on the host or LAN.
+    """
+    url = validate_url(url)
+    parsed = urlparse(url)
+    host = parsed.hostname or ""
+    if host.lower() in ("localhost", "0.0.0.0"):
+        raise HTTPException(status_code=400, detail="Invalid URL")
+    try:
+        addr = _ipaddress.ip_address(host)
+        if addr.is_private or addr.is_loopback or addr.is_link_local or addr.is_reserved:
+            raise HTTPException(status_code=400, detail="Invalid URL")
+    except ValueError:
+        pass  # hostname — not an IP literal, allow it
     return url
 
 
