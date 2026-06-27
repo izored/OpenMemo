@@ -37,6 +37,11 @@ npmRebuild: false
 
 mac:
   category: public.app-category.productivity
+  icon: build/icon.png   # electron-builder generates the .icns from this 1024px PNG
+  extendInfo:
+    NSHumanReadableCopyright: "© izo.studio"
+    CFBundleDisplayName: OpenMemo
+    LSMinimumSystemVersion: "12.0"
   target:
     - target: dmg
       arch:
@@ -48,8 +53,6 @@ mac:
   gatekeeperAssess: false
   entitlements: build/entitlements.mac.plist
   entitlementsInherit: build/entitlements.mac.plist
-  extendInfo:
-    LSMinimumSystemVersion: "12.0"
 
 dmg:
   title: OpenMemo

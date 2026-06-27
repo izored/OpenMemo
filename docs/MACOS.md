@@ -140,6 +140,40 @@ OPENMEMO_RENDERER_URL=http://localhost:3000 npm --prefix macOS run dev
 
 ---
 
+## Lock the app with a 4-digit PIN (optional)
+
+Set a PIN from the menu: **OpenMemo → App Lock (PIN)…**. Once set, every launch
+shows a lock screen and **the backend doesn't even start until you unlock** — so
+a locked app exposes nothing, not even on localhost. Change or turn it off from
+the same menu (it asks for the current PIN first).
+
+The PIN is stored as a salted hash, encrypted with Electron `safeStorage` (tied
+to your macOS login keychain), in `~/Library/Application Support/OpenMemo`. It's
+a casual privacy lock — good against someone opening your laptop, not a vault
+against a determined attacker with full disk access.
+
+> Note: this is the **app-launch** lock. OpenMemo also has a separate, built-in
+> **hidden-section passcode** (Settings → for hiding individual memos) — the two
+> are independent.
+
+---
+
+## Security model
+
+- The backend binds **127.0.0.1 only** — never your network. Nothing is exposed
+  to other machines.
+- The window runs with `contextIsolation` on and `nodeIntegration` off; it only
+  ever loads the local app, and any external link opens in your system browser
+  (in-window navigation away from the app is blocked).
+- **Single-instance**: a second launch focuses the existing window instead of
+  starting a second backend.
+- **Ollama** is yours and local; no API keys or cloud calls are involved.
+- The app is **ad-hoc signed, not notarized** (no paid Apple account) — hence the
+  one-time Gatekeeper step. It is not sandboxed (it needs to read your media
+  files and spawn ffmpeg / the Python backend).
+
+---
+
 ## 7. Troubleshooting
 
 | Symptom | Fix |

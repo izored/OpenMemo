@@ -10,3 +10,9 @@ contextBridge.exposeInMainWorld('openmemoBoot', {
     ipcRenderer.on('boot:log', (_e, line: string) => cb(line));
   },
 });
+
+// App-lock: the lock screen (lock.html) loads in this same window and verifies
+// the PIN. On success the main process takes over and loads the app.
+contextBridge.exposeInMainWorld('openmemoLock', {
+  verify: (pin: string): Promise<{ ok: boolean }> => ipcRenderer.invoke('lock:verify', pin),
+});

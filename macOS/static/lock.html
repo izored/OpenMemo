@@ -1,0 +1,77 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>OpenMemo — Locked</title>
+    <style>
+      :root { color-scheme: dark; }
+      * { margin: 0; padding: 0; box-sizing: border-box; }
+      html, body { height: 100%; }
+      body {
+        background: radial-gradient(120% 120% at 50% 0%, #1a1410 0%, #0b0b0f 60%);
+        color: #e9e9f0; font: 14px -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
+        display: flex; flex-direction: column; align-items: center; justify-content: center;
+        gap: 26px; height: 100vh; -webkit-user-select: none; user-select: none;
+        -webkit-app-region: drag;
+      }
+      .mark { font-size: 20px; font-weight: 700; letter-spacing: -0.01em; color: #f4825a; }
+      .mark b { color: #fffdfa; }
+      .label { color: #9a9aa8; font-size: 13px; }
+      .dots { display: flex; gap: 16px; -webkit-app-region: no-drag; }
+      .dot {
+        width: 15px; height: 15px; border-radius: 50%;
+        border: 2px solid #4a3a34; background: transparent; transition: all 0.15s;
+      }
+      .dot.on { background: #f4825a; border-color: #f4825a; }
+      .err { color: #f87171; font-size: 12px; min-height: 16px; }
+      .hint { color: #54545f; font-size: 11px; }
+      .shake { animation: shake 0.4s; }
+      @keyframes shake {
+        10%,90%{transform:translateX(-2px)} 30%,70%{transform:translateX(5px)}
+        50%{transform:translateX(-7px)}
+      }
+    </style>
+  </head>
+  <body>
+    <div class="mark">open<b>Memo</b></div>
+    <div class="label" id="label">Enter your PIN</div>
+    <div class="dots" id="dots">
+      <span class="dot"></span><span class="dot"></span>
+      <span class="dot"></span><span class="dot"></span>
+    </div>
+    <div class="err" id="err"></div>
+    <div class="hint">Type your 4-digit PIN</div>
+    <script>
+      let pin = '';
+      const dots = [...document.querySelectorAll('.dot')];
+      const err = document.getElementById('err');
+      const label = document.getElementById('label');
+      const dotsEl = document.getElementById('dots');
+
+      function render() { dots.forEach((d, i) => d.classList.toggle('on', i < pin.length)); }
+
+      async function submit() {
+        const res = await window.openmemoLock.verify(pin);
+        if (res.ok) {
+          label.textContent = 'Unlocking…';
+          err.textContent = '';
+          // The main process now loads the app — nothing more to do here.
+        } else {
+          err.textContent = 'Wrong PIN';
+          dotsEl.classList.add('shake');
+          setTimeout(() => dotsEl.classList.remove('shake'), 420);
+          pin = ''; render();
+        }
+      }
+
+      window.addEventListener('keydown', (e) => {
+        if (e.key >= '0' && e.key <= '9' && pin.length < 4) {
+          pin += e.key; render();
+          if (pin.length === 4) submit();
+        } else if (e.key === 'Backspace') {
+          pin = pin.slice(0, -1); render(); err.textContent = '';
+        }
+      });
+    </script>
+  </body>
+</html>
