@@ -92,17 +92,17 @@ git clone <repo> openmemo && cd openmemo
 # 1. frontend deps (the build step compiles the SPA)
 npm --prefix frontend ci
 
-# 2. desktop shell deps
-npm --prefix desktop install
+# 2. macOS desktop shell deps
+npm --prefix macOS install
 
 # 3. build the .dmg (ad-hoc signed — see note)
-cd desktop
+cd macOS
 CSC_IDENTITY_AUTO_DISCOVERY=false npm run dist
 ```
 
 `npm run dist` runs, in order: compile the shell TypeScript → build the SPA →
-`scripts/bundle-backend.mjs` (download Python, `pip install`, copy backend +
-SPA, fetch ffmpeg) → `electron-builder`. The result is in `desktop/release/`.
+`macOS/scripts/bundle-backend.mjs` (download Python, `pip install`, copy backend
++ SPA, fetch ffmpeg) → `electron-builder`. The result is in `macOS/release/`.
 
 > **`CSC_IDENTITY_AUTO_DISCOVERY=false`** stops electron-builder from hunting for
 > a real Developer ID certificate; it falls back to an **ad-hoc** signature
@@ -124,19 +124,18 @@ SPA, fetch ffmpeg) → `electron-builder`. The result is in `desktop/release/`.
 Run the shell against your checked-out source and the `backend/.venv`:
 
 ```bash
-bash scripts/setup-mac.sh          # once: venv + deps + frontend + chromium
-npm --prefix desktop install       # once
+bash macOS/setup-mac.sh            # once: venv + deps + frontend + chromium + shell
 npm --prefix frontend run build    # the shell loads the built SPA
-npm --prefix desktop run dev        # launches the native window
+npm --prefix macOS run dev        # launches the native window
 ```
 
 For live frontend HMR, run Vite separately and point the shell at it:
 
 ```bash
 # terminal A
-bash scripts/dev-mac.sh
+bash macOS/dev-mac.sh
 # terminal B
-OPENMEMO_RENDERER_URL=http://localhost:3000 npm --prefix desktop run dev
+OPENMEMO_RENDERER_URL=http://localhost:3000 npm --prefix macOS run dev
 ```
 
 ---

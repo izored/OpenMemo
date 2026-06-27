@@ -1,8 +1,8 @@
 // OpenMemo Side Panel - Shows AI summary of current page
 
-// Default to :8099 — the port the macOS app and the dev server both use.
-// Docker users point this at :8091 via the options page (chrome.storage).
-const DEFAULT_API_BASE = 'http://localhost:8099/api';
+// Docker default. The macOS app and the dev server use :8099 — point there from
+// the options page (chrome.storage), which overrides this.
+const DEFAULT_API_BASE = 'http://localhost:8091/api';
 
 async function getApiBase() {
   const stored = await chrome.storage.sync.get('apiBase');

@@ -10,11 +10,11 @@
 # Run your own Ollama and point OpenMemo at it (OLLAMA_HOST, default
 # http://localhost:11434).
 #
-# Usage:   bash scripts/setup-mac.sh
+# Usage:   bash macOS/setup-mac.sh
 #
 set -euo pipefail
 
-# --- resolve repo root (this script lives in <root>/scripts) -----------------
+# --- resolve repo root (this script lives in <root>/macOS) -------------------
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 cd "$ROOT"
@@ -61,9 +61,13 @@ python -m patchright install chromium
 echo "==> Installing frontend deps (npm ci)"
 ( cd frontend && npm ci )
 
+# --- 4. macOS desktop shell deps (for the native app) ------------------------
+echo "==> Installing macOS desktop shell deps (npm install)"
+( cd macOS && npm install )
+
 deactivate
 
-# --- 4. Ollama reminder (one line — no hand-holding) -------------------------
+# --- 5. Ollama reminder (one line — no hand-holding) -------------------------
 cat <<'EOF'
 
 ==> Done.
@@ -73,6 +77,8 @@ OpenMemo talks to YOUR Ollama — it does not ship one.
   • Chat / vision:    Gemma 4 recommended (e.g. gemma4:e4b)
   • If Ollama isn't on http://localhost:11434, set OLLAMA_HOST accordingly.
 
-Start the dev app:   bash scripts/dev-mac.sh   (or double-click dev.command)
-Then open:           http://localhost:3000
+Run in a browser:    bash macOS/dev-mac.sh   (or double-click macOS/dev.command)
+                     then open http://localhost:3000
+Run as the app:      npm --prefix frontend run build && npm --prefix macOS run dev
+Build the .dmg:      cd macOS && CSC_IDENTITY_AUTO_DISCOVERY=false npm run dist
 EOF

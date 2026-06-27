@@ -86,7 +86,7 @@ your own and point the app at it.
 
 ```bash
 # from the repo root
-bash scripts/setup-mac.sh
+bash macOS/setup-mac.sh
 ```
 
 This installs the toolchain via Homebrew (`python@3.12`, `node`, `ffmpeg`),
@@ -96,14 +96,14 @@ headless Chromium used by the link scraper. It does **not** touch Ollama.
 ### Run it (dev)
 
 ```bash
-bash scripts/dev-mac.sh      # or double-click dev.command in Finder
+bash macOS/dev-mac.sh        # or double-click macOS/dev.command in Finder
 ```
 
 Open **`http://localhost:3000`**. Backend is on `:8099`, Vite proxies `/api` and
 `/files` to it automatically.
 
 > First run only — make the scripts executable:
-> `chmod +x dev.command scripts/*.sh`
+> `chmod +x macOS/dev.command macOS/*.sh`
 
 ### Ollama (user-provided)
 
@@ -119,7 +119,7 @@ environment) if yours is elsewhere.
 ### Native `.app` / `.dmg`
 
 A double-click Mac app (the whole UI in its own window, no browser) is built
-from `desktop/`. See **[MACOS.md](MACOS.md)** for building and installing it.
+from `macOS/`. See **[MACOS.md](MACOS.md)** for building and installing it.
 
 ---
 
