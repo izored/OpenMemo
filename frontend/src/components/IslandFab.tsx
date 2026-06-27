@@ -39,6 +39,7 @@ const SPRING = { type: 'spring' as const, stiffness: 520, damping: 40 };
 export function IslandFab({ open, onOpenChange, icon = 'plus', label = 'New', hoverOpen, openWidth = 296, anchor = 'right', working, children }: IslandFabProps) {
   const beam = useBeamConfig();
   const rootRef = useRef<HTMLDivElement>(null);
+  const islandRef = useRef<HTMLDivElement>(null);
   const pinnedRef = useRef(false); // clicked open → don't auto-collapse on mouse leave
   const hoverTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -96,6 +97,7 @@ export function IslandFab({ open, onOpenChange, icon = 'plus', label = 'New', ho
       onMouseLeave={onLeave}
     >
       <motion.div
+        ref={islandRef}
         layout
         className={cn('om-island', 'om-accent-beam', open && 'open', anchor === 'center' && 'center', working && 'working')}
         style={{
@@ -104,8 +106,16 @@ export function IslandFab({ open, onOpenChange, icon = 'plus', label = 'New', ho
           ['--om-beam-op' as string]: working ? beam.workingStrength : beam.ambientStrength,
           ['--om-beam-dur' as string]: `${working ? beam.workingDuration : beam.ambientDuration}s`,
           ['--om-beam-glow' as string]: `${Math.round((working ? beam.workingBrightness : beam.ambientBrightness) * 8)}px`,
+          // Scale origin matches the CSS anchor so FM never extends the island
+          // past its anchored edge during the open/close layout animation.
+          // Right-anchored (default): grow left+up from bottom-right corner.
+          // Center-anchored (Music): grow symmetrically from bottom-center.
+          originX: anchor === 'center' ? 0.5 : 1,
+          originY: 1,
         }}
         transition={SPRING}
+        onLayoutAnimationStart={() => islandRef.current?.classList.add('om-island--clipping')}
+        onLayoutAnimationComplete={() => islandRef.current?.classList.remove('om-island--clipping')}
       >
         <AnimatePresence mode="popLayout" initial={false}>
           {open ? (
