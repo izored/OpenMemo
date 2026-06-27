@@ -779,7 +779,7 @@ async def delete_memo(memo_id: str, db: AsyncSession = Depends(get_db)):
         await delete_memo_embeddings(memo_id)
     except Exception as e:
         # Non-fatal: a reindex sweeps any stragglers.
-        print(f"Embedding purge failed for {memo_id}: {e}")
+        logger.warning("Embedding purge failed for %s: %s", memo_id, e)
     return {"status": "deleted"}
 
 

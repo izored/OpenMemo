@@ -5,6 +5,7 @@ from .sanitize import (
     sanitize_filename,
     escape_fts5_query,
     validate_url,
+    validate_proxy_url,
     sanitize_string,
     SafePath,
 )
@@ -15,6 +16,7 @@ __all__ = [
     "sanitize_filename",
     "escape_fts5_query",
     "validate_url",
+    "validate_proxy_url",
     "sanitize_string",
     "SafePath",
     "FileUploadHandler",
