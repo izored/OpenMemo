@@ -119,14 +119,15 @@ export function IslandFab({ open, onOpenChange, icon = 'plus', label = 'New', ho
       >
         <AnimatePresence mode="popLayout" initial={false}>
           {open ? (
-            // Form fades out FAST on close so it never ghosts behind the +.
+            // On open: wait for the box to mostly settle (~260ms) then fade in
+            // quickly so text never appears inside a still-growing island.
+            // On close: vanish in 50ms so no text is visible while the box shrinks.
             <motion.div
               key="body"
               className="om-island-body"
               initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              transition={{ opacity: { duration: 0.12, delay: open ? 0.08 : 0 } }}
+              animate={{ opacity: 1, transition: { duration: 0.1, delay: 0.26 } }}
+              exit={{ opacity: 0, transition: { duration: 0.05, delay: 0 } }}
             >
               {children}
             </motion.div>
