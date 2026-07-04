@@ -439,10 +439,19 @@ input, textarea { font: inherit; color: inherit; }
 .om-media-preview.theater { max-width: none; width: 100%; margin-left: 0; }
 .om-media-preview.theater video,
 .om-media-preview.theater img { max-height: none; }
-.om-media-preview img,
-.om-media-preview video {
+.om-media-preview img {
   display: block; width: 100%; height: auto; max-height: 70vh; object-fit: contain;
 }
+/* Video hugs its own aspect ratio (width:auto + both max caps, frame shrinks to
+   fit-content) so a portrait clip — Reels, Shorts, TikTok, Threads, any 9:16 —
+   sits tight instead of floating in a wide box with empty side bars. Landscape
+   still fills the column up to the frame's 720px max. Systematic: every platform
+   and any pulled-local video, not just one host. */
+.om-media-preview video {
+  display: block; width: auto; height: auto; max-width: 100%; max-height: 70vh;
+  margin-inline: auto;
+}
+.om-media-preview:has(video) { width: fit-content; }
 .om-media-controls {
   position: absolute; top: 10px; right: 10px;
   display: flex; gap: 6px;
