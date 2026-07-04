@@ -56,8 +56,15 @@ export function Lightbox() {
           <video
             key={memo.id}
             src={localVideo}
+            poster={memo.thumbnail_path || undefined}
             controls
             autoPlay
+            // Muted so autoplay is actually allowed (browsers block unmuted
+            // autoplay, which left the lightbox on a paused black frame). The
+            // poster fills the gap before the first frame; controls let the user
+            // unmute, and the memo page player plays with sound.
+            muted
+            playsInline
             onClick={(e) => e.stopPropagation()}
             style={{ maxWidth: '100%', maxHeight: '100%', borderRadius: 12 }}
           />
