@@ -24,9 +24,19 @@ export function AskMemoPanel({ memoId, collectionId }: AskMemoPanelProps) {
   const [streaming, setStreaming] = useState(false);
   const [sessionId, setSessionId] = useState<string | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
+  // Stick to the bottom while streaming, but yield the moment the user scrolls
+  // up to re-read (otherwise a long answer can't be scrolled). See AskMemoPage.
+  const pinnedRef = useRef(true);
+  const onThreadScroll = () => {
+    const el = scrollRef.current;
+    if (!el) return;
+    pinnedRef.current = el.scrollHeight - el.scrollTop - el.clientHeight < 80;
+  };
 
   useEffect(() => {
-    scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: 'smooth' });
+    if (!pinnedRef.current) return;
+    const el = scrollRef.current;
+    if (el) el.scrollTop = el.scrollHeight;
   }, [messages]);
 
   // Working indicator (terminal-style). The last assistant message is "live"
@@ -140,7 +150,7 @@ export function AskMemoPanel({ memoId, collectionId }: AskMemoPanelProps) {
         </h3>
       </div>
 
-      <div ref={scrollRef} className="om-ask-panel-thread">
+      <div ref={scrollRef} className="om-ask-panel-thread" onScroll={onThreadScroll}>
         {messages.length === 0 && (
           <div className="om-ask-panel-empty">
             <Bot size={24} className="om-accent-icon" />

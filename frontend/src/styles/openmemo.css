@@ -1481,6 +1481,24 @@ input, textarea { font: inherit; color: inherit; }
 .om-highlight-bar { width: 2px; flex-shrink: 0; background: var(--accent); border-radius: 2px; }
 .om-highlight p { margin: 0; font-size: 14px; line-height: 1.55; color: var(--text); font-style: italic; }
 .om-detail-summary { font-size: 13.5px; line-height: 1.65; color: var(--text-2); margin: 0; background: var(--surface); padding: 16px; border-radius: var(--r-md); border: 1px solid var(--border); }
+
+/* Poster for a remote video with no embeddable player and no local file yet
+   (Threads, Facebook, unsupported hosts). Click = open original; the play badge
+   and hint signal it's playable off-site. Keeps the memo page from looking empty. */
+.om-detail-poster { position: relative; display: inline-block; max-width: 100%; margin-bottom: 24px;
+                    border-radius: var(--r-lg); overflow: hidden; line-height: 0;
+                    background: var(--surface-2); border: 1px solid var(--border); }
+.om-detail-poster.no-thumb { display: block; width: 100%; aspect-ratio: 16 / 9; }
+.om-detail-poster img { display: block; max-width: 100%; max-height: 68vh; width: auto; height: auto; }
+.om-detail-poster-play { position: absolute; inset: 0; margin: auto; width: 60px; height: 60px;
+                         display: inline-flex; align-items: center; justify-content: center;
+                         border-radius: 999px; background: rgba(0,0,0,.55); color: #fff;
+                         backdrop-filter: blur(4px); transition: transform .15s, background .15s; }
+.om-detail-poster:hover .om-detail-poster-play { transform: scale(1.06); background: rgba(0,0,0,.72); }
+.om-detail-poster-hint { position: absolute; left: 12px; bottom: 12px; line-height: 1;
+                         display: inline-flex; align-items: center; gap: 6px; padding: 6px 10px;
+                         border-radius: 999px; background: rgba(0,0,0,.6); color: #fff;
+                         font-size: 12px; backdrop-filter: blur(4px); }
 .om-ai-rerun { display: inline-flex; align-items: center; gap: 4px; margin-left: 8px; font-size: 11px; color: var(--accent); font-family: var(--font-mono); }
 .om-connected { display: flex; flex-direction: column; gap: 1px; }
 .om-connected-row { display: grid; grid-template-columns: 16px 1fr auto; gap: 10px; align-items: center; padding: 8px 10px; border-radius: 8px; transition: background .15s; }

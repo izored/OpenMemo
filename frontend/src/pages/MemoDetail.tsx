@@ -1930,6 +1930,29 @@ export function MemoDetail() {
               </p>
             )}
 
+            {/* Un-embeddable remote video: the host has no iframe player
+                (Threads, Facebook, and others — see platforms.ts) and no local
+                file has been pulled yet. Without this the page shows only tool
+                cards and looks empty. Render the poster as a play button that
+                opens the original; "Make it local" (rail) pulls a native file. */}
+            {memo.type === 'video' && !videoEmbed && !memo.file_path && !isEditing && (
+              <a
+                className={cn('om-detail-poster', !memo.thumbnail_path && 'no-thumb')}
+                href={memo.source_url || undefined}
+                target="_blank"
+                rel="noopener noreferrer"
+              >
+                {memo.thumbnail_path && <img src={memo.thumbnail_path} alt={memo.title} />}
+                <span className="om-detail-poster-play">
+                  <Play size={22} style={{ fill: 'currentColor' }} />
+                </span>
+                <span className="om-detail-poster-hint">
+                  <ExternalLink size={13} />
+                  Open on {memo.source_domain || 'original site'}
+                </span>
+              </a>
+            )}
+
             {/* (Audio remote handling moved into the unified audio block above.) */}
 
             {/* Make it local, Video description and Transcript all moved to the

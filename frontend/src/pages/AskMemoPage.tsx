@@ -45,6 +45,15 @@ export function AskMemoPage() {
   const [menuPos, setMenuPos] = useState<{ bottom: number; right: number } | null>(null);
   const modelBtnRef = useRef<HTMLButtonElement>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
+  // Stick the thread to the bottom as tokens stream — but only while the user is
+  // already near the bottom. The moment they scroll up to re-read, we stop
+  // yanking them back down (otherwise a long streamed answer is unscrollable).
+  const pinnedRef = useRef(true);
+  const onThreadScroll = () => {
+    const el = scrollRef.current;
+    if (!el) return;
+    pinnedRef.current = el.scrollHeight - el.scrollTop - el.clientHeight < 80;
+  };
 
   const { data: modelsData } = useQuery({ queryKey: ['models'], queryFn: systemApi.models });
   const { data: serverSettings } = useQuery({ queryKey: ['app-settings'], queryFn: settingsApi.get });
@@ -64,7 +73,11 @@ export function AskMemoPage() {
   }, [modelsData, serverSettings]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
-    scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: 'smooth' });
+    if (!pinnedRef.current) return;
+    const el = scrollRef.current;
+    // Instant (not smooth) — a smooth animation per streamed token fights the
+    // user's own scroll and stutters. Pinned-to-bottom should just track.
+    if (el) el.scrollTop = el.scrollHeight;
   }, [messages]);
 
   const loadSession = async (id: string) => {
@@ -299,7 +312,7 @@ export function AskMemoPage() {
           </div>
         ) : (
           <>
-            <div className="om-ask-thread" ref={scrollRef}>
+            <div className="om-ask-thread" ref={scrollRef} onScroll={onThreadScroll}>
               {messages.map((msg) => (
                 <div key={msg.id} className={`om-msg ${msg.role}`}>
                   <div className={`om-msg-avatar ${msg.role === 'assistant' ? 'ai' : ''}`}>
