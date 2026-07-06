@@ -6,7 +6,7 @@
  * browser is ever opened. Ollama is user-provided — we only pass it the
  * host:port to talk to.
  */
-import { app, BrowserWindow, Menu, dialog, ipcMain, shell } from 'electron';
+import { app, BrowserWindow, Menu, dialog, globalShortcut, ipcMain, shell } from 'electron';
 import { spawn } from 'node:child_process';
 import path from 'node:path';
 import fs from 'node:fs';
@@ -364,6 +364,13 @@ function buildMenu(): void {
                 label: 'Open Logs Folder',
                 click: () => void shell.openPath(path.dirname(logFile())),
               },
+              {
+                label: 'Open at Login',
+                type: 'checkbox' as const,
+                checked: app.getLoginItemSettings().openAtLogin,
+                click: (item: Electron.MenuItem) =>
+                  app.setLoginItemSettings({ openAtLogin: item.checked }),
+              },
               { type: 'separator' as const },
               { role: 'hide' as const },
               { role: 'quit' as const },
@@ -480,6 +487,30 @@ app.on('open-file', (event, filePath) => {
   }
 });
 
+// openmemo:// deep link (registered below + `protocols` in electron-builder.yml).
+// openmemo://memo/<id> etc. maps onto the SPA's client routes; a bare
+// openmemo:// just focuses/reopens the app.
+app.on('open-url', (event, url) => {
+  event.preventDefault();
+  void (async () => {
+    if (!mainWindow) await openAppWindow();
+    if (!mainWindow) return;
+    if (mainWindow.isMinimized()) mainWindow.restore();
+    mainWindow.show();
+    mainWindow.focus();
+    if (!backend || !isBackendRunning()) return;
+    try {
+      const u = new URL(url);
+      // host + pathname → SPA route ("memo/abc", "settings", …). Sanitized:
+      // only ever appended to our own local origin.
+      const route = `${u.host}${u.pathname}`.replace(/^\/+|\/+$/g, '');
+      if (route) await mainWindow.loadURL(`${backend.url}${route}`);
+    } catch {
+      /* malformed link — focusing the app is enough */
+    }
+  })();
+});
+
 // Single-instance: a second launch would spawn a second backend fighting for the
 // same port. Bounce it and focus the existing window instead.
 if (!app.requestSingleInstanceLock()) {
@@ -501,6 +532,13 @@ if (!app.requestSingleInstanceLock()) {
       copyright: '© izo.studio',
       credits: 'Your local AI knowledge OS. Bring your own Ollama.',
     });
+    // Claim the openmemo:// scheme (Info.plist side is `protocols` in
+    // electron-builder.yml; this covers dev runs too).
+    app.setAsDefaultProtocolClient('openmemo');
+    // Global quick-capture: ⌘⇧M from anywhere → front the app + open the
+    // add-memo island. Deliberately not ⌘⇧N (Finder's new-folder).
+    const ok = globalShortcut.register('CommandOrControl+Shift+M', () => void triggerQuickAdd());
+    if (!ok) appendLog('[shell] Global shortcut ⌘⇧M unavailable (taken by another app).\n');
     buildMenu();
     registerIpc();
     void openAppWindow();
@@ -511,6 +549,8 @@ if (!app.requestSingleInstanceLock()) {
     });
   });
 }
+
+app.on('will-quit', () => globalShortcut.unregisterAll());
 
 // macOS convention: closing the window keeps the app (and the warm backend)
 // alive in the Dock — reopening is instant. Everywhere else, close = quit.

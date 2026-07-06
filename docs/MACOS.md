@@ -140,6 +140,23 @@ OPENMEMO_RENDERER_URL=http://localhost:3000 npm --prefix macOS run dev
 
 ---
 
+## It behaves like a Mac app
+
+- **Closing the window doesn't quit.** The app (and its warm backend) stays in
+  the Dock; click the Dock icon to reopen instantly. ⌘Q quits for real. If the
+  PIN lock is on, reopening asks for the PIN again.
+- **⌘N — New Memo** from the File menu, and **⌘⇧M from anywhere** (global
+  shortcut) fronts the app with the add-memo island open.
+- **Drop files on the Dock icon** (or Finder → Open With → OpenMemo) and
+  they're ingested as memos directly.
+- **`openmemo://` links** open the app — e.g. `openmemo://memo/<id>` jumps to a
+  memo, `openmemo://settings` to Settings.
+- **Open at Login** — toggle in the OpenMemo menu.
+- Window size/position persist; About shows the real version; update checks on
+  launch (menu → Check for Updates…).
+
+---
+
 ## Lock the app with a 4-digit PIN (optional)
 
 Set a PIN from the menu: **OpenMemo → App Lock (PIN)…**. Once set, every launch
