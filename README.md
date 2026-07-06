@@ -86,6 +86,12 @@ docker-compose up -d
 
 Open **http://localhost:8091**. That's it.
 
+### macOS App (Apple Silicon)
+
+OpenMemo also runs as a native Mac app — its own window, Dock icon, ⌘N, PIN
+lock, no Docker and no browser. Everything Mac-specific lives under
+[`macOS/`](macOS/); build and install guide in [`docs/MACOS.md`](docs/MACOS.md).
+
 ### Prerequisites
 
 1. **Ollama** installed and running ([ollama.ai](https://ollama.ai))

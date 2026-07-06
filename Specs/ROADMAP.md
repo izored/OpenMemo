@@ -242,6 +242,8 @@ no user action required. All run on the existing APScheduler instance wired in
 
 ## Backlog *(unversioned)*
 
+- **First-launch intro v2 (cross-platform)** — Full rework of the onboarding intro (`frontend/src/components/onboarding/IntroSequence.tsx`) with dedicated motion design. High bar: CleanMyMac-grade cinematic sequence, custom animation work, est. ~1 week. The current framer-motion intro is the v1 placeholder-replacement; it ships on all platforms and hands off to the spotlight tour — keep that contract. Known v1 nits to absorb: exit animation needs an `AnimatePresence` parent; `staggerChildren` is a no-op without variants.
+- **macOS native notifications** — Notify when transcribe/localize finishes while the app is backgrounded. Needs a backend→shell event channel (poll or WS); shell side is trivial after that. Deferred from PR #102.
 - **User flow diagram** — Full UX flow diagram for birds-eye view of journeys across Dashboard, MemoDetail, Collections, Chat, Settings
 - **Multimedia icon Lottie animation** — FAB animated icon; spec at [`Specs/multimedia-icon-animation.md`](./multimedia-icon-animation.md)
 - **List view & Timeline view** — Alternatives to card grid

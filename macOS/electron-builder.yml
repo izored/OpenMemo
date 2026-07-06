@@ -1,0 +1,78 @@
+# electron-builder config — Apple-Silicon .dmg, unsigned (no dev account).
+#
+# Build on a Mac:  CSC_IDENTITY_AUTO_DISCOVERY=false npm run dist
+#   CSC_IDENTITY_AUTO_DISCOVERY=false stops electron-builder hunting for a real
+#   Developer ID cert; it falls back to an ad-hoc signature ("-"), which is the
+#   minimum macOS needs to launch an arm64 app. Without a paid Apple account we
+#   cannot notarize, so first launch still needs the Gatekeeper workaround
+#   (right-click → Open, or `xattr -dr com.apple.quarantine`). See docs/MACOS.md.
+appId: studio.izo.openmemo
+productName: OpenMemo
+copyright: © izo.studio
+
+directories:
+  output: release
+  # NOT "build" — the repo's root .gitignore ignores build/, which would drop
+  # the icon + entitlements from version control.
+  buildResources: buildResources
+
+# What goes inside the asar (the shell itself). The Python runtime, backend
+# source, built SPA, and ffmpeg are added as extraResources below.
+files:
+  - dist-electron/**/*
+  - static/**/*
+  - package.json
+
+# Assembled by scripts/bundle-backend.mjs before electron-builder runs. Each
+# lands under Contents/Resources/<to> — matching resolvePaths() in src/paths.ts.
+extraResources:
+  - from: resources-stage/python
+    to: python
+  - from: resources-stage/app-backend
+    to: app-backend
+  - from: resources-stage/frontend-dist
+    to: frontend-dist
+  - from: resources-stage/ffmpeg
+    to: ffmpeg
+
+npmRebuild: false
+
+# Guarantee a valid (ad-hoc) signature on every mach-o even when builder skips
+# signing (no Developer ID). See scripts/afterPack.cjs.
+afterPack: scripts/afterPack.cjs
+
+# openmemo:// deep links (CFBundleURLTypes) — handled in src/main.ts open-url.
+protocols:
+  - name: OpenMemo
+    schemes:
+      - openmemo
+
+mac:
+  category: public.app-category.productivity
+  icon: buildResources/icon.png   # electron-builder generates the .icns from this 1024px PNG
+  extendInfo:
+    NSHumanReadableCopyright: "© izo.studio"
+    CFBundleDisplayName: OpenMemo
+    LSMinimumSystemVersion: "12.0"
+  target:
+    - target: dmg
+      arch:
+        - arm64
+  # No paid account → don't harden (entitlements would be enforced) and don't
+  # let Gatekeeper assessment fail the build. Ad-hoc signing happens via the
+  # CSC_IDENTITY_AUTO_DISCOVERY=false env at build time.
+  hardenedRuntime: false
+  gatekeeperAssess: false
+  entitlements: buildResources/entitlements.mac.plist
+  entitlementsInherit: buildResources/entitlements.mac.plist
+
+dmg:
+  title: OpenMemo
+  contents:
+    - x: 140
+      y: 200
+      type: file
+    - x: 400
+      y: 200
+      type: link
+      path: /Applications

@@ -1,5 +1,5 @@
 from pydantic_settings import BaseSettings
-from pydantic import field_validator
+from pydantic import field_validator, model_validator
 from pathlib import Path
 
 
@@ -54,7 +54,21 @@ class Settings(BaseSettings):
     # Context window requested from Ollama for chat/summary calls. Ollama's own
     # default (4096) silently truncates long RAG contexts and transcripts.
     OLLAMA_NUM_CTX: int = 8192
-    
+
+    # External ffmpeg binary used for video thumbnails + HLS/DASH muxing
+    # (backend/core/video.py, localize_media.py). Bare "ffmpeg" resolves via
+    # PATH on Windows/Docker/brew installs; the packaged macOS .app overrides
+    # this with FFMPEG_BIN=<bundled arm64 ffmpeg> so it works without a system
+    # install.
+    FFMPEG_BIN: str = "ffmpeg"
+
+    # When set to the built frontend dir, the backend serves the SPA from its
+    # own origin (single process, no nginx/Vite). The packaged macOS .app sets
+    # this so the Electron window can load http://127.0.0.1:<port>/ and every
+    # relative /api URL, upload, and SSE stream works same-origin. Empty = off
+    # (Docker keeps nginx; dev keeps the Vite proxy) — see backend/main.py.
+    FRONTEND_DIST: str = ""
+
     # Server
     HOST: str = "0.0.0.0"
     PORT: int = 8000
@@ -64,6 +78,10 @@ class Settings(BaseSettings):
         "http://127.0.0.1:3000",
         "http://localhost:80",
         "http://localhost:8091",
+        # macOS app / single-process: the SPA is served same-origin on :8099, so
+        # CORS isn't strictly needed, but allow it for a browser opened there too.
+        "http://localhost:8099",
+        "http://127.0.0.1:8099",
         "http://localhost",
 
     ]
@@ -74,7 +92,30 @@ class Settings(BaseSettings):
         if isinstance(v, str):
             return [item.strip() for item in v.split(",") if item.strip()]
         return v
-    
+
+    @model_validator(mode="after")
+    def _anchor_writable_state_to_data_dir(self):
+        """Re-anchor the DB, Chroma store, and files dir under DATA_DIR — but
+        only when DATA_DIR was explicitly overridden (e.g. the packaged macOS
+        app sets DATA_DIR=~/Library/Application Support/OpenMemo, where the code
+        lives in a read-only .app bundle).
+
+        Existing Windows dev and Docker leave DATA_DIR at its default and set the
+        dependent paths themselves, so this is a no-op for them — their behavior
+        is byte-identical. An explicit override of any individual path still wins
+        (only fields NOT sourced from env are re-derived).
+        """
+        if "DATA_DIR" not in self.model_fields_set:
+            return self
+        data = Path(self.DATA_DIR)
+        if "DATABASE_URL" not in self.model_fields_set:
+            self.DATABASE_URL = f"sqlite+aiosqlite:///{data / 'openmemo.db'}"
+        if "CHROMA_PERSIST_DIR" not in self.model_fields_set:
+            self.CHROMA_PERSIST_DIR = str(data / "chroma")
+        if "FILES_DIR" not in self.model_fields_set:
+            self.FILES_DIR = data / "files"
+        return self
+
     class Config:
         # Anchored to backend/.env regardless of CWD. The old relative ".env"
         # only loaded when uvicorn was started from backend/ — started from the

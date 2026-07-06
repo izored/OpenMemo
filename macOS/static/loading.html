@@ -1,0 +1,63 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>OpenMemo</title>
+    <style>
+      :root { color-scheme: dark; }
+      * { margin: 0; padding: 0; box-sizing: border-box; }
+      html, body { height: 100%; }
+      body {
+        background: radial-gradient(120% 120% at 50% 0%, #16161d 0%, #0b0b0f 60%);
+        color: #e9e9f0;
+        font: 14px/1.5 -apple-system, BlinkMacSystemFont, "SF Pro Text", system-ui, sans-serif;
+        display: flex; flex-direction: column; align-items: center; justify-content: center;
+        height: 100vh; gap: 28px; overflow: hidden; -webkit-user-select: none; user-select: none;
+        -webkit-app-region: drag;
+      }
+      .mark {
+        font-size: 34px; font-weight: 700; letter-spacing: -0.02em;
+        background: linear-gradient(100deg, #a78bfa 0%, #7dd3fc 50%, #a78bfa 100%);
+        background-size: 220% 100%;
+        -webkit-background-clip: text; background-clip: text; color: transparent;
+        animation: shimmer 3.2s ease-in-out infinite;
+      }
+      .mark b { font-weight: 800; }
+      @keyframes shimmer { 0%,100% { background-position: 0% 50%; } 50% { background-position: 100% 50%; } }
+      .ring {
+        width: 46px; height: 46px; border-radius: 50%;
+        border: 2.5px solid rgba(167,139,250,0.18);
+        border-top-color: #a78bfa; animation: spin 0.9s linear infinite;
+      }
+      @keyframes spin { to { transform: rotate(360deg); } }
+      .status { color: #9a9aa8; font-size: 13px; }
+      .log {
+        position: fixed; bottom: 16px; left: 0; right: 0; text-align: center;
+        color: #54545f; font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+        font-size: 11px; padding: 0 24px; white-space: nowrap; overflow: hidden;
+        text-overflow: ellipsis; opacity: 0; transition: opacity 0.4s;
+      }
+      @media (prefers-reduced-motion: reduce) {
+        .mark, .ring { animation: none; }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="mark">open<b>Memo</b></div>
+    <div class="ring"></div>
+    <div class="status">Starting your local knowledge OS…</div>
+    <div class="log" id="log"></div>
+    <script>
+      const log = document.getElementById('log');
+      if (window.openmemoBoot) {
+        window.openmemoBoot.onLog((line) => {
+          const t = String(line).trim();
+          if (!t) return;
+          log.textContent = t;
+          log.style.opacity = '1';
+        });
+      }
+    </script>
+  </body>
+</html>
