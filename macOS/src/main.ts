@@ -10,7 +10,13 @@ import { app, BrowserWindow, Menu, dialog, ipcMain, shell } from 'electron';
 import { spawn } from 'node:child_process';
 import path from 'node:path';
 import fs from 'node:fs';
-import { startBackend, stopBackend, restartBackend, StartedBackend } from './backend';
+import {
+  startBackend,
+  stopBackend,
+  restartBackend,
+  isBackendRunning,
+  StartedBackend,
+} from './backend';
 import { resolvePaths, staticDir } from './paths';
 import {
   loadSettings,
@@ -28,6 +34,10 @@ let backend: StartedBackend | null = null;
 const bootLog: string[] = [];
 // Resolver for the app-lock gate — fulfilled when the correct PIN is entered.
 let lockResolve: ((ok: boolean) => void) | null = null;
+// One silent update check per app run (not per window reopen).
+let updateChecked = false;
+// Files dropped on the Dock icon before the backend was up.
+const pendingOpenFiles: string[] = [];
 
 /** Persisted shell log, for diagnosing a failed launch after the fact. */
 function logFile(): string {
@@ -128,15 +138,21 @@ function showLockGate(): Promise<boolean> {
   });
 }
 
-async function boot(): Promise<void> {
-  // App lock: gate everything behind the PIN. The backend isn't even started
-  // until the user unlocks, so a locked app exposes nothing on localhost.
+/**
+ * Open (or reopen) the app window: PIN gate → loading screen → backend
+ * (started once, reused on window reopens — macOS keeps the app alive in the
+ * Dock after the window closes) → load the UI.
+ */
+async function openAppWindow(): Promise<void> {
+  if (!mainWindow) createWindow();
+
+  // App lock: gate every window open behind the PIN. On first launch the
+  // backend isn't even started until the user unlocks, so a locked app
+  // exposes nothing on localhost. On reopen (backend already warm) the gate
+  // still covers the UI.
   if (isLockEnabled()) {
     const unlocked = await showLockGate();
-    if (!unlocked) {
-      app.quit();
-      return;
-    }
+    if (!unlocked) return;
   }
 
   // Show the loading screen immediately so launch never looks frozen.
@@ -153,13 +169,20 @@ async function boot(): Promise<void> {
   }
 
   try {
-    backend = await startBackend(appendLog);
-    appendLog(`[shell] Backend up at ${backend.url}\n`);
-    maybeInstallChromium(); // first-run, background, non-blocking
-    const target = rendererOverride ?? backend.url;
+    // Reuse the running backend on window reopen; never double-spawn.
+    if (!isBackendRunning()) {
+      backend = await startBackend(appendLog);
+      appendLog(`[shell] Backend up at ${backend.url}\n`);
+      maybeInstallChromium(); // first-run, background, non-blocking
+      flushPendingOpenFiles();
+    }
+    const target = rendererOverride ?? backend!.url;
     await mainWindow?.loadURL(target);
-    // Quietly check GitHub for a newer release once the app is up (packaged only).
-    if (app.isPackaged) void checkForUpdates({ silent: true });
+    // Quietly check GitHub for a newer release, once per app run (packaged only).
+    if (app.isPackaged && !updateChecked) {
+      updateChecked = true;
+      void checkForUpdates({ silent: true });
+    }
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
     appendLog(`[shell] FAILED: ${msg}\n`);
@@ -173,11 +196,60 @@ async function boot(): Promise<void> {
       cancelId: 1,
     });
     if (choice === 0) {
-      await boot();
+      await openAppWindow();
     } else {
       app.quit();
     }
   }
+}
+
+/**
+ * Native "New Memo" (File menu / ⌘N / global shortcut): make sure the window
+ * exists and is front, then ask the SPA to open the add-memo island. The SPA
+ * listens for this event in Layout.tsx.
+ */
+async function triggerQuickAdd(): Promise<void> {
+  if (!mainWindow) await openAppWindow();
+  if (!mainWindow) return;
+  if (mainWindow.isMinimized()) mainWindow.restore();
+  mainWindow.show();
+  mainWindow.focus();
+  void mainWindow.webContents.executeJavaScript(
+    "window.dispatchEvent(new CustomEvent('openmemo:quick-add'))",
+    true,
+  );
+}
+
+/**
+ * Ingest files dropped on the Dock icon (or opened via Finder "Open With").
+ * Posted straight to the backend's multipart endpoint; the SPA refetches on
+ * window focus, so new memos appear without a manual reload.
+ */
+async function ingestFiles(filePaths: string[]): Promise<void> {
+  if (!backend) return;
+  for (const p of filePaths) {
+    try {
+      const buf = await fs.promises.readFile(p);
+      const form = new FormData();
+      form.append('file', new Blob([buf]), path.basename(p));
+      const res = await fetch(`${backend.url}api/ingest/file`, { method: 'POST', body: form });
+      appendLog(`[shell] Dock ingest ${path.basename(p)} → HTTP ${res.status}\n`);
+    } catch (e) {
+      appendLog(`[shell] Dock ingest failed for ${p}: ${e instanceof Error ? e.message : e}\n`);
+    }
+  }
+  if (!mainWindow) await openAppWindow();
+  if (mainWindow) {
+    if (mainWindow.isMinimized()) mainWindow.restore();
+    mainWindow.show();
+    mainWindow.focus();
+  }
+}
+
+function flushPendingOpenFiles(): void {
+  if (pendingOpenFiles.length === 0) return;
+  const batch = pendingOpenFiles.splice(0, pendingOpenFiles.length);
+  void ingestFiles(batch);
 }
 
 /**
@@ -300,6 +372,18 @@ function buildMenu(): void {
         ]
       : []),
     {
+      label: 'File',
+      submenu: [
+        {
+          label: 'New Memo',
+          accelerator: 'CmdOrCtrl+N',
+          click: () => void triggerQuickAdd(),
+        },
+        { type: 'separator' },
+        { role: 'close' },
+      ],
+    },
+    {
       label: 'Edit',
       submenu: [
         { role: 'undo' },
@@ -385,6 +469,17 @@ function registerIpc(): void {
   });
 }
 
+// Dock drop / Finder "Open With" → ingest. Must be registered before 'ready';
+// files arriving before the backend is up are queued and flushed after boot.
+app.on('open-file', (event, filePath) => {
+  event.preventDefault();
+  if (backend && isBackendRunning()) {
+    void ingestFiles([filePath]);
+  } else {
+    pendingOpenFiles.push(filePath);
+  }
+});
+
 // Single-instance: a second launch would spawn a second backend fighting for the
 // same port. Bounce it and focus the existing window instead.
 if (!app.requestSingleInstanceLock()) {
@@ -394,6 +489,8 @@ if (!app.requestSingleInstanceLock()) {
     if (mainWindow) {
       if (mainWindow.isMinimized()) mainWindow.restore();
       mainWindow.focus();
+    } else {
+      void openAppWindow();
     }
   });
 
@@ -406,22 +503,23 @@ if (!app.requestSingleInstanceLock()) {
     });
     buildMenu();
     registerIpc();
-    createWindow();
-    void boot();
+    void openAppWindow();
 
+    // macOS: Dock click with no window → reopen (backend already warm).
     app.on('activate', () => {
-      if (BrowserWindow.getAllWindows().length === 0) {
-        createWindow();
-        void boot();
-      }
+      if (!mainWindow) void openAppWindow();
     });
   });
 }
 
-// Backend is a child process — always tear it down with the app.
+// macOS convention: closing the window keeps the app (and the warm backend)
+// alive in the Dock — reopening is instant. Everywhere else, close = quit.
 app.on('window-all-closed', () => {
-  stopBackend();
-  app.quit();
+  if (process.platform !== 'darwin') {
+    stopBackend();
+    app.quit();
+  }
 });
+// ⌘Q / real quit: always tear the backend down with the app.
 app.on('before-quit', () => stopBackend());
 process.on('exit', () => stopBackend());

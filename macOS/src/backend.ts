@@ -109,27 +109,67 @@ export async function startBackend(onLog?: (line: string) => void): Promise<Star
   return { port, url: `http://127.0.0.1:${port}/` };
 }
 
-/** Stop the backend and its children. Safe to call multiple times. */
+/** True while the spawned backend process is alive. */
+export function isBackendRunning(): boolean {
+  return !!child && child.exitCode === null && !child.killed;
+}
+
+function signalTree(c: ChildProcess, sig: NodeJS.Signals): void {
+  try {
+    if (process.platform !== 'win32' && c.pid) {
+      // Negative pid → signal the whole process group (uvicorn + workers).
+      process.kill(-c.pid, sig);
+    } else {
+      c.kill(sig);
+    }
+  } catch {
+    /* already gone */
+  }
+}
+
+function waitExit(c: ChildProcess, ms: number): Promise<boolean> {
+  return new Promise((resolve) => {
+    if (c.exitCode !== null) return resolve(true);
+    const timer = setTimeout(() => {
+      c.off('exit', onExit);
+      resolve(false);
+    }, ms);
+    const onExit = () => {
+      clearTimeout(timer);
+      resolve(true);
+    };
+    c.once('exit', onExit);
+  });
+}
+
+/** Stop the backend (fire-and-forget). Safe to call multiple times. */
 export function stopBackend(): void {
   if (!child || child.killed) {
     child = null;
     return;
   }
-  try {
-    if (process.platform !== 'win32' && child.pid) {
-      // Negative pid → signal the whole process group (uvicorn + workers).
-      process.kill(-child.pid, 'SIGTERM');
-    } else {
-      child.kill('SIGTERM');
-    }
-  } catch {
-    /* already gone */
-  }
+  signalTree(child, 'SIGTERM');
   child = null;
+}
+
+/**
+ * Stop and WAIT for the process to actually exit (SIGKILL after the grace
+ * period). Used before a restart so the port is really free — otherwise the
+ * respawn races the dying uvicorn and findPort migrates to :8100, silently
+ * breaking the Chrome extension's fixed :8099 target.
+ */
+export async function stopBackendAndWait(graceMs = 5000): Promise<void> {
+  const c = child;
+  child = null;
+  if (!c || c.exitCode !== null) return;
+  signalTree(c, 'SIGTERM');
+  if (await waitExit(c, graceMs)) return;
+  signalTree(c, 'SIGKILL');
+  await waitExit(c, 2000);
 }
 
 /** Restart the backend (e.g. after the user changes the Ollama host). */
 export async function restartBackend(onLog?: (line: string) => void): Promise<StartedBackend> {
-  stopBackend();
+  await stopBackendAndWait();
   return startBackend(onLog);
 }
