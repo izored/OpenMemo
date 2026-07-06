@@ -34,6 +34,20 @@ function logFile(): string {
   return path.join(app.getPath('userData'), 'logs', 'openmemo.log');
 }
 
+/**
+ * True only for the app's own local origins. Exact hostname match — a naive
+ * startsWith('http://localhost') would also pass http://localhost.evil.com.
+ */
+function isLocalAppUrl(url: string): boolean {
+  try {
+    const u = new URL(url);
+    if (u.protocol === 'file:') return true;
+    return u.protocol === 'http:' && (u.hostname === '127.0.0.1' || u.hostname === 'localhost');
+  } catch {
+    return false;
+  }
+}
+
 function appendLog(line: string): void {
   bootLog.push(line);
   if (bootLog.length > 400) bootLog.shift();
@@ -84,7 +98,7 @@ function createWindow(): void {
 
   // Open target=_blank / external links in the system browser, never in-app.
   mainWindow.webContents.setWindowOpenHandler(({ url }) => {
-    if (url.startsWith('http://127.0.0.1') || url.startsWith('http://localhost')) {
+    if (isLocalAppUrl(url)) {
       return { action: 'allow' };
     }
     shell.openExternal(url);
@@ -95,11 +109,7 @@ function createWindow(): void {
   // click shouldn't replace the UI with a remote page). External URLs open in
   // the system browser instead.
   mainWindow.webContents.on('will-navigate', (e, url) => {
-    const local =
-      url.startsWith('http://127.0.0.1') ||
-      url.startsWith('http://localhost') ||
-      url.startsWith('file://');
-    if (!local) {
+    if (!isLocalAppUrl(url)) {
       e.preventDefault();
       shell.openExternal(url);
     }
@@ -341,12 +351,20 @@ function registerIpc(): void {
   });
 
   // --- app-lock PIN ---------------------------------------------------------
-  ipcMain.handle('lock:verify', (_evt, pin: string) => {
+  // Linear backoff on failed attempts so the IPC can't be used as a fast PIN
+  // oracle (4 digits = only 10k combos without this).
+  let lockFails = 0;
+  ipcMain.handle('lock:verify', async (_evt, pin: string) => {
+    if (lockFails > 0) {
+      await new Promise((r) => setTimeout(r, Math.min(lockFails * 400, 4000)));
+    }
     if (verifyPin(pin)) {
+      lockFails = 0;
       lockResolve?.(true);
       lockResolve = null;
       return { ok: true };
     }
+    lockFails += 1;
     return { ok: false };
   });
   ipcMain.handle('lock:status', () => ({ enabled: isLockEnabled() }));

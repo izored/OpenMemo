@@ -179,6 +179,7 @@ against a determined attacker with full disk access.
 | Symptom | Fix |
 |---------|-----|
 | "App can't be opened" on first launch | Gatekeeper — right-click → Open, or `xattr -dr com.apple.quarantine /Applications/OpenMemo.app` (§2). |
+| App dies instantly ("Killed: 9" in Console) | arm64 requires a valid signature on every binary. The build ad-hoc signs automatically (`scripts/afterPack.cjs`); if you assembled the app manually, run `codesign --force --deep --sign - /Applications/OpenMemo.app`. |
 | Window stuck on the loading screen | Backend failed to boot. The error dialog shows the last log lines; usually a missing bundled resource — rebuild. In dev, make sure `frontend/dist` exists and `backend/.venv` is set up. |
 | "Local AI: Offline" in Settings | Ollama isn't reachable. Start it, or set the right host via **OpenMemo → Ollama Host…**. |
 | Link previews for antibot sites don't enrich | The first-run Chromium fetch hasn't finished (or failed). It degrades gracefully to plain HTTP; relaunch to retry. |

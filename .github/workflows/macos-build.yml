@@ -33,8 +33,10 @@ jobs:
       - name: Build .dmg
         working-directory: macOS
         env:
-          # Don't hunt for a Developer ID cert; fall back to ad-hoc signing.
+          # Don't hunt for a Developer ID cert; afterPack.cjs ad-hoc signs.
           CSC_IDENTITY_AUTO_DISCOVERY: "false"
+          # Authenticated GitHub API calls in bundle-backend.mjs (rate limits).
+          GITHUB_TOKEN: ${{ github.token }}
         run: npm run dist
 
       - name: Upload .dmg
@@ -43,3 +45,14 @@ jobs:
           name: OpenMemo-macos-arm64
           path: macOS/release/*.dmg
           if-no-files-found: error
+
+      # Tag builds: attach the .dmg to the release for that tag. Upload only —
+      # release creation (with its full-changelog body) stays with the
+      # documented release flow. Non-fatal if the release doesn't exist yet.
+      - name: Attach .dmg to release
+        if: startsWith(github.ref, 'refs/tags/')
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release upload "${GITHUB_REF_NAME}" macOS/release/*.dmg --clobber \
+            || echo "::warning::No release for ${GITHUB_REF_NAME} yet — create it, then re-run this job or upload the artifact manually."

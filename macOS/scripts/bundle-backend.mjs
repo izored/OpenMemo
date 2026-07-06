@@ -1,7 +1,7 @@
 /**
- * bundle-backend.mjs — assemble desktop/resources-stage/ for electron-builder.
+ * bundle-backend.mjs — assemble macOS/resources-stage/ for electron-builder.
  *
- * Produces, under desktop/resources-stage/ (matches resolvePaths() in
+ * Produces, under macOS/resources-stage/ (matches resolvePaths() in
  * src/paths.ts → these land in Contents/Resources):
  *
  *   python/        relocatable arm64 CPython (python-build-standalone) with the
@@ -17,9 +17,12 @@
  *   PBS_ASSET_URL   explicit python-build-standalone install_only .tar.gz URL
  *   FFMPEG_SRC      path to a local static arm64 ffmpeg to copy (skips download)
  *   FFMPEG_URL      URL of a static arm64 ffmpeg (.zip or raw binary)
+ *   FFMPEG_SHA256   expected hex digest of the FFMPEG_URL download (integrity)
+ *   GITHUB_TOKEN    used for the GitHub API call when present (CI rate limits)
  */
 import { execSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
+import crypto from 'node:crypto';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -50,9 +53,13 @@ fs.mkdirSync(STAGE, { recursive: true });
 async function resolvePbsUrl() {
   if (process.env.PBS_ASSET_URL) return process.env.PBS_ASSET_URL;
   log('Resolving latest python-build-standalone release…');
+  const ghHeaders = { 'User-Agent': 'openmemo-bundler', Accept: 'application/vnd.github+json' };
+  // CI runners share IPs — authenticate when a token is available to dodge
+  // the unauthenticated rate limit.
+  if (process.env.GITHUB_TOKEN) ghHeaders.Authorization = `Bearer ${process.env.GITHUB_TOKEN}`;
   const res = await fetch(
     'https://api.github.com/repos/astral-sh/python-build-standalone/releases/latest',
-    { headers: { 'User-Agent': 'openmemo-bundler', Accept: 'application/vnd.github+json' } },
+    { headers: ghHeaders },
   );
   if (!res.ok) die(`GitHub API ${res.status}. Set PBS_ASSET_URL to pin a release.`);
   const rel = await res.json();
@@ -98,6 +105,10 @@ fs.cpSync(path.join(ROOT, 'backend'), path.join(STAGE, 'app-backend', 'backend')
     const base = path.basename(src);
     if (SKIP.has(base)) return false;
     if (base.endsWith('.pyc')) return false;
+    // NEVER ship the developer's local env files — backend/.env holds personal
+    // config and backend/config.py loads it on whatever machine the .dmg lands
+    // on. .env.example (documentation) is fine to keep.
+    if (base === '.env' || (base.startsWith('.env.') && base !== '.env.example')) return false;
     return true;
   },
 });
@@ -126,6 +137,15 @@ if (process.env.FFMPEG_SRC) {
   const tmp2 = fs.mkdtempSync(path.join(os.tmpdir(), 'openmemo-ff-'));
   const dl = path.join(tmp2, path.basename(url));
   await download(url, dl);
+  // Integrity check — the default source is a third-party site, so allow (and
+  // in CI, encourage) pinning the exact artifact by digest.
+  if (process.env.FFMPEG_SHA256) {
+    const got = crypto.createHash('sha256').update(fs.readFileSync(dl)).digest('hex');
+    if (got !== process.env.FFMPEG_SHA256.toLowerCase()) {
+      die(`ffmpeg SHA-256 mismatch: expected ${process.env.FFMPEG_SHA256}, got ${got}`);
+    }
+    log('ffmpeg SHA-256 verified.');
+  }
   if (dl.endsWith('.zip')) {
     run(`unzip -o "${dl}" -d "${tmp2}"`);
     const found = fs
