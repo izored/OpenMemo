@@ -84,6 +84,12 @@ Update-FileVersion "chrome-extension/manifest.json" `
     '"version": "\d+\.\d+\.\d+"' `
     "`"version`": `"$new`""
 
+# macOS desktop shell (About panel + update notifier read this). NOT the
+# lockfile - a blanket "version" replace there would corrupt nested entries.
+Update-FileVersion "macOS/package.json" `
+    '"version": "\d+\.\d+\.\d+"' `
+    "`"version`": `"$new`""
+
 Update-FileVersion "README.md" `
     'version-\d+\.\d+\.\d+' `
     "version-$new"

@@ -55,8 +55,13 @@ export function loadSettings(): ShellSettings {
 
 export function saveSettings(patch: Partial<ShellSettings>): ShellSettings {
   const next = { ...loadSettings(), ...patch };
-  fs.mkdirSync(path.dirname(file()), { recursive: true });
-  fs.writeFileSync(file(), JSON.stringify(next, null, 2), 'utf-8');
+  const f = file();
+  fs.mkdirSync(path.dirname(f), { recursive: true });
+  // Atomic write (tmp + rename) so a crash mid-write can't corrupt settings —
+  // this file holds the PIN blob; a torn write would lock the user out.
+  const tmp = `${f}.tmp`;
+  fs.writeFileSync(tmp, JSON.stringify(next, null, 2), 'utf-8');
+  fs.renameSync(tmp, f);
   return next;
 }
 

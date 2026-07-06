@@ -64,6 +64,15 @@ export function Layout() {
 
   const [txConfig, setTxConfig, resetTxConfig] = useTransitionConfig();
 
+  // Native quick-add: the macOS shell (File → New Memo, ⌘N, global hotkey)
+  // dispatches this window event to open the add-memo island. Harmless on the
+  // plain web build — nothing dispatches it there.
+  useEffect(() => {
+    const openAdd = () => setAddPanelOpen(true);
+    window.addEventListener('openmemo:quick-add', openAdd);
+    return () => window.removeEventListener('openmemo:quick-add', openAdd);
+  }, [setAddPanelOpen]);
+
   const [overlayKey, setOverlayKey] = useState(0);
   const [overlayTheme, setOverlayTheme] = useState(tweaks.theme);
   const [colorTransition, setColorTransition] = useState(false);

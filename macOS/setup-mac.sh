@@ -62,8 +62,8 @@ echo "==> Installing frontend deps (npm ci)"
 ( cd frontend && npm ci )
 
 # --- 4. macOS desktop shell deps (for the native app) ------------------------
-echo "==> Installing macOS desktop shell deps (npm install)"
-( cd macOS && npm install )
+echo "==> Installing macOS desktop shell deps (npm ci)"
+( cd macOS && npm ci )
 
 deactivate
 
