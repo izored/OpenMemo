@@ -37,6 +37,10 @@ extraResources:
 
 npmRebuild: false
 
+# Guarantee a valid (ad-hoc) signature on every mach-o even when builder skips
+# signing (no Developer ID). See scripts/afterPack.cjs.
+afterPack: scripts/afterPack.cjs
+
 mac:
   category: public.app-category.productivity
   icon: buildResources/icon.png   # electron-builder generates the .icns from this 1024px PNG

@@ -74,9 +74,13 @@ export async function startBackend(onLog?: (line: string) => void): Promise<Star
     // All writable state under userData — the .app bundle is read-only.
     DATA_DIR: userData,
     HF_HOME: path.join(userData, 'hf-cache'), // whisper model cache
-    // Keep the link-scraper's Chromium under userData (fetched on first run by
-    // main.ts) so install + runtime agree and it's removable with the app data.
-    PLAYWRIGHT_BROWSERS_PATH: path.join(userData, 'ms-playwright'),
+    // Packaged only: keep the link-scraper's Chromium under userData (fetched
+    // on first run by main.ts) so install + runtime agree. In dev the browser
+    // was installed by setup-mac.sh into playwright's DEFAULT cache — forcing
+    // this path there would make the dev backend miss it silently.
+    ...(app.isPackaged
+      ? { PLAYWRIGHT_BROWSERS_PATH: path.join(userData, 'ms-playwright') }
+      : {}),
     FRONTEND_DIST: paths.frontendDist,
     FFMPEG_BIN: paths.ffmpegBin,
     OLLAMA_HOST: settings.ollamaHost,
