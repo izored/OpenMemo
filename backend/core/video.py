@@ -6,14 +6,22 @@ emits a single JPEG frame to a fixed destination path.
 """
 
 import asyncio
+import os
 import shutil
 from pathlib import Path
 
+from backend.config import settings
+
 
 def ffmpeg_available() -> bool:
-    """Return True if `ffmpeg` is on PATH. Cached at first call site only —
-    callers should treat this as cheap (it's just a PATH lookup)."""
-    return shutil.which("ffmpeg") is not None
+    """Return True if the configured ffmpeg is runnable. Resolves
+    `settings.FFMPEG_BIN` — an absolute path (the bundled macOS binary) is
+    accepted directly; a bare name (`ffmpeg`) is looked up on PATH. Cheap
+    (a path check / PATH lookup)."""
+    ffmpeg = settings.FFMPEG_BIN
+    if os.path.isabs(ffmpeg):
+        return os.path.isfile(ffmpeg) and os.access(ffmpeg, os.X_OK)
+    return shutil.which(ffmpeg) is not None
 
 
 async def extract_video_thumbnail(
@@ -40,7 +48,7 @@ async def extract_video_thumbnail(
         # -ss BEFORE -i for fast seek (decodes only from the GOP at `ss`).
         # -frames:v 1 → single frame. Scale keeps aspect ratio, even height.
         proc = await asyncio.create_subprocess_exec(
-            "ffmpeg",
+            settings.FFMPEG_BIN,
             "-y",
             "-ss", f"{ss:.2f}",
             "-i", video_path,

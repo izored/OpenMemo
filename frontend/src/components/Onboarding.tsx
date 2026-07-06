@@ -3,6 +3,7 @@ import { Icon } from './Icon';
 import { TOUR_STEPS, ONBOARDING_KEY } from '@/lib/onboarding';
 import { useAppStore } from '@/stores/appStore';
 import { cn } from '@/lib/utils';
+import { IntroSequence } from './onboarding/IntroSequence';
 
 type Phase = 'intro' | 'tour' | 'done';
 
@@ -39,8 +40,10 @@ export function Onboarding() {
     // eslint-disable-next-line react-hooks/set-state-in-effect -- show the intro once on first mount
     if (!localStorage.getItem(ONBOARDING_KEY)) setPhase('intro');
     const retake = () => {
+      // Replay the whole onboarding: cinematic intro first, then the spotlight
+      // tour (Settings → "Replay product tour" fires this).
       setStep(0);
-      setPhase('tour');
+      setPhase('intro');
     };
     window.addEventListener('openmemo:retake-tour', retake);
     return () => window.removeEventListener('openmemo:retake-tour', retake);
@@ -90,38 +93,11 @@ export function Onboarding() {
 
   if (phase === 'done') return null;
 
-  // ── Fullscreen first-impression intro ──────────────────────────────────
-  // Placeholder stage. Drop a custom motion animation into `.om-intro-stage`
-  // (CleanMyMac-style) — the layout, copy, and CTA stay.
+  // ── Fullscreen first-impression intro (CleanMyMac-style) ───────────────
+  // The cinematic, high-motion sequence. On "Take the tour" it hands off to the
+  // spotlight coachmarks below; Skip dismisses onboarding entirely.
   if (phase === 'intro') {
-    return (
-      <div className="om-intro">
-        <div className="om-intro-stage">
-          {/* Living-cell composition — 4 blurred blobs drifting on independent
-              loops at calm, slow speeds. Centered, not wide. */}
-          <div className="om-intro-cell" aria-hidden>
-            <span className="om-intro-blob b1" />
-            <span className="om-intro-blob b2" />
-            <span className="om-intro-blob b3" />
-            <span className="om-intro-blob b4" />
-          </div>
-        </div>
-        <div className="om-intro-copy">
-          <span className="mono om-greet-eyebrow">Welcome to</span>
-          <h1 className="om-intro-title">openMemo</h1>
-          <p className="om-intro-sub">One place for everything worth saving. On your machine. Free.</p>
-          <div className="om-intro-actions">
-            <button className="om-add-foot-btn primary" onClick={() => setPhase('tour')}>
-              <span>Take the tour</span>
-              <Icon name="arrowRight" size={13} />
-            </button>
-            <button className="om-add-foot-btn ghost" onClick={finish}>
-              Skip
-            </button>
-          </div>
-        </div>
-      </div>
-    );
+    return <IntroSequence onTakeTour={() => setPhase('tour')} onSkip={finish} />;
   }
 
   // ── Coachmark tour ─────────────────────────────────────────────────────

@@ -1,0 +1,58 @@
+name: Build macOS app (.dmg)
+
+# Builds the Apple-Silicon .dmg in the cloud. Manual (workflow_dispatch) or on a
+# version tag push. The macos-14 runner IS arm64, which bundle-backend.mjs
+# requires (it downloads an arm64 Python + native wheels + arm64 ffmpeg).
+#
+# Unsigned / ad-hoc only (no paid Apple account → CSC_IDENTITY_AUTO_DISCOVERY=false),
+# so the artifact still needs the Gatekeeper step on first launch — see docs/MACOS.md.
+
+on:
+  workflow_dispatch:
+  push:
+    tags:
+      - "v*"
+
+jobs:
+  build:
+    runs-on: macos-14            # Apple Silicon (arm64)
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Install frontend deps
+        run: npm --prefix frontend ci
+
+      - name: Install macOS shell deps
+        run: npm --prefix macOS install
+
+      - name: Build .dmg
+        working-directory: macOS
+        env:
+          # Don't hunt for a Developer ID cert; afterPack.cjs ad-hoc signs.
+          CSC_IDENTITY_AUTO_DISCOVERY: "false"
+          # Authenticated GitHub API calls in bundle-backend.mjs (rate limits).
+          GITHUB_TOKEN: ${{ github.token }}
+        run: npm run dist
+
+      - name: Upload .dmg
+        uses: actions/upload-artifact@v4
+        with:
+          name: OpenMemo-macos-arm64
+          path: macOS/release/*.dmg
+          if-no-files-found: error
+
+      # Tag builds: attach the .dmg to the release for that tag. Upload only —
+      # release creation (with its full-changelog body) stays with the
+      # documented release flow. Non-fatal if the release doesn't exist yet.
+      - name: Attach .dmg to release
+        if: startsWith(github.ref, 'refs/tags/')
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release upload "${GITHUB_REF_NAME}" macOS/release/*.dmg --clobber \
+            || echo "::warning::No release for ${GITHUB_REF_NAME} yet — create it, then re-run this job or upload the artifact manually."
