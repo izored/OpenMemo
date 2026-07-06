@@ -1,0 +1,7 @@
+# Scoped to macOS/ — keeps Unix line endings on files executed by a shell here.
+# CRLF breaks the shebang / `bash` parsing on macOS. The repo is developed on
+# Windows, so without this git's autocrlf could rewrite them on checkout.
+# Lives inside macOS/ (not repo root) so the Mac port leaves the rest of the
+# repo's checkout behavior completely alone.
+*.sh        text eol=lf
+*.command   text eol=lf
