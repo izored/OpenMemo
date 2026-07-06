@@ -6,13 +6,14 @@
   "author": "izo.studio",
   "license": "MIT",
   "private": true,
+  "repository": "https://github.com/izored/OpenMemo",
   "main": "dist-electron/main.js",
   "scripts": {
     "build:ts": "tsc -p tsconfig.json",
     "build:frontend": "npm --prefix ../frontend run build",
     "dev": "npm run build:ts && electron .",
     "bundle:backend": "node scripts/bundle-backend.mjs",
-    "dist": "npm run build:ts && npm run build:frontend && npm run bundle:backend && electron-builder --mac --arm64"
+    "dist": "npm run build:ts && npm run build:frontend && npm run bundle:backend && electron-builder --mac --arm64 --publish never"
   },
   "devDependencies": {
     "@types/node": "^22.10.0",
