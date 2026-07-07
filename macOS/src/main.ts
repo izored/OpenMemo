@@ -58,6 +58,24 @@ function isLocalAppUrl(url: string): boolean {
   }
 }
 
+/**
+ * Load the SPA into the main window and hard-reset any window-drag region.
+ *
+ * macOS Electron can carry a `-webkit-app-region: drag` region from a
+ * previously loaded page (the loading/lock screens used to set one) across an
+ * in-place navigation — the whole window then swallows every mouse click as a
+ * window-drag attempt while the keyboard keeps working. The static pages no
+ * longer declare drag regions, and this reset guarantees the SPA never
+ * inherits one regardless.
+ */
+async function loadAppUrl(url: string): Promise<void> {
+  if (!mainWindow) return;
+  await mainWindow.loadURL(url);
+  await mainWindow.webContents.insertCSS(
+    'html, body { -webkit-app-region: no-drag !important; }',
+  );
+}
+
 function appendLog(line: string): void {
   bootLog.push(line);
   if (bootLog.length > 400) bootLog.shift();
@@ -177,7 +195,7 @@ async function openAppWindow(): Promise<void> {
       flushPendingOpenFiles();
     }
     const target = rendererOverride ?? backend!.url;
-    await mainWindow?.loadURL(target);
+    await loadAppUrl(target);
     // Quietly check GitHub for a newer release, once per app run (packaged only).
     if (app.isPackaged && !updateChecked) {
       updateChecked = true;
@@ -434,7 +452,7 @@ function registerIpc(): void {
     try {
       await mainWindow?.loadFile(path.join(staticDir(), 'loading.html'));
       backend = await restartBackend(appendLog);
-      await mainWindow?.loadURL(process.env.OPENMEMO_RENDERER_URL ?? backend.url);
+      await loadAppUrl(process.env.OPENMEMO_RENDERER_URL ?? backend.url);
       return { ok: true };
     } catch (err) {
       return { ok: false, error: err instanceof Error ? err.message : String(err) };
@@ -504,7 +522,7 @@ app.on('open-url', (event, url) => {
       // host + pathname → SPA route ("memo/abc", "settings", …). Sanitized:
       // only ever appended to our own local origin.
       const route = `${u.host}${u.pathname}`.replace(/^\/+|\/+$/g, '');
-      if (route) await mainWindow.loadURL(`${backend.url}${route}`);
+      if (route) await loadAppUrl(`${backend.url}${route}`);
     } catch {
       /* malformed link — focusing the app is enough */
     }
