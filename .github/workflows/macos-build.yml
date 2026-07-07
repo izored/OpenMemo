@@ -40,7 +40,7 @@ jobs:
         run: npm run dist
 
       - name: Upload .dmg
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           name: OpenMemo-macos-arm64
           path: macOS/release/*.dmg
