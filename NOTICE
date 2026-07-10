@@ -1,0 +1,22 @@
+openMemo
+Copyright (c) 2026 DIR (dev.izo.red) <dev@izo.red>
+
+This program is licensed under the GNU Affero General Public License,
+version 3 (AGPL-3.0). See the LICENSE file for the full text, and
+docs/LICENSE-EXPLAINED.md for a plain-English walkthrough.
+
+Additional terms under GNU AGPL version 3, section 7(b)
+--------------------------------------------------------
+
+Any copy, fork, or modified version of this software that you distribute,
+or make available to users as a network service, must preserve the
+following author attribution in a place reasonably visible to its users
+(for example the README, an About screen, or the documentation):
+
+    Based on openMemo by DIR (dev.izo.red)
+
+Removing or obscuring this attribution in distributed or modified versions
+is not permitted. This requirement does not restrict the freedoms granted
+by the AGPL: the software and any modified version of it remain free to
+use, study, modify, and redistribute under the same license, and must
+remain freely available to their users as the AGPL requires.

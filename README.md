@@ -214,4 +214,4 @@ openMemo stands on the shoulders of incredible open-source projects: MDXEditor, 
 
 ## Licence
 
-AGPL 3.0. Free to use, modify, and self-host. Any derivative work or service must remain open source and share improvements back to the community.
+AGPL 3.0. Free to use, modify, and self-host. Any derivative work or service must remain open source and share improvements back to the community, and must keep the credit: "Based on openMemo by DIR (dev.izo.red)". Full text in [`LICENSE`](LICENSE), attribution terms in [`NOTICE`](NOTICE), plain-English walkthrough in [`docs/LICENSE-EXPLAINED.md`](docs/LICENSE-EXPLAINED.md).
