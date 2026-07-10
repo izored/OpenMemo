@@ -43,6 +43,9 @@ export const memoApi = {
   pin: (id: string, pinned: boolean) => fetchJSON<{ id: string; pinned: boolean }>(`/memos/${id}/pin`, { method: 'PUT', body: JSON.stringify({ pinned }) }),
   like: (id: string, liked: boolean) => fetchJSON<{ id: string; liked: boolean }>(`/memos/${id}/like`, { method: 'PUT', body: JSON.stringify({ liked }) }),
   hide: (id: string, hidden: boolean) => fetchJSON<{ id: string; hidden: boolean }>(`/memos/${id}/hide`, { method: 'PUT', body: JSON.stringify({ hidden }) }),
+  // Dashboard tile size — 'wide' spans two grid columns, 'normal' resets.
+  setCardSize: (id: string, size: 'normal' | 'wide') =>
+    fetchJSON<{ id: string; card_size: string | null }>(`/memos/${id}/card-size`, { method: 'PUT', body: JSON.stringify({ size }) }),
   listPinned: (workspace_id?: string) => fetchJSON<{ id: string; type: string; title: string; thumbnail_path?: string; source_domain?: string; source_favicon?: string; pinned: boolean }[]>(`/memos/pinned/list${workspace_id ? `?workspace_id=${encodeURIComponent(workspace_id)}` : ''}`),
   delete: (id: string) => fetchJSON<any>(`/memos/${id}`, { method: 'DELETE' }),
   restore: (id: string) => fetchJSON<any>(`/memos/${id}/restore`, { method: 'POST' }),
@@ -79,10 +82,12 @@ export const ingestApi = {
   // `no_pull` saves the URL as a plain link, skipping the heavy visual pull
   // (yt-dlp / headless / media scrape) for pages that choke the pipeline or
   // when the user just wants the bookmark (OPNMMO-0049).
-  url: (url: string, collection_id?: string, opts?: { noPull?: boolean; workspace_id?: string }) =>
+  // `audioOnly` (Music page "+"): file the link as a music memo and pull the
+  // audio track, even for video hosts like YouTube.
+  url: (url: string, collection_id?: string, opts?: { noPull?: boolean; audioOnly?: boolean; workspace_id?: string }) =>
     fetchJSON<{ id: string; title: string }>('/ingest/url', {
       method: 'POST',
-      body: JSON.stringify({ url, collection_id, no_pull: opts?.noPull ?? false, workspace_id: opts?.workspace_id }),
+      body: JSON.stringify({ url, collection_id, no_pull: opts?.noPull ?? false, audio_only: opts?.audioOnly ?? false, workspace_id: opts?.workspace_id }),
     }),
   note: (title: string, content: string, collection_id?: string, workspace_id?: string) =>
     fetchJSON<{ id: string }>('/ingest/note', {

@@ -159,7 +159,9 @@ export function MusicAddModal({ embedded = false }: { embedded?: boolean } = {})
         navigate(`/music/${res.collection_id}`);
         return;
       }
-      await ingestApi.url(link);
+      // Music surface: a plain link (YouTube, SoundCloud…) means "save the
+      // SONG" — ingest as a music memo + audio pull, never a video/link memo.
+      await ingestApi.url(link, undefined, { audioOnly: true });
       refreshMusic();
       close();
     } catch (e) {
@@ -385,7 +387,7 @@ export function MusicAddModal({ embedded = false }: { embedded?: boolean } = {})
               </>
             ) : (
               <p className="om-mm-hint mono">
-                Spotify &amp; Apple Music links download as lossless FLAC. Other links save like any audio memo.
+                Spotify &amp; Apple Music links download as lossless FLAC. Other links (YouTube, SoundCloud…) are saved as songs — audio downloads right here in your library.
               </p>
             )}
           </div>
