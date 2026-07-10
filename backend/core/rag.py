@@ -28,7 +28,8 @@ THIN_MEMO_SYSTEM_PROMPT = """You are MemoAI, answering about one saved memo. The
 # context block.
 NO_CONTEXT_MESSAGE = (
     "I couldn't find anything in your memos relevant to that question. "
-    "Try rephrasing it, or start your message with `@` to chat without memo context."
+    "Try rephrasing it, or switch the composer to **Chat** mode to talk to the "
+    "model without your memos."
 )
 
 

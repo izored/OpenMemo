@@ -6,7 +6,6 @@ import {
 } from '@dnd-kit/core';
 import { SortableContext, verticalListSortingStrategy, useSortable, arrayMove } from '@dnd-kit/sortable';
 import { motion, AnimatePresence } from 'framer-motion';
-import Masonry from 'react-masonry-css';
 import { useState, useEffect, useRef } from 'react';
 import { MemoCard } from './MemoCard';
 import { Icon } from './Icon';
@@ -58,6 +57,46 @@ function useViewportColumns(userCols: number): number {
     return () => window.removeEventListener('resize', calc);
   }, []);
   return Math.min(userCols, cap);
+}
+
+// CSS-grid masonry cell (replaces react-masonry-css — column buckets can't host
+// a card spanning two columns). The grid runs on tiny 2px auto-rows; each cell
+// measures its content and spans ceil((height + gap) / 2) rows, so cards pack
+// like a masonry while `grid-column: span 2` gives user-resized wide cards a
+// true two-column footprint (grid-auto-flow: dense backfills beside them).
+const ROW_UNIT = 2;
+
+function MasonryCell({
+  wide,
+  gap,
+  children,
+}: {
+  wide: boolean;
+  gap: number;
+  children: React.ReactNode;
+}) {
+  const innerRef = useRef<HTMLDivElement>(null);
+  const [rows, setRows] = useState(1);
+  useEffect(() => {
+    const el = innerRef.current;
+    if (!el) return;
+    const measure = () => {
+      const h = el.getBoundingClientRect().height;
+      setRows(Math.max(1, Math.ceil((h + gap) / ROW_UNIT)));
+    };
+    measure();
+    const ro = new ResizeObserver(measure);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [gap]);
+  return (
+    <div
+      className="om-masonry-cell"
+      style={{ gridRowEnd: `span ${rows}`, gridColumn: wide ? 'span 2' : undefined }}
+    >
+      <div ref={innerRef}>{children}</div>
+    </div>
+  );
 }
 
 export function MemoGrid({ memos: serverMemos, transitionKey }: MemoGridProps) {
@@ -180,14 +219,6 @@ export function MemoGrid({ memos: serverMemos, transitionKey }: MemoGridProps) {
     );
   }
 
-  const breakpointCols = {
-    default: columns,
-    1500: Math.min(columns, 4),
-    1280: Math.min(columns, 3),
-    900: 2,
-    640: 1,
-  };
-
   return (
     <>
       <SortableContext items={localMemos.map((m) => m.id)} strategy={verticalListSortingStrategy}>
@@ -205,18 +236,26 @@ export function MemoGrid({ memos: serverMemos, transitionKey }: MemoGridProps) {
               exit={{ opacity: 0, y: -8 }}
               transition={{ duration: 0.18, ease: [0.25, 1, 0.5, 1] }}
             >
-              <Masonry
-                breakpointCols={breakpointCols}
-                className="om-masonry"
-                columnClassName="om-masonry-col"
-                style={{ gap }}
+              <div
+                className="om-masonry-grid"
+                style={{
+                  ['--grid-cols' as string]: columns,
+                  ['--grid-gap' as string]: `${gap}px`,
+                  columnGap: gap,
+                }}
               >
                 {localMemos.map((memo) => (
-                  <div key={memo.id} style={{ marginBottom: gap }}>
+                  <MasonryCell
+                    key={memo.id}
+                    gap={gap}
+                    // A wide card needs a second column to exist — on the phone's
+                    // single column it renders normal.
+                    wide={memo.card_size === 'wide' && columns > 1}
+                  >
                     <SortableMemoCard memo={memo} anyDragActive={!!activeId} lightboxGroup={mediaGroup} transitionKey={transitionKey} dragDisabled={dragDisabled} />
-                  </div>
+                  </MasonryCell>
                 ))}
-              </Masonry>
+              </div>
             </motion.div>
           </AnimatePresence>
         </div>

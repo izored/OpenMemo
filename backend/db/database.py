@@ -94,6 +94,11 @@ async def _run_migrations():
             await db.execute("ALTER TABLE memos ADD COLUMN liked BOOLEAN DEFAULT 0")
             await db.commit()
 
+        # User-chosen dashboard tile size ('wide' spans two columns). NULL = normal.
+        if "card_size" not in columns:
+            await db.execute("ALTER TABLE memos ADD COLUMN card_size VARCHAR")
+            await db.commit()
+
         if "is_deleted" not in columns:
             await db.execute("ALTER TABLE memos ADD COLUMN is_deleted BOOLEAN DEFAULT 0")
             await db.commit()

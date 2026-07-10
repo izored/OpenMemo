@@ -50,7 +50,7 @@ export function IslandFab({ open, onOpenChange, icon = 'plus', label = 'New', ho
     const onDown = (e: MouseEvent) => {
       const t = e.target as Node;
       if (rootRef.current?.contains(t)) return;
-      if ((t as HTMLElement).closest?.('.om-add-coll-flyout')) return;
+      if ((t as HTMLElement).closest?.('.om-add-coll-flyout, .om-add-coll-pop-layer')) return;
       onOpenChange(false);
     };
     const onKey = (e: KeyboardEvent) => {
