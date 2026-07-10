@@ -1,4 +1,5 @@
 import React, { useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { useNavigate } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Icon } from './Icon';
@@ -49,6 +50,9 @@ export function AddMemoPanel({ embedded = false }: { embedded?: boolean } = {}) 
   // When a Space is open, adds land in it (ADR-020) and the collection picker
   // shows the Space's collections, not the library's.
   const activeSpace = useAppStore((s) => s.activeSpace);
+  // When a collection view is open (dashboard filter / Space view), a new memo
+  // should land in it — the picker pre-selects the collection on panel open.
+  const activeCollection = useAppStore((s) => s.activeCollection);
   const queryClient = useQueryClient();
 
   const { data: collections = [] } = useQuery({
@@ -72,6 +76,22 @@ export function AddMemoPanel({ embedded = false }: { embedded?: boolean } = {}) 
   const [tags, setTags] = useState<string[]>([]);
   const [collection, setCollection] = useState<string>('');
   const [collOpen, setCollOpen] = useState(false);
+  // The collection popup renders through a portal in FIXED coords measured off
+  // the select button. In-flow it lived inside the panel's scrolling body,
+  // which clipped its top and swallowed wheel scroll — unscrollable with many
+  // collections. Fixed + portal = full height, its own scrollbar, no clipping.
+  const collBtnRef = useRef<HTMLButtonElement>(null);
+  const [collPos, setCollPos] = useState<{ left: number; width: number; bottom: number } | null>(null);
+  const toggleColl = () => {
+    setCollOpen((v) => {
+      const next = !v;
+      if (next && collBtnRef.current) {
+        const r = collBtnRef.current.getBoundingClientRect();
+        setCollPos({ left: r.left, width: r.width, bottom: window.innerHeight - r.top + 4 });
+      }
+      return next;
+    });
+  };
   const [busy, setBusy] = useState(false);
   const [progress, setProgress] = useState<{ done: number; total: number } | null>(null);
   const [error, setError] = useState('');
@@ -130,6 +150,16 @@ export function AddMemoPanel({ embedded = false }: { embedded?: boolean } = {}) 
     }
   }, [open]);
 
+  // Each open re-targets the collection the user is currently looking at (or
+  // clears it on the plain dashboard), so "add while inside Fitness" files the
+  // memo into Fitness with zero clicks. Manual picks after open still win.
+  useEffect(() => {
+    if (open) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- prefill from the open collection view
+      setCollection(activeCollection || '');
+    }
+  }, [open, activeCollection]);
+
   // A collection just created from the "New collection…" flow auto-selects here,
   // so the user lands back in the panel with it already chosen (no reselect).
   useEffect(() => {
@@ -156,6 +186,9 @@ export function AddMemoPanel({ embedded = false }: { embedded?: boolean } = {}) 
   const done = () => {
     queryClient.invalidateQueries({ queryKey: ['memos'] });
     queryClient.invalidateQueries({ queryKey: ['stats'] });
+    // Memo counts on collection cards / sidebar move when an add targets a
+    // collection — keep them honest.
+    queryClient.invalidateQueries({ queryKey: ['collections'] });
     // Keep Space counts fresh so the header stats and the delete warning
     // ("N memos will be gone") never lie after an add into a Space.
     if (activeSpace) {
@@ -511,7 +544,7 @@ export function AddMemoPanel({ embedded = false }: { embedded?: boolean } = {}) 
 
         <div className="om-add-sect mono">Collection</div>
         <div className="om-add-coll-wrap">
-          <button className="om-add-select" onClick={() => setCollOpen((v) => !v)} aria-expanded={collOpen}>
+          <button ref={collBtnRef} className="om-add-select" onClick={toggleColl} aria-expanded={collOpen}>
             <Icon name="folder" size={12} />
             <span>{activeColl ? activeColl.name : 'No collection'}</span>
             <Icon
@@ -520,36 +553,52 @@ export function AddMemoPanel({ embedded = false }: { embedded?: boolean } = {}) 
               style={{ marginLeft: 'auto', opacity: 0.55, transform: collOpen ? 'rotate(180deg)' : 'none', transition: 'transform .15s' }}
             />
           </button>
-          {collOpen && (
-            <div className="om-add-coll-pop" role="listbox" aria-label="Choose collection">
-              <button
-                className={cn('om-add-coll-opt', !collection && 'active')}
-                onClick={() => { setCollection(''); setCollOpen(false); }}
-              >
-                <Icon name="inbox" size={11} />
-                <span>No collection</span>
-                <span className="mono" />
-              </button>
-              {collections.map((c: Collection) => (
-                <button
-                  key={c.id}
-                  className={cn('om-add-coll-opt', collection === c.id && 'active')}
-                  onClick={() => { setCollection(c.id); setCollOpen(false); }}
+          {collOpen &&
+            collPos &&
+            createPortal(
+              // The layer class also tells IslandFab's click-outside handler
+              // these clicks belong to the add flow — not a dismiss.
+              <div className="om-add-coll-pop-layer">
+                <div
+                  style={{ position: 'fixed', inset: 0, zIndex: 499 }}
+                  onClick={() => setCollOpen(false)}
+                />
+                <div
+                  className="om-add-coll-pop is-portal"
+                  role="listbox"
+                  aria-label="Choose collection"
+                  style={{ position: 'fixed', left: collPos.left, width: collPos.width, bottom: collPos.bottom, zIndex: 500 }}
                 >
-                  <span>{c.emoji || '📁'}</span>
-                  <span>{c.name}</span>
-                  <span className="mono" />
-                </button>
-              ))}
-              <button
-                className="om-add-coll-opt new"
-                onClick={() => { setEditingCollection(null); setCollectionModalOpen(true); setCollOpen(false); }}
-              >
-                <Icon name="plus" size={12} />
-                <span>New collection…</span>
-              </button>
-            </div>
-          )}
+                  <button
+                    className={cn('om-add-coll-opt', !collection && 'active')}
+                    onClick={() => { setCollection(''); setCollOpen(false); }}
+                  >
+                    <Icon name="inbox" size={11} />
+                    <span>No collection</span>
+                    <span className="mono" />
+                  </button>
+                  {collections.map((c: Collection) => (
+                    <button
+                      key={c.id}
+                      className={cn('om-add-coll-opt', collection === c.id && 'active')}
+                      onClick={() => { setCollection(c.id); setCollOpen(false); }}
+                    >
+                      <span>{c.emoji || '📁'}</span>
+                      <span>{c.name}</span>
+                      <span className="mono" />
+                    </button>
+                  ))}
+                  <button
+                    className="om-add-coll-opt new"
+                    onClick={() => { setEditingCollection(null); setCollectionModalOpen(true); setCollOpen(false); }}
+                  >
+                    <Icon name="plus" size={12} />
+                    <span>New collection…</span>
+                  </button>
+                </div>
+              </div>,
+              document.body
+            )}
         </div>
 
         <div className="om-add-sect mono">Tags</div>

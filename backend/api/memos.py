@@ -137,8 +137,8 @@ async def list_memos(
             Memo.id, Memo.type, Memo.title, Memo.description, Memo.content_text,
             Memo.source_url, Memo.source_domain, Memo.source_favicon,
             Memo.thumbnail_path, Memo.file_path, Memo.ai_summary, Memo.notes,
-            Memo.sort_order, Memo.pinned, Memo.liked, Memo.hidden, Memo.audio_kind,
-            Memo.audio_artist, Memo.audio_album, Memo.is_processed,
+            Memo.sort_order, Memo.pinned, Memo.liked, Memo.hidden, Memo.card_size,
+            Memo.audio_kind, Memo.audio_artist, Memo.audio_album, Memo.is_processed,
             Memo.localize_status, Memo.localize_error,
             Memo.created_at, Memo.updated_at, Memo.recency_at,
         ),
@@ -231,6 +231,7 @@ async def list_memos(
                 "pinned": m.pinned,
                 "liked": m.liked,
                 "hidden": m.hidden,
+                "card_size": m.card_size,
                 "audio_kind": m.audio_kind,
                 "audio_artist": m.audio_artist,
                 "audio_album": m.audio_album,
@@ -295,6 +296,7 @@ async def get_memo(memo_id: str, db: AsyncSession = Depends(get_db)):
         "pinned": memo.pinned,
         "liked": memo.liked,
         "hidden": memo.hidden,
+        "card_size": memo.card_size,
         "is_processed": memo.is_processed,
         "created_at": memo.created_at.isoformat(),
         "updated_at": memo.updated_at.isoformat(),
@@ -705,6 +707,26 @@ async def update_memo_like(memo_id: str, body: LikeUpdate, db: AsyncSession = De
     memo.updated_at = datetime.utcnow()
     await db.commit()
     return {"id": memo.id, "liked": memo.liked, "status": "updated"}
+
+
+class CardSizeUpdate(BaseModel):
+    size: str  # 'normal' | 'wide'
+
+
+@router.put("/{memo_id}/card-size")
+async def update_memo_card_size(memo_id: str, body: CardSizeUpdate, db: AsyncSession = Depends(get_db)):
+    """Set the memo's dashboard tile size. 'wide' spans two grid columns so the
+    user can make a memo pop in the feed; 'normal' resets to one column."""
+    if body.size not in ("normal", "wide"):
+        raise HTTPException(status_code=400, detail="size must be 'normal' or 'wide'")
+    memo = await db.get(Memo, memo_id)
+    if not memo:
+        raise HTTPException(status_code=404, detail="Memo not found")
+    # Store NULL for normal so pre-feature rows and reset rows look identical.
+    memo.card_size = None if body.size == "normal" else body.size
+    memo.updated_at = datetime.utcnow()
+    await db.commit()
+    return {"id": memo.id, "card_size": memo.card_size, "status": "updated"}
 
 
 @router.get("/pinned/list")

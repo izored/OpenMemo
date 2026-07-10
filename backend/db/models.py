@@ -135,6 +135,10 @@ class Memo(Base):
     # live inside their playlist and stay out of every list feed; a standalone
     # song added to a playlist later keeps its library spot (flag stays False).
     playlist_born = Column(Boolean, default=False)
+    # User-chosen tile size in the dashboard grid. NULL/'normal' = one column;
+    # 'wide' = spans two columns (still one masonry cell tall) so a memo the
+    # user wants to remember pops out of the feed.
+    card_size = Column(String, nullable=True)  # normal|wide
     is_processed = Column(Boolean, default=False)
     is_deleted = Column(Boolean, default=False)
     deleted_at = Column(DateTime, nullable=True)
