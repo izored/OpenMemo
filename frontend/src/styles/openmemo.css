@@ -1049,10 +1049,11 @@ input, textarea { font: inherit; color: inherit; }
 [data-card="normal"]  .om-min-hover { display: none; }
 
 /* Minimal: pin + delete sit inside the hover overlay's top-right corner.
-   Pointer-events restored because the overlay disables them on its container. */
+   Pointer-events restored because the overlay disables them on its container.
+   z stays above the pencil (10) so the chips' tooltips don't get eaten. */
 [data-card="minimal"] .om-card-actions {
   top: 12px; right: 12px;
-  z-index: 4; pointer-events: auto;
+  z-index: 12; pointer-events: auto;
 }
 [data-card="minimal"] .om-card-actions .om-action.pinned { background: var(--accent); color: var(--accent-text, #fff); }
 
@@ -1205,7 +1206,8 @@ input, textarea { font: inherit; color: inherit; }
 }
 
 /* Action cluster sits in the hover overlay's top-right corner. */
-[data-card="edge"] .om-card-actions { top: 12px; right: 12px; z-index: 4; pointer-events: auto; }
+/* z above the pencil (10) so the chips' tooltips don't get eaten. */
+[data-card="edge"] .om-card-actions { top: 12px; right: 12px; z-index: 12; pointer-events: auto; }
 [data-card="edge"] .om-card-actions .om-action.pinned { background: var(--accent); color: var(--accent-text, #fff); }
 
 /* The wall fills the width — the grid max-width cap is dropped in the
@@ -1219,7 +1221,11 @@ input, textarea { font: inherit; color: inherit; }
 [data-card="edge"] .om-space-header { display: none; }
 
 .om-card-actions {
-  position: absolute; top: 10px; right: 10px; z-index: 10;
+  /* z 12 > the pencil's z 10: the cluster's hover tooltips drop into the
+     pencil's row (top 34) and must paint over it, not get eaten by it. The
+     chips themselves never overlap the pencil, and the tooltip is
+     pointer-events:none, so the pencil stays fully clickable. */
+  position: absolute; top: 10px; right: 10px; z-index: 12;
   display: flex; gap: 4px;
   opacity: 0; transition: opacity .2s;
 }
