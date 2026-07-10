@@ -30,6 +30,16 @@ const SUGGESTIONS = [
   "What's in my inbox?",
 ];
 
+// Answer mode: 'memos' = RAG over the library with citations (default);
+// 'chat' = straight LLM, no retrieval. Replaces the old hidden "@" prefix
+// (which still works server-side for muscle memory, but is no longer taught).
+type AskMode = 'memos' | 'chat';
+
+// The coach strip that teaches the two modes shows at most this many visits,
+// then retires forever. "Got it" retires it immediately.
+const COACH_KEY = 'openmemo_ask_coach_count';
+const COACH_MAX_SHOWS = 30;
+
 export function AskMemoPage() {
   const { chatModel, setChatModel } = useAppStore();
   const theme = useAppStore((s) => s.tweaks.theme);
@@ -39,6 +49,10 @@ export function AskMemoPage() {
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState('');
   const [streaming, setStreaming] = useState(false);
+  // Default to memos every visit — "search my stuff" is the page's promise;
+  // a sticky chat mode would silently answer from thin air days later.
+  const [askMode, setAskMode] = useState<AskMode>('memos');
+  const [coachVisible, setCoachVisible] = useState(false);
   const [sessionId, setSessionId] = useState<string | null>(null);
   const [historyOpen, setHistoryOpen] = useState(false);
   const [modelOpen, setModelOpen] = useState(false);
@@ -79,6 +93,29 @@ export function AskMemoPage() {
     // user's own scroll and stutters. Pinned-to-bottom should just track.
     if (el) el.scrollTop = el.scrollHeight;
   }, [messages]);
+
+  // Mode coach: one increment per page visit, retire after COACH_MAX_SHOWS
+  // visits (or the first "Got it") — by then the toggle is learned.
+  useEffect(() => {
+    try {
+      const seen = parseInt(localStorage.getItem(COACH_KEY) || '0', 10) || 0;
+      if (seen < COACH_MAX_SHOWS) {
+        // eslint-disable-next-line react-hooks/set-state-in-effect -- one-time visibility gate per visit
+        setCoachVisible(true);
+        localStorage.setItem(COACH_KEY, String(seen + 1));
+      }
+    } catch {
+      /* private mode etc. — just skip the coach */
+    }
+  }, []);
+  const dismissCoach = () => {
+    setCoachVisible(false);
+    try {
+      localStorage.setItem(COACH_KEY, String(COACH_MAX_SHOWS));
+    } catch {
+      /* ignore */
+    }
+  };
 
   const loadSession = async (id: string) => {
     try {
@@ -133,6 +170,9 @@ export function AskMemoPage() {
         query: userMsg.content,
         session_id: sessionId || undefined,
         model: chatModel,
+        // The composer toggle decides: memos = RAG with citations, chat =
+        // straight to the model. No more secret "@" prefix required.
+        use_rag: askMode === 'memos',
       });
       if (!resp.ok) {
         const err = await resp.json().catch(() => ({ detail: `HTTP ${resp.status}` }));
@@ -194,14 +234,57 @@ export function AskMemoPage() {
 
   const hasThread = messages.length > 0;
 
+  // Slim strip that teaches the Memos/Chat toggle. Shows on the first
+  // COACH_MAX_SHOWS visits, then never again (see the mount effect above).
+  const coach = coachVisible ? (
+    <div className="om-ask-coach" role="note">
+      <Icon name="info" size={12} />
+      <p>
+        <b>Memos</b> answers from your saved stuff, with citations. <b>Chat</b> talks
+        straight to the model — nothing of yours is searched. Flip it next to the
+        message box.
+      </p>
+      <button type="button" className="om-ask-coach-btn" onClick={dismissCoach}>
+        Got it
+      </button>
+    </div>
+  ) : null;
+
   const composerInner = (
     <div className="om-ask-composer">
-      <Icon name="sparkles" size={14} />
+      <div className="om-ask-mode" role="tablist" aria-label="Answer mode">
+        <button
+          type="button"
+          role="tab"
+          aria-selected={askMode === 'memos'}
+          className={cn('om-ask-mode-btn', askMode === 'memos' && 'active')}
+          onClick={() => setAskMode('memos')}
+          title="Answer from your memos, with citations"
+        >
+          <Icon name="sparkles" size={11} />
+          <span>Memos</span>
+        </button>
+        <button
+          type="button"
+          role="tab"
+          aria-selected={askMode === 'chat'}
+          className={cn('om-ask-mode-btn', askMode === 'chat' && 'active')}
+          onClick={() => setAskMode('chat')}
+          title="Talk to the model directly — your memos are not searched"
+        >
+          <Icon name="message" size={11} />
+          <span>Chat</span>
+        </button>
+      </div>
       <input
         value={input}
         onChange={(e) => setInput(e.target.value)}
         onKeyDown={(e) => e.key === 'Enter' && !e.shiftKey && handleSend()}
-        placeholder="Ask anything across your Memos…"
+        placeholder={
+          askMode === 'memos'
+            ? 'Ask anything across your Memos…'
+            : `Chat with ${chatModel || 'the model'} — memos stay out of it…`
+        }
         disabled={streaming}
         autoFocus
       />
@@ -299,7 +382,9 @@ export function AskMemoPage() {
             </span>
             <h1 className="om-ask-title">What do you remember?</h1>
             <p className="om-greet-sub" style={{ marginBottom: 8 }}>
-              I'll search your saved articles, notes, and documents and answer with citations.
+              {askMode === 'memos'
+                ? "I'll search your saved articles, notes, and documents and answer with citations."
+                : `Plain chat with ${chatModel || 'your local model'} — your memos aren't touched.`}
             </p>
             {composer}
             <div className="om-ask-suggestions" style={{ justifyContent: 'center' }}>
@@ -309,6 +394,7 @@ export function AskMemoPage() {
                 </button>
               ))}
             </div>
+            {coach}
           </div>
         ) : (
           <>
@@ -361,7 +447,10 @@ export function AskMemoPage() {
                 </div>
               ))}
             </div>
-            <div className="om-ask-composer-dock">{composer}</div>
+            <div className="om-ask-composer-dock">
+              {coach}
+              {composer}
+            </div>
           </>
         )}
       </div>

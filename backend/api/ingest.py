@@ -57,6 +57,11 @@ class URLIngest(BaseModel):
     # when the page offers them, and a total failure degrades to a bare link
     # instead of erroring the save (OPNMMO-0049).
     no_pull: bool = False
+    # True = the user asked for the AUDIO of this link (Music page "+"): file it
+    # as a music memo and pull the audio track, even when the host is a video
+    # platform (YouTube etc.). Ignores auto_download_audio — the intent is
+    # explicit, so it never needs the manual "Make it local → audio" step.
+    audio_only: bool = False
 
 
 class PlaylistProbe(BaseModel):
@@ -320,6 +325,12 @@ async def ingest_url(
     # auto-localize below (OPNMMO-0049).
     if data.no_pull:
         memo.type = "link"
+    elif data.audio_only:
+        # Music page's "+" pastes a link wanting the SONG, not the video: force
+        # the music shape up front so the memo lives on the Music page from the
+        # first render, then let the audio localize task pull the file.
+        memo.type = "audio"
+        memo.audio_kind = "music"
     else:
         # Canonical type from URL signal (video aggregator / direct file / web page).
         memo.type = derive_memo_type(memo)
@@ -338,7 +349,9 @@ async def ingest_url(
         and memo.type == "audio"
         and bool(memo.source_url)
         and not memo.file_path
-        and bool(get_settings().get("auto_download_audio", True))
+        # audio_only is an explicit "give me the song" — download regardless of
+        # the auto_download_audio preference.
+        and (data.audio_only or bool(get_settings().get("auto_download_audio", True)))
     )
     # Auto-download a video that has NO inline embed player (Threads, Reddit,
     # unknown host). The sniff/yt-dlp helper makes it a local, playable memo with

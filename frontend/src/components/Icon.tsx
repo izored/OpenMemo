@@ -9,6 +9,8 @@ const ICON_PATHS: Record<string, string> = {
   arrowRight: 'M5 12h14M13 5l7 7-7 7',
   arrowUpRight: 'M7 17 17 7M7 7h10v10',
   move: 'M5 9l-3 3 3 3M9 5l3-3 3 3M15 19l-3 3-3-3M19 9l3 3-3 3M2 12h20M12 2v20',
+  // Horizontal double-headed arrow — the card wide/normal resize toggle.
+  resizeWide: 'M3 12h18M7 8l-4 4 4 4M17 8l4 4-4 4',
   search: 'M11 19a8 8 0 1 0 0-16 8 8 0 0 0 0 16zM21 21l-4.35-4.35',
   plus: 'M12 5v14M5 12h14',
   x: 'M18 6 6 18M6 6l12 12',

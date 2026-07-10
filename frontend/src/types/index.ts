@@ -42,6 +42,8 @@ export interface Memo {
   /** Hidden from the main dashboard (still visible in collections); listed in
    *  the passcode-gated hidden section. */
   hidden?: boolean;
+  /** Dashboard tile size — 'wide' spans two grid columns. Absent/null = normal. */
+  card_size?: 'normal' | 'wide' | null;
   is_processed: boolean;
   created_at: string;
   updated_at: string;

@@ -183,10 +183,23 @@ function Chrome({
   playerOverlay?: React.ReactNode;
 }) {
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
   const openThumbEdit = useAppStore((s) => s.openThumbEdit);
   // "Add to playlist" — music memos only, touch-first (no drag needed).
   const [plMenuOpen, setPlMenuOpen] = React.useState(false);
   const isMusicCard = audioKind(memo) === 'music';
+  // User-resizable tile (dashboard grids): wide = two columns. Persisted per
+  // memo; the grid re-lays out live off the invalidated memos query.
+  const isWide = memo.card_size === 'wide';
+  const handleToggleWide = async (e: React.MouseEvent) => {
+    e.stopPropagation();
+    try {
+      await memoApi.setCardSize(memo.id, isWide ? 'normal' : 'wide');
+      queryClient.invalidateQueries({ queryKey: ['memos'] });
+    } catch {
+      /* ignore — next click retries */
+    }
+  };
   const handleClick = () => {
     if (onCardClick) onCardClick();
     else navigate(`/memo/${memo.id}`);
@@ -216,7 +229,7 @@ function Chrome({
         className="om-action om-card-edit"
         onClick={(e) => { e.stopPropagation(); openThumbEdit(memo); }}
         onPointerDown={(e) => e.stopPropagation()}
-        title="Edit thumbnail & title"
+        data-tip="Edit thumbnail & title"
         aria-label="Edit thumbnail and title"
       >
         <Pencil size={12} />
@@ -226,7 +239,7 @@ function Chrome({
       <AnimatePresence>{playerOverlay}</AnimatePresence>
       <div className="om-card-actions">
         {onOpen && (
-          <button className="om-action" onClick={onOpen} title="Open memo page" aria-label="Open memo">
+          <button className="om-action" onClick={onOpen} data-tip="Open memo page" aria-label="Open memo">
             <Icon name="arrowUpRight" size={14} />
           </button>
         )}
@@ -235,7 +248,7 @@ function Chrome({
             className={cn('om-action', plMenuOpen && 'pinned')}
             onClick={(e) => { e.stopPropagation(); setPlMenuOpen((v) => !v); }}
             onPointerDown={(e) => e.stopPropagation()}
-            title="Add to playlist"
+            data-tip="Add to playlist"
             aria-label="Add to playlist"
             aria-expanded={plMenuOpen}
           >
@@ -243,13 +256,24 @@ function Chrome({
           </button>
         )}
         <button
+          className={cn('om-action', isWide && 'pinned')}
+          onClick={handleToggleWide}
+          onPointerDown={(e) => e.stopPropagation()}
+          data-tip={isWide ? 'Back to one column' : 'Make it wide'}
+          aria-label={isWide ? 'Resize card to one column' : 'Resize card to two columns'}
+          aria-pressed={isWide}
+        >
+          <Icon name="resizeWide" size={14} />
+        </button>
+        <button
           className={cn('om-action', memo.pinned && 'pinned')}
           onClick={onPin}
-          title={memo.pinned ? 'Unpin' : 'Pin to sidebar'}
+          data-tip={memo.pinned ? 'Unpin' : 'Pin to sidebar'}
+          aria-label={memo.pinned ? 'Unpin' : 'Pin to sidebar'}
         >
           <Icon name="pin" size={14} />
         </button>
-        <button className="om-action" onClick={onDelete} title="Delete">
+        <button className="om-action" onClick={onDelete} data-tip="Delete" aria-label="Delete">
           <Icon name="x" size={15} />
         </button>
       </div>
