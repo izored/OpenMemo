@@ -18,7 +18,7 @@
     --typeset-size: 14px;
     --typeset-leading: 1.7;
     --typeset-flow: 0.86em;
-    --typeset-font-mono: var(--font-mono);
+    --typeset-font-mono: var(--font-code, monospace);
     font-size: var(--typeset-size);
     line-height: var(--typeset-leading);
     color: var(--text-2);
