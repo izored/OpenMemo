@@ -1,6 +1,7 @@
 """Backup and restore API — downloadable zip snapshots, one-click restore."""
 import io
 import json
+import logging
 import shutil
 import sqlite3
 import tempfile
@@ -102,6 +103,22 @@ async def restore_backup(file: UploadFile = File(...)):
     db_path = Path(settings.DATA_DIR) / "openmemo.db"
     files_dir = Path(settings.FILES_DIR)
 
+    # Validate EVERY file entry before touching the DB or the files dir, so a
+    # malicious archive is rejected without destroying anything
+    # (Zip-Slip defense in depth — see plans/002).
+    files_dir_resolved = files_dir.resolve()
+    safe_entries: list[tuple[str, Path]] = []
+    if scope == "full":
+        for name in names:
+            if name.startswith(_FILES_PREFIX) and not name.endswith("/"):
+                rel = name[len(_FILES_PREFIX):]
+                dest = (files_dir / rel).resolve()
+                try:
+                    dest.relative_to(files_dir_resolved)
+                except ValueError:
+                    raise HTTPException(status_code=400, detail="Backup contains an unsafe file path")
+                safe_entries.append((name, dest))
+
     # Write restored DB to a temp file first, then atomically replace.
     with tempfile.TemporaryDirectory() as tmp:
         tmp_db = Path(tmp) / "openmemo.db"
@@ -116,10 +133,19 @@ async def restore_backup(file: UploadFile = File(...)):
         await engine.dispose()
 
         db_path.parent.mkdir(parents=True, exist_ok=True)
+        # Stale WAL sidecars from the old database would shadow the restored
+        # file's content — remove them before the swap (plans/006 follow-up).
+        # Best-effort: on Windows a lingering reader can hold the -wal open;
+        # the next connection checkpoints it anyway.
+        for suffix in ("-wal", "-shm"):
+            sidecar = db_path.with_name(db_path.name + suffix)
+            try:
+                sidecar.unlink(missing_ok=True)
+            except OSError:
+                logging.getLogger(__name__).warning("Could not remove stale sidecar %s", sidecar)
         shutil.copy2(tmp_db, db_path)
 
     if scope == "full":
-        files_dir_resolved = files_dir.resolve()
         files_dir.mkdir(parents=True, exist_ok=True)
         # Remove existing files but keep the thumbs cache directory structure.
         for item in files_dir.iterdir():
@@ -129,16 +155,8 @@ async def restore_backup(file: UploadFile = File(...)):
                 else:
                     item.unlink(missing_ok=True)
 
-        for name in names:
-            if name.startswith(_FILES_PREFIX) and not name.endswith("/"):
-                rel = name[len(_FILES_PREFIX):]
-                dest = (files_dir / rel).resolve()
-                # Reject path traversal attempts in zip entries.
-                try:
-                    dest.relative_to(files_dir_resolved)
-                except ValueError:
-                    continue
-                dest.parent.mkdir(parents=True, exist_ok=True)
-                dest.write_bytes(zf.read(name))
+        for name, dest in safe_entries:
+            dest.parent.mkdir(parents=True, exist_ok=True)
+            dest.write_bytes(zf.read(name))
 
     return {"ok": True, "scope": scope, "version": meta.get("app_version")}
