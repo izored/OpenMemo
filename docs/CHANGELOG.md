@@ -7,6 +7,7 @@ All notable changes to OpenMemo are documented here.
 
 ### Fixed
 
+- 📄 **Note memos get a reading surface.** A text note's body rendered straight onto the decorative cloud background — long-form text floating on a gradient, hard to read. Notes now sit on the same panel that document and code files already use, so every long-form text body in the memo page shares one standard: content lives on a surface, never on the wallpaper.
 - ⌨️ **Code finally looks like code.** The `--font-mono` token has always pointed at Satoshi — the brand's meta-label face — so markdown code blocks and inline code rendered in a sans-serif. A new `--font-code` token carries a real monospace stack (Cascadia Code, SF Mono, Menlo, Consolas) and every code surface now uses it; the UI's small Satoshi labels are untouched.
 - 🧹 **Dead speed-dial code removed.** `SpeedDialFAB` was mounted nowhere (the visible + button is IslandFab), and it was the only opener for `AddMemoModal`, which itself rendered nowhere. Both components and their orphaned store slice are gone — the New Memo panel is and remains the real flow.
 - ⚡ **Ctrl+K search opens instantly.** The search overlay used to play the same 200ms pop-and-fade as every other modal. A keyboard shortcut you hit dozens of times a day should never make you wait to type, so the palette (and its backdrop) now appears fully formed on the next frame — mouse-opened modals keep their pop.
