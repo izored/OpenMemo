@@ -1,6 +1,7 @@
 """Backup and restore API — downloadable zip snapshots, one-click restore."""
 import io
 import json
+import logging
 import shutil
 import sqlite3
 import tempfile
@@ -132,6 +133,16 @@ async def restore_backup(file: UploadFile = File(...)):
         await engine.dispose()
 
         db_path.parent.mkdir(parents=True, exist_ok=True)
+        # Stale WAL sidecars from the old database would shadow the restored
+        # file's content — remove them before the swap (plans/006 follow-up).
+        # Best-effort: on Windows a lingering reader can hold the -wal open;
+        # the next connection checkpoints it anyway.
+        for suffix in ("-wal", "-shm"):
+            sidecar = db_path.with_name(db_path.name + suffix)
+            try:
+                sidecar.unlink(missing_ok=True)
+            except OSError:
+                logging.getLogger(__name__).warning("Could not remove stale sidecar %s", sidecar)
         shutil.copy2(tmp_db, db_path)
 
     if scope == "full":
