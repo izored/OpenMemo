@@ -49,7 +49,7 @@ each other; execute in numeric order (leverage-sorted). Same drift rules apply.
 | Plan | Title | Category | Severity | Effort | Depends on | Status |
 |------|-------|----------|----------|--------|------------|--------|
 | 019 | Ctrl+K search overlay opens instantly (no animation) | purpose/frequency | HIGH | S | — | DONE |
-| 020 | SpeedDialFAB: ease-in → strong ease-out, scale 0.6 → 0.92 | easing | HIGH | S | — | DONE (component currently unmounted — dead code; fix applies if revived) |
+| 020 | SpeedDialFAB: ease-in → strong ease-out, scale 0.6 → 0.92 | easing | HIGH | S | — | SUPERSEDED (dead component deleted, along with unmounted AddMemoModal + its store slice) |
 | 021 | MotionConfig reducedMotion="user" at app root | accessibility | MEDIUM | S | — | DONE |
 | 022 | Replace `transition: all` on Card / tab buttons / editor | performance | MEDIUM | S | — | DONE |
 | 023 | Toast exit animation (delete + notice toasts) | interruptibility | MEDIUM | M | — | DONE |

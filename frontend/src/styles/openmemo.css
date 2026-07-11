@@ -13,6 +13,9 @@
   --font-ui: 'Satoshi', ui-sans-serif, system-ui, -apple-system, sans-serif;
   --font-display: 'Satoshi', ui-sans-serif, system-ui, -apple-system, sans-serif;
   --font-mono: 'Satoshi', ui-sans-serif, system-ui, -apple-system, sans-serif;
+  /* --font-mono is the brand meta-label face (Satoshi + tnum), NOT monospace.
+     Actual code (markdown code/pre, code blocks) uses --font-code. */
+  --font-code: ui-monospace, 'Cascadia Code', 'SF Mono', Menlo, Consolas, 'Liberation Mono', monospace;
 
   --r-xs: 6px;
   --r-sm: 10px;
@@ -1984,10 +1987,10 @@ input, textarea { font: inherit; color: inherit; }
 
 /* Code blocks for ReactMarkdown in MemoDetail / AskMemoPanel */
 .om-code-inline     { background: var(--surface-3); color: var(--text); padding: 1px 5px;
-                      border-radius: 4px; font-size: 11px; font-family: var(--font-mono); }
+                      border-radius: 4px; font-size: 11px; font-family: var(--font-code); }
 .om-code-block      { background: var(--surface-3); color: var(--text); padding: 14px 18px;
                       border-radius: var(--r-md); overflow-x: auto;
-                      font-family: var(--font-mono); font-size: 12px; line-height: 1.6; margin: 8px 0; }
+                      font-family: var(--font-code); font-size: 12px; line-height: 1.6; margin: 8px 0; }
 .om-code-block code { background: transparent; padding: 0; }
 
 /* Related memos strip */

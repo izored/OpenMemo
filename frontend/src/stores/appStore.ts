@@ -98,12 +98,6 @@ interface AppState {
   chatModel: string;
   setChatModel: (model: string) => void;
 
-  // Add modal
-  addModalOpen: boolean;
-  setAddModalOpen: (open: boolean) => void;
-  addModalTab: 'link' | 'note' | 'file';
-  setAddModalTab: (tab: 'link' | 'note' | 'file') => void;
-
   // Collection modal
   collectionModalOpen: boolean;
   setCollectionModalOpen: (open: boolean) => void;
@@ -238,11 +232,6 @@ export const useAppStore = create<AppState>((set) => ({
     set({ chatModel: model });
     persist({ chatModel: model });
   },
-
-  addModalOpen: false,
-  setAddModalOpen: (open) => set({ addModalOpen: open }),
-  addModalTab: 'link',
-  setAddModalTab: (tab) => set({ addModalTab: tab }),
 
   collectionModalOpen: false,
   setCollectionModalOpen: (open) => set({ collectionModalOpen: open }),

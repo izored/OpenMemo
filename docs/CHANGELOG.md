@@ -7,6 +7,8 @@ All notable changes to OpenMemo are documented here.
 
 ### Fixed
 
+- ⌨️ **Code finally looks like code.** The `--font-mono` token has always pointed at Satoshi — the brand's meta-label face — so markdown code blocks and inline code rendered in a sans-serif. A new `--font-code` token carries a real monospace stack (Cascadia Code, SF Mono, Menlo, Consolas) and every code surface now uses it; the UI's small Satoshi labels are untouched.
+- 🧹 **Dead speed-dial code removed.** `SpeedDialFAB` was mounted nowhere (the visible + button is IslandFab), and it was the only opener for `AddMemoModal`, which itself rendered nowhere. Both components and their orphaned store slice are gone — the New Memo panel is and remains the real flow.
 - ⚡ **Ctrl+K search opens instantly.** The search overlay used to play the same 200ms pop-and-fade as every other modal. A keyboard shortcut you hit dozens of times a day should never make you wait to type, so the palette (and its backdrop) now appears fully formed on the next frame — mouse-opened modals keep their pop.
 - 🍞 **Toasts leave the way they arrive.** The undo-delete toast and the notice toast slid in nicely and then vanished in a single frame when their time ran out. Both now slip down and fade over 160ms before unmounting — clicking Undo or ✕ gets the same soft exit, and the restore still fires immediately.
 - ♿ **Reduced motion now reaches every animation.** The CSS side already respected `prefers-reduced-motion` in ~15 places, but the framer-motion side (card entrances, grid reflow, the theme-toggle ripple) ignored it. One `MotionConfig reducedMotion="user"` at the app root now stills every motion component for users who asked for less movement, while keeping opacity feedback.
