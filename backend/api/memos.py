@@ -132,9 +132,12 @@ async def list_memos(
     # this default, every Space's memos would leak into the main dashboard.
     workspace_id = sanitize_workspace_id(workspace_id) if workspace_id else "default"
     """List memos with filtering and pagination."""
-    query = select(Memo).options(
+    # List rows only ever show a 400-char preview — truncate in SQL so a
+    # 500 KB transcript isn't shipped to Python per row (plans/012).
+    content_preview = func.substr(Memo.content_text, 1, 400).label("content_preview")
+    query = select(Memo, content_preview).options(
         load_only(
-            Memo.id, Memo.type, Memo.title, Memo.description, Memo.content_text,
+            Memo.id, Memo.type, Memo.title, Memo.description,
             Memo.source_url, Memo.source_domain, Memo.source_favicon,
             Memo.thumbnail_path, Memo.file_path, Memo.ai_summary, Memo.notes,
             Memo.sort_order, Memo.pinned, Memo.liked, Memo.hidden, Memo.card_size,
@@ -210,7 +213,7 @@ async def list_memos(
     # Fetch with pagination
     query = _apply_sort(query, sort).offset(offset).limit(limit)
     result = await db.execute(query)
-    memos = result.scalars().all()
+    rows = result.unique().all()  # (Memo, content_preview) tuples
     
     return {
         "items": [
@@ -219,7 +222,7 @@ async def list_memos(
                 "type": m.type,
                 "title": m.title,
                 "description": m.description,
-                "content_text": (m.content_text[:400] if m.content_text else None),
+                "content_text": preview,
                 "source_url": m.source_url,
                 "source_domain": m.source_domain,
                 "source_favicon": m.source_favicon,
@@ -246,7 +249,7 @@ async def list_memos(
                 "collections": [{"id": c.id, "name": c.name, "color": c.color} for c in m.collections],
                 "tags": [t.name for t in m.tags],
             }
-            for m in memos
+            for m, preview in rows
         ],
         "total": total,
         "offset": offset,
