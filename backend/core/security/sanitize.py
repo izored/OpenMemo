@@ -143,6 +143,11 @@ def validate_url(url: str) -> str:
 
 
 import ipaddress as _ipaddress
+import socket as _socket
+
+
+def _is_blocked_ip(addr: _ipaddress.IPv4Address | _ipaddress.IPv6Address) -> bool:
+    return addr.is_private or addr.is_loopback or addr.is_link_local or addr.is_reserved
 
 
 def validate_proxy_url(url: str) -> str:
@@ -150,6 +155,8 @@ def validate_proxy_url(url: str) -> str:
 
     Used by proxy endpoints to prevent SSRF: even though openMemo is local-only,
     the proxy must not be used to probe other services on the host or LAN.
+    Hostnames are resolved so a DNS name pointing at a private address is
+    rejected the same as an IP literal (plans/003).
     """
     url = validate_url(url)
     parsed = urlparse(url)
@@ -158,10 +165,21 @@ def validate_proxy_url(url: str) -> str:
         raise HTTPException(status_code=400, detail="Invalid URL")
     try:
         addr = _ipaddress.ip_address(host)
-        if addr.is_private or addr.is_loopback or addr.is_link_local or addr.is_reserved:
+        if _is_blocked_ip(addr):
             raise HTTPException(status_code=400, detail="Invalid URL")
     except ValueError:
-        pass  # hostname — not an IP literal, allow it
+        # Hostname — resolve it and check every address it maps to.
+        try:
+            infos = _socket.getaddrinfo(host, None)
+        except OSError:
+            raise HTTPException(status_code=400, detail="URL host could not be resolved")
+        for info in infos:
+            try:
+                resolved = _ipaddress.ip_address(info[4][0])
+            except ValueError:
+                continue
+            if _is_blocked_ip(resolved):
+                raise HTTPException(status_code=400, detail="Invalid URL")
     return url
 
 
