@@ -138,7 +138,27 @@ async def rag_chat(
             collection_id=collection_id,
             memo_id=memo_id,
         )
-        
+
+        # Drop ghost vectors: a failed Chroma purge can leave chunks whose memo
+        # is soft-deleted — citing them 404s in the UI (plans/009). NULL
+        # is_deleted counts as live, same idiom as memos.list_memos.
+        retrieved_ids = {s["metadata"].get("memo_id") for s in sources if s["metadata"].get("memo_id")}
+        if retrieved_ids:
+            from sqlalchemy import select
+
+            from backend.db.database import AsyncSessionLocal
+            from backend.db.models import Memo
+
+            async with AsyncSessionLocal() as db:
+                rows = await db.execute(
+                    select(Memo.id).where(
+                        Memo.id.in_(retrieved_ids),
+                        (Memo.is_deleted == False) | (Memo.is_deleted == None),  # noqa: E712, E711
+                    )
+                )
+                live_ids = {r[0] for r in rows}
+            sources = [s for s in sources if s["metadata"].get("memo_id") in live_ids]
+
         # Yield sources first so frontend can display them
         yield {
             "type": "sources",
