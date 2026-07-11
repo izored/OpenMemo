@@ -61,8 +61,8 @@ export function SearchOverlay() {
 
   return (
     <>
-      <div className="om-backdrop" onClick={() => setOpen(false)} />
-      <div className="om-modal" role="dialog" aria-label="Search Memos">
+      <div className="om-backdrop om-backdrop-instant" onClick={() => setOpen(false)} />
+      <div className="om-modal om-modal-instant" role="dialog" aria-label="Search Memos">
         <div className="om-url-input" style={{ margin: 18, marginBottom: 0 }}>
           <Icon name="search" size={15} />
           <input

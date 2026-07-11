@@ -40,6 +40,28 @@ then bugs, then perf/debt.
 
 Status values: TODO | IN PROGRESS | DONE | BLOCKED (one-line reason) | REJECTED (one-line rationale)
 
+## Animation plans (019–023)
+
+Added 2026-07-11 by the `improve-animations` skill, against commit `bf529e5`
+(branch `claude/openmemo-skills-shadcn-0837f2`). Independent of 001–018 and of
+each other; execute in numeric order (leverage-sorted). Same drift rules apply.
+
+| Plan | Title | Category | Severity | Effort | Depends on | Status |
+|------|-------|----------|----------|--------|------------|--------|
+| 019 | Ctrl+K search overlay opens instantly (no animation) | purpose/frequency | HIGH | S | — | DONE |
+| 020 | SpeedDialFAB: ease-in → strong ease-out, scale 0.6 → 0.92 | easing | HIGH | S | — | SUPERSEDED (dead component deleted, along with unmounted AddMemoModal + its store slice) |
+| 021 | MotionConfig reducedMotion="user" at app root | accessibility | MEDIUM | S | — | DONE |
+| 022 | Replace `transition: all` on Card / tab buttons / editor | performance | MEDIUM | S | — | DONE |
+| 023 | Toast exit animation (delete + notice toasts) | interruptibility | MEDIUM | M | — | DONE |
+
+Animation findings rejected during vetting (do not re-audit):
+
+- **`transform-origin: center` on modals** — correct; modals appear centered. Exempt by rule.
+- **`.om-coach-spot` `transition: all` tweening layout box** — onboarding spotlight, rare frequency, deliberate geometry tween. Acceptable.
+- **Framer `x`/`y` shorthands in MemoGrid/MemoCard** — framer-motion 12 hybrid engine; entrances are short, small offsets on non-busy renders. Not worth the churn.
+- **`om-media-preview` width/max-width transition (openmemo.css:428)** — theater-mode expansion is a deliberate layout morph on a rare action; comment documents the design.
+- **CSS reduced-motion coverage** — already good (~15 gates in openmemo.css); the gap was framer-only, closed by 021.
+
 ## Dependency notes
 
 - **016 requires 015**: 016 narrows invalidation inside the `useMemoMutations` hook

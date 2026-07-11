@@ -115,7 +115,7 @@ export function ChangelogModal({
                 </span>
               </div>
 
-              <div className="om-detail-summary" style={{ background: 'transparent', border: 0, padding: 0, fontSize: 13.5 }}>
+              <div className="typeset typeset-docs" style={{ background: 'transparent', border: 0, padding: 0 }}>
                 <ReactMarkdown remarkPlugins={[remarkGfm]}>
                   {rel.body || '_No release notes._'}
                 </ReactMarkdown>
