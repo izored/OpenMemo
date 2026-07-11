@@ -27,7 +27,7 @@ then bugs, then perf/debt.
 | 006 | Enable SQLite WAL + busy_timeout | perf | P1 | S | LOW | — | DONE (per-connection listener for busy_timeout/synchronous; WAL was init-only; restore clears stale sidecars) |
 | 007 | Surface + retry silent embed failures | bug | P1 | M | LOW | — | DONE (embed_status column + migration, safe dispatch, POST /reembed, tests; frontend retry button = follow-up) |
 | 008 | Persist assistant reply on client disconnect | bug | P2 | M | LOW | — | TODO |
-| 009 | Drop deleted memos from RAG sources (ghost vectors) | bug | P2 | S | LOW | — | TODO |
+| 009 | Drop deleted memos from RAG sources (ghost vectors) | bug | P2 | S | LOW | — | DONE (liveness filter before sources yield; all-ghost falls through to NO_CONTEXT; tests) |
 | 010 | Abort SSE readers on unmount (zombie requests) | bug | P2 | S | LOW | — | TODO |
 | 011 | Fix notes-autosave clobbering in-progress typing | bug | P2 | S | MED | — | TODO |
 | 012 | Truncate list content_text in SQL, not Python | perf | P3 | S | LOW | — | TODO |
