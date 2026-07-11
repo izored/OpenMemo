@@ -273,7 +273,7 @@ export function MarkdownEditor({
           exit={{ opacity: 0, y: 6 }}
           transition={{ type: 'spring', stiffness: 420, damping: 32 }}
           className={cn(
-            'relative rounded-2xl transition-all om-md-editor',
+            'relative rounded-2xl transition-[border-color,background-color] om-md-editor',
             focused
               ? 'border border-[var(--border)] bg-[var(--surface)]'
               : 'border border-transparent bg-transparent',
