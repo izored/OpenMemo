@@ -308,11 +308,12 @@ export const chatApi = {
     memo_id?: string;
     model?: string;
     use_rag?: boolean;
-  }) => {
+  }, signal?: AbortSignal) => {
     return fetch(`${API_BASE}/chat/stream`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(data),
+      signal,
     });
   },
 };
