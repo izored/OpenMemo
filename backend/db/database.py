@@ -114,6 +114,12 @@ async def _run_migrations():
             await db.execute("ALTER TABLE memos ADD COLUMN card_size VARCHAR")
             await db.commit()
 
+        # Embed outcome per memo — lets the UI show and retry failed embeds
+        # instead of memos silently missing from RAG/search (plans/007).
+        if "embed_status" not in columns:
+            await db.execute("ALTER TABLE memos ADD COLUMN embed_status TEXT")
+            await db.commit()
+
         if "is_deleted" not in columns:
             await db.execute("ALTER TABLE memos ADD COLUMN is_deleted BOOLEAN DEFAULT 0")
             await db.commit()

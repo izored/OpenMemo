@@ -25,18 +25,18 @@ then bugs, then perf/debt.
 | 004 | Scope CORS extension origin (drop wildcard) | security | P2 | S | LOW | — | DONE (EXTENSION_ORIGIN setting; wildcard only as unset fallback) |
 | 005 | Bump vulnerable dev deps (vitest CVE, etc.) | security | P3 | S | LOW | — | DONE (vite 7.3.6 + esbuild 0.28.1 clears the dev-server file-read CVE; js-yaml via @mdxeditor deferred — needs breaking 3→4 editor bump) |
 | 006 | Enable SQLite WAL + busy_timeout | perf | P1 | S | LOW | — | DONE (per-connection listener for busy_timeout/synchronous; WAL was init-only; restore clears stale sidecars) |
-| 007 | Surface + retry silent embed failures | bug | P1 | M | LOW | — | TODO |
-| 008 | Persist assistant reply on client disconnect | bug | P2 | M | LOW | — | TODO |
-| 009 | Drop deleted memos from RAG sources (ghost vectors) | bug | P2 | S | LOW | — | TODO |
-| 010 | Abort SSE readers on unmount (zombie requests) | bug | P2 | S | LOW | — | TODO |
-| 011 | Fix notes-autosave clobbering in-progress typing | bug | P2 | S | MED | — | TODO |
-| 012 | Truncate list content_text in SQL, not Python | perf | P3 | S | LOW | — | TODO |
-| 013 | Migrate PyPDF2 (abandoned) → pypdf | dependencies | P3 | S | LOW | — | TODO |
-| 014 | Backfill `.env.example` with all settings | dx | P3 | S | LOW | — | TODO |
-| 015 | Extract `useMemoMutations` hook (pin/delete/hide) | tech-debt | P3 | M | LOW | — | TODO |
+| 007 | Surface + retry silent embed failures | bug | P1 | M | LOW | — | DONE (embed_status column + migration, safe dispatch, POST /reembed, tests; frontend retry button = follow-up) |
+| 008 | Persist assistant reply on client disconnect | bug | P2 | M | LOW | — | TODO (deferred 2026-07-11 — M effort; next batch)|
+| 009 | Drop deleted memos from RAG sources (ghost vectors) | bug | P2 | S | LOW | — | DONE (liveness filter before sources yield; all-ghost falls through to NO_CONTEXT; tests) |
+| 010 | Abort SSE readers on unmount (zombie requests) | bug | P2 | S | LOW | — | DONE (AbortController in both chat surfaces; stream() takes a signal; AbortError not surfaced as error) |
+| 011 | Fix notes-autosave clobbering in-progress typing | bug | P2 | S | MED | — | TODO (deferred 2026-07-11 — MED risk; next batch)|
+| 012 | Truncate list content_text in SQL, not Python | perf | P3 | S | LOW | — | DONE (substr(...,1,400) label; full column no longer loaded) |
+| 013 | Migrate PyPDF2 (abandoned) → pypdf | dependencies | P3 | S | LOW | — | DONE (pypdf 5.1.0, same PdfReader API) |
+| 014 | Backfill `.env.example` with all settings | dx | P3 | S | LOW | — | DONE (all config.py settings documented, defaults commented) |
+| 015 | Extract `useMemoMutations` hook (pin/delete/hide) | tech-debt | P3 | M | LOW | — | TODO (deferred 2026-07-11 — refactor batch with 016/017)|
 | 016 | Targeted query invalidation (no refetch storm) | tech-debt | P3 | M | MED | 015 | TODO |
 | 017 | Split 1,577-line MemoDetail into sub-components | tech-debt | P3 | L | MED | 011, 015 (soft) | TODO |
-| 018 | Characterization-test baseline + FE component harness | tests | P1 | M | LOW | — | TODO |
+| 018 | Characterization-test baseline + FE component harness | tests | P1 | M | LOW | — | TODO (deferred 2026-07-11 — backend suite grew 19→37 through plans 001-012 instead)|
 
 Status values: TODO | IN PROGRESS | DONE | BLOCKED (one-line reason) | REJECTED (one-line rationale)
 

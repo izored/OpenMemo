@@ -63,6 +63,10 @@ export function AskMemoPage() {
   // already near the bottom. The moment they scroll up to re-read, we stop
   // yanking them back down (otherwise a long streamed answer is unscrollable).
   const pinnedRef = useRef(true);
+  // Abort the in-flight stream on unmount so navigating away stops the fetch
+  // and the backend stops generating for a client nobody is watching (plans/010).
+  const abortRef = useRef<AbortController | null>(null);
+  useEffect(() => () => abortRef.current?.abort(), []);
   const onThreadScroll = () => {
     const el = scrollRef.current;
     if (!el) return;
@@ -165,6 +169,8 @@ export function AskMemoPage() {
     const assistantMsg: Message = { id: (Date.now() + 1).toString(), role: 'assistant', content: '', sources: [] };
     setMessages((p) => [...p, assistantMsg]);
 
+    const controller = new AbortController();
+    abortRef.current = controller;
     try {
       const resp = await chatApi.stream({
         query: userMsg.content,
@@ -173,7 +179,7 @@ export function AskMemoPage() {
         // The composer toggle decides: memos = RAG with citations, chat =
         // straight to the model. No more secret "@" prefix required.
         use_rag: askMode === 'memos',
-      });
+      }, controller.signal);
       if (!resp.ok) {
         const err = await resp.json().catch(() => ({ detail: `HTTP ${resp.status}` }));
         throw new Error(err.detail || `HTTP ${resp.status}`);
@@ -220,14 +226,18 @@ export function AskMemoPage() {
         }
       }
     } catch (e) {
-      setMessages((prev) => {
-        const updated = [...prev];
-        const last = updated[updated.length - 1];
-        if (last.role === 'assistant')
-          last.content = 'Error: ' + ((e as Error).message || 'Failed to get response');
-        return [...updated];
-      });
+      // Unmount/navigation abort is not an error — the component is gone.
+      if ((e as Error).name !== 'AbortError') {
+        setMessages((prev) => {
+          const updated = [...prev];
+          const last = updated[updated.length - 1];
+          if (last.role === 'assistant')
+            last.content = 'Error: ' + ((e as Error).message || 'Failed to get response');
+          return [...updated];
+        });
+      }
     } finally {
+      abortRef.current = null;
       setStreaming(false);
     }
   };

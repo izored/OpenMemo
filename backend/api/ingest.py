@@ -1,4 +1,5 @@
 """Content ingestion API - handles URL saving, file uploads, and processing."""
+import asyncio
 import logging
 import uuid
 from datetime import datetime, timedelta
@@ -241,10 +242,31 @@ async def process_memo(memo_id: str):
             )
             memo.embedding_ids = chunk_ids
             memo.is_processed = True
+            memo.embed_status = "ok"
             memo.updated_at = datetime.utcnow()
             await db.commit()
         except Exception as e:
             log.error("Error processing memo %s: %s", memo_id, e)
+            # Persist the failure so the UI can show it and a retry can find it
+            # (plans/007) — the bug was precisely that nothing was recorded.
+            memo.embed_status = "error"
+            memo.updated_at = datetime.utcnow()
+            await db.commit()
+
+
+def schedule_processing(memo_id: str) -> None:
+    """Fire-and-forget embed with a done-callback so exceptions are logged,
+    not swallowed by the event loop (plans/007)."""
+    task = asyncio.create_task(process_memo(memo_id))
+
+    def _log(t: asyncio.Task) -> None:
+        if t.cancelled():
+            return
+        exc = t.exception()
+        if exc:
+            log.error("process_memo task failed for %s: %r", memo_id, exc)
+
+    task.add_done_callback(_log)
 
 
 # --- Routes ---

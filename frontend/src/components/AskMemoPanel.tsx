@@ -27,6 +27,10 @@ export function AskMemoPanel({ memoId, collectionId }: AskMemoPanelProps) {
   // Stick to the bottom while streaming, but yield the moment the user scrolls
   // up to re-read (otherwise a long answer can't be scrolled). See AskMemoPage.
   const pinnedRef = useRef(true);
+  // Abort the in-flight stream on unmount so closing the panel stops the fetch
+  // and the backend stops generating for a client nobody is watching (plans/010).
+  const abortRef = useRef<AbortController | null>(null);
+  useEffect(() => () => abortRef.current?.abort(), []);
   const onThreadScroll = () => {
     const el = scrollRef.current;
     if (!el) return;
@@ -69,6 +73,8 @@ export function AskMemoPanel({ memoId, collectionId }: AskMemoPanelProps) {
     const assistantMsg: Message = { id: (Date.now() + 1).toString(), role: 'assistant', content: '', sources: [] };
     setMessages((prev) => [...prev, assistantMsg]);
 
+    const controller = new AbortController();
+    abortRef.current = controller;
     try {
       const resp = await chatApi.stream({
         query: userMsg.content,
@@ -76,7 +82,7 @@ export function AskMemoPanel({ memoId, collectionId }: AskMemoPanelProps) {
         memo_id: memoId,
         collection_id: collectionId,
         model: chatModel,
-      });
+      }, controller.signal);
 
       if (!resp.ok) {
         const err = await resp.json().catch(() => ({ detail: `HTTP ${resp.status}` }));
@@ -131,13 +137,17 @@ export function AskMemoPanel({ memoId, collectionId }: AskMemoPanelProps) {
         }
       }
     } catch (e) {
-      setMessages((prev) => {
-        const updated = [...prev];
-        const last = updated[updated.length - 1];
-        if (last.role === 'assistant') last.content = 'Error: ' + ((e as Error).message || 'Failed');
-        return [...updated];
-      });
+      // Unmount abort is not an error — the panel is gone.
+      if ((e as Error).name !== 'AbortError') {
+        setMessages((prev) => {
+          const updated = [...prev];
+          const last = updated[updated.length - 1];
+          if (last.role === 'assistant') last.content = 'Error: ' + ((e as Error).message || 'Failed');
+          return [...updated];
+        });
+      }
     } finally {
+      abortRef.current = null;
       setStreaming(false);
     }
   };

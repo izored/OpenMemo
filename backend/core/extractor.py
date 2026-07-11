@@ -329,7 +329,7 @@ async def extract_url(url: str) -> dict:
 async def extract_pdf(file_path: str) -> dict:
     """Extract text from PDF."""
     import asyncio
-    from PyPDF2 import PdfReader
+    from pypdf import PdfReader
     
     def _read_pdf():
         reader = PdfReader(file_path)

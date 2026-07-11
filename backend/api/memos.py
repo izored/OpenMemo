@@ -132,14 +132,17 @@ async def list_memos(
     # this default, every Space's memos would leak into the main dashboard.
     workspace_id = sanitize_workspace_id(workspace_id) if workspace_id else "default"
     """List memos with filtering and pagination."""
-    query = select(Memo).options(
+    # List rows only ever show a 400-char preview — truncate in SQL so a
+    # 500 KB transcript isn't shipped to Python per row (plans/012).
+    content_preview = func.substr(Memo.content_text, 1, 400).label("content_preview")
+    query = select(Memo, content_preview).options(
         load_only(
-            Memo.id, Memo.type, Memo.title, Memo.description, Memo.content_text,
+            Memo.id, Memo.type, Memo.title, Memo.description,
             Memo.source_url, Memo.source_domain, Memo.source_favicon,
             Memo.thumbnail_path, Memo.file_path, Memo.ai_summary, Memo.notes,
             Memo.sort_order, Memo.pinned, Memo.liked, Memo.hidden, Memo.card_size,
             Memo.audio_kind, Memo.audio_artist, Memo.audio_album, Memo.is_processed,
-            Memo.localize_status, Memo.localize_error,
+            Memo.embed_status, Memo.localize_status, Memo.localize_error,
             Memo.created_at, Memo.updated_at, Memo.recency_at,
         ),
         selectinload(Memo.collections),
@@ -210,7 +213,7 @@ async def list_memos(
     # Fetch with pagination
     query = _apply_sort(query, sort).offset(offset).limit(limit)
     result = await db.execute(query)
-    memos = result.scalars().all()
+    rows = result.unique().all()  # (Memo, content_preview) tuples
     
     return {
         "items": [
@@ -219,7 +222,7 @@ async def list_memos(
                 "type": m.type,
                 "title": m.title,
                 "description": m.description,
-                "content_text": (m.content_text[:400] if m.content_text else None),
+                "content_text": preview,
                 "source_url": m.source_url,
                 "source_domain": m.source_domain,
                 "source_favicon": m.source_favicon,
@@ -236,6 +239,7 @@ async def list_memos(
                 "audio_artist": m.audio_artist,
                 "audio_album": m.audio_album,
                 "is_processed": m.is_processed,
+                "embed_status": m.embed_status,
                 # Playlist tiles read this to tell a finished track from one that
                 # is mid-download, queued, or failed (the dimmed pending cards).
                 "localize_status": m.localize_status,
@@ -245,7 +249,7 @@ async def list_memos(
                 "collections": [{"id": c.id, "name": c.name, "color": c.color} for c in m.collections],
                 "tags": [t.name for t in m.tags],
             }
-            for m in memos
+            for m, preview in rows
         ],
         "total": total,
         "offset": offset,
@@ -298,6 +302,7 @@ async def get_memo(memo_id: str, db: AsyncSession = Depends(get_db)):
         "hidden": memo.hidden,
         "card_size": memo.card_size,
         "is_processed": memo.is_processed,
+        "embed_status": memo.embed_status,
         "created_at": memo.created_at.isoformat(),
         "updated_at": memo.updated_at.isoformat(),
         "collections": [{"id": c.id, "name": c.name, "color": c.color} for c in memo.collections],
@@ -652,9 +657,8 @@ async def update_memo(memo_id: str, data: MemoUpdate, db: AsyncSession = Depends
     
     # Re-embed in background if content changed
     if content_changed:
-        from backend.api.ingest import process_memo
-        import asyncio
-        asyncio.create_task(process_memo(memo_id))
+        from backend.api.ingest import schedule_processing
+        schedule_processing(memo_id)
     
     return {"id": memo.id, "status": "updated"}
 
@@ -815,10 +819,23 @@ async def restore_memo(memo_id: str, db: AsyncSession = Depends(get_db)):
     memo.deleted_at = None
     await db.commit()
     if memo.content_text:
-        import asyncio
-        from backend.api.ingest import process_memo
-        asyncio.create_task(process_memo(memo_id))
+        from backend.api.ingest import schedule_processing
+        schedule_processing(memo_id)
     return {"status": "restored"}
+
+
+@router.post("/{memo_id}/reembed")
+async def reembed_memo(memo_id: str, db: AsyncSession = Depends(get_db)):
+    """Re-run embedding for a memo (e.g. after Ollama was down) — the retry
+    path for embed_status == "error" (plans/007)."""
+    memo = await db.get(Memo, memo_id)
+    if not memo:
+        raise HTTPException(status_code=404, detail="Memo not found")
+    if not memo.content_text:
+        raise HTTPException(status_code=400, detail="Memo has no content to embed")
+    from backend.api.ingest import schedule_processing
+    schedule_processing(memo_id)
+    return {"status": "scheduled", "memo_id": memo_id}
 
 
 @router.get("/deleted/list")
