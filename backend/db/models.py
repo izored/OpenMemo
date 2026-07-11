@@ -140,6 +140,8 @@ class Memo(Base):
     # user wants to remember pops out of the feed.
     card_size = Column(String, nullable=True)  # normal|wide
     is_processed = Column(Boolean, default=False)
+    # None = embed never attempted; "ok" = embedded; "error" = last attempt failed
+    embed_status = Column(String, nullable=True, default=None)
     is_deleted = Column(Boolean, default=False)
     deleted_at = Column(DateTime, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)

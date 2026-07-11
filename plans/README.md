@@ -25,7 +25,7 @@ then bugs, then perf/debt.
 | 004 | Scope CORS extension origin (drop wildcard) | security | P2 | S | LOW | — | DONE (EXTENSION_ORIGIN setting; wildcard only as unset fallback) |
 | 005 | Bump vulnerable dev deps (vitest CVE, etc.) | security | P3 | S | LOW | — | DONE (vite 7.3.6 + esbuild 0.28.1 clears the dev-server file-read CVE; js-yaml via @mdxeditor deferred — needs breaking 3→4 editor bump) |
 | 006 | Enable SQLite WAL + busy_timeout | perf | P1 | S | LOW | — | DONE (per-connection listener for busy_timeout/synchronous; WAL was init-only; restore clears stale sidecars) |
-| 007 | Surface + retry silent embed failures | bug | P1 | M | LOW | — | TODO |
+| 007 | Surface + retry silent embed failures | bug | P1 | M | LOW | — | DONE (embed_status column + migration, safe dispatch, POST /reembed, tests; frontend retry button = follow-up) |
 | 008 | Persist assistant reply on client disconnect | bug | P2 | M | LOW | — | TODO |
 | 009 | Drop deleted memos from RAG sources (ghost vectors) | bug | P2 | S | LOW | — | TODO |
 | 010 | Abort SSE readers on unmount (zombie requests) | bug | P2 | S | LOW | — | TODO |
