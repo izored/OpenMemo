@@ -2013,9 +2013,11 @@ export function MemoDetail() {
               </div>
             )}
 
-            {/* Content body for note */}
+            {/* Content body for note — on the same reading surface as
+                document/code files, so long-form text never floats raw on the
+                decorative page background (OPNMMO-0047 standard). */}
             {memo.type === 'note' && !isEditing && (
-              <div style={{ marginBottom: '24px' }}>
+              <div className="om-file-content">
                 <MarkdownEditor
                   viewFirst
                   value={noteContent}
