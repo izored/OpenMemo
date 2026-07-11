@@ -1,4 +1,5 @@
 import { BrowserRouter, Routes, Route } from 'react-router-dom';
+import { MotionConfig } from 'framer-motion';
 import { Layout } from '@/components/Layout';
 import { Dashboard } from '@/pages/Dashboard';
 import { CollectionsPage } from '@/pages/CollectionsPage';
@@ -12,6 +13,7 @@ import { SpacePage } from '@/pages/SpacePage';
 
 export default function App() {
   return (
+    <MotionConfig reducedMotion="user">
     <BrowserRouter>
       <Routes>
         <Route path="/" element={<Layout />}>
@@ -31,5 +33,6 @@ export default function App() {
         </Route>
       </Routes>
     </BrowserRouter>
+    </MotionConfig>
   );
 }

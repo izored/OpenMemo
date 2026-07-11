@@ -410,7 +410,7 @@ export function AskMemoPage() {
                     </span>
                     {msg.role === 'assistant' ? (
                       <div
-                        className="om-detail-summary"
+                        className="typeset typeset-chat"
                         style={{ background: 'transparent', border: 0, padding: 0 }}
                       >
                         <ReactMarkdown

@@ -59,9 +59,9 @@ export function SpeedDialFAB({ inline = false }: { inline?: boolean }) {
             style={{
               transform: isOpen
                 ? `translate(-50%, calc(-50% + ${item.ty})) scale(1)`
-                : 'translate(-50%, -50%) scale(0.6)',
+                : 'translate(-50%, -50%) scale(0.92)',
               opacity: isOpen ? 1 : 0,
-              transition: `transform 220ms ease-in ${delay}ms, opacity 180ms ease-in ${delay}ms`,
+              transition: `transform 220ms var(--ease-out) ${delay}ms, opacity 180ms var(--ease-out) ${delay}ms`,
               pointerEvents: isOpen ? 'auto' : 'none',
             }}
             onMouseEnter={() => {
@@ -122,7 +122,7 @@ export function SpeedDialFAB({ inline = false }: { inline?: boolean }) {
           size={24}
           style={{
             transform: isOpen ? 'rotate(-45deg)' : 'rotate(0deg)',
-            transition: 'transform 200ms ease-in',
+            transition: 'transform 200ms var(--ease-out)',
           }}
         />
       </button>

@@ -28,7 +28,7 @@ export function Card({
       className={cn(
         'rounded-[28px] overflow-hidden',
         variantStyles[variant],
-        interactive && 'cursor-pointer transition-all duration-[var(--duration-base)] ease-out hover:-translate-y-1',
+        interactive && 'cursor-pointer transition-[transform,box-shadow] duration-[var(--duration-fast)] ease-out hover:-translate-y-1',
         className
       )}
     >
