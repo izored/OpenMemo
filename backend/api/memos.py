@@ -139,7 +139,7 @@ async def list_memos(
             Memo.thumbnail_path, Memo.file_path, Memo.ai_summary, Memo.notes,
             Memo.sort_order, Memo.pinned, Memo.liked, Memo.hidden, Memo.card_size,
             Memo.audio_kind, Memo.audio_artist, Memo.audio_album, Memo.is_processed,
-            Memo.localize_status, Memo.localize_error,
+            Memo.embed_status, Memo.localize_status, Memo.localize_error,
             Memo.created_at, Memo.updated_at, Memo.recency_at,
         ),
         selectinload(Memo.collections),
@@ -236,6 +236,7 @@ async def list_memos(
                 "audio_artist": m.audio_artist,
                 "audio_album": m.audio_album,
                 "is_processed": m.is_processed,
+                "embed_status": m.embed_status,
                 # Playlist tiles read this to tell a finished track from one that
                 # is mid-download, queued, or failed (the dimmed pending cards).
                 "localize_status": m.localize_status,
@@ -298,6 +299,7 @@ async def get_memo(memo_id: str, db: AsyncSession = Depends(get_db)):
         "hidden": memo.hidden,
         "card_size": memo.card_size,
         "is_processed": memo.is_processed,
+        "embed_status": memo.embed_status,
         "created_at": memo.created_at.isoformat(),
         "updated_at": memo.updated_at.isoformat(),
         "collections": [{"id": c.id, "name": c.name, "color": c.color} for c in memo.collections],
@@ -652,9 +654,8 @@ async def update_memo(memo_id: str, data: MemoUpdate, db: AsyncSession = Depends
     
     # Re-embed in background if content changed
     if content_changed:
-        from backend.api.ingest import process_memo
-        import asyncio
-        asyncio.create_task(process_memo(memo_id))
+        from backend.api.ingest import schedule_processing
+        schedule_processing(memo_id)
     
     return {"id": memo.id, "status": "updated"}
 
@@ -815,10 +816,23 @@ async def restore_memo(memo_id: str, db: AsyncSession = Depends(get_db)):
     memo.deleted_at = None
     await db.commit()
     if memo.content_text:
-        import asyncio
-        from backend.api.ingest import process_memo
-        asyncio.create_task(process_memo(memo_id))
+        from backend.api.ingest import schedule_processing
+        schedule_processing(memo_id)
     return {"status": "restored"}
+
+
+@router.post("/{memo_id}/reembed")
+async def reembed_memo(memo_id: str, db: AsyncSession = Depends(get_db)):
+    """Re-run embedding for a memo (e.g. after Ollama was down) — the retry
+    path for embed_status == "error" (plans/007)."""
+    memo = await db.get(Memo, memo_id)
+    if not memo:
+        raise HTTPException(status_code=404, detail="Memo not found")
+    if not memo.content_text:
+        raise HTTPException(status_code=400, detail="Memo has no content to embed")
+    from backend.api.ingest import schedule_processing
+    schedule_processing(memo_id)
+    return {"status": "scheduled", "memo_id": memo_id}
 
 
 @router.get("/deleted/list")
