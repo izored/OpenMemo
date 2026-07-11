@@ -85,7 +85,11 @@ class Settings(BaseSettings):
         "http://localhost",
 
     ]
-    
+    # Exact origin of the OpenMemo browser extension, e.g.
+    # "chrome-extension://abcdefghijklmnopabcdefghijklmnop" (the ID shown on
+    # chrome://extensions). Empty keeps the broad chrome-extension:// fallback.
+    EXTENSION_ORIGIN: str = ""
+
     @field_validator("OLLAMA_HOSTS", "CORS_ORIGINS", mode="before")
     @classmethod
     def _parse_comma_separated_list(cls, v):

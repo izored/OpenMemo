@@ -247,11 +247,17 @@ app = FastAPI(
 )
 
 # CORS
+_cors_origins = list(settings.CORS_ORIGINS)
+if settings.EXTENSION_ORIGIN:
+    _cors_origins.append(settings.EXTENSION_ORIGIN)
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=settings.CORS_ORIGINS,
-    # Browser extension fetches originate from chrome-extension://<id>.
-    allow_origin_regex=r"chrome-extension://.*",
+    allow_origins=_cors_origins,
+    # Browser extension fetches originate from chrome-extension://<id>. Only
+    # fall back to the broad regex when no explicit EXTENSION_ORIGIN is set —
+    # configure it (from chrome://extensions) to lock this down (plans/004).
+    allow_origin_regex=None if settings.EXTENSION_ORIGIN else r"chrome-extension://.*",
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

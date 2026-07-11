@@ -102,6 +102,22 @@ async def restore_backup(file: UploadFile = File(...)):
     db_path = Path(settings.DATA_DIR) / "openmemo.db"
     files_dir = Path(settings.FILES_DIR)
 
+    # Validate EVERY file entry before touching the DB or the files dir, so a
+    # malicious archive is rejected without destroying anything
+    # (Zip-Slip defense in depth — see plans/002).
+    files_dir_resolved = files_dir.resolve()
+    safe_entries: list[tuple[str, Path]] = []
+    if scope == "full":
+        for name in names:
+            if name.startswith(_FILES_PREFIX) and not name.endswith("/"):
+                rel = name[len(_FILES_PREFIX):]
+                dest = (files_dir / rel).resolve()
+                try:
+                    dest.relative_to(files_dir_resolved)
+                except ValueError:
+                    raise HTTPException(status_code=400, detail="Backup contains an unsafe file path")
+                safe_entries.append((name, dest))
+
     # Write restored DB to a temp file first, then atomically replace.
     with tempfile.TemporaryDirectory() as tmp:
         tmp_db = Path(tmp) / "openmemo.db"
@@ -119,7 +135,6 @@ async def restore_backup(file: UploadFile = File(...)):
         shutil.copy2(tmp_db, db_path)
 
     if scope == "full":
-        files_dir_resolved = files_dir.resolve()
         files_dir.mkdir(parents=True, exist_ok=True)
         # Remove existing files but keep the thumbs cache directory structure.
         for item in files_dir.iterdir():
@@ -129,16 +144,8 @@ async def restore_backup(file: UploadFile = File(...)):
                 else:
                     item.unlink(missing_ok=True)
 
-        for name in names:
-            if name.startswith(_FILES_PREFIX) and not name.endswith("/"):
-                rel = name[len(_FILES_PREFIX):]
-                dest = (files_dir / rel).resolve()
-                # Reject path traversal attempts in zip entries.
-                try:
-                    dest.relative_to(files_dir_resolved)
-                except ValueError:
-                    continue
-                dest.parent.mkdir(parents=True, exist_ok=True)
-                dest.write_bytes(zf.read(name))
+        for name, dest in safe_entries:
+            dest.parent.mkdir(parents=True, exist_ok=True)
+            dest.write_bytes(zf.read(name))
 
     return {"ok": True, "scope": scope, "version": meta.get("app_version")}

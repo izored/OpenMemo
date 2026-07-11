@@ -20,9 +20,9 @@ then bugs, then perf/debt.
 | Plan | Title | Category | Priority | Effort | Risk | Depends on | Status |
 |------|-------|----------|----------|--------|------|------------|--------|
 | 001 | Fix FTS5 undefined-function (search silently degraded) | bug | P1 | S | LOW | — | TODO |
-| 002 | Block Zip-Slip path traversal in backup restore | security | P1 | S | LOW | — | TODO |
-| 003 | Validate proxy/image URLs, block private hosts (SSRF) | security | P1 | S | LOW | — | TODO |
-| 004 | Scope CORS extension origin (drop wildcard) | security | P2 | S | LOW | — | TODO |
+| 002 | Block Zip-Slip path traversal in backup restore | security | P1 | S | LOW | — | DONE (guard existed from security pass; added validate-before-wipe + regression tests) |
+| 003 | Validate proxy/image URLs, block private hosts (SSRF) | security | P1 | S | LOW | — | DONE (added DNS resolution check + tests; IP-literal guard existed) |
+| 004 | Scope CORS extension origin (drop wildcard) | security | P2 | S | LOW | — | DONE (EXTENSION_ORIGIN setting; wildcard only as unset fallback) |
 | 005 | Bump vulnerable dev deps (vitest CVE, etc.) | security | P3 | S | LOW | — | TODO |
 | 006 | Enable SQLite WAL + busy_timeout | perf | P1 | S | LOW | — | TODO |
 | 007 | Surface + retry silent embed failures | bug | P1 | M | LOW | — | TODO |
