@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { useAppStore } from '@/stores/appStore';
 import { memoApi } from '@/lib/api';
+import { cn } from '@/lib/utils';
 
 const DURATION = 5000;
 
@@ -10,6 +11,7 @@ export function DeleteToast() {
   const clearDeleteToast = useAppStore((s) => s.clearDeleteToast);
   const queryClient = useQueryClient();
   const [timeLeft, setTimeLeft] = useState(DURATION);
+  const [closing, setClosing] = useState(false);
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const undoneRef = useRef(false);
@@ -19,6 +21,7 @@ export function DeleteToast() {
     undoneRef.current = false;
     // eslint-disable-next-line react-hooks/set-state-in-effect -- reset the countdown when a new toast appears
     setTimeLeft(DURATION);
+    setClosing(false); // a new toast must not inherit the old exit state
 
     intervalRef.current = setInterval(() => {
       setTimeLeft((t) => Math.max(0, t - 100));
@@ -29,7 +32,7 @@ export function DeleteToast() {
         // Time's up — embeddings + hard delete not needed; soft delete already done.
         // Optionally: purge embeddings here in background.
       }
-      clearDeleteToast();
+      setClosing(true);
     }, DURATION);
 
     return () => {
@@ -51,7 +54,7 @@ export function DeleteToast() {
     } catch (e) {
       console.error(e);
     }
-    clearDeleteToast();
+    setClosing(true);
   };
 
   if (!toast) return null;
@@ -59,7 +62,17 @@ export function DeleteToast() {
   const pct = (timeLeft / DURATION) * 100;
 
   return (
-    <div className="om-delete-toast" role="status" aria-live="polite">
+    <div
+      className={cn('om-delete-toast', closing && 'closing')}
+      role="status"
+      aria-live="polite"
+      onAnimationEnd={(e) => {
+        if (closing && e.animationName === 'om-toast-out') {
+          setClosing(false);
+          clearDeleteToast();
+        }
+      }}
+    >
       <span className="om-delete-toast-text">
         <strong>"{toast.title}"</strong> deleted
       </span>

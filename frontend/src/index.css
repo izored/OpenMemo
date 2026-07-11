@@ -1,5 +1,6 @@
 @import "tailwindcss";
-@plugin "@tailwindcss/typography";
+/* Markdown typography now comes from styles/typeset.css (shadcn/typeset model);
+   the @tailwindcss/typography prose plugin had zero usages and was dropped. */
 
 :root {
   --color-brand: #ea2804;
