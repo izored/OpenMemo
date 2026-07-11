@@ -9,7 +9,8 @@ beautifulsoup4==4.12.3
 html2text==2024.2.26
 python-docx==1.1.2
 openpyxl==3.1.5
-PyPDF2==3.0.1
+# pypdf is the maintained successor of PyPDF2 (same PdfReader API, plans/013)
+pypdf==5.1.0
 pydantic==2.9.2
 pydantic-settings==2.5.2
 # yt-dlp breaks whenever YouTube changes its player (every few weeks), so a
