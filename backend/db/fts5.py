@@ -3,6 +3,7 @@ import asyncio
 import logging
 from sqlalchemy import text
 from backend.db.database import AsyncSessionLocal, engine
+from backend.core.security import escape_fts5_query
 
 logger = logging.getLogger(__name__)
 
@@ -49,22 +50,6 @@ async def init_fts5():
                 INSERT INTO memos_fts(rowid, title, content_text)
                 SELECT rowid, title, content_text FROM memos
             """))
-
-
-import re
-
-
-def _escape_fts5(query: str) -> str:
-    """Escape FTS5 special characters and wrap terms in quotes for literal matching."""
-    # Strip FTS5 control characters
-    query = re.sub(r'["*\-\(\)]', ' ', query)
-    # Normalize whitespace
-    query = re.sub(r'\s+', ' ', query).strip()
-    if not query:
-        return ""
-    # Wrap each term in double quotes for literal match
-    terms = query.split()
-    return " ".join(f'"{term}"' for term in terms)
 
 
 async def search_fts5(query: str, workspace_id: str, limit: int = 20) -> list[dict]:

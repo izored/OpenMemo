@@ -1,3 +1,4 @@
+from sqlalchemy import event
 from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession, async_sessionmaker
 from pathlib import Path
 
@@ -21,6 +22,20 @@ engine = create_async_engine(
     # too long as a backstop; NullPool rejects pool_size/max_overflow/timeout.
     pool_recycle=1800,
 )
+
+
+@event.listens_for(engine.sync_engine, "connect")
+def _set_sqlite_pragmas(dbapi_connection, connection_record):
+    """Per-connection pragmas (plans/006). journal_mode=WAL persists in the DB
+    file (set in _run_migrations), but busy_timeout and synchronous are
+    per-connection — without this listener every engine connection ran with
+    busy_timeout=0 and errored 'database is locked' under write contention."""
+    cursor = dbapi_connection.cursor()
+    cursor.execute("PRAGMA journal_mode=WAL")
+    cursor.execute("PRAGMA busy_timeout=5000")
+    cursor.execute("PRAGMA synchronous=NORMAL")
+    cursor.close()
+
 
 AsyncSessionLocal = async_sessionmaker(
     engine,
