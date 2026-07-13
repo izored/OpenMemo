@@ -45,17 +45,23 @@ Organise Memos into themed collections with emoji icons and descriptions. Drag a
 ### 🔌 Chrome Extension
 One-click save from any webpage. Site-specific extractors pull clean article text, video metadata, and source attribution automatically.
 
+### 🎵 Music Library
+A full music page of its own. Paste a Spotify, Apple Music, or YouTube playlist and get it back as a real playlist: per-track downloads, lossless FLAC where the source allows, a play queue with OS media keys, and a now-playing player that follows you across the app. Voice notes and music live apart, each with their own dashboard filter.
+
+### 🗂️ Spaces
+Group whole areas of your life. A Space bundles Memos and collections under one cover, one color, one name. Client work, home projects, research topics. Each Space gets its own page.
+
 ### 🔍 Hybrid Search
 **Semantic + Full-Text.** ChromaDB finds things by *meaning*. SQLite FTS5 finds things by *exact words*. Combined, they surface what you need even when you can't describe it perfectly.
 
 ### ⚙️ Everything Gets Indexed
 Every saved item is automatically processed in the background:
 - **Extracted:** PDFs, DOCX, images, audio, and webpages parsed into clean text
-- **Embedded:** Vectorised by `nomic-embed-text` for semantic search
+- **Embedded:** Vectorised by your local Ollama embed model for semantic search
 - **Indexed:** Added to FTS5 for instant keyword retrieval
 
-### ⚡ AI Chat *(work in progress)*
-Ask questions in plain language. Get answers grounded in your actual saved content, with citations back to the source. Real-time streaming via Server-Sent Events. Prefix with `@` to skip your Memos and ask the model directly.
+### ✨ Ask Memo
+Ask questions in plain language. Get answers grounded in your actual saved content, with citations back to the source Memos. One toggle switches between **Memos** (searches your library, cites what it used) and **Chat** (straight to the model, your data stays out of it). Live status while it thinks, streaming answers, scoped chat per memo or per collection. The whole retrieval flow is documented and locked in [ADR-022](docs/ADR-022-ASK-RAG.md).
 
 ---
 
@@ -88,7 +94,7 @@ Open **http://localhost:8091**. That's it.
 
 ### macOS App (Apple Silicon)
 
-OpenMemo also runs as a native Mac app — its own window, Dock icon, ⌘N, PIN
+openMemo also runs as a native Mac app. Its own window, Dock icon, ⌘N, PIN
 lock, no Docker and no browser. Everything Mac-specific lives under
 [`macOS/`](macOS/); build and install guide in [`docs/MACOS.md`](docs/MACOS.md).
 
@@ -98,10 +104,11 @@ lock, no Docker and no browser. Everything Mac-specific lives under
 2. Pull the recommended models:
 
 ```bash
-ollama pull nomic-embed-text   # embeddings
-ollama pull qwen2.5:7b          # chat (fast, capable)
-ollama pull gemma3:4b           # vision / image understanding
+ollama pull nomic-embed-text-v2-moe   # embeddings
+ollama pull gemma4:e4b                 # chat + vision (fast, capable)
 ```
+
+Any Ollama chat model works. Pick yours in Settings → Local AI, or per conversation from the Ask composer. Full model guide in [`docs/ollama.md`](docs/ollama.md).
 
 ### Development Mode
 
@@ -131,7 +138,7 @@ Open **http://localhost:3000**. See [`docs/INSTALL.md`](docs/INSTALL.md) for the
 | **State** | Zustand + TanStack Query |
 | **Backend** | FastAPI (async Python 3.12) |
 | **Vector DB** | ChromaDB (local persistence) |
-| **Embeddings** | Ollama `nomic-embed-text` (async background queue) |
+| **Embeddings** | Ollama (nomic embed models, async background queue) |
 | **LLM** | Ollama (any model you choose) |
 | **Search** | Hybrid: ChromaDB semantic + SQLite FTS5, re-ranked |
 | **Chat** | Server-Sent Events (SSE) streaming |
@@ -166,7 +173,9 @@ openmemo/
 ├── chrome-extension/     # Manifest V3 browser extension
 ├── docs/
 │   ├── INSTALL.md                  # Full installation & troubleshooting
-│   ├── DESIGN.md                   # Design system tokens
+│   ├── ollama.md                   # Models, retrieval, context windows
+│   ├── DECISIONS.md                # Architecture Decision Records
+│   ├── ADR-022-ASK-RAG.md          # The locked Ask Memo / RAG flow
 │   ├── memo-card-visual-system.md  # Card UI design reference
 │   ├── settings-and-appearance.md  # Settings bento + live appearance panel
 │   └── CHANGELOG.md                # Release history
@@ -177,9 +186,9 @@ openmemo/
 
 ## Roadmap
 
-**v2.0** *(current)*: Audio Memos (record, play, local transcription), Make it local (download any video or audio link so it survives the source going offline), persistent audio player, live waveform, redesigned minimal card mode, cinematic light/dark transition, pinning, video thumbnails, drag-to-file collections
+**v3.0** *(current)*: Music library with playlist import and lossless pulls, Spaces, Ask Memo with the Memos/Chat toggle and per-memo citations, native macOS app, mobile responsive pass, editable thumbnails, hidden section behind a passcode, cinematic onboarding
 **Next**: Transcript-synced playback, AI-suggested collections, similar Memos, multiple views (grid/list/board)
-**Later**: Multi-user workspaces, Notion/Obsidian import, mobile responsive, PWA offline support, plugin system
+**Later**: Multi-user workspaces, Notion/Obsidian import, PWA offline support, plugin system
 
 See [`Specs/ROADMAP.md`](Specs/ROADMAP.md) for the full roadmap, architectural findings, and contributor guide.
 
