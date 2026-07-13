@@ -123,7 +123,7 @@ async def reindex_embeddings():
     written by a different model live in a different vector space and make
     retrieval garbage. Idempotent; safe to run anytime. Ollama must be up."""
     from sqlalchemy import select
-    from backend.core.embedder import embed_memo
+    from backend.core.embedder import embed_memo, build_embed_text
     from backend.core.ollama_client import ollama_client
     from backend.db.chroma_client import get_collection
     from backend.db.database import AsyncSessionLocal
@@ -144,11 +144,11 @@ async def reindex_embeddings():
         chunks_written = 0
         failed = 0
         for memo in rows:
-            text = memo.content_text
-            if not text or not text.strip():
+            # Same full-text blob as the ingest path — description + summary +
+            # transcript, not just content_text (OPNMMO-0058).
+            text = build_embed_text(memo)
+            if not text.strip():
                 continue
-            if memo.notes:
-                text += f"\n\n--- Notes ---\n{memo.notes}"
             try:
                 ids = await embed_memo(
                     memo_id=memo.id,
