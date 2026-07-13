@@ -219,17 +219,20 @@ async def _localize_memo_task(memo_id: str):
 
 async def process_memo(memo_id: str):
     """Background task to embed memo content."""
-    from backend.core.embedder import embed_memo
-    
+    from backend.core.embedder import embed_memo, build_embed_text
+
     async with AsyncSessionLocal() as db:
         memo = await db.get(Memo, memo_id)
-        if not memo or not memo.content_text:
+        if not memo:
             return
-        
+        # Embed ALL of the memo's text (title + description + transcript/body +
+        # summary + notes), not just content_text — so a video with only a
+        # platform description is still retrievable (OPNMMO-0058).
+        text_to_embed = build_embed_text(memo)
+        if not text_to_embed.strip():
+            return
+
         try:
-            text_to_embed = memo.content_text
-            if memo.notes:
-                text_to_embed += f"\n\n--- Notes ---\n{memo.notes}"
             chunk_ids = await embed_memo(
                 memo_id=memo.id,
                 text=text_to_embed,
