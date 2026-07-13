@@ -1,4 +1,5 @@
 """RAG pipeline - retrieval-augmented generation for AskMemo."""
+import re
 from typing import AsyncGenerator
 
 from backend.config import settings
@@ -32,6 +33,104 @@ NO_CONTEXT_MESSAGE = (
     "Try rephrasing it, or switch the composer to **Chat** mode to talk to the "
     "model without your memos."
 )
+
+# Follow-up condensation (ADR-022): a follow-up like "and what about the
+# price?" embeds terribly on its own — retrieval needs the standalone form.
+# One cheap LLM call rewrites it before embedding; the ORIGINAL question still
+# goes to the answering model.
+CONDENSE_SYSTEM_PROMPT = (
+    "You rewrite a follow-up question as one standalone search query. Use the "
+    "conversation to resolve pronouns and references. Return ONLY the rewritten "
+    "query, nothing else — no quotes, no explanation. If the question is "
+    "already standalone, return it unchanged."
+)
+
+# Reasoning models wrap their monologue in <think> tags — strip before use.
+_THINK_RE = re.compile(r"<think>.*?</think>", re.S)
+
+
+async def condense_query(query: str, history: list[dict], model: str | None) -> str:
+    """Rewrite a follow-up into a standalone retrieval query using the recent
+    conversation. Falls back to the raw query on any failure or a suspicious
+    rewrite (empty, or so long the model started chatting)."""
+    convo = "\n".join(
+        f"{m['role']}: {m['content'][:300]}" for m in history[-4:] if m.get("content")
+    )
+    messages = [
+        {"role": "system", "content": CONDENSE_SYSTEM_PROMPT},
+        {
+            "role": "user",
+            "content": f"Conversation:\n{convo}\n\nFollow-up question: {query}\n\nStandalone search query:",
+        },
+    ]
+    try:
+        out = await ollama_client.chat_sync(messages=messages, model=model)
+        out = _THINK_RE.sub("", out or "").strip().strip('"').strip()
+        out = out.splitlines()[0].strip() if out else ""
+        if 0 < len(out) <= 300:
+            return out
+    except Exception:
+        pass
+    return query
+
+
+async def keyword_memo_chunks(
+    retrieval_query: str,
+    exclude_memo_ids: set[str],
+    workspace_id: str | None,
+) -> list[dict]:
+    """Keyword leg of hybrid retrieval (ADR-022): FTS5 over titles + content
+    finds memos by EXACT words — the proper nouns and brand names pure vector
+    search misses. For keyword-matched memos the vector pool didn't already
+    surface, pull their best chunks from Chroma WITHOUT the distance cutoff (an
+    exact name match earns its seat even when its embedding sits far away).
+    Memos with no chunks at all (embed failed/pending) fall back to a
+    title+preview pseudo-chunk so a keyword hit is never silently dropped."""
+    from backend.db.fts5 import search_fts5
+
+    try:
+        hits = await search_fts5(
+            retrieval_query, workspace_id or "default", limit=settings.RAG_MAX_SOURCES
+        )
+    except Exception:
+        return []
+    kw_ids = [h["memo_id"] for h in hits if h["memo_id"] not in exclude_memo_ids]
+    if not kw_ids:
+        return []
+
+    # Best chunks for the keyword memos, ranked by the same query embedding so
+    # ordering stays comparable. max_distance=2.0 disables the cosine cutoff.
+    chunks = await search_similar(
+        query=retrieval_query,
+        memo_ids=kw_ids,
+        n_results=len(kw_ids) * settings.RAG_CHUNKS_PER_MEMO,
+        max_distance=2.0,
+    )
+
+    # Title+preview fallback for keyword memos with no vectors.
+    chunked_ids = {c["metadata"].get("memo_id") for c in chunks}
+    missing = [m for m in kw_ids if m not in chunked_ids]
+    if missing:
+        from sqlalchemy import select
+
+        from backend.db.database import AsyncSessionLocal
+        from backend.db.models import Memo
+
+        async with AsyncSessionLocal() as db:
+            rows = await db.execute(select(Memo).where(Memo.id.in_(missing)))
+            for memo in rows.scalars():
+                doc = (memo.content_text or memo.description or "")[:600]
+                chunks.append({
+                    "id": f"memo_{memo.id}_kw",
+                    "document": f"{memo.title or 'Untitled'}\n{doc}".strip(),
+                    "metadata": {
+                        "memo_id": memo.id,
+                        "title": memo.title or "Untitled",
+                        "source_domain": memo.source_domain or "",
+                    },
+                    "distance": 2.0,
+                })
+    return chunks
 
 
 def group_by_memo(
@@ -171,15 +270,31 @@ async def rag_chat(
         return
 
     if use_rag:
+        # Follow-ups: condense "and what about X?" into a standalone query for
+        # RETRIEVAL only — the model still answers the user's original words.
+        retrieval_query = query
+        if history:
+            retrieval_query = await condense_query(query, history, model)
+
         # Retrieve a CHUNK pool wider than the final memo cap, so collapsing to
         # distinct memos below still leaves several sources to cite.
         chunks = await search_similar(
-            query=query,
+            query=retrieval_query,
             workspace_id=workspace_id,
             collection_id=collection_id,
             memo_id=memo_id,
             n_results=settings.RAG_CANDIDATE_K,
         )
+
+        # Hybrid leg: exact-word matches (titles + FTS5 content) join the pool
+        # AFTER the vector chunks — supplementary, never displacing a closer
+        # semantic hit. Scoped asks (one memo / one collection) skip it: their
+        # pool is already pinned to the right memos.
+        if not memo_id and not collection_id:
+            vector_memo_ids = {
+                c["metadata"].get("memo_id") for c in chunks if c["metadata"].get("memo_id")
+            }
+            chunks += await keyword_memo_chunks(retrieval_query, vector_memo_ids, workspace_id)
 
         # Drop ghost vectors: a failed Chroma purge can leave chunks whose memo
         # is soft-deleted — citing them 404s in the UI (plans/009). NULL
