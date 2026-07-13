@@ -3,6 +3,13 @@
 All notable changes to OpenMemo are documented here.
 
 ---
+## [Unreleased]
+
+### Fixed
+
+- 🍎 **The macOS build can actually attach its .dmg to the release.** The tag-build workflow uploaded the .dmg to the GitHub release with the default Actions token, which is read-only for releases — so v3.0.0's upload died with HTTP 403 and the fallback claimed "no release yet" when the release was sitting right there. The workflow now requests `contents: write`, and the fallback tells the truth: a 403 fails the job loudly as a permissions problem, while a genuinely missing release stays a gentle warning.
+
+---
 ## [3.0.0] - 2026-07-13
 
 ### Fixed
