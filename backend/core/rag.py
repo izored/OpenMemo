@@ -1,6 +1,7 @@
 """RAG pipeline - retrieval-augmented generation for AskMemo."""
 from typing import AsyncGenerator
 
+from backend.config import settings
 from backend.core.embedder import search_similar
 from backend.core.ollama_client import ollama_client
 
@@ -33,16 +34,55 @@ NO_CONTEXT_MESSAGE = (
 )
 
 
-def build_context_prompt(sources: list[dict]) -> str:
-    """Build context block from retrieved chunks."""
+def group_by_memo(
+    chunks: list[dict],
+    max_memos: int,
+    max_chunks_per_memo: int,
+) -> list[dict]:
+    """Collapse retrieved chunks (nearest-first) into distinct memos.
+
+    A single memo can own several of the top chunks; showing one citation card
+    per chunk makes Ask look like it pulled "8 Toyota memos" when it really
+    found two (OPNMMO-0053). Group by memo_id preserving relevance order (the
+    first chunk seen for a memo is its nearest), keep up to `max_chunks_per_memo`
+    chunks per memo for the model, and cap the whole list to `max_memos` memos.
+
+    Returns a list of {memo_id, title, domain, distance, documents[]} — one per
+    memo, ordered by best distance.
+    """
+    groups: dict[str, dict] = {}
+    for ch in chunks:
+        meta = ch.get("metadata", {})
+        mid = meta.get("memo_id")
+        if not mid:
+            continue
+        g = groups.get(mid)
+        if g is None:
+            if len(groups) >= max_memos:
+                continue  # memo budget spent — skip further new memos
+            groups[mid] = {
+                "memo_id": mid,
+                "title": meta.get("title", "Untitled"),
+                "domain": meta.get("source_domain", ""),
+                "distance": ch.get("distance", 0),
+                "documents": [ch.get("document", "")],
+            }
+        elif len(g["documents"]) < max_chunks_per_memo:
+            g["documents"].append(ch.get("document", ""))
+    return list(groups.values())
+
+
+def build_context_prompt(memo_groups: list[dict]) -> str:
+    """Build the context block from memo groups — one citation index per memo,
+    with that memo's chunks stacked under it. Keeps [n] citations aligned with
+    the source cards shown to the user (both are one-per-memo)."""
     context_parts = []
-    for i, source in enumerate(sources, 1):
-        title = source["metadata"].get("title", "Untitled")
-        domain = source["metadata"].get("source_domain", "")
-        source_info = f"[{i}] {title}"
-        if domain:
-            source_info += f" ({domain})"
-        context_parts.append(f"{source_info}\n{source['document']}\n")
+    for i, g in enumerate(memo_groups, 1):
+        source_info = f"[{i}] {g['title']}"
+        if g["domain"]:
+            source_info += f" ({g['domain']})"
+        body = "\n\n".join(d for d in g["documents"] if d)
+        context_parts.append(f"{source_info}\n{body}\n")
 
     return "---\nCONTEXT FROM USER'S MEMOS:\n\n" + "\n".join(context_parts) + "\n---"
 
@@ -131,18 +171,20 @@ async def rag_chat(
         return
 
     if use_rag:
-        # Retrieve relevant chunks
-        sources = await search_similar(
+        # Retrieve a CHUNK pool wider than the final memo cap, so collapsing to
+        # distinct memos below still leaves several sources to cite.
+        chunks = await search_similar(
             query=query,
             workspace_id=workspace_id,
             collection_id=collection_id,
             memo_id=memo_id,
+            n_results=settings.RAG_CANDIDATE_K,
         )
 
         # Drop ghost vectors: a failed Chroma purge can leave chunks whose memo
         # is soft-deleted — citing them 404s in the UI (plans/009). NULL
         # is_deleted counts as live, same idiom as memos.list_memos.
-        retrieved_ids = {s["metadata"].get("memo_id") for s in sources if s["metadata"].get("memo_id")}
+        retrieved_ids = {c["metadata"].get("memo_id") for c in chunks if c["metadata"].get("memo_id")}
         if retrieved_ids:
             from sqlalchemy import select
 
@@ -157,23 +199,32 @@ async def rag_chat(
                     )
                 )
                 live_ids = {r[0] for r in rows}
-            sources = [s for s in sources if s["metadata"].get("memo_id") in live_ids]
+            chunks = [c for c in chunks if c["metadata"].get("memo_id") in live_ids]
+
+        # Collapse chunks → distinct memos so the citation list is one card per
+        # memo, capped at RAG_MAX_SOURCES (OPNMMO-0053). Order preserved =
+        # nearest memo first; each memo keeps its best few chunks for context.
+        sources = group_by_memo(
+            chunks,
+            max_memos=settings.RAG_MAX_SOURCES,
+            max_chunks_per_memo=settings.RAG_CHUNKS_PER_MEMO,
+        )
 
         # Yield sources first so frontend can display them
         yield {
             "type": "sources",
             "data": [
                 {
-                    "memo_id": s["metadata"].get("memo_id"),
-                    "title": s["metadata"].get("title", "Untitled"),
-                    "domain": s["metadata"].get("source_domain", ""),
-                    "snippet": s["document"][:200],
-                    "distance": s["distance"],
+                    "memo_id": g["memo_id"],
+                    "title": g["title"],
+                    "domain": g["domain"],
+                    "snippet": (g["documents"][0] if g["documents"] else "")[:200],
+                    "distance": g["distance"],
                 }
-                for s in sources
+                for g in sources
             ],
         }
-        
+
         # Nothing relevant retrieved — answer honestly without burning an LLM
         # call on an empty context (the model would either hallucinate or
         # produce a slower version of this exact message).

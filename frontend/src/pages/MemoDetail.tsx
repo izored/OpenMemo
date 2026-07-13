@@ -2,8 +2,6 @@ import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import {
-  MessageSquare,
-  Bot,
   Sparkles,
   Loader2,
   ExternalLink,
@@ -1352,7 +1350,7 @@ function AskRailTool({ memoId, open, onToggle }: { memoId: string; open: boolean
       duration={beam.ambientDuration}
     >
       <RailCard
-        icon={<Bot size={16} className="om-accent-icon" />}
+        icon={<Icon name="sparkles" size={16} className="om-accent-icon" />}
         title="Ask this memo"
         open={open}
         onToggle={onToggle}

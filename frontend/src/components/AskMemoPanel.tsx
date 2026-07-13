@@ -1,5 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Send, Bot, Loader2, Globe, AlertTriangle } from 'lucide-react';
+import { Send, Loader2, Globe, AlertTriangle } from 'lucide-react';
+import { Icon } from '@/components/Icon';
 import { chatApi } from '@/lib/api';
 import { useAppStore } from '@/stores/appStore';
 import type { ChatSource } from '@/types';
@@ -163,7 +164,7 @@ export function AskMemoPanel({ memoId, collectionId }: AskMemoPanelProps) {
       <div ref={scrollRef} className="om-ask-panel-thread" onScroll={onThreadScroll}>
         {messages.length === 0 && (
           <div className="om-ask-panel-empty">
-            <Bot size={24} className="om-accent-icon" />
+            <Icon name="sparkles" size={24} className="om-accent-icon" />
             <p className="om-ask-panel-empty-hint">Ask questions about this content</p>
           </div>
         )}
@@ -198,7 +199,7 @@ export function AskMemoPanel({ memoId, collectionId }: AskMemoPanelProps) {
             <div key={msg.id} className={`om-panel-msg${msg.role === 'user' ? ' user' : ''}`}>
               {msg.role === 'assistant' && (
                 <div className="om-panel-msg-avatar">
-                  <Bot size={12} className="om-accent-icon" />
+                  <Icon name="sparkles" size={12} className="om-accent-icon" />
                 </div>
               )}
               <div className={`om-panel-bubble ${msg.role === 'user' ? 'user' : 'assistant'}`}>
