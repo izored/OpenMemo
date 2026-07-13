@@ -2282,19 +2282,29 @@ input, textarea { font: inherit; color: inherit; }
 @media (prefers-reduced-motion: reduce) { .om-ask-title-cycle { animation: none; } }
 
 .om-ask-thread { display: flex; flex-direction: column; gap: 28px; }
-.om-msg { display: grid; grid-template-columns: 32px 1fr; gap: 16px; }
+/* minmax(0,1fr): without the 0 min, the content track can't shrink below its
+   widest child (a long URL, a code block, the sources card) and the whole
+   thread scrolls sideways. The 0 lets the column shrink and wide content wrap
+   or scroll inside itself instead. */
+.om-msg { display: grid; grid-template-columns: 32px minmax(0, 1fr); gap: 16px; }
 .om-msg-avatar { width: 32px; height: 32px; border-radius: 9px; background: var(--surface-2); display: inline-flex; align-items: center; justify-content: center; font-size: 11.5px; font-weight: 600; }
 .om-msg-avatar.ai { background: linear-gradient(135deg, var(--accent) 0%, var(--accent-deep) 100%); color: #fff; }
-.om-msg-body { display: flex; flex-direction: column; gap: 10px; }
+.om-msg-body { display: flex; flex-direction: column; gap: 10px; min-width: 0; }
 .om-msg-meta { font-size: 10.5px; color: var(--text-4); letter-spacing: 0.04em; }
 .om-msg-body p { margin: 0; font-size: 15px; line-height: 1.6; color: var(--text); }
 .om-msg.user .om-msg-body p { color: var(--text-2); }
-.om-msg-cards { display: flex; flex-direction: column; gap: 6px; padding: 14px; background: var(--surface); border: 1px solid var(--border); border-radius: 14px; }
-.om-ask-source { display: grid; grid-template-columns: 22px 1fr; gap: 12px; align-items: center; padding: 8px 6px; border-radius: 8px; transition: background .15s; cursor: pointer; }
+/* Compact citation rows (Perplexity-style): one line each — index, title that
+   truncates, muted domain, and a "See memo" pill on the right — so a 5-source
+   answer is a tight list, not five stacked cards. */
+.om-msg-cards { display: flex; flex-direction: column; gap: 2px; padding: 4px; background: var(--surface); border: 1px solid var(--border); border-radius: 12px; }
+.om-ask-source { display: flex; align-items: center; gap: 10px; width: 100%; text-align: left; padding: 6px 8px; border-radius: 8px; transition: background .15s; cursor: pointer; }
 .om-ask-source:hover { background: var(--surface-2); }
-.om-ask-source-num { font-size: 10.5px; color: var(--accent); }
-.om-ask-source-title { margin: 0; font-size: 13px; color: var(--text); }
-.om-ask-source-meta { font-size: 10.5px; color: var(--text-4); }
+.om-ask-source-num { flex-shrink: 0; width: 14px; font-size: 10.5px; color: var(--accent); }
+.om-ask-source-title { flex: 1; min-width: 0; margin: 0; font-size: 12.5px; color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.om-ask-source-meta { flex-shrink: 0; max-width: 130px; font-size: 10.5px; color: var(--text-4); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.om-ask-source-open { flex-shrink: 0; display: inline-flex; align-items: center; gap: 5px; font-size: 11px; color: var(--text-3); padding: 4px 9px; border-radius: 999px; border: 1px solid var(--border); background: var(--surface-2); transition: background .15s, color .15s, border-color .15s; }
+.om-ask-source:hover .om-ask-source-open { color: var(--text); border-color: var(--border-2); background: var(--surface-3); }
+@media (max-width: 620px) { .om-ask-source-meta { display: none; } }
 .om-msg-actions { display: flex; gap: 4px; }
 .om-msg-actions button { display: inline-flex; align-items: center; gap: 6px; font-size: 11.5px; color: var(--text-3); padding: 6px 10px; border-radius: 8px; transition: background .15s, color .15s; }
 .om-msg-actions button:hover { background: var(--surface-2); color: var(--text); }
@@ -2303,8 +2313,16 @@ input, textarea { font: inherit; color: inherit; }
   position: sticky; bottom: 24px;
   display: flex; flex-direction: column; gap: 10px;
 }
-.om-ask-suggestions { display: flex; gap: 6px; flex-wrap: wrap; }
-.om-suggest { font-size: 12px; padding: 6px 12px; border-radius: 999px; background: var(--surface); border: 1px solid var(--border); color: var(--text-2); transition: background .15s, color .15s; }
+.om-ask-suggestions { display: flex; gap: 6px; flex-wrap: wrap; justify-content: center; }
+/* Hero starters stay a single row: never wrap to a second line (the height jump
+   the user disliked), and break out of the 640px hero cap up to the viewport so
+   three chips sit side by side. */
+.om-ask-hero .om-ask-suggestions {
+  flex-wrap: nowrap;
+  width: max-content; max-width: min(900px, 92vw);
+  margin-left: auto; margin-right: auto;
+}
+.om-suggest { font-size: 12px; padding: 6px 12px; border-radius: 999px; white-space: nowrap; background: var(--surface); border: 1px solid var(--border); color: var(--text-2); transition: background .15s, color .15s; }
 .om-suggest:hover { background: var(--surface-2); color: var(--text); }
 .om-ask-composer {
   display: flex; align-items: center; gap: 12px;
@@ -4669,16 +4687,20 @@ body.om-has-bbar .om-fab { display: none !important; }
 /* Ask owns its own bottom dock, so drop the main pane's bottom padding here —
    otherwise the sticky composer floats a full density-gutter above the bottom
    edge. The dock then carries the 24px gutter itself. */
-.om-main:has(.om-ask-shell) { padding-bottom: 0 !important; }
+/* Kill .om-main's density-dependent side padding for the Ask page: the shell
+   broke out of the LEFT gutter only, leaving a lone right gutter that shoved the
+   whole column off-centre. Zeroing it and giving the shell its own symmetric
+   gutters centres the thread in the space beside the sidebar. */
+.om-main:has(.om-ask-shell) { padding: 0 !important; }
 .om-ask-shell {
   display: grid; grid-template-columns: 1fr 0;
   gap: 0;
   height: 100vh;
-  padding: 24px 0 0;
+  padding: 24px 24px 0;
   transition: grid-template-columns .25s cubic-bezier(.2,.7,.2,1), gap .25s;
 }
 .om-ask-shell.history-open { grid-template-columns: 1fr 240px; gap: 24px; }
-.om-ask-topbar { display: flex; justify-content: flex-end; padding: 0 4px 4px; }
+.om-ask-topbar { display: flex; justify-content: flex-end; gap: 8px; padding: 0 4px 4px; }
 .om-ask-histtoggle {
   display: inline-flex; align-items: center; gap: 7px;
   padding: 7px 12px; border-radius: 8px;
@@ -4690,8 +4712,15 @@ body.om-has-bbar .om-fab { display: none !important; }
 .om-ask-histtoggle.active { background: var(--surface-2); color: var(--text); border-color: var(--border-2); }
 .om-ask-history {
   display: flex; flex-direction: column; gap: 8px;
-  border-left: 1px solid var(--border);
-  padding-left: 16px; min-height: 0; overflow: hidden;
+  min-height: 0; overflow: hidden;
+  padding: 12px;
+  /* Glass panel so the thread list reads over a busy wallpaper, matching the
+     Ask message bodies (surface @72% + blur) instead of floating bare. */
+  background: color-mix(in srgb, var(--surface) 72%, transparent);
+  -webkit-backdrop-filter: blur(12px);
+  backdrop-filter: blur(12px);
+  border: 1px solid var(--border);
+  border-radius: 14px;
 }
 .om-model-btn {
   display: inline-flex; align-items: center; gap: 5px;
@@ -4737,7 +4766,8 @@ body.om-has-bbar .om-fab { display: none !important; }
 }
 .om-ask-history-item span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .om-ask-history-item:hover { background: var(--surface-2); color: var(--text); }
-.om-ask-history-item.active { background: var(--surface-2); color: var(--text); box-shadow: inset 2px 0 0 var(--accent); }
+/* Active thread = a stronger fill, never a left-edge accent bar. */
+.om-ask-history-item.active { background: var(--surface-3); color: var(--text); }
 .om-ask-main { display: flex; flex-direction: column; min-height: 0; }
 .om-ask-hero {
   margin: auto; max-width: 640px; width: 100%;
@@ -4749,7 +4779,11 @@ body.om-has-bbar .om-fab { display: none !important; }
 .om-ask-main .om-ask-thread {
   flex: 1; overflow-y: auto; min-height: 0;
   display: flex; flex-direction: column; gap: 28px;
-  padding: 8px 4px 16px; max-width: 760px; width: 100%; margin: 0 auto;
+  padding: 18px 4px 16px; max-width: 760px; width: 100%; margin: 0 auto;
+  /* Soft top fade so a long answer dissolves under the top bar instead of
+     hard-clipping mid-line as you scroll. */
+  -webkit-mask-image: linear-gradient(to bottom, transparent 0, #000 22px);
+  mask-image: linear-gradient(to bottom, transparent 0, #000 22px);
 }
 /* Chat legibility on custom backgrounds: every message body sits on a soft
    glass panel, so streamed text never fights a busy user wallpaper. Scoped to
@@ -4760,6 +4794,12 @@ body.om-has-bbar .om-fab { display: none !important; }
   border: 1px solid color-mix(in srgb, var(--border) 60%, transparent);
   border-radius: 14px; padding: 12px 16px 14px;
 }
+/* Keep everything inside the answer bubble within its width: markdown wraps
+   long tokens/URLs, and code blocks + tables scroll inside themselves rather
+   than widening the whole thread (the stray horizontal scrollbar). */
+.om-ask-main .om-msg-body .typeset-chat { min-width: 0; overflow-wrap: anywhere; }
+.om-ask-main .om-msg-body :is(pre, table) { max-width: 100%; overflow-x: auto; }
+.om-ask-main .om-msg-cards { min-width: 0; max-width: 100%; }
 .om-ask-composer-dock {
   position: sticky; bottom: 0;
   padding: 14px 0 24px;
@@ -4794,7 +4834,7 @@ body.om-has-bbar .om-fab { display: none !important; }
    Shows on the first 30 visits, then retires (localStorage counter). */
 .om-ask-coach {
   display: flex; align-items: center; gap: 10px;
-  max-width: 760px; width: 100%; margin: 10px auto 0;
+  width: max-content; max-width: min(900px, 92vw); margin: 10px auto 0;
   padding: 8px 12px; border-radius: 10px;
   background: color-mix(in oklab, var(--elev) 82%, transparent);
   border: 1px solid var(--border);
@@ -4803,7 +4843,7 @@ body.om-has-bbar .om-fab { display: none !important; }
   animation: omPopUp .18s ease;
 }
 .om-ask-coach > svg { color: var(--accent); flex-shrink: 0; }
-.om-ask-coach p { flex: 1; margin: 0; font-size: 11.5px; line-height: 1.45; color: var(--text-2); }
+.om-ask-coach p { flex: 1; margin: 0; font-size: 11.5px; line-height: 1.45; color: var(--text-2); white-space: nowrap; }
 .om-ask-coach p b { color: var(--text); font-weight: 600; }
 .om-ask-coach-btn {
   flex-shrink: 0; padding: 4px 10px; border-radius: 999px;

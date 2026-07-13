@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { Loader2 } from 'lucide-react';
 import { Icon } from '@/components/Icon';
 import { useAppStore } from '@/stores/appStore';
@@ -25,11 +25,71 @@ interface Session {
   created_at: string;
 }
 
-const SUGGESTIONS = [
-  'Summarize my reading this week',
-  'Connect ideas across my notes',
-  "What's in my inbox?",
+// Starter prompts. A chip is a SHORTCUT: the pill shows a short human label, but
+// clicking sends the full `prompt` — a properly framed instruction the local
+// model can actually act on (a bare "themes across my memos" gives a weak
+// answer; the expanded prompt asks for structure + citations). The full prompt
+// is what lands in the thread as the user turn. All phrased around what openMemo
+// holds (memos, videos, songs, articles, links, Spaces, collections) — never
+// generic assistant filler. We show 3 at a time, re-picked at random on refresh.
+interface Suggestion {
+  label: string;
+  prompt: string;
+}
+
+const SUGGESTION_POOL: Suggestion[] = [
+  { label: 'Summarize my week',
+    prompt: 'Summarize the memos I saved this week. Group them by theme, and for each give a one or two sentence takeaway. Cite each memo you use.' },
+  { label: 'Connect ideas across my notes',
+    prompt: 'Look across my saved notes and memos and find the connections between them. Point out ideas or topics that show up in more than one memo and explain how they relate, with citations.' },
+  { label: "What have I saved on design?",
+    prompt: 'Search my memos for anything about design and give a structured overview: the main ideas, any recurring principles, and which memos cover them. Answer only from my saved memos and cite them.' },
+  { label: 'Recap my saved videos',
+    prompt: 'Recap up to five of the videos I saved recently. For each, give the title and 2-3 bullets on what it covers, using the video description and transcript. Cite each one.' },
+  { label: 'What songs did I save lately?',
+    prompt: 'List up to five of the songs and music I saved recently, with artist and any context I noted. Answer from my saved memos only.' },
+  { label: 'Surface memos I forgot about',
+    prompt: "Pull up a few older memos I saved but probably haven't revisited. For each, remind me what it is and why it might still be worth my time. Cite them." },
+  { label: 'Takeaways from my articles',
+    prompt: 'Go through up to five of the articles I saved and extract the key takeaways from each — a few tight bullets per article, most important first, with citations.' },
+  { label: 'What themes run through my memos?',
+    prompt: 'Analyze my saved memos as a whole and identify the recurring themes. For each theme, name the memos that belong to it and briefly explain the throughline, with citations.' },
+  { label: "What's tied to my project?",
+    prompt: "Find the memos most related to what I'm currently working on. Summarize how each one connects and what I could take from it. Answer from my saved memos and cite them." },
+  { label: 'What did I save from YouTube?',
+    prompt: 'Show me up to five things I saved from YouTube recently. For each video, use its description and transcript to give a short summary, and cite each source.' },
+  { label: 'Pull quotes worth revisiting',
+    prompt: 'Find the most striking or useful quotes and passages across my saved memos and list them, each with the memo it came from. Cite each one.' },
+  { label: "What's inside my Spaces?",
+    prompt: 'Give me an overview of what is in my Spaces right now: the main topics and a few notable memos in each. Answer from my saved memos and cite them.' },
+  { label: 'Two bullets on each recent memo',
+    prompt: "For each memo I saved recently, give exactly two bullet points capturing what it's about and why it matters. Cite each memo." },
+  { label: 'Which memos mention pricing?',
+    prompt: 'Search my memos for anything about pricing, costs, or plans and summarize what each one says. Answer only from my saved memos and cite them.' },
+  { label: 'What have I been reading lately?',
+    prompt: 'Summarize what I have been reading and saving lately across articles, notes, and videos. Group by topic and highlight the throughlines, with citations.' },
+  { label: 'Recap my latest collection',
+    prompt: "Summarize the memos in my most recent collection. Give a short overview of the collection's theme, then a bullet per memo, with citations." },
+  { label: 'Links I saved but never opened',
+    prompt: "Find saved links or memos it looks like I haven't really engaged with yet. For each, tell me what it is and whether it's worth opening. Cite them." },
+  { label: 'Compare two of my memos',
+    prompt: 'Pick two of my saved memos that cover related ideas and compare them: where they agree, where they differ, and what I should take from each. Cite both.' },
+  { label: 'What recipes have I saved?',
+    prompt: 'List up to five recipes I saved, with the dish name and a quick note on ingredients or method from each memo. Answer from my saved memos and cite them.' },
+  { label: 'Turn my videos into study notes',
+    prompt: 'Take up to five of the videos I saved and turn them into concise study notes: key points and takeaways per video, organized clearly, using their transcripts. Cite each video.' },
 ];
+
+// Fisher-Yates shuffle → first 3. Called once per mount so a refresh rotates
+// the trio while it stays stable during a session.
+function pickSuggestions(pool: Suggestion[], n = 3): Suggestion[] {
+  const a = [...pool];
+  for (let i = a.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [a[i], a[j]] = [a[j], a[i]];
+  }
+  return a.slice(0, n);
+}
 
 // Hero lines. One picked at random per visit, then cycled while the hero is
 // idle so the page never greets you the same way twice (OPNMMO-0053).
@@ -62,6 +122,7 @@ export function AskMemoPage() {
   const theme = useAppStore((s) => s.tweaks.theme);
   const beam = useBeamConfig();
   const navigate = useNavigate();
+  const location = useLocation();
   const queryClient = useQueryClient();
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState('');
@@ -72,6 +133,8 @@ export function AskMemoPage() {
   const [coachVisible, setCoachVisible] = useState(false);
   const [sessionId, setSessionId] = useState<string | null>(null);
   const [historyOpen, setHistoryOpen] = useState(false);
+  // Random 3 of the 20 starters, fixed for this mount (rotates on refresh).
+  const [suggestions] = useState(() => pickSuggestions(SUGGESTION_POOL));
   const [modelOpen, setModelOpen] = useState(false);
   const [menuPos, setMenuPos] = useState<{ bottom: number; right: number } | null>(null);
   const modelBtnRef = useRef<HTMLButtonElement>(null);
@@ -293,6 +356,19 @@ export function AskMemoPage() {
 
   const hasThread = messages.length > 0;
 
+  // Clicking "Ask Memo" in the sidebar (even mid-thread) sends a fresh
+  // { newChat } location state; reset to an empty new chat when it arrives.
+  // Keyed on location.key so every click fires, and inlined so `newChat`
+  // isn't an effect dependency.
+  useEffect(() => {
+    if ((location.state as { newChat?: number } | null)?.newChat) {
+      setMessages([]);
+      setSessionId(null);
+      setInput('');
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [location.key]);
+
   // Rotate the hero line while the empty hero is on screen. Random start so
   // two visits in a row don't open on the same words; stops once a thread
   // exists (the hero is gone anyway).
@@ -309,9 +385,8 @@ export function AskMemoPage() {
     <div className="om-ask-coach" role="note">
       <Icon name="info" size={12} />
       <p>
-        <b>Memos</b> answers from your saved stuff, with citations. <b>Chat</b> talks
-        straight to the model — nothing of yours is searched. Flip it next to the
-        message box.
+        <b>Memos</b> answers from your saved memos, with citations. <b>Chat</b> ignores
+        them and talks to the AI directly.
       </p>
       <button type="button" className="om-ask-coach-btn" onClick={dismissCoach}>
         Got it
@@ -435,6 +510,16 @@ export function AskMemoPage() {
     <div className={cn('om-ask-shell', historyOpen && 'history-open')}>
       <div className="om-ask-main">
         <div className="om-ask-topbar">
+          {hasThread && (
+            <button
+              className="om-ask-histtoggle"
+              onClick={newChat}
+              title="Start a new chat"
+            >
+              <Icon name="plus" size={13} />
+              <span>New chat</span>
+            </button>
+          )}
           <button
             className={cn('om-ask-histtoggle', historyOpen && 'active')}
             onClick={() => setHistoryOpen((v) => !v)}
@@ -459,9 +544,14 @@ export function AskMemoPage() {
             </p>
             {composer}
             <div className="om-ask-suggestions" style={{ justifyContent: 'center' }}>
-              {SUGGESTIONS.map((s) => (
-                <button key={s} className="om-suggest" onClick={() => handleSend(s)}>
-                  {s}
+              {suggestions.map((s) => (
+                <button
+                  key={s.label}
+                  className="om-suggest"
+                  onClick={() => handleSend(s.prompt)}
+                  title={s.prompt}
+                >
+                  {s.label}
                 </button>
               ))}
             </div>
@@ -517,17 +607,21 @@ export function AskMemoPage() {
                     {msg.sources && msg.sources.length > 0 && (
                       <div className="om-msg-cards">
                         {msg.sources.map((s, i) => (
-                          <div
+                          <button
                             key={i}
+                            type="button"
                             className="om-ask-source"
                             onClick={() => s.memo_id && navigate(`/memo/${s.memo_id}`)}
+                            title={s.title}
                           >
                             <span className="om-ask-source-num mono">{i + 1}</span>
-                            <div>
-                              <p className="om-ask-source-title">{s.title}</p>
-                              <span className="om-ask-source-meta mono">{s.domain}</span>
-                            </div>
-                          </div>
+                            <span className="om-ask-source-title">{s.title}</span>
+                            {s.domain && <span className="om-ask-source-meta mono">{s.domain}</span>}
+                            <span className="om-ask-source-open">
+                              <Icon name="arrowUpRight" size={11} />
+                              See memo
+                            </span>
+                          </button>
                         ))}
                       </div>
                     )}

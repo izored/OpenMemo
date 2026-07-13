@@ -100,12 +100,14 @@ export function Layout() {
   // otherwise navigating away and back leaves the page unscrollable until a
   // full refresh. Hence location.pathname in the deps.
   //
-  // The memo detail page is the exception: it manages its own native scroll on
-  // an inner pane (.om-detail-scroll) while .om-main is overflow:hidden. Running
-  // Lenis there would hijack the wheel for the unscrollable main and starve the
-  // inner scroll — so we skip Lenis entirely on /memo/* routes.
+  // Some pages manage their own native scroll on inner panes while .om-main
+  // itself has no overflow: the memo detail page (.om-detail-scroll) and the
+  // Ask page (.om-ask-thread + .om-ask-history-list). Binding Lenis to the
+  // unscrollable .om-main there hijacks the wheel and starves the inner panes —
+  // nothing scrolls at all. Skip Lenis on those routes so native wheel reaches
+  // the real scrollers.
   useEffect(() => {
-    if (location.pathname.startsWith('/memo/')) return;
+    if (location.pathname.startsWith('/memo/') || location.pathname === '/ask') return;
     // Below lg (phones/tablets) let native momentum scroll own touch — Lenis
     // hijacks it and feels wrong on a touchscreen (ADR-009 #8).
     if (isMobile) return;

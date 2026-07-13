@@ -74,6 +74,35 @@ async def condense_query(query: str, history: list[dict], model: str | None) -> 
     return query
 
 
+TITLE_SYSTEM_PROMPT = (
+    "You write a very short title (3 to 6 words) for a chat, from the user's "
+    "first question and the assistant's answer. Return ONLY the title — no "
+    "quotes, no trailing punctuation, no preamble. Sentence case."
+)
+
+
+async def generate_title(question: str, answer: str, model: str | None) -> str | None:
+    """One cheap LLM call to name a chat thread from its first exchange. Returns
+    a short title, or None on any failure or suspicious output so the caller
+    keeps its fallback (the truncated question)."""
+    messages = [
+        {"role": "system", "content": TITLE_SYSTEM_PROMPT},
+        {
+            "role": "user",
+            "content": f"Question: {question[:500]}\n\nAnswer: {answer[:800]}\n\nTitle:",
+        },
+    ]
+    try:
+        out = await ollama_client.chat_sync(messages=messages, model=model)
+        out = _THINK_RE.sub("", out or "").strip().strip('"').strip()
+        out = (out.splitlines()[0] if out else "").strip().rstrip(".").strip()
+        if 0 < len(out) <= 80:
+            return out
+    except Exception:
+        pass
+    return None
+
+
 async def keyword_memo_chunks(
     retrieval_query: str,
     exclude_memo_ids: set[str],
@@ -119,7 +148,9 @@ async def keyword_memo_chunks(
         async with AsyncSessionLocal() as db:
             rows = await db.execute(select(Memo).where(Memo.id.in_(missing)))
             for memo in rows.scalars():
-                doc = (memo.content_text or memo.description or "")[:600]
+                # video_description before description: a YouTube memo's blurb
+                # lives there, not in `description` (OPNMMO-0058).
+                doc = (memo.content_text or memo.video_description or memo.description or "")[:600]
                 chunks.append({
                     "id": f"memo_{memo.id}_kw",
                     "document": f"{memo.title or 'Untitled'}\n{doc}".strip(),
@@ -171,16 +202,51 @@ def group_by_memo(
     return list(groups.values())
 
 
+# Per-memo cap for the framing text (AI summary / description) prepended to a
+# cited memo's chunks in library RAG. Small on purpose: the retrieved chunks are
+# the semantic match; this adds the author's blurb / AI summary so a video memo
+# isn't reduced to "a link" when the transcript wasn't the strongest hit.
+_MEMO_FRAMING_CAP = 1500
+
+
+def memo_framing_text(
+    description: str | None,
+    video_description: str | None,
+    ai_summary: str | None,
+) -> str:
+    """Short framing text for a retrieved memo: its AI summary if one exists,
+    else its description (platform blurb for videos, extracted lede otherwise).
+    Prepended to the memo's matched chunks so the model sees what the memo IS —
+    a cooking video, a build log — not only the slices that happened to match
+    (OPNMMO-0058). Capped to keep the multi-memo context inside the window."""
+    summary = (ai_summary or "").strip()
+    if summary:
+        return summary[:_MEMO_FRAMING_CAP]
+    desc = (video_description or description or "").strip()
+    return desc[:_MEMO_FRAMING_CAP]
+
+
 def build_context_prompt(memo_groups: list[dict]) -> str:
     """Build the context block from memo groups — one citation index per memo,
-    with that memo's chunks stacked under it. Keeps [n] citations aligned with
-    the source cards shown to the user (both are one-per-memo)."""
+    with that memo's framing (AI summary / description) and matched chunks
+    stacked under it. Keeps [n] citations aligned with the source cards shown to
+    the user (both are one-per-memo)."""
     context_parts = []
     for i, g in enumerate(memo_groups, 1):
         source_info = f"[{i}] {g['title']}"
         if g["domain"]:
             source_info += f" ({g['domain']})"
-        body = "\n\n".join(d for d in g["documents"] if d)
+        pieces: list[str] = []
+        framing = (g.get("framing") or "").strip()
+        if framing:
+            pieces.append(framing)
+        # Append matched chunks, skipping any already covered by the framing
+        # text (a short memo's only chunk can equal its description).
+        for d in g["documents"]:
+            d = (d or "").strip()
+            if d and d not in framing:
+                pieces.append(d)
+        body = "\n\n".join(pieces)
         context_parts.append(f"{source_info}\n{body}\n")
 
     return "---\nCONTEXT FROM USER'S MEMOS:\n\n" + "\n".join(context_parts) + "\n---"
@@ -296,9 +362,12 @@ async def rag_chat(
             }
             chunks += await keyword_memo_chunks(retrieval_query, vector_memo_ids, workspace_id)
 
-        # Drop ghost vectors: a failed Chroma purge can leave chunks whose memo
-        # is soft-deleted — citing them 404s in the UI (plans/009). NULL
-        # is_deleted counts as live, same idiom as memos.list_memos.
+        # Drop ghost vectors AND hydrate the survivors in one load: a failed
+        # Chroma purge can leave chunks whose memo is soft-deleted (citing them
+        # 404s — plans/009), and each live memo's description / AI summary is
+        # needed to frame its chunks (OPNMMO-0058). NULL is_deleted counts as
+        # live, same idiom as memos.list_memos.
+        memo_by_id = {}
         retrieved_ids = {c["metadata"].get("memo_id") for c in chunks if c["metadata"].get("memo_id")}
         if retrieved_ids:
             from sqlalchemy import select
@@ -308,13 +377,13 @@ async def rag_chat(
 
             async with AsyncSessionLocal() as db:
                 rows = await db.execute(
-                    select(Memo.id).where(
+                    select(Memo).where(
                         Memo.id.in_(retrieved_ids),
                         (Memo.is_deleted == False) | (Memo.is_deleted == None),  # noqa: E712, E711
                     )
                 )
-                live_ids = {r[0] for r in rows}
-            chunks = [c for c in chunks if c["metadata"].get("memo_id") in live_ids]
+                memo_by_id = {m.id: m for m in rows.scalars()}
+            chunks = [c for c in chunks if c["metadata"].get("memo_id") in memo_by_id]
 
         # Collapse chunks → distinct memos so the citation list is one card per
         # memo, capped at RAG_MAX_SOURCES (OPNMMO-0053). Order preserved =
@@ -324,6 +393,16 @@ async def rag_chat(
             max_memos=settings.RAG_MAX_SOURCES,
             max_chunks_per_memo=settings.RAG_CHUNKS_PER_MEMO,
         )
+
+        # Frame each cited memo with its AI summary / description so the model
+        # sees what the memo is about — not just the matched chunks — fixing Ask
+        # calling video memos "just links" (OPNMMO-0058).
+        for g in sources:
+            m = memo_by_id.get(g["memo_id"])
+            if m is not None:
+                g["framing"] = memo_framing_text(
+                    m.description, m.video_description, m.ai_summary
+                )
 
         # Yield sources first so frontend can display them
         yield {
