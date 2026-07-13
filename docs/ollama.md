@@ -37,11 +37,13 @@ nomic embed models get their required task prefixes (`search_document:` / `searc
 
 ## How Ask Memo retrieves
 
-- Top 8 chunks by cosine similarity (`RAG_TOP_K`).
+- A pool of 16 chunks by cosine similarity (`RAG_CANDIDATE_K`), then collapsed to **distinct memos**: up to 5 memos cited (`RAG_MAX_SOURCES`), best 2 chunks each (`RAG_CHUNKS_PER_MEMO`). One citation card per memo, never eight cards of the same one.
 - Chunks that are too far from the question (`RAG_MAX_DISTANCE`, default 0.80) are dropped instead of being stuffed into the prompt.
-- Scoping is real: Ask from a memo page searches that memo, Ask from a collection searches that collection only.
-- Nothing relevant found? openMemo says so honestly instead of letting the model improvise. Start your message with `@` to chat without memo context.
+- Scoping is real: Ask from a memo page feeds that whole memo (no retrieval), Ask from a collection searches that collection only.
+- Nothing relevant found? openMemo says so honestly instead of letting the model improvise. Flip the composer to **Chat** to talk to the model without memo context.
 - Follow-up questions carry the conversation history, in RAG mode too.
+
+The full flow, every prompt included verbatim, is locked in [ADR-022](ADR-022-ASK-RAG.md).
 
 ## Context windows
 
@@ -62,6 +64,9 @@ DEFAULT_VISION_MODEL=gemma4:e4b
 OLLAMA_NUM_CTX=8192
 RAG_TOP_K=8
 RAG_MAX_DISTANCE=0.80
+RAG_CANDIDATE_K=16
+RAG_MAX_SOURCES=5
+RAG_CHUNKS_PER_MEMO=2
 ```
 
 `OLLAMA_HOSTS` is a fallback list. openMemo probes them in order and uses the first one that answers, so a laptop and a GPU box can share one config.
