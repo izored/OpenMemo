@@ -1,6 +1,6 @@
 # ADR-022: Ask Memo, Ask this memo, and the RAG flow
 
-**Date:** 2026-07-13 · **Status:** Shipped · **Builds on:** ADR-014 (resilient Ollama integration), ADR-007 (one predicate gates AI features)
+**Date:** 2026-07-13 · **Updated:** 2026-07-13 (hybrid retrieval + follow-up condensation) · **Status:** Shipped · **Builds on:** ADR-014 (resilient Ollama integration), ADR-007 (one predicate gates AI features)
 
 This is the locked reference for how a question travels from the composer to Ollama and back. Every prompt we send is written here verbatim. When we improve retrieval, we change this document in the same PR. No silent drift.
 
@@ -30,15 +30,17 @@ Collection scoping is library RAG with a filter: retrieval only searches chunks 
 4. Chunks land in ChromaDB with metadata: `memo_id`, `workspace_id`, `type`, `title`, `source_domain`, `chunk_index`. Old chunks for the memo are deleted first, so a shorter re-embed never leaves stale tails.
 5. The index only holds live memos. Delete removes chunks, restore re-embeds.
 
-### Library RAG (read path, OPNMMO-0053 shape)
+### Library RAG (read path, OPNMMO-0053 shape + hybrid)
 
-1. Embed the question (`search_query: ` prefix when nomic).
-2. Pull a candidate pool of `RAG_CANDIDATE_K=16` chunks by cosine distance, scoped by collection when asked from one.
-3. Drop chunks farther than `RAG_MAX_DISTANCE=0.80`. Beyond that they are topic noise.
-4. Drop ghost chunks whose memo is soft-deleted (plans/009). A failed Chroma purge must never produce a citation that 404s.
-5. **Collapse chunks to distinct memos** (`group_by_memo`): keep up to `RAG_CHUNKS_PER_MEMO=2` best chunks per memo, cap the list at `RAG_MAX_SOURCES=5` memos, nearest memo first. One citation card per memo. This is the fix for "8 Toyota memos" that were really 2.
-6. Stream the source list to the UI first (the "Reading N memos" state), then build the prompt.
-7. Nothing survived the cuts? Stream `NO_CONTEXT_MESSAGE` verbatim, no LLM call. Honest and instant beats hallucination.
+1. **Condense follow-ups.** When the session has history, one cheap LLM call rewrites the question into a standalone retrieval query ("and the price?" becomes "toyota hilux price"). Retrieval uses the rewrite; the answering model still gets the user's original words. Any failure or a suspicious rewrite (empty, over 300 chars, `<think>` residue) falls back to the raw question.
+2. Embed the retrieval query (`search_query: ` prefix when nomic).
+3. Pull a candidate pool of `RAG_CANDIDATE_K=16` chunks by cosine distance, scoped by collection when asked from one.
+4. Drop chunks farther than `RAG_MAX_DISTANCE=0.80`. Beyond that they are topic noise.
+5. **Hybrid keyword leg** (library-wide asks only, scoped asks skip it): FTS5 over titles + content finds memos by exact words. Keyword-matched memos the vector pool missed get their best chunks pulled from Chroma with the distance cutoff DISABLED — an exact name match earns its seat even when its embedding sits far away. A keyword memo with no vectors at all (embed failed or pending) joins as a title+preview pseudo-chunk instead of being silently dropped. Keyword chunks append AFTER the vector pool: supplementary, never displacing a closer semantic hit.
+6. Drop ghost chunks whose memo is soft-deleted (plans/009), across both legs. A failed Chroma purge must never produce a citation that 404s.
+7. **Collapse chunks to distinct memos** (`group_by_memo`): keep up to `RAG_CHUNKS_PER_MEMO=2` best chunks per memo, cap the list at `RAG_MAX_SOURCES=5` memos, nearest memo first. One citation card per memo. This is the fix for "8 Toyota memos" that were really 2.
+8. Stream the source list to the UI first (the "Reading N memos" state), then build the prompt.
+9. Nothing survived the cuts? Stream `NO_CONTEXT_MESSAGE` verbatim, no LLM call. Honest and instant beats hallucination.
 
 The context block the model sees:
 
@@ -98,6 +100,12 @@ Context wrapper: `---\nCONTEXT FROM THIS MEMO:\n\n{header + body}\n---` followed
 
 > I couldn't find anything in your memos relevant to that question. Try rephrasing it, or switch the composer to **Chat** mode to talk to the model without your memos.
 
+**Follow-up condensation** (`CONDENSE_SYSTEM_PROMPT`, retrieval-only pre-call):
+
+> You rewrite a follow-up question as one standalone search query. Use the conversation to resolve pronouns and references. Return ONLY the rewritten query, nothing else, no quotes, no explanation. If the question is already standalone, return it unchanged.
+
+The user turn is `Conversation:\n{last 4 messages, 300 chars each}\n\nFollow-up question: {query}\n\nStandalone search query:`. `<think>` blocks from reasoning models are stripped from the reply.
+
 ### Message assembly, every mode
 
 ```
@@ -127,4 +135,6 @@ Model resolution and `num_ctx=8192` follow ADR-014. Responses stream over SSE as
 - Anyone can now answer "what does the model see?" from this page alone. Prompt edits must update this file in the same change.
 - Citations are honest: five cards means five memos. A memo dominating the pool costs it nothing, its best two chunks still represent it.
 - The distance cutoff is the current weak point. 0.80 is lenient, and a weakly related memo (a README that mentions the topic once) can still ride in as a low-value source. Tighten per corpus, or move to a relative cutoff (drop sources much farther than the best hit).
-- **Known gaps, deliberately out of scope here and tracked for later:** the chat path is pure vector search (the search page is hybrid, chat is not), so exact names lean on the embed model; temporal questions ("what did I save this week?") retrieve by phrase similarity, not by date; follow-ups are not condensed into standalone queries before embedding. Each fits this flow without changing its shape: hybrid merge feeds the same candidate pool, a query router swaps the context block, condensation rewrites the query before step 1.
+- ~~The chat path is pure vector search~~ **Shipped 2026-07-13:** hybrid retrieval merges an FTS5 keyword leg into the candidate pool, so exact names no longer lean on the embed model alone.
+- ~~Follow-ups are not condensed~~ **Shipped 2026-07-13:** follow-ups are rewritten into standalone retrieval queries when history exists. Costs one extra model call per follow-up turn; the "Searching your memos" status covers the latency.
+- **Remaining gap, tracked for later:** temporal questions ("what did I save this week?") still retrieve by phrase similarity, not by date. A query router that swaps in a structured recent-memos context block fits this flow without changing its shape.

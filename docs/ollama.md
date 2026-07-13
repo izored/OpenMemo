@@ -37,11 +37,11 @@ nomic embed models get their required task prefixes (`search_document:` / `searc
 
 ## How Ask Memo retrieves
 
-- A pool of 16 chunks by cosine similarity (`RAG_CANDIDATE_K`), then collapsed to **distinct memos**: up to 5 memos cited (`RAG_MAX_SOURCES`), best 2 chunks each (`RAG_CHUNKS_PER_MEMO`). One citation card per memo, never eight cards of the same one.
-- Chunks that are too far from the question (`RAG_MAX_DISTANCE`, default 0.80) are dropped instead of being stuffed into the prompt.
+- **Hybrid**: a pool of 16 chunks by cosine similarity (`RAG_CANDIDATE_K`) plus an FTS5 keyword leg over titles and content, so exact names (brands, people, file names) surface even when the embedding model misses them. Then collapsed to **distinct memos**: up to 5 memos cited (`RAG_MAX_SOURCES`), best 2 chunks each (`RAG_CHUNKS_PER_MEMO`). One citation card per memo, never eight cards of the same one.
+- Chunks that are too far from the question (`RAG_MAX_DISTANCE`, default 0.80) are dropped instead of being stuffed into the prompt. Keyword-matched memos bypass the cutoff — an exact match earns its seat.
+- **Follow-ups retrieve properly**: "and what about the price?" is first rewritten into a standalone query (one quick model call) before searching, so the retrieval matches what you meant, not the fragment you typed. The model still answers your original words.
 - Scoping is real: Ask from a memo page feeds that whole memo (no retrieval), Ask from a collection searches that collection only.
 - Nothing relevant found? openMemo says so honestly instead of letting the model improvise. Flip the composer to **Chat** to talk to the model without memo context.
-- Follow-up questions carry the conversation history, in RAG mode too.
 
 The full flow, every prompt included verbatim, is locked in [ADR-022](ADR-022-ASK-RAG.md).
 

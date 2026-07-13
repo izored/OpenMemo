@@ -117,15 +117,17 @@ async def search_similar(
     workspace_id: str | None = None,
     collection_id: str | None = None,
     memo_id: str | None = None,
+    memo_ids: list[str] | None = None,
     n_results: int | None = None,
     max_distance: float | None = None,
 ) -> list[dict]:
     """Search ChromaDB for similar chunks.
 
-    Scoping: memo_id pins to one memo; collection_id resolves to that
-    collection's live memos and filters with $in. Results farther than
-    max_distance (cosine) are dropped — beyond it they're topic noise that
-    only pollutes the model's context.
+    Scoping: memo_id pins to one memo; memo_ids pins to an explicit set (hybrid
+    RAG pulls chunks for keyword-matched memos this way); collection_id
+    resolves to that collection's live memos and filters with $in. Results
+    farther than max_distance (cosine) are dropped — beyond it they're topic
+    noise that only pollutes the model's context.
     """
     n_results = n_results or settings.RAG_TOP_K
     max_distance = max_distance if max_distance is not None else settings.RAG_MAX_DISTANCE
@@ -140,6 +142,8 @@ async def search_similar(
         filters["workspace_id"] = workspace_id
     if memo_id:
         filters["memo_id"] = memo_id
+    elif memo_ids:
+        filters["memo_id"] = {"$in": memo_ids}
     elif collection_id:
         ids = await _collection_memo_ids(collection_id)
         if not ids:
