@@ -2,6 +2,7 @@ import React, { useState, useRef, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
+import { Loader2 } from 'lucide-react';
 import { Icon } from '@/components/Icon';
 import { useAppStore } from '@/stores/appStore';
 import { chatApi, systemApi, settingsApi } from '@/lib/api';
@@ -29,6 +30,22 @@ const SUGGESTIONS = [
   'Connect ideas across my notes',
   "What's in my inbox?",
 ];
+
+// Hero lines. One picked at random per visit, then cycled while the hero is
+// idle so the page never greets you the same way twice (OPNMMO-0053).
+const HERO_LINES = [
+  'Ask your second brain.',
+  "It's all in there. Ask.",
+  'Your library talks back.',
+  'Saved it? Ask it.',
+  'Every memo, one question away.',
+  'Ask what you almost forgot.',
+  'Your memos remember for you.',
+  'Pull answers from everything you kept.',
+  'You saved it for a reason.',
+  'Talk to everything you saved.',
+];
+const HERO_CYCLE_MS = 6000;
 
 // Answer mode: 'memos' = RAG over the library with citations (default);
 // 'chat' = straight LLM, no retrieval. Replaces the old hidden "@" prefix
@@ -120,6 +137,38 @@ export function AskMemoPage() {
       /* ignore */
     }
   };
+
+  // Working indicator (OPNMMO-0053). The last assistant message is "live" while
+  // we stream. Until the first token lands, render an animated status row
+  // (searching → reading → thinking) instead of a dead "…", so the user can see
+  // work is happening. Once tokens arrive a blinking caret tails the text.
+  const last = messages[messages.length - 1];
+  const liveAssistant = streaming && last?.role === 'assistant' ? last : null;
+  const isLiveError = !!liveAssistant && liveAssistant.content.startsWith('Error:');
+  const hasTokens = !!liveAssistant && !isLiveError && liveAssistant.content.length > 0;
+  const isThinking = !!liveAssistant && !hasTokens && !isLiveError;
+  const foundSources = liveAssistant?.sources?.length ?? 0;
+
+  // Pre-token status advances connecting → working after a short beat so the
+  // handshake reads before "thinking". Reset whenever a new run starts.
+  const [phase, setPhase] = useState<'connecting' | 'working'>('connecting');
+  useEffect(() => {
+    if (!isThinking) return;
+    setPhase('connecting');
+    const t = setTimeout(() => setPhase('working'), 900);
+    return () => clearTimeout(t);
+  }, [isThinking, liveAssistant?.id]);
+
+  // Label reflects what Ask is actually doing right now: in memos mode it
+  // searches, then reads the retrieved sources; in chat mode it just thinks.
+  const thinkingLabel =
+    askMode === 'memos'
+      ? foundSources > 0
+        ? `Reading ${foundSources} ${foundSources === 1 ? 'memo' : 'memos'}`
+        : 'Searching your memos'
+      : phase === 'connecting'
+        ? 'Connecting to Ollama'
+        : 'Thinking';
 
   const loadSession = async (id: string) => {
     try {
@@ -243,6 +292,16 @@ export function AskMemoPage() {
   };
 
   const hasThread = messages.length > 0;
+
+  // Rotate the hero line while the empty hero is on screen. Random start so
+  // two visits in a row don't open on the same words; stops once a thread
+  // exists (the hero is gone anyway).
+  const [heroIdx, setHeroIdx] = useState(() => Math.floor(Math.random() * HERO_LINES.length));
+  useEffect(() => {
+    if (hasThread) return;
+    const t = setInterval(() => setHeroIdx((i) => (i + 1) % HERO_LINES.length), HERO_CYCLE_MS);
+    return () => clearInterval(t);
+  }, [hasThread]);
 
   // Slim strip that teaches the Memos/Chat toggle. Shows on the first
   // COACH_MAX_SHOWS visits, then never again (see the mount effect above).
@@ -390,7 +449,9 @@ export function AskMemoPage() {
             <span className="om-ask-eyebrow mono">
               Ask · {chatModel ? `model ${chatModel}` : 'local AI'}
             </span>
-            <h1 className="om-ask-title">What do you remember?</h1>
+            <h1 key={heroIdx} className="om-ask-title om-ask-title-cycle">
+              {HERO_LINES[heroIdx]}
+            </h1>
             <p className="om-greet-sub" style={{ marginBottom: 8 }}>
               {askMode === 'memos'
                 ? "I'll search your saved articles, notes, and documents and answer with citations."
@@ -419,20 +480,37 @@ export function AskMemoPage() {
                       {msg.role === 'assistant' ? 'openMemo' : 'You'}
                     </span>
                     {msg.role === 'assistant' ? (
-                      <div
-                        className="typeset typeset-chat"
-                        style={{ background: 'transparent', border: 0, padding: 0 }}
-                      >
-                        <ReactMarkdown
-                          components={{
-                            code: ({ children, className }: { children?: React.ReactNode; className?: string }) => (
-                              <code className={`mono ${className || ''}`}>{children}</code>
-                            ),
-                          }}
+                      msg.id === liveAssistant?.id && isThinking ? (
+                        <div className="om-ask-status" aria-live="polite">
+                          <Loader2 size={13} className="om-spin" />
+                          <span className="om-ask-status-label">
+                            {thinkingLabel}
+                            {chatModel ? (
+                              <span className="om-ask-status-model"> · {chatModel}</span>
+                            ) : null}
+                          </span>
+                          <span className="om-ask-caret" aria-hidden="true" />
+                        </div>
+                      ) : (
+                        <div
+                          className="typeset typeset-chat"
+                          style={{ background: 'transparent', border: 0, padding: 0 }}
                         >
-                          {msg.content || (streaming ? '…' : '')}
-                        </ReactMarkdown>
-                      </div>
+                          <ReactMarkdown
+                            components={{
+                              code: ({ children, className }: { children?: React.ReactNode; className?: string }) => (
+                                <code className={`mono ${className || ''}`}>{children}</code>
+                              ),
+                            }}
+                          >
+                            {msg.content}
+                          </ReactMarkdown>
+                          {/* Blinking block caret tails the text while it streams. */}
+                          {msg.id === liveAssistant?.id && hasTokens && (
+                            <span className="om-ask-caret om-ask-caret-inline" aria-hidden="true" />
+                          )}
+                        </div>
+                      )
                     ) : (
                       <p>{msg.content}</p>
                     )}
