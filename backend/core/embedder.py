@@ -19,6 +19,45 @@ def _task_prefixes() -> tuple[str, str]:
     return "", ""
 
 
+def build_embed_text(memo) -> str:
+    """All searchable text for a memo, combined into one blob for embedding.
+
+    The write-path bug (OPNMMO-0058): only `content_text` was embedded. For a
+    video/audio memo the platform blurb lives in `video_description` and the
+    spoken words in `content_text` (the transcript, once it exists) — different
+    fields. So a video with a description but no transcript embedded NOTHING and
+    was unretrievable, and a keyword hit on it fed the model an empty body. Ask
+    then called such memos "just links".
+
+    Combine title + description + body + AI summary + notes so every memo is
+    retrievable by anything it actually holds, and its chunks carry enough
+    context to answer from. Returns "" for a title-only memo (a fresh song, an
+    un-pulled link) so callers still skip embedding nothing but a title.
+    """
+    desc = (getattr(memo, "video_description", None) or getattr(memo, "description", None) or "").strip()
+    body = (getattr(memo, "content_text", None) or getattr(memo, "content_raw", None) or "").strip()
+    summ = (getattr(memo, "ai_summary", None) or "").strip()
+    notes = (getattr(memo, "notes", None) or "").strip()
+    if not (desc or body or summ):
+        return ""  # only a title so far — nothing worth indexing yet
+
+    parts: list[str] = []
+    title = (getattr(memo, "title", None) or "").strip()
+    if title:
+        parts.append(title)
+    # For media before transcription content_text == video_description (the
+    # extractor seeds it), so dedupe to avoid embedding the blurb twice.
+    if desc and desc != body:
+        parts.append(desc)
+    if body:
+        parts.append(body)
+    if summ and summ not in (body, desc):
+        parts.append(summ)
+    if notes:
+        parts.append(f"--- Notes ---\n{notes}")
+    return "\n\n".join(parts)
+
+
 def _build_where(filters: dict) -> dict | None:
     """Chroma `where` from {field: value}. Multiple conditions need an explicit
     $and — a flat multi-key dict is rejected by current Chroma versions."""

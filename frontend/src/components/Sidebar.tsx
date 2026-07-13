@@ -189,7 +189,10 @@ export function Sidebar() {
   const goRoute = (path: string) => {
     setActiveCollection(null);
     setActiveSpace(null);
-    navigate(path);
+    // Clicking Ask Memo always lands on a fresh new chat, even from inside a
+    // thread. A same-path navigate() is a no-op, so pass a changing state that
+    // the Ask page watches to reset (see AskMemoPage location effect).
+    navigate(path, path === '/ask' ? { state: { newChat: Date.now() } } : undefined);
   };
   const selectCollection = (id: string) => {
     setActiveCollection(id);

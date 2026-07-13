@@ -43,7 +43,9 @@ async def chat_stream(data: ChatRequest, db: AsyncSession = Depends(get_db)):
     """Stream a RAG chat response."""
     from backend.core.rag import rag_chat
     
-    # Get or create session
+    # Get or create session. A brand-new session gets a smart LLM title after
+    # its first answer (below); until then it falls back to the truncated query.
+    is_new_session = not data.session_id
     session_id = data.session_id
     if not session_id:
         session_id = str(uuid.uuid4())
@@ -155,7 +157,9 @@ async def chat_stream(data: ChatRequest, db: AsyncSession = Depends(get_db)):
             yield f"data: {json.dumps({'type': 'error', 'data': str(e)})}\n\n"
             return
 
-        # Save assistant message
+        # Save assistant message, then name a fresh thread from its first
+        # exchange. Title is set BEFORE the 'done' event so the session list
+        # (refetched on done) already shows the smart title, not the fallback.
         async with (await _get_session()) as save_db:
             assistant_msg = Message(
                 id=str(uuid.uuid4()),
@@ -166,6 +170,15 @@ async def chat_stream(data: ChatRequest, db: AsyncSession = Depends(get_db)):
             )
             save_db.add(assistant_msg)
             await save_db.commit()
+
+            if is_new_session and full_response.strip():
+                from backend.core.rag import generate_title
+                title = await generate_title(query, full_response, data.model)
+                if title:
+                    sess = await save_db.get(ChatSession, session_id)
+                    if sess:
+                        sess.title = title
+                        await save_db.commit()
 
         yield f"data: {json.dumps({'type': 'done', 'session_id': session_id})}\n\n"
     
