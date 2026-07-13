@@ -51,6 +51,15 @@ class Settings(BaseSettings):
     # the model. Lenient by default — tighten per-corpus if answers drift.
     RAG_MAX_DISTANCE: float = 0.80
 
+    # Library RAG (Ask Memo over the whole library) retrieves a chunk POOL, then
+    # collapses it to distinct memos so the citation list is one card per memo —
+    # not eight chunks of the same memo (OPNMMO-0053). Pool wide enough that
+    # dedup still yields several distinct memos; per-memo chunk cap keeps a
+    # dominant memo from crowding the model's context.
+    RAG_CANDIDATE_K: int = 16    # chunks pulled before dedup
+    RAG_MAX_SOURCES: int = 5     # distinct memos shown + cited
+    RAG_CHUNKS_PER_MEMO: int = 2 # chunks per memo fed to the model
+
     # Context window requested from Ollama for chat/summary calls. Ollama's own
     # default (4096) silently truncates long RAG contexts and transcripts.
     OLLAMA_NUM_CTX: int = 8192

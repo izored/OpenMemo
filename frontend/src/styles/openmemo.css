@@ -2275,6 +2275,11 @@ input, textarea { font: inherit; color: inherit; }
 .om-ask-head { display: flex; flex-direction: column; gap: 8px; }
 .om-ask-eyebrow { font-size: 10.5px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--text-4); }
 .om-ask-title { font-size: 42px; font-weight: 500; letter-spacing: -0.025em; margin: 0; line-height: 1.05; }
+/* Rotating hero line: each swap re-mounts the h1 (React key), this animation
+   fades the new words in. Stilled for reduced-motion users. */
+.om-ask-title-cycle { animation: omHeroLineIn .5s ease both; }
+@keyframes omHeroLineIn { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+@media (prefers-reduced-motion: reduce) { .om-ask-title-cycle { animation: none; } }
 
 .om-ask-thread { display: flex; flex-direction: column; gap: 28px; }
 .om-msg { display: grid; grid-template-columns: 32px 1fr; gap: 16px; }
@@ -4745,6 +4750,15 @@ body.om-has-bbar .om-fab { display: none !important; }
   flex: 1; overflow-y: auto; min-height: 0;
   display: flex; flex-direction: column; gap: 28px;
   padding: 8px 4px 16px; max-width: 760px; width: 100%; margin: 0 auto;
+}
+/* Chat legibility on custom backgrounds: every message body sits on a soft
+   glass panel, so streamed text never fights a busy user wallpaper. Scoped to
+   the Ask page — the memo-page panel already has its own bubbles. */
+.om-ask-main .om-msg-body {
+  background: color-mix(in srgb, var(--surface) 72%, transparent);
+  backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px);
+  border: 1px solid color-mix(in srgb, var(--border) 60%, transparent);
+  border-radius: 14px; padding: 12px 16px 14px;
 }
 .om-ask-composer-dock {
   position: sticky; bottom: 0;
