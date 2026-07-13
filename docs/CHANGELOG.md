@@ -5,6 +5,11 @@ All notable changes to OpenMemo are documented here.
 ---
 ## [Unreleased]
 
+### Added
+
+- 🔎 **Ask Memo retrieval goes hybrid.** Pure vector search missed exact names: ask about a brand, a person, or a file name and you depended on the embedding model having a good day. Retrieval now runs a second leg through the full-text index (titles + content) and folds exact-word matches into the candidate pool — a keyword hit joins the citations even when its embedding sits far from the question, and a memo whose embedding failed entirely still surfaces as a title+preview source. Semantic hits keep first seats; keywords supplement, never displace.
+- 🧵 **Follow-up questions finally retrieve what you meant.** Asking "and what about the price?" used to embed those five words as-is — retrieval had no idea you were still talking about the Hilux. With chat history present, one quick model call now rewrites the follow-up into a standalone search query before retrieval; the answering model still gets your original words. Falls back to the raw question if the rewrite fails or a reasoning model rambles. The whole shape is locked in ADR-022.
+
 ### Fixed
 
 - 🍎 **The macOS build can actually attach its .dmg to the release.** The tag-build workflow uploaded the .dmg to the GitHub release with the default Actions token, which is read-only for releases — so v3.0.0's upload died with HTTP 403 and the fallback claimed "no release yet" when the release was sitting right there. The workflow now requests `contents: write`, and the fallback tells the truth: a 403 fails the job loudly as a permissions problem, while a genuinely missing release stays a gentle warning.
