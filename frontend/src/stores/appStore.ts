@@ -112,6 +112,14 @@ interface AppState {
   addPanelOpen: boolean;
   setAddPanelOpen: (open: boolean) => void;
 
+  // Files handed off from the global FileDropLayer to AddMemoPanel for the
+  // "prefill" branch of the hybrid commit (ADR-023): a drop on an ambiguous
+  // surface (bare library / lists / detail / ask) opens the New-Memo panel
+  // with these staged on the Media tab so the user picks a collection + tags
+  // before saving. AddMemoPanel consumes and clears the slice on open.
+  pendingDropFiles: File[] | null;
+  setPendingDropFiles: (files: File[] | null) => void;
+
   // True while a page renders the bottom bar (ADR-021). The bottom bar owns the
   // New-Memo / Add-music flow through its IslandFab, so the GLOBAL corner panels
   // (AddMemoPanel, MusicAddModal) step aside and render null to avoid doubling.
@@ -242,6 +250,9 @@ export const useAppStore = create<AppState>((set) => ({
 
   addPanelOpen: false,
   setAddPanelOpen: (open) => set({ addPanelOpen: open }),
+
+  pendingDropFiles: null,
+  setPendingDropFiles: (files) => set({ pendingDropFiles: files }),
 
   bottomBarPresent: false,
   setBottomBarPresent: (present) => set({ bottomBarPresent: present }),
