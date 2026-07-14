@@ -40,6 +40,9 @@ function AnimatedHeight({ tabKey, children }: { tabKey: string; children: React.
 export function AddMemoPanel({ embedded = false }: { embedded?: boolean } = {}) {
   const open = useAppStore((s) => s.addPanelOpen);
   const setOpen = useAppStore((s) => s.setAddPanelOpen);
+  // Files handed off from the global FileDropLayer's prefill branch (ADR-023).
+  const pendingDropFiles = useAppStore((s) => s.pendingDropFiles);
+  const setPendingDropFiles = useAppStore((s) => s.setPendingDropFiles);
   const bottomBarPresent = useAppStore((s) => s.bottomBarPresent);
   const setWriterOpen = useAppStore((s) => s.setWriterOpen);
   const setAddMemoBusy = useAppStore((s) => s.setAddMemoBusy);
@@ -93,6 +96,9 @@ export function AddMemoPanel({ embedded = false }: { embedded?: boolean } = {}) 
     });
   };
   const [busy, setBusy] = useState(false);
+  // Files staged for the prefill flow (dropped elsewhere, waiting for the user
+  // to pick a collection + tags here, then Save). Empty = normal Media tab.
+  const [staged, setStaged] = useState<File[]>([]);
   const [progress, setProgress] = useState<{ done: number; total: number } | null>(null);
   const [error, setError] = useState('');
   const fileRef = useRef<HTMLInputElement>(null);
@@ -160,6 +166,36 @@ export function AddMemoPanel({ embedded = false }: { embedded?: boolean } = {}) 
     }
   }, [open, activeCollection]);
 
+  // Prefill handoff (ADR-023): files dropped on an ambiguous surface arrive via
+  // the store. Jump to the Media tab, stage them, and clear the slice — Save
+  // uploads them into whatever collection/tags the user then picks.
+  useEffect(() => {
+    if (!pendingDropFiles || !pendingDropFiles.length) return;
+    const files = pendingDropFiles;
+    setTab('multimedia');
+    const kind = files.every((f) => f.type.startsWith('image/'))
+      ? 'image'
+      : files.every((f) => f.type.startsWith('video/'))
+        ? 'video'
+        : files.every((f) => f.type.startsWith('audio/'))
+          ? 'audio'
+          : 'file';
+    setMediaKind(kind);
+    // Replace (not append) so the handoff is idempotent — React StrictMode
+    // re-runs this effect on the panel's mount, and the global + embedded panel
+    // instances both consume the slice; a fresh open always starts clean.
+    setStaged(files);
+    setPendingDropFiles(null);
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- consume the one-shot handoff slice
+  }, [pendingDropFiles, setPendingDropFiles]);
+
+  // Drop the staged set whenever the panel closes without saving, so reopening
+  // never shows files left over from a cancelled drop.
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- clear staged on close
+    if (!open) setStaged([]);
+  }, [open]);
+
   // A collection just created from the "New collection…" flow auto-selects here,
   // so the user lands back in the panel with it already chosen (no reselect).
   useEffect(() => {
@@ -178,6 +214,7 @@ export function AddMemoPanel({ embedded = false }: { embedded?: boolean } = {}) 
     setNote('');
     setNoteTitle('');
     setTags([]);
+    setStaged([]);
     setError('');
   };
   const close = () => {
@@ -221,7 +258,11 @@ export function AddMemoPanel({ embedded = false }: { embedded?: boolean } = {}) 
         if (!noteTitle.trim() && !note.trim()) return;
         await ingestApi.note(noteTitle.trim() || 'Untitled note', note, collection || undefined, activeSpace || undefined);
       } else if (tab === 'multimedia') {
-        fileRef.current?.click();
+        if (staged.length) {
+          await uploadFiles(staged);
+        } else {
+          fileRef.current?.click();
+        }
         return;
       } else {
         return;
@@ -235,7 +276,14 @@ export function AddMemoPanel({ embedded = false }: { embedded?: boolean } = {}) 
     }
   };
 
-  const onFile = async (files: FileList | null) => {
+  // Add more files to the staged set (prefill flow) without uploading yet.
+  const stageFiles = (files: FileList | File[] | null) => {
+    if (!files) return;
+    const arr = Array.from(files);
+    if (arr.length) setStaged((prev) => [...prev, ...arr]);
+  };
+
+  const uploadFiles = async (files: FileList | File[] | null) => {
     if (!files || !files.length) return;
 
     // Disclaimer for huge uploads — they consume RAM (browser side), disk
@@ -510,7 +558,8 @@ export function AddMemoPanel({ embedded = false }: { embedded?: boolean } = {}) 
                 onDragOver={(e) => e.preventDefault()}
                 onDrop={(e) => {
                   e.preventDefault();
-                  onFile(e.dataTransfer.files);
+                  if (staged.length) stageFiles(e.dataTransfer.files);
+                  else uploadFiles(e.dataTransfer.files);
                 }}
               >
                 <Icon name={mediaKind === 'image' ? 'image' : mediaKind === 'video' ? 'video' : mediaKind === 'audio' ? 'mic' : 'file'} size={20} />
@@ -518,6 +567,13 @@ export function AddMemoPanel({ embedded = false }: { embedded?: boolean } = {}) 
                   <>
                     <p>Uploading {progress.done} / {progress.total}…</p>
                     <span className="mono">Keep this panel open until it finishes</span>
+                  </>
+                ) : staged.length ? (
+                  <>
+                    <p><b>{staged.length} file{staged.length === 1 ? '' : 's'} ready</b></p>
+                    <span className="mono">
+                      {staged.slice(0, 3).map((f) => f.name).join(' · ')}{staged.length > 3 ? ' …' : ''} · click or drop to add more
+                    </span>
                   </>
                 ) : (
                   <>
@@ -534,6 +590,15 @@ export function AddMemoPanel({ embedded = false }: { embedded?: boolean } = {}) 
                   </>
                 )}
               </div>
+              {staged.length > 0 && (
+                <button
+                  className="om-add-staged-clear mono"
+                  onClick={() => setStaged([])}
+                  type="button"
+                >
+                  Clear {staged.length} staged file{staged.length === 1 ? '' : 's'}
+                </button>
+              )}
             </div>
           )}
 
@@ -629,7 +694,11 @@ export function AddMemoPanel({ embedded = false }: { embedded?: boolean } = {}) 
         multiple
         accept={mediaKind === 'image' ? 'image/*' : mediaKind === 'video' ? 'video/*' : mediaKind === 'audio' ? 'audio/*' : undefined}
         hidden
-        onChange={(e) => onFile(e.target.files)}
+        onChange={(e) => {
+          if (staged.length) stageFiles(e.target.files);
+          else uploadFiles(e.target.files);
+          e.target.value = '';
+        }}
       />
 
       <div className="om-add-foot">
@@ -638,7 +707,7 @@ export function AddMemoPanel({ embedded = false }: { embedded?: boolean } = {}) 
         </button>
         {tab !== 'voice' && (
           <button className="om-add-foot-btn primary" onClick={save} disabled={busy}>
-            <span>{progress ? `Uploading ${progress.done}/${progress.total}…` : busy ? 'Saving…' : tab === 'multimedia' ? 'Choose files' : tab === 'link' && plShape.isPlaylist && plChoice === 'playlist' ? (plProbe?.alreadySaved ? 'Open playlist' : 'Save playlist') : 'Save'}</span>
+            <span>{progress ? `Uploading ${progress.done}/${progress.total}…` : busy ? 'Saving…' : tab === 'multimedia' ? (staged.length ? `Add ${staged.length} file${staged.length === 1 ? '' : 's'}` : 'Choose files') : tab === 'link' && plShape.isPlaylist && plChoice === 'playlist' ? (plProbe?.alreadySaved ? 'Open playlist' : 'Save playlist') : 'Save'}</span>
             <span className="mono om-add-kbd-inv">⏎</span>
           </button>
         )}
