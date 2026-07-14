@@ -14,6 +14,7 @@ import 'lenis/dist/lenis.css';
 import { Sidebar } from './Sidebar';
 import { MobileTopBar } from './MobileTopBar';
 import { AddMemoPanel } from './AddMemoPanel';
+import { FileDropLayer } from './FileDropLayer';
 import { MusicAddModal } from './MusicAddModal';
 import { AppearancePanel } from './AppearancePanel';
 import { CloudBackground } from './CloudBackground';
@@ -228,6 +229,20 @@ export function Layout() {
     setSidebarOpen(false);
   }, [location.pathname, setSidebarOpen]);
 
+  // Leaving the /space/ route exits the Space (ADR-020). SpacePage syncs
+  // activeSpace FROM the URL on entry; the mirror on EXIT must live here, above
+  // the routed page, so it runs after navigation and can't be undone by
+  // SpacePage's own URL-sync effect racing a sidebar "All Memos" click (the
+  // route is the source of truth — see appStore activeSpace). Without this the
+  // Space stayed "active" on the dashboard, so New-Memo + file drops kept
+  // targeting it after you left.
+  useEffect(() => {
+    const st = useAppStore.getState();
+    if (!location.pathname.startsWith('/space/') && st.activeSpace !== null) {
+      st.setActiveSpace(null);
+    }
+  }, [location.pathname]);
+
   return (
     <div className={cn('om-app', sidebarCollapsed && 'sidebar-collapsed', colorTransition && 'theme-transitioning', isMobile && drawerOpen && 'drawer-open')}>
       <AudioPlayerProvider>
@@ -255,6 +270,7 @@ export function Layout() {
 
       <Onboarding />
       <SearchOverlay />
+      <FileDropLayer />
       <AddMemoPanel />
       <MusicAddModal />
       <AppearancePanel />
