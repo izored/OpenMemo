@@ -47,6 +47,7 @@ class SettingsPatch(BaseModel):
     telegram_enabled: Optional[bool] = None
     telegram_poll_minutes: Optional[int] = None
     telegram_default_collection: Optional[str] = None
+    telegram_force_localize: Optional[bool] = None
 
 
 @router.get("")

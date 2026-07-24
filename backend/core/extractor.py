@@ -1,4 +1,6 @@
 """Content extractors for URLs, PDFs, documents, images."""
+import asyncio
+import logging
 import re
 import json
 import base64
@@ -10,6 +12,8 @@ from bs4 import BeautifulSoup
 import html2text
 
 from backend.core.ollama_client import ollama_client
+
+log = logging.getLogger(__name__)
 
 
 # --- Defuddle-style metadata extraction (ported from Obsidian Clipper) ---
@@ -606,15 +610,85 @@ def canonical_source_url(url: str) -> str:
     return url
 
 
-async def _instagram_photo_meta(url: str, domain: str) -> dict | None:
-    """Resolve an Instagram photo post into an image-memo dict via the
-    crawler-UA OpenGraph fetch. Returns None when no og:image comes back
-    (login-walled even for crawlers, deleted post, network error) so the
-    caller can fall through to the generic link path.
+def _is_instagram_video_path(url: str) -> bool:
+    """True when the URL path itself says video (/reel/, /reels/, /tv/).
+    Needed because Instagram's crawler page for a reel does NOT reliably carry
+    og:video — verified live 2026-07-24, a reel came back with og:image only —
+    so the og:video guard alone would misfile reels as photos."""
+    try:
+        path = urlparse(url).path.lower()
+    except Exception:
+        return False
+    return any(seg in path for seg in ("/reel/", "/reels/", "/tv/"))
 
-    Known ceiling (accepted in plan): og:image is ~640px and only the first
-    slide of a carousel. Full-res / all-slides needs the cookie-jar +
-    gallery-dl upgrade (future, opt-in)."""
+
+def _parse_gallery_dl_dump(text: str) -> tuple[str, str] | None:
+    """First full-size image URL + caption out of `gallery-dl -j` output.
+
+    The dump is a JSON array of [type, ...] entries; type 3 = a downloadable
+    URL with its metadata dict (description holds the caption). Defensive by
+    construction — any shape surprise returns None, never raises."""
+    try:
+        entries = json.loads(text)
+        for entry in entries:
+            if (
+                isinstance(entry, list)
+                and len(entry) >= 3
+                and entry[0] == 3
+                and isinstance(entry[1], str)
+                and entry[1].startswith("http")
+            ):
+                meta = entry[2] if isinstance(entry[2], dict) else {}
+                return entry[1], str(meta.get("description") or "")
+    except Exception:
+        pass
+    return None
+
+
+async def _instagram_gallery_dl(url: str) -> tuple[str, str] | None:
+    """Full-size image URL + caption via gallery-dl and the ADR-012 cookie
+    jar. None when cookies are absent, the tool is missing (dev venv), or
+    extraction fails — the caller falls down the tier ladder."""
+    from backend.core.app_settings import cookies_present, get_cookies_path
+
+    if not cookies_present():
+        return None
+    try:
+        proc = await asyncio.create_subprocess_exec(
+            "gallery-dl", "-j", "--cookies", str(get_cookies_path()), url,
+            stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.DEVNULL,
+        )
+        try:
+            out, _ = await asyncio.wait_for(proc.communicate(), timeout=45)
+        except asyncio.TimeoutError:
+            proc.kill()
+            return None
+        if proc.returncode != 0 or not out:
+            return None
+        return _parse_gallery_dl_dump(out.decode("utf-8", "replace"))
+    except (FileNotFoundError, OSError, NotImplementedError):
+        # Tool missing (dev venv) or the running event loop can't spawn
+        # subprocesses — fall down the ladder instead of failing the save.
+        return None
+
+
+async def _instagram_photo_meta(url: str, domain: str) -> dict | None:
+    """Resolve an Instagram photo post into an image-memo dict. Returns None
+    for video paths (/reel/), video pages (og:video), or when every tier
+    fails, so the caller can fall through to the generic link path.
+
+    Resolution ladder, best first (IG re-encodes all uploads server-side, so
+    ~1080–1440 px is the ceiling that exists anywhere — the true original
+    never leaves Instagram):
+      1. gallery-dl + cookie jar  → IG's full display file, uncropped
+      2. headless DOM grab        → rendered image, ~1080 px, uncropped
+      3. crawler-UA og:image      → 640 px square CROP (IG's CDN bakes the
+         crop into the signed URL — stp=c…, verified untamperable, 403)
+    The winning tier is logged per save so resolution stays observable."""
+    if _is_instagram_video_path(url):
+        return None
+    # Crawler fetch always runs: cheapest source of title/caption, and its
+    # og:video tag is the video-page guard for ambiguous /p/ URLs.
     meta = await _fetch_og_meta(url, user_agent=_CRAWLER_UA)
     thumbnail = meta.get("thumbnail_path")
     if not thumbnail:
@@ -624,7 +698,30 @@ async def _instagram_photo_meta(url: str, domain: str) -> dict | None:
     # memo as an image; let the caller keep the video/embed shape.
     if meta.get("video_url"):
         return None
+
     description = meta.get("description") or ""
+    tier = "crawler-og-640"
+
+    # Tier 1 — gallery-dl with cookies: full display resolution.
+    full = await _instagram_gallery_dl(url)
+    if full:
+        thumbnail = full[0]
+        description = full[1] or description
+        tier = "gallery-dl-full"
+    else:
+        # Tier 2 — headless render, largest visible image (uncropped ~1080).
+        try:
+            from backend.core.headless import render_page
+
+            rendered = await render_page(url, want_main_image=True)
+            main_img = (rendered or {}).get("main_image")
+            if main_img:
+                thumbnail = main_img
+                tier = "headless-dom"
+        except Exception:
+            pass
+
+    log.info("instagram photo resolved via %s: %s", tier, url)
     return {
         "title": meta.get("title") or url,
         "description": description[:500],

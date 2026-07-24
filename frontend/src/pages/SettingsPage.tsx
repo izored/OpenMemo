@@ -298,6 +298,24 @@ function TelegramRelayRows({ profile, save }: { profile: AppSettings | null; sav
       </div>
       <div className="om-setting-row" style={{ borderTop: '1px solid var(--border)', marginTop: 8, paddingTop: 8 }}>
         <div className="om-setting-row-text">
+          <p>Pull media locally</p>
+          <span className="mono">
+            Download the actual photo, video, or audio for every bot save so it survives takedown. Off = bot saves follow the same auto-download rules as a paste.
+          </span>
+        </div>
+        <button
+          type="button"
+          className="om-add-toggle"
+          onClick={() => profile && save({ telegram_force_localize: !profile.telegram_force_localize })}
+          aria-pressed={profile?.telegram_force_localize ?? true}
+        >
+          <span className={'om-add-toggle-switch' + ((profile?.telegram_force_localize ?? true) ? ' on' : '')}>
+            <span className="om-add-toggle-knob" />
+          </span>
+        </button>
+      </div>
+      <div className="om-setting-row" style={{ borderTop: '1px solid var(--border)', marginTop: 8, paddingTop: 8 }}>
+        <div className="om-setting-row-text">
           <p>Check every</p>
           <span className="mono">How often openMemo asks Telegram for new shares. Capture is queued, not lost, between checks.</span>
         </div>
@@ -478,7 +496,7 @@ export function SettingsPage() {
       })
       .catch(() => {
         setMaxUploadMb(5120);
-        setProfile({ max_upload_mb: 5120, display_name: '', email: '', avatar_data_url: '', mailing_list_consent: false, auto_download_audio: true, auto_download_video: true, music_quality: '16', music_provider: 'qobuz', chat_model: '', num_ctx: 0, yt_cookies_present: false, bg_image_ext: '', hidden_passcode_set: false, telegram_enabled: false, telegram_poll_minutes: 15, telegram_default_collection: 'IG Inbox', telegram_token_present: false, telegram_user_locked: false });
+        setProfile({ max_upload_mb: 5120, display_name: '', email: '', avatar_data_url: '', mailing_list_consent: false, auto_download_audio: true, auto_download_video: true, music_quality: '16', music_provider: 'qobuz', chat_model: '', num_ctx: 0, yt_cookies_present: false, bg_image_ext: '', hidden_passcode_set: false, telegram_enabled: false, telegram_poll_minutes: 15, telegram_default_collection: 'IG Inbox', telegram_force_localize: true, telegram_token_present: false, telegram_user_locked: false });
       });
   }, []);
 
@@ -964,7 +982,7 @@ export function SettingsPage() {
               <div className="om-setting-row-text" style={{ maxWidth: 560 }}>
                 <p>Cookies for restricted downloads</p>
                 <span className="mono">
-                  Lets "Make it local" fetch age-restricted or private videos. The cookie file stays on this machine, in openMemo's own data store (a Docker volume), as <code>yt_cookies.txt</code>. It is only handed to yt-dlp to fetch the video, never sent to any openMemo service (there isn't one). Use a throwaway account.{' '}
+                  Lets "Make it local" fetch age-restricted or private videos, and unlocks full-resolution uncropped Instagram photos (without cookies, Instagram only serves a 640px square crop). The cookie file stays on this machine, in openMemo's own data store (a Docker volume), as <code>yt_cookies.txt</code>. It is only handed to yt-dlp and gallery-dl to fetch media, never sent to any openMemo service (there isn't one). Use a throwaway account.{' '}
                   <button type="button" onClick={() => openGuide('yt-cookies')} style={{ color: 'var(--accent)', fontWeight: 500 }}>Show me how</button>
                 </span>
               </div>

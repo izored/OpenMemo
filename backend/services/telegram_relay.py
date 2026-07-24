@@ -117,7 +117,7 @@ async def _get_or_create_collection(db, name: str) -> str:
     return coll.id
 
 
-async def _save_url(url: str, collection_name: str) -> dict:
+async def _save_url(url: str, collection_name: str, force_localize: bool) -> dict:
     """Save one URL through the shared ingest pipeline. Never raises."""
     from backend.api.ingest import URLIngest, ingest_url_core
 
@@ -129,7 +129,7 @@ async def _save_url(url: str, collection_name: str) -> dict:
     try:
         async with AsyncSessionLocal() as db:
             coll_id = await _get_or_create_collection(db, collection_name)
-            data = URLIngest(url=url, collection_id=coll_id)
+            data = URLIngest(url=url, collection_id=coll_id, force_localize=force_localize)
             result = await ingest_url_core(data, db, schedule)
     except Exception as e:
         log.warning("relay save failed for %s: %r", url, e)
@@ -141,44 +141,136 @@ async def _save_url(url: str, collection_name: str) -> dict:
     return result
 
 
-async def _collection_buttons(memo_id: str) -> list:
-    """Inline keyboard of standard collections for the re-file tap (Phase 3).
-    callback_data is capped at 64 bytes by Telegram, so two 8-char id prefixes
-    are used and resolved back with a LIKE match."""
+# Buttons per page of the collection keyboard. All collections stay reachable
+# via ‹ › paging (Telegram caps a keyboard at 100 buttons; paging keeps the
+# receipt compact instead). Text search covers the rest: reply to a receipt
+# with a collection name and the memo moves there.
+_PAGE_SIZE = 8
+
+# Receipt message id → memo id, so a text REPLY to a "Saved ✓" receipt can be
+# routed to the right memo. In-memory, capped; after a restart old receipts
+# lose text-search routing (buttons keep working — ids live in callback_data).
+_RECEIPT_MEMOS: dict = {}
+_RECEIPT_CAP = 300
+
+
+def _remember_receipt(message_id, memo_id: str) -> None:
+    if message_id is None:
+        return
+    _RECEIPT_MEMOS[message_id] = memo_id
+    while len(_RECEIPT_MEMOS) > _RECEIPT_CAP:
+        _RECEIPT_MEMOS.pop(next(iter(_RECEIPT_MEMOS)))
+
+
+async def _all_collections():
     from sqlalchemy import select
     from backend.db.models import Collection
 
     async with AsyncSessionLocal() as db:
-        colls = (
+        return (
             await db.execute(
                 select(Collection)
                 .where(Collection.kind == "standard")
-                .order_by(Collection.pinned.desc(), Collection.sort_order)
-                .limit(8)
+                .order_by(Collection.pinned.desc(), Collection.sort_order, Collection.name)
             )
         ).scalars().all()
+
+
+async def _collection_keyboard(memo8: str, page: int = 0) -> list:
+    """Paged inline keyboard of ALL standard collections (Phase 3).
+    callback_data is capped at 64 bytes by Telegram, so 8-char id prefixes are
+    used and resolved back with a LIKE match. Nav row: ‹  page/pages  ›."""
+    colls = await _all_collections()
+    pages = max(1, -(-len(colls) // _PAGE_SIZE))
+    page = max(0, min(page, pages - 1))
+    subset = colls[page * _PAGE_SIZE:(page + 1) * _PAGE_SIZE]
+
     rows, row = [], []
-    for c in colls:
+    for c in subset:
         row.append({
             "text": f"{c.emoji or ''} {c.name}".strip()[:32],
-            "callback_data": f"mv:{memo_id[:8]}:{c.id[:8]}",
+            "callback_data": f"mv:{memo8[:8]}:{c.id[:8]}",
         })
         if len(row) == 2:
             rows.append(row)
             row = []
     if row:
         rows.append(row)
+    if pages > 1:
+        # "·" placeholders, never blank — Telegram rejects empty button text.
+        rows.append([
+            {"text": "‹" if page > 0 else "·", "callback_data": f"pg:{memo8[:8]}:{page - 1}" if page > 0 else "noop"},
+            {"text": f"{page + 1}/{pages}", "callback_data": "noop"},
+            {"text": "›" if page < pages - 1 else "·", "callback_data": f"pg:{memo8[:8]}:{page + 1}" if page < pages - 1 else "noop"},
+        ])
     return rows
 
 
-async def _handle_callback(client, token: str, cq: dict) -> None:
-    """A collection button was tapped: move the memo, edit the receipt."""
+def _match_collection(colls, query: str):
+    """Find a collection by name: exact (ci) → prefix → substring. None when
+    nothing matches — the caller lists what exists."""
+    q = query.strip().casefold()
+    if not q:
+        return None
+    for c in colls:
+        if c.name.casefold() == q:
+            return c
+    for c in colls:
+        if c.name.casefold().startswith(q):
+            return c
+    for c in colls:
+        if q in c.name.casefold():
+            return c
+    return None
+
+
+async def _move_memo(memo_id_prefix: str, collection) -> bool:
+    """Re-file a memo (by id or 8-char prefix) into `collection`."""
     from sqlalchemy import select, delete, insert
-    from backend.db.models import Memo, Collection, memo_collections
+    from backend.db.models import Memo, memo_collections
+
+    async with AsyncSessionLocal() as db:
+        memo = (
+            await db.execute(select(Memo).where(Memo.id.like(f"{memo_id_prefix}%")))
+        ).scalars().first()
+        if not memo:
+            return False
+        await db.execute(
+            delete(memo_collections).where(memo_collections.c.memo_id == memo.id)
+        )
+        await db.execute(
+            insert(memo_collections).values(memo_id=memo.id, collection_id=collection.id)
+        )
+        await db.commit()
+    return True
+
+
+async def _handle_callback(client, token: str, cq: dict) -> None:
+    """A collection button (or pager) was tapped: move the memo / flip the page."""
+    from sqlalchemy import select
+    from backend.db.models import Collection
 
     cq_id = cq.get("id")
     data = cq.get("data") or ""
     parts = data.split(":")
+
+    # Pager taps swap the keyboard in place; noop answers the spinner only.
+    if parts[0] == "pg" and len(parts) == 3:
+        await _tg(client, token, "answerCallbackQuery", callback_query_id=cq_id)
+        msg = cq.get("message") or {}
+        try:
+            page = int(parts[2])
+        except ValueError:
+            return
+        if msg.get("chat"):
+            keyboard = await _collection_keyboard(parts[1], page)
+            await _tg(
+                client, token, "editMessageReplyMarkup",
+                chat_id=msg["chat"]["id"],
+                message_id=msg.get("message_id"),
+                reply_markup={"inline_keyboard": keyboard},
+            )
+        return
     if len(parts) != 3 or parts[0] != "mv":
         await _tg(client, token, "answerCallbackQuery", callback_query_id=cq_id)
         return
@@ -187,27 +279,13 @@ async def _handle_callback(client, token: str, cq: dict) -> None:
     label = None
     try:
         async with AsyncSessionLocal() as db:
-            memo = (
-                await db.execute(select(Memo).where(Memo.id.like(f"{memo8}%")))
-            ).scalars().first()
             coll = (
                 await db.execute(
                     select(Collection).where(Collection.id.like(f"{coll8}%"))
                 )
             ).scalars().first()
-            if memo and coll:
-                await db.execute(
-                    delete(memo_collections).where(
-                        memo_collections.c.memo_id == memo.id
-                    )
-                )
-                await db.execute(
-                    insert(memo_collections).values(
-                        memo_id=memo.id, collection_id=coll.id
-                    )
-                )
-                await db.commit()
-                label = coll.name
+        if coll and await _move_memo(memo8, coll):
+            label = coll.name
     except Exception as e:
         log.warning("relay move failed (%s): %r", data, e)
 
@@ -251,16 +329,40 @@ async def _handle_message(client, token: str, msg: dict, settings: dict) -> str 
 
     m = _URL_RE.search(text)
     if not m:
+        # Collection search (Phase 3): REPLY to a "Saved ✓" receipt with a
+        # collection name and the memo moves there — the buttons' text twin,
+        # for libraries too big to page through.
+        reply_to = (msg.get("reply_to_message") or {}).get("message_id")
+        memo_id = _RECEIPT_MEMOS.get(reply_to) if reply_to else None
+        if memo_id:
+            colls = await _all_collections()
+            target = _match_collection(colls, text)
+            if target and await _move_memo(memo_id, target):
+                await _tg(
+                    client, token, "sendMessage", chat_id=chat_id,
+                    text=f"Moved to {target.name} ✓",
+                )
+            else:
+                names = ", ".join(c.name for c in colls[:30])
+                await _tg(
+                    client, token, "sendMessage", chat_id=chat_id,
+                    text=f'No collection matching "{text[:40]}". You have: {names}'[:400],
+                )
+            return "chat"
         await _tg(
             client, token, "sendMessage", chat_id=chat_id,
-            text="Send me a link and I'll save it to openMemo.",
+            text="Send me a link and I'll save it — or reply to a receipt with a collection name to re-file.",
         )
         return "chat"
 
     # \S+ grabs trailing prose punctuation ("…/p/XYZ/," ) — strip it so the
     # URL that reaches the pipeline is the URL the user meant.
     url = m.group(0).rstrip(".,;:!?)]}’”")
-    result = await _save_url(url, settings.get("telegram_default_collection") or "IG Inbox")
+    result = await _save_url(
+        url,
+        settings.get("telegram_default_collection") or "IG Inbox",
+        bool(settings.get("telegram_force_localize", True)),
+    )
     status = result.get("status")
     if status == "duplicate":
         await _tg(
@@ -274,12 +376,14 @@ async def _handle_message(client, token: str, msg: dict, settings: dict) -> str 
         )
     else:
         RELAY_STATUS["saved_count"] += 1
-        buttons = await _collection_buttons(result["id"])
-        await _tg(
+        keyboard = await _collection_keyboard(result["id"])
+        sent = await _tg(
             client, token, "sendMessage", chat_id=chat_id,
             text=f"Saved → {settings.get('telegram_default_collection') or 'IG Inbox'} ✓\n{result.get('title', '')[:80]}",
-            reply_markup={"inline_keyboard": buttons} if buttons else None,
+            reply_markup={"inline_keyboard": keyboard} if keyboard else None,
         )
+        if sent:
+            _remember_receipt(sent.get("message_id"), result["id"])
     return "link"
 
 

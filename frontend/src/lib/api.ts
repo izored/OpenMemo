@@ -382,6 +382,9 @@ export interface AppSettings {
   telegram_enabled: boolean;
   telegram_poll_minutes: number;
   telegram_default_collection: string;
+  // Pull media locally for every bot save (download on save regardless of the
+  // embed-host rule) so on-the-go captures survive takedown.
+  telegram_force_localize: boolean;
   telegram_token_present: boolean;
   telegram_user_locked: boolean;
 }
