@@ -654,11 +654,15 @@ async def _minimal_link(url: str, domain: str | None = None) -> dict:
             parsed = _parse_html(rendered["html"], url, url, domain)
             main_img = rendered.get("main_image")
             if parsed is None and is_photo and main_img:
-                # Photo page with no usable OG/text — still keep the real image.
+                # Photo page with no usable OG/text in the rendered DOM (FB/IG
+                # inject OG tags server-side for scrapers only). Keep the real
+                # image and borrow title/description from the scraper HTML so
+                # the memo isn't titled with its own raw URL.
+                og = await _fetch_og_meta(url)
                 parsed = {
-                    "title": url,
-                    "description": "",
-                    "content_text": "",
+                    "title": og.get("title") or url,
+                    "description": og.get("description") or "",
+                    "content_text": og.get("description") or "",
                     "content_raw": "",
                     "source_url": url,
                     "source_domain": domain,
