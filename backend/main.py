@@ -212,6 +212,12 @@ async def lifespan(app: FastAPI):
 
     asyncio.create_task(_run_reclassify_job())
 
+    # Telegram capture relay (ADR-020) — dormant until enabled + token set in
+    # Settings; the loop itself never raises out, so this can't hurt startup.
+    from backend.services.telegram_relay import run_relay_loop
+
+    asyncio.create_task(run_relay_loop())
+
     scheduler = AsyncIOScheduler()
     scheduler.add_job(
         _run_reclassify_job,

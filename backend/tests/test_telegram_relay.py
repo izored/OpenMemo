@@ -1,0 +1,86 @@
+"""Telegram capture relay (ADR-020) — pure-logic tests.
+
+Covers the pieces that can break silently: Instagram URL canonicalization
+(share-sheet tracking params must not mint twin memos), URL extraction from a
+message, callback_data round-trip sizing, and the owner-lock gate settings."""
+from backend.core.extractor import canonical_source_url
+from backend.services.telegram_relay import _URL_RE
+
+
+class TestCanonicalSourceUrl:
+    def test_strips_instagram_tracking_query(self):
+        assert (
+            canonical_source_url("https://www.instagram.com/p/DKKxnIZOX1f/?igsh=abc123")
+            == "https://www.instagram.com/p/DKKxnIZOX1f/"
+        )
+
+    def test_strips_instagram_fragment(self):
+        assert (
+            canonical_source_url("https://instagram.com/p/XYZ/#frag")
+            == "https://instagram.com/p/XYZ/"
+        )
+
+    def test_leaves_youtube_query_alone(self):
+        url = "https://www.youtube.com/watch?v=dQw4w9WgXcQ"
+        assert canonical_source_url(url) == url
+
+    def test_leaves_plain_urls_alone(self):
+        url = "https://example.com/article"
+        assert canonical_source_url(url) == url
+
+    def test_never_raises_on_garbage(self):
+        assert canonical_source_url("not a url at all") == "not a url at all"
+
+
+class TestMessageUrlExtraction:
+    def test_finds_url_in_plain_share(self):
+        m = _URL_RE.search("https://www.instagram.com/p/DKKxnIZOX1f/?igsh=1")
+        assert m and m.group(0).startswith("https://www.instagram.com/p/")
+
+    def test_finds_url_amid_text(self):
+        m = _URL_RE.search("look at this https://example.com/x cool right")
+        assert m and m.group(0) == "https://example.com/x"
+
+    def test_no_url_returns_none(self):
+        assert _URL_RE.search("hello bot") is None
+
+    def test_trailing_punctuation_strippable(self):
+        # Mirrors the rstrip in _handle_message: prose punctuation after the
+        # URL must not reach the pipeline.
+        m = _URL_RE.search("look: https://www.instagram.com/p/ABC/, wow")
+        assert m is not None
+        assert m.group(0).rstrip(".,;:!?)]}’”") == "https://www.instagram.com/p/ABC/"
+
+
+class TestCallbackDataSize:
+    def test_move_callback_fits_telegram_64_byte_cap(self):
+        # Two 8-char id prefixes + separators — the format _collection_buttons
+        # emits and _handle_callback parses.
+        data = f"mv:{'a' * 8}:{'b' * 8}"
+        assert len(data.encode()) <= 64
+        parts = data.split(":")
+        assert len(parts) == 3 and parts[0] == "mv"
+
+
+class TestOwnerLockSettings:
+    def test_lock_roundtrip(self, tmp_path, monkeypatch):
+        import backend.core.app_settings as aps
+
+        monkeypatch.setattr(aps, "_PATH", tmp_path / "app_settings.json")
+        aps.set_telegram_allowed_user(12345)
+        assert aps.get_telegram_allowed_user() == 12345
+        assert aps.telegram_user_locked() is True
+        aps.set_telegram_allowed_user(0)
+        assert aps.get_telegram_allowed_user() == 0
+        assert aps.telegram_user_locked() is False
+
+    def test_clearing_token_clears_lock(self, tmp_path, monkeypatch):
+        import backend.core.app_settings as aps
+
+        monkeypatch.setattr(aps, "_PATH", tmp_path / "app_settings.json")
+        aps.set_telegram_token("123:abcdefghijklmnopqrstuvwxyz1234567890")
+        aps.set_telegram_allowed_user(777)
+        assert aps.telegram_token_present() and aps.telegram_user_locked()
+        aps.set_telegram_token("")
+        assert not aps.telegram_token_present()
+        assert not aps.telegram_user_locked()
