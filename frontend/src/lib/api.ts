@@ -376,6 +376,23 @@ export interface AppSettings {
   // Read-only flag: whether a hidden-section passcode exists. The hash itself
   // never crosses the API.
   hidden_passcode_set: boolean;
+  // Telegram capture relay (ADR-020). The bot token itself never crosses the
+  // API — only the presence flag does; the owner lock is auto-captured from
+  // the first sender.
+  telegram_enabled: boolean;
+  telegram_poll_minutes: number;
+  telegram_default_collection: string;
+  telegram_token_present: boolean;
+  telegram_user_locked: boolean;
+}
+
+export interface TelegramRelayStatus {
+  running: boolean;
+  last_poll_at: string | null;
+  last_error: string | null;
+  saved_count: number;
+  telegram_token_present: boolean;
+  telegram_user_locked: boolean;
 }
 
 export const settingsApi = {
@@ -397,6 +414,18 @@ export const settingsApi = {
   },
   deleteCookies: () =>
     fetchJSON<{ yt_cookies_present: boolean }>('/settings/cookies', { method: 'DELETE' }),
+  // Telegram capture relay (ADR-020). Set (or clear, with '') the bot token;
+  // the token itself is write-only — only a presence flag ever comes back.
+  setTelegramToken: (token: string) =>
+    fetchJSON<{ telegram_token_present: boolean }>('/settings/telegram/token', {
+      method: 'POST',
+      body: JSON.stringify({ token }),
+    }),
+  resetTelegramUserLock: () =>
+    fetchJSON<{ telegram_user_locked: boolean }>('/settings/telegram/user-lock', {
+      method: 'DELETE',
+    }),
+  telegramStatus: () => fetchJSON<TelegramRelayStatus>('/settings/telegram/status'),
   // Upload a custom appearance background, stored full-quality server-side.
   // Returns the active extension; the image is served at /api/settings/background.
   uploadBackground: async (file: File): Promise<{ bg_image_ext: string }> => {

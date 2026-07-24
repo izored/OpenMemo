@@ -7,6 +7,88 @@ the decision, and its consequences, so a future reader knows *why*, not just
 
 ---
 
+## ADR-020: Phone capture goes through a Telegram relay inbox, never a direct connection to the backend
+
+**Date:** 2026-07-24 · **Status:** Accepted — building · **Builds on:** ADR-012 (user-supplied cookie jar for restricted downloads), ADR-002 (self-hosted headless Chromium), ADR-008 (never block the event loop), ADR-001 (define shared things once)
+
+### Context
+
+The recurring real-world moment: an Instagram photo post worth keeping, seen on the
+iPhone, several times a day. Wanted: tap Share, file it into an openMemo collection with
+the photo stored locally, the caption captured, and the AI tag pass run — without leaving
+Instagram and without parking the post in some other Instagram account's saved pile.
+
+Three hard constraints shape the solution:
+
+1. **openMemo has no authentication.** Every API route is open to whoever reaches the
+   port. Any design that exposes the backend to the phone directly — port forward,
+   public tunnel — exposes the entire library. A VPN mesh (Tailscale) fixes reachability
+   securely, but demands the VPN be connected *and* the PC be awake at the moment of
+   capture; a failed save silently loses the post. Capture happens on café 5G at 3pm;
+   the PC is often asleep.
+2. **iOS offers no Web Share Target.** A PWA cannot appear in the Instagram share sheet
+   on iOS (Android-only API). The native-feeling options are an iOS Shortcut or sharing
+   to an app that already exists in the sheet.
+3. **Instagram resists server-side extraction.** yt-dlp handles reels but is a video
+   tool — photo-only `/p/` posts routinely fail. Anonymous page fetches hit a login
+   wall. Any reliable photo pull needs session cookies (the ADR-012 jar pattern) and a
+   photo-capable extractor.
+
+### Decision
+
+**Capture is a store-and-forward relay: the phone drops the post URL into a Telegram bot
+chat, and the backend long-polls Telegram *outbound* to collect it. The phone never
+connects to openMemo at all.**
+
+- **Share flow.** Instagram → Share → Telegram → bot chat. Two taps, native share sheet,
+  no Shortcut, no VPN. The bot chat is also the feedback surface: the backend replies
+  "Saved ✓" with an inline keyboard of collections, so filing is one optional tap
+  *after* the save instead of a blocking menu *before* it.
+- **Store-and-forward beats direct HTTP.** Telegram is the always-on queue: PC asleep →
+  the message simply waits; the poller drains the backlog on wake using `getUpdates`
+  offset acknowledgement. No inbound port, no webhook, no public URL, nothing new
+  exposed. This one property dissolves the whole "lost save" failure class instead of
+  patching it with retry logic on the phone.
+- **The poller is a lifespan background task** (`backend/services/telegram_relay.py`),
+  fire-and-forget with done-callback logging like every other background job (ADR-008 —
+  long-poll timeout runs on the event loop's clock, never blocks it). It processes
+  messages only from the single configured Telegram user ID; everything else is ignored
+  and logged. The bot token and allowed ID live in the app-settings JSON with
+  presence-only exposure over the API — the exact pattern of the ADR-012 cookie jar.
+- **Ingest is the existing pipeline, called directly.** The relay extracts the first URL
+  from the message and invokes the same code path as `POST /api/ingest/url` — no
+  HTTP-self-call, no parallel ingest world (ADR-001). Saves land in an auto-created
+  "IG Inbox" collection; a `source_url` match short-circuits to "Already saved ✓"
+  instead of minting a twin memo.
+- **v1 changes zero extraction code.** The deciding test was the user pasting the real
+  Instagram link into the WebUI: the existing `/ingest/url` pipeline produced an
+  acceptable memo as-is. The relay therefore feeds the unchanged pipeline — same
+  extractor, same thumbnail, same memo as a manual paste. The Phase 0 probe results
+  are recorded for the day the existing output disappoints: yt-dlp fails photo posts
+  ("No video formats found") but keeps reels; a link-preview crawler UA
+  (`facebookexternalhit/1.1`) gets `og:image` + caption with no cookies (640px, first
+  image only); **gallery-dl** + the ADR-012 cookie jar is the full-resolution,
+  all-carousel-images upgrade; the ADR-002 headless renderer is last resort (patchright
+  ships only in the Docker image, not the dev venv).
+
+### Consequences
+
+- The save path works from anywhere with internet, with the PC in any power state, and
+  adds zero attack surface: the backend only ever dials out to `api.telegram.org`.
+- The post URL transits Telegram's servers. Acceptable: it is a public Instagram URL,
+  not library content; the memo itself never leaves the machine.
+- Telegram becomes a soft dependency for *capture only* — if the poller dies or Telegram
+  is unreachable, the app itself is untouched (liveness stays dependency-free, ADR-008)
+  and messages queue server-side until polling resumes.
+- Cookie rot is the maintenance tax: Instagram sessions expire every few weeks, and the
+  chain's photo links degrade until the jar is refreshed via the ADR-012 walkthrough.
+  The bot reply makes the expiry loud at the moment of capture.
+- The relay pattern is platform-neutral by construction: any URL shared to the bot —
+  TikTok, an article, a YouTube video — rides the same pipeline the WebUI uses, so
+  "Instagram capture" is really "phone capture" with Instagram as the motivating case.
+
+---
+
 ## ADR-019: Apple Music is a second SpotiFLAC front-end; Qobuz stays the only audio source
 
 **Date:** 2026-06-13 · **Status:** Shipped · **Builds on:** ADR-017 (Spotify links resolve to lossless FLAC through a no-account chain), ADR-001 (define shared things once)
