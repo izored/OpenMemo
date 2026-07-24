@@ -17,6 +17,7 @@ on:
 # needs write (v3.0.0 run failed with HTTP 403 without this).
 permissions:
   contents: write
+  actions: write   # needed to delete old artifacts in the cleanup step below
 
 jobs:
   build:
@@ -43,6 +44,20 @@ jobs:
           # Authenticated GitHub API calls in bundle-backend.mjs (rate limits).
           GITHUB_TOKEN: ${{ github.token }}
         run: npm run dist
+
+      # Actions storage is capped (0.5GB free tier); each .dmg is ~400MB, so
+      # more than one live copy blows the quota. Delete prior runs' artifacts
+      # of the same name before uploading this run's.
+      - name: Delete old .dmg artifacts
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          ids=$(gh api "repos/${{ github.repository }}/actions/artifacts?per_page=100" \
+            --jq '.artifacts[] | select(.name=="OpenMemo-macos-arm64") | .id')
+          for id in $ids; do
+            echo "Deleting old artifact $id"
+            gh api -X DELETE "repos/${{ github.repository }}/actions/artifacts/$id" || true
+          done
 
       - name: Upload .dmg
         uses: actions/upload-artifact@v5
