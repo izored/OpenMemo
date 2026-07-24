@@ -1,4 +1,5 @@
 """User-configurable settings API (runtime, persisted as JSON)."""
+import re
 from typing import Optional
 
 from fastapi import APIRouter, File, HTTPException, UploadFile
@@ -43,6 +44,9 @@ class SettingsPatch(BaseModel):
     music_provider: Optional[str] = None
     chat_model: Optional[str] = None
     num_ctx: Optional[int] = None
+    telegram_enabled: Optional[bool] = None
+    telegram_poll_minutes: Optional[int] = None
+    telegram_default_collection: Optional[str] = None
 
 
 @router.get("")
@@ -94,6 +98,54 @@ async def check_hidden_passcode(body: HiddenPasscodeVerify):
     if not hidden_passcode_set():
         raise HTTPException(status_code=400, detail="No passcode has been set yet.")
     return {"ok": verify_hidden_passcode(body.passcode)}
+
+
+# --- Telegram capture relay (ADR-020) ----------------------------------------
+# The bot token is a secret: stored in the settings JSON, never returned by any
+# endpoint — only `telegram_token_present` is (yt_cookies pattern).
+
+
+class TelegramTokenSet(BaseModel):
+    token: str
+
+
+@router.post("/telegram/token")
+async def write_telegram_token(body: TelegramTokenSet):
+    """Store the bot token (empty string clears it and unlocks the owner)."""
+    from backend.core.app_settings import set_telegram_token, telegram_token_present
+
+    token = body.token.strip()
+    # BotFather tokens look like "<digits>:<35 url-safe chars>". Reject obvious
+    # garbage early so a paste mistake fails loudly, not silently at poll time.
+    if token and not re.fullmatch(r"\d+:[A-Za-z0-9_-]{30,}", token):
+        raise HTTPException(
+            status_code=400,
+            detail="That doesn't look like a bot token. Copy it from @BotFather.",
+        )
+    set_telegram_token(token)
+    return {"telegram_token_present": telegram_token_present()}
+
+
+@router.delete("/telegram/user-lock")
+async def reset_telegram_user_lock():
+    """Forget the locked owner so the next sender re-captures the lock."""
+    from backend.core.app_settings import set_telegram_allowed_user, telegram_user_locked
+
+    set_telegram_allowed_user(0)
+    return {"telegram_user_locked": telegram_user_locked()}
+
+
+@router.get("/telegram/status")
+async def read_telegram_status():
+    """Live relay status for the Settings card."""
+    from backend.core.app_settings import telegram_token_present, telegram_user_locked
+    from backend.services.telegram_relay import RELAY_STATUS
+
+    return {
+        **RELAY_STATUS,
+        "telegram_token_present": telegram_token_present(),
+        "telegram_user_locked": telegram_user_locked(),
+    }
 
 
 def _looks_like_cookie_jar(text: str) -> bool:

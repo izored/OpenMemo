@@ -9,7 +9,7 @@ import { ONBOARDING_KEY } from '@/lib/onboarding';
 import { useAppStore } from '@/stores/appStore';
 import { useIsMobile } from '@/lib/useBreakpoint';
 import { CookiesUpload } from '@/components/CookiesUpload';
-import { systemApi, maintenanceApi, backupApi, settingsApi, memoApi, type AppSettings } from '@/lib/api';
+import { systemApi, maintenanceApi, backupApi, settingsApi, memoApi, type AppSettings, type TelegramRelayStatus } from '@/lib/api';
 import type { OllamaModel } from '@/types';
 
 type BuiltWithEntry = { name: string; url: string; desc: string };
@@ -208,6 +208,115 @@ function TrashRow() {
  *  persisted `chatModel` in the app store (read by every Ask/chat surface) AND
  *  to the server-side `chat_model` setting, so backend-initiated calls
  *  (summaries without an explicit model) use the same default. */
+function TelegramRelayRows({ profile, save }: { profile: AppSettings | null; save: (p: Partial<AppSettings>) => void }) {
+  const [tokenInput, setTokenInput] = useState('');
+  const [tokenPresent, setTokenPresent] = useState<boolean | null>(null);
+  const [tokenError, setTokenError] = useState('');
+  const [status, setStatus] = useState<TelegramRelayStatus | null>(null);
+
+  useEffect(() => {
+    settingsApi.telegramStatus().then(setStatus).catch(() => setStatus(null));
+  }, []);
+
+  const present = tokenPresent ?? profile?.telegram_token_present ?? false;
+  const enabled = profile?.telegram_enabled ?? false;
+
+  const saveToken = async () => {
+    setTokenError('');
+    try {
+      const r = await settingsApi.setTelegramToken(tokenInput);
+      setTokenPresent(r.telegram_token_present);
+      setTokenInput('');
+    } catch (e) {
+      setTokenError(e instanceof Error ? e.message : 'Failed to save token');
+    }
+  };
+
+  const clearToken = async () => {
+    const r = await settingsApi.setTelegramToken('');
+    setTokenPresent(r.telegram_token_present);
+  };
+
+  const statusLine = !present
+    ? 'Paste a bot token from @BotFather to begin.'
+    : !enabled
+      ? 'Token stored. Turn the relay on to start polling.'
+      : status?.last_error
+        ? `Error: ${status.last_error}`
+        : status?.last_poll_at
+          ? `Polling. Last check ${new Date(status.last_poll_at + 'Z').toLocaleTimeString()} · ${status.saved_count} saved this session`
+          : 'On — first poll runs within a minute.';
+
+  return (
+    <>
+      <div className="om-setting-row">
+        <div className="om-setting-row-text">
+          <p>Telegram capture</p>
+          <span className="mono">
+            Share any link to your private bot chat and it lands here, filed into "{profile?.telegram_default_collection || 'IG Inbox'}". openMemo polls Telegram outbound — no open ports, and messages queue while this machine sleeps. {statusLine}
+          </span>
+        </div>
+        <button
+          type="button"
+          className="om-add-toggle"
+          onClick={() => profile && save({ telegram_enabled: !profile.telegram_enabled })}
+          aria-pressed={enabled}
+          disabled={!present}
+        >
+          <span className={'om-add-toggle-switch' + (enabled && present ? ' on' : '')}>
+            <span className="om-add-toggle-knob" />
+          </span>
+        </button>
+      </div>
+      <div className="om-setting-row" style={{ borderTop: '1px solid var(--border)', marginTop: 8, paddingTop: 8 }}>
+        <div className="om-setting-row-text">
+          <p>Bot token</p>
+          <span className="mono">
+            {present
+              ? `Stored on this machine, never shown or sent anywhere else.${profile?.telegram_user_locked || status?.telegram_user_locked ? ' Locked to the first sender.' : ' Locks to the first person who messages the bot.'}`
+              : 'From Telegram: @BotFather → /newbot → copy the token.'}
+            {tokenError ? ` ${tokenError}` : ''}
+          </span>
+        </div>
+        {present ? (
+          <button className="om-btn-secondary" onClick={clearToken}>Remove</button>
+        ) : (
+          <div style={{ display: 'flex', gap: 8 }}>
+            <input
+              type="password"
+              className="om-input"
+              placeholder="123456:ABC…"
+              value={tokenInput}
+              onChange={(e) => setTokenInput(e.target.value)}
+              style={{ width: 180 }}
+            />
+            <button className="om-btn-secondary" onClick={saveToken} disabled={!tokenInput.trim()}>
+              Save
+            </button>
+          </div>
+        )}
+      </div>
+      <div className="om-setting-row" style={{ borderTop: '1px solid var(--border)', marginTop: 8, paddingTop: 8 }}>
+        <div className="om-setting-row-text">
+          <p>Check every</p>
+          <span className="mono">How often openMemo asks Telegram for new shares. Capture is queued, not lost, between checks.</span>
+        </div>
+        <select
+          className="om-input"
+          value={String(profile?.telegram_poll_minutes ?? 15)}
+          onChange={(e) => save({ telegram_poll_minutes: Number(e.target.value) })}
+          style={{ width: 130 }}
+        >
+          <option value="5">5 minutes</option>
+          <option value="15">15 minutes</option>
+          <option value="30">30 minutes</option>
+          <option value="60">1 hour</option>
+        </select>
+      </div>
+    </>
+  );
+}
+
 function ModelSelect({ models }: { models: OllamaModel[] }) {
   const chatModel = useAppStore((s) => s.chatModel);
   const setChatModel = useAppStore((s) => s.setChatModel);
@@ -369,7 +478,7 @@ export function SettingsPage() {
       })
       .catch(() => {
         setMaxUploadMb(5120);
-        setProfile({ max_upload_mb: 5120, display_name: '', email: '', avatar_data_url: '', mailing_list_consent: false, auto_download_audio: true, auto_download_video: true, music_quality: '16', music_provider: 'qobuz', chat_model: '', num_ctx: 0, yt_cookies_present: false, bg_image_ext: '', hidden_passcode_set: false });
+        setProfile({ max_upload_mb: 5120, display_name: '', email: '', avatar_data_url: '', mailing_list_consent: false, auto_download_audio: true, auto_download_video: true, music_quality: '16', music_provider: 'qobuz', chat_model: '', num_ctx: 0, yt_cookies_present: false, bg_image_ext: '', hidden_passcode_set: false, telegram_enabled: false, telegram_poll_minutes: 15, telegram_default_collection: 'IG Inbox', telegram_token_present: false, telegram_user_locked: false });
       });
   }, []);
 
@@ -864,6 +973,10 @@ export function SettingsPage() {
             <div className="om-setting-row" style={{ borderTop: '1px solid var(--border)', marginTop: 8, paddingTop: 8 }}>
               <TrashRow />
             </div>
+          </SettingCard>
+
+          <SettingCard title="Phone capture" eyebrow="Telegram relay">
+            <TelegramRelayRows profile={profile} save={saveProfile} />
           </SettingCard>
 
           <div className="om-setting-card om-creator-card">

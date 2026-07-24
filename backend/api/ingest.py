@@ -308,9 +308,40 @@ async def ingest_url(
     db: AsyncSession = Depends(get_db),
 ):
     """Ingest content from a URL."""
+    return await ingest_url_core(data, db, background_tasks.add_task)
+
+
+async def ingest_url_core(data: URLIngest, db: AsyncSession, schedule) -> dict:
+    """Shared body of the /url route, callable outside a request (ADR-020: the
+    Telegram relay saves through the SAME pipeline as a WebUI paste, no
+    HTTP-self-call). `schedule(fn, *args)` receives every follow-up job — the
+    route passes `background_tasks.add_task`, the relay passes its own
+    fire-and-forget scheduler. All jobs are handed over only after commit."""
     from backend.core.extractor import (
-        extract_url, extract_video, detect_url_type,
+        extract_url, extract_video, detect_url_type, canonical_source_url,
     )
+
+    # Same source must never mint a twin memo (share-sheet URLs carry tracking
+    # params — canonicalized away for hosts where the query is never identity,
+    # e.g. Instagram's ?igsh=). Saving twice returns the existing memo instead.
+    # audio_only is exempt: "give me the SONG of this link" is a different ask
+    # than the earlier bookmark of the same URL (Music page "+").
+    data.url = canonical_source_url(data.url)
+    if not data.audio_only:
+        existing = (
+            await db.execute(
+                select(Memo).where(
+                    Memo.source_url == data.url, Memo.is_deleted == False  # noqa: E712
+                )
+            )
+        ).scalars().first()
+        if existing is not None:
+            return {
+                "id": existing.id,
+                "title": existing.title,
+                "type": existing.type,
+                "status": "duplicate",
+            }
 
     if data.no_pull:
         # "Don't pull" (OPNMMO-0049): no yt-dlp, no headless render, no media
@@ -398,14 +429,14 @@ async def ingest_url(
     await db.commit()
 
     # Process in background
-    background_tasks.add_task(process_memo, memo.id)
+    schedule(process_memo, memo.id)
     if memo.thumbnail_path and memo.thumbnail_path.startswith("http"):
-        background_tasks.add_task(cache_thumbnail, memo.id)
-    background_tasks.add_task(_localize_memo_task, memo.id)
+        schedule(cache_thumbnail, memo.id)
+    schedule(_localize_memo_task, memo.id)
     if auto_localize_audio:
-        background_tasks.add_task(localize_memo_task, memo.id, "audio")
+        schedule(localize_memo_task, memo.id, "audio")
     elif auto_localize_video:
-        background_tasks.add_task(localize_memo_task, memo.id, "video")
+        schedule(localize_memo_task, memo.id, "video")
 
     return {"id": memo.id, "title": memo.title, "type": memo.type, "status": "processing"}
 

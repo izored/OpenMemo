@@ -73,6 +73,12 @@ _DEFAULTS: dict[str, Any] = {
     # so long transcripts / full RAG contexts aren't silently truncated; a user
     # on a small box can lower it. Resolved + clamped by get_num_ctx().
     "num_ctx": 0,
+    # Telegram capture relay (ADR-020). The poller runs only when enabled AND a
+    # bot token is present. Poll cadence in minutes (clamped 1–120 by the
+    # relay). Saves land in the named collection (auto-created if missing).
+    "telegram_enabled": False,
+    "telegram_poll_minutes": 15,
+    "telegram_default_collection": "IG Inbox",
 }
 
 _UNCAPPED_SENTINEL = 0
@@ -85,6 +91,13 @@ _HARD_CEILING_MB = 1024 * 1024  # 1 TB
 # (the local API itself has no auth), not an encryption boundary.
 _PASSCODE_KEY = "hidden_passcode_hash"
 _PBKDF2_ITERATIONS = 200_000
+
+# Telegram relay secrets (ADR-020). Stored in the same JSON but NOT in
+# _DEFAULTS: get_settings() strips them, so the token and the owner's Telegram
+# user id never cross the API — only `telegram_token_present` and
+# `telegram_user_locked` booleans do (the yt_cookies pattern).
+_TG_TOKEN_KEY = "telegram_bot_token"
+_TG_USER_KEY = "telegram_allowed_user_id"
 
 
 def _read() -> dict[str, Any]:
@@ -105,10 +118,14 @@ def get_settings() -> dict[str, Any]:
     # sees whether a passcode exists.
     data = _read()
     data.pop(_PASSCODE_KEY, None)
+    data.pop(_TG_TOKEN_KEY, None)
+    data.pop(_TG_USER_KEY, None)
     return {
         **data,
         "yt_cookies_present": cookies_present(),
         "hidden_passcode_set": hidden_passcode_set(),
+        "telegram_token_present": telegram_token_present(),
+        "telegram_user_locked": telegram_user_locked(),
     }
 
 
@@ -223,6 +240,52 @@ def verify_hidden_passcode(passcode: str) -> bool:
     except ValueError:
         return False
     return hmac.compare_digest(candidate, digest)
+
+
+def telegram_token_present() -> bool:
+    return bool(_read().get(_TG_TOKEN_KEY))
+
+
+def get_telegram_token() -> str:
+    """The raw bot token — for the relay's own API calls only, never the API."""
+    return str(_read().get(_TG_TOKEN_KEY) or "")
+
+
+def set_telegram_token(token: str) -> None:
+    """Store (or clear, with an empty string) the Telegram bot token."""
+    with _LOCK:
+        current = _read()
+        if token.strip():
+            current[_TG_TOKEN_KEY] = token.strip()
+        else:
+            current.pop(_TG_TOKEN_KEY, None)
+            # A new bot means a new chat: drop the old owner lock with it.
+            current.pop(_TG_USER_KEY, None)
+        _write_raw(current)
+
+
+def telegram_user_locked() -> bool:
+    return bool(_read().get(_TG_USER_KEY))
+
+
+def get_telegram_allowed_user() -> int:
+    """The locked owner user id, or 0 when not yet captured."""
+    try:
+        return int(_read().get(_TG_USER_KEY) or 0)
+    except (TypeError, ValueError):
+        return 0
+
+
+def set_telegram_allowed_user(user_id: int) -> None:
+    """Lock the relay to one Telegram user (0 clears the lock). Auto-captured
+    from the first sender after a token is set — see telegram_relay."""
+    with _LOCK:
+        current = _read()
+        if user_id:
+            current[_TG_USER_KEY] = int(user_id)
+        else:
+            current.pop(_TG_USER_KEY, None)
+        _write_raw(current)
 
 
 def get_max_upload_bytes() -> int:
