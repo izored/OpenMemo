@@ -63,6 +63,11 @@ class URLIngest(BaseModel):
     # platform (YouTube etc.). Ignores auto_download_audio — the intent is
     # explicit, so it never needs the manual "Make it local → audio" step.
     audio_only: bool = False
+    # True = pull the media local on save regardless of the embed-host rule and
+    # the auto_download_* settings (Telegram relay saves, gated by the
+    # telegram_force_localize setting — an on-the-go capture should survive
+    # takedown with no manual "Make it local" visit, ADR-020).
+    force_localize: bool = False
 
 
 class PlaylistProbe(BaseModel):
@@ -421,6 +426,14 @@ async def ingest_url_core(data: URLIngest, db: AsyncSession, schedule) -> dict:
         and not has_embed_player(memo.source_url)
         and bool(get_settings().get("auto_download_video", True))
     )
+    # Relay saves may force the pull (telegram_force_localize, ADR-020): media
+    # downloads regardless of the embed-host rule and the auto_download_*
+    # prefs, so an on-the-go capture survives takedown with no manual step.
+    if data.force_localize and not data.no_pull and memo.source_url and not memo.file_path:
+        if memo.type == "video":
+            auto_localize_video = True
+        elif memo.type == "audio":
+            auto_localize_audio = True
     if auto_localize_audio or auto_localize_video:
         memo.localize_status = "pending"
 

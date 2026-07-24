@@ -60,16 +60,32 @@ connects to openMemo at all.**
   HTTP-self-call, no parallel ingest world (ADR-001). Saves land in an auto-created
   "IG Inbox" collection; a `source_url` match short-circuits to "Already saved ✓"
   instead of minting a twin memo.
-- **v1 changes zero extraction code.** The deciding test was the user pasting the real
-  Instagram link into the WebUI: the existing `/ingest/url` pipeline produced an
-  acceptable memo as-is. The relay therefore feeds the unchanged pipeline — same
-  extractor, same thumbnail, same memo as a manual paste. The Phase 0 probe results
-  are recorded for the day the existing output disappoints: yt-dlp fails photo posts
-  ("No video formats found") but keeps reels; a link-preview crawler UA
-  (`facebookexternalhit/1.1`) gets `og:image` + caption with no cookies (640px, first
-  image only); **gallery-dl** + the ADR-012 cookie jar is the full-resolution,
-  all-carousel-images upgrade; the ADR-002 headless renderer is last resort (patchright
-  ships only in the Docker image, not the dev venv).
+- **Instagram photo posts resolve down a three-tier ladder, best first.** (The "zero
+  extraction changes" v1 died on contact: the existing pipeline filed a photo post as
+  a "video" memo wearing Instagram's embed — no local image, and "Make it local" is a
+  video downloader that can never fetch one.) A `/p/` URL that yt-dlp declines ("No
+  video formats found") is treated as a photo and resolved by: **(1) gallery-dl + the
+  ADR-012 cookie jar** — Instagram's full display file, uncropped; **(2) the ADR-002
+  headless renderer's largest-visible-image grab** — ~1080 px, uncropped, no cookies
+  (Docker only; patchright isn't in the dev venv); **(3) the crawler-UA og:image** —
+  a 640 px square **crop** Instagram's CDN bakes into the signed URL (`stp=c…`;
+  stripping it returns 403 — verified). The winning tier is logged per save. Two
+  guards keep videos out: a `/reel/`–`/tv/` path check (Instagram's crawler pages
+  do NOT reliably carry `og:video` — a live reel came back og:image-only) and the
+  `og:video` tag for ambiguous `/p/` video posts. Resolution ceiling is Instagram's,
+  not ours: uploads are re-encoded server-side (~1080–1440 px max anywhere); the true
+  original never leaves Instagram.
+- **Every relay save can force the local pull** (`telegram_force_localize`, default
+  on, a Settings toggle — not hardcoded): video/audio downloads on save regardless of
+  the embed-host rule and the `auto_download_*` prefs, because an on-the-go capture
+  should survive takedown with no manual "Make it local" visit. Off = bot saves follow
+  the same rules as a WebUI paste.
+- **The receipt reaches every collection.** The "Saved ✓" reply pages through ALL
+  standard collections (‹ 1/N ›, 8 per page — Telegram caps callback payloads, so
+  8-char id prefixes resolve back via LIKE), and replying to any receipt with a
+  collection name moves the memo by match (exact → prefix → substring). Receipt→memo
+  routing is an in-memory map; a restart only degrades text-replies on old receipts —
+  buttons keep working, their ids live in the callback data.
 
 ### Consequences
 
