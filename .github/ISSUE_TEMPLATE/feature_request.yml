@@ -1,0 +1,25 @@
+name: ✨ Feature request
+description: Something openMemo should do. Pitch it.
+title: "[feature] "
+labels: ["enhancement"]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: What's the itch?
+      description: The moment where openMemo let you down or made you work too hard.
+      placeholder: Every time I save X, I have to manually Y…
+    validations:
+      required: true
+  - type: textarea
+    id: idea
+    attributes:
+      label: What should happen instead?
+      placeholder: One tap and…
+    validations:
+      required: true
+  - type: textarea
+    id: context
+    attributes:
+      label: Anything else
+      description: Screenshots, links, similar features elsewhere.
