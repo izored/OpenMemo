@@ -18,6 +18,19 @@ jobs:
             const repoName = context.repo.repo;
             const owner = context.repo.owner;
             const version = release ? release.tag_name : 'v1.7.43';
+            // repository_dispatch caps client_payload around 64KB — v3.0.0's
+            // 108KB milestone body was rejected outright ("client_payload is
+            // too large") and the profile entry silently never happened.
+            // Truncate at a line boundary under a safe budget and point to the
+            // release page for the rest; the GitHub Release itself always
+            // carries the full body (its limit is 125K chars).
+            const MAX_DESC = 55000;
+            let description = release?.body ? release.body.trim() : `${version} released`;
+            if (description.length > MAX_DESC) {
+              const cut = description.lastIndexOf('\n', MAX_DESC);
+              description = description.slice(0, cut > 0 ? cut : MAX_DESC)
+                + `\n\n… truncated — full notes: https://github.com/${owner}/${repoName}/releases/tag/${version}`;
+            }
             await github.rest.repos.createDispatchEvent({
               owner: 'izored',
               repo: 'izored',
@@ -26,9 +39,7 @@ jobs:
                 repo: repoName,
                 version,
                 title: release ? (release.name || version) : version,
-                description: release?.body
-                  ? release.body.trim()
-                  : `${version} released`,
+                description,
                 date: release ? release.published_at.split('T')[0] : new Date().toISOString().split('T')[0],
                 type: 'launch',
                 emoji: '🚀',
