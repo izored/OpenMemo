@@ -45,28 +45,10 @@ jobs:
           GITHUB_TOKEN: ${{ github.token }}
         run: npm run dist
 
-      # Actions storage is capped (0.5GB free tier); each .dmg is ~400MB, so
-      # more than one live copy blows the quota. Delete prior runs' artifacts
-      # of the same name before uploading this run's.
-      - name: Delete old .dmg artifacts
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          ids=$(gh api "repos/${{ github.repository }}/actions/artifacts?per_page=100" \
-            --jq '.artifacts[] | select(.name=="OpenMemo-macos-arm64") | .id')
-          for id in $ids; do
-            echo "Deleting old artifact $id"
-            gh api -X DELETE "repos/${{ github.repository }}/actions/artifacts/$id" || true
-          done
-
-      - name: Upload .dmg
-        uses: actions/upload-artifact@v5
-        with:
-          name: OpenMemo-macos-arm64
-          path: macOS/release/*.dmg
-          if-no-files-found: error
-
-      # Tag builds: attach the .dmg to the release for that tag. Upload only —
+      # Tag builds: attach the .dmg to the release for that tag FIRST — the
+      # release is the deliverable, and it must never wait behind the
+      # quota-prone artifact upload (v3.1.0's first build died on "Artifact
+      # storage quota has been hit" before this step ever ran). Upload only —
       # release creation (with its full-changelog body) stays with the
       # documented release flow. Non-fatal if the release doesn't exist yet;
       # a 403 (token can't write releases) is a real failure, not a warning.
@@ -85,3 +67,28 @@ jobs:
             fi
             echo "::warning::No release for ${GITHUB_REF_NAME} yet — create it, then re-run this job or upload the artifact manually."
           fi
+
+      # Actions storage is capped (0.5GB free tier); each .dmg is ~400MB, so
+      # more than one live copy blows the quota. Delete prior runs' artifacts
+      # of the same name before uploading this run's.
+      - name: Delete old .dmg artifacts
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          ids=$(gh api "repos/${{ github.repository }}/actions/artifacts?per_page=100" \
+            --jq '.artifacts[] | select(.name=="OpenMemo-macos-arm64") | .id')
+          for id in $ids; do
+            echo "Deleting old artifact $id"
+            gh api -X DELETE "repos/${{ github.repository }}/actions/artifacts/$id" || true
+          done
+
+      # Best-effort CI copy: the account-wide storage quota can block this even
+      # with zero artifacts in THIS repo, and the .dmg is already on the
+      # release by now — never fail the build over it.
+      - name: Upload .dmg
+        continue-on-error: true
+        uses: actions/upload-artifact@v5
+        with:
+          name: OpenMemo-macos-arm64
+          path: macOS/release/*.dmg
+          if-no-files-found: error
