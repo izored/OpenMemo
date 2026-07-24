@@ -19,8 +19,8 @@ smaller cards in the middle. Source order is reading order.
 │  This week · On disk        (5 tiles, full)    │
 ├───────────────────────┬──────────────────────┤
 │  Profile              │  Files & limits        │
-│  Local AI             │  Made by               │  ← masonry, packs tight
-│  Browser extension    │                        │
+│  Local AI             │  Phone capture         │  ← masonry, packs tight
+│  Browser extension    │  Made by               │
 ├──────────────────────────────────────────────┤
 │  Built with (full-width marquee)               │
 ├───────────────────────┬──────────────────────┤
@@ -42,6 +42,12 @@ The masonry is `columns: 2` with `break-inside: avoid` on each card, so a short
 card is hugged by the next one instead of stretching to fill a row. It is named
 `om-settings-masonry`, not `om-masonry`, because the memo grid already owns the
 latter (a flex-based masonry).
+
+The **Phone capture** card (ADR-020) holds the Telegram relay: enable toggle
+(disabled until a token is stored), write-only bot token field (only a presence
+flag ever comes back), a "Pull media locally" toggle for forcing downloads on
+bot saves, and the poll cadence select. Its status line reads the live relay
+state from `/api/settings/telegram/status`.
 
 ---
 

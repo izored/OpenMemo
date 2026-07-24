@@ -24,7 +24,7 @@ Articles in bookmarks you'll never re-read. Notes scattered across 4 apps. PDFs 
 | 🔗 **Links** | 📸 **Images** | 📁 **Files** |
 | 🎙️ **Audio** | 📊 **Reports** | 🖼️ **Screenshots** |
 
-Drop a PDF. Paste a URL. Jot a quick note. Record a voice memo. The Chrome Extension captures any webpage in one click.
+Drop a PDF. Paste a URL. Jot a quick note. Record a voice memo. The Chrome Extension captures any webpage in one click. On your phone, share any post to your private Telegram bot and it lands in openMemo by itself.
 
 ---
 
@@ -44,6 +44,9 @@ Organise Memos into themed collections with emoji icons and descriptions. Drag a
 
 ### 🔌 Chrome Extension
 One-click save from any webpage. Site-specific extractors pull clean article text, video metadata, and source attribution automatically.
+
+### 📲 Phone Capture
+See a post worth keeping while you're out. Share it to your private Telegram bot and keep scrolling. openMemo polls Telegram from your machine, no VPN, no open ports, and files each link like a paste: photo, caption, thumbnail, AI tags. The bot replies with a receipt and buttons to re-file into any collection, or reply with a collection name and it moves. Your PC asleep? Messages queue on Telegram until it wakes. Instagram photo posts land as real image files, not embeds. Add your cookie file and they arrive full resolution, uncropped.
 
 ### 🎵 Music Library
 A full music page of its own. Paste a Spotify, Apple Music, or YouTube playlist and get it back as a real playlist: per-track downloads, lossless FLAC where the source allows, a play queue with OS media keys, and a now-playing player that follows you across the app. Voice notes and music live apart, each with their own dashboard filter.

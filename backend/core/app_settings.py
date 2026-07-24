@@ -79,6 +79,11 @@ _DEFAULTS: dict[str, Any] = {
     "telegram_enabled": False,
     "telegram_poll_minutes": 15,
     "telegram_default_collection": "IG Inbox",
+    # Pull media locally for every bot save (video/audio download on save,
+    # regardless of the embed-host rule) so an on-the-go capture survives
+    # takedown without a manual "Make it local" visit. Off = bot saves follow
+    # the same auto-download rules as a WebUI paste.
+    "telegram_force_localize": True,
 }
 
 _UNCAPPED_SENTINEL = 0
