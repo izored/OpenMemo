@@ -1,0 +1,56 @@
+name: 🐛 Bug report
+description: Something broke. Tell us what, and we'll hunt it.
+title: "[bug] "
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for the report. Short and specific beats long and vague.
+  - type: input
+    id: version
+    attributes:
+      label: openMemo version
+      description: Settings page footer, or the release you downloaded.
+      placeholder: v3.1.0
+    validations:
+      required: true
+  - type: dropdown
+    id: install
+    attributes:
+      label: How do you run openMemo?
+      options:
+        - Docker (docker compose)
+        - macOS app (.dmg)
+        - Dev mode (vite + uvicorn)
+        - Other
+    validations:
+      required: true
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened?
+      description: What did you do, what did you expect, what happened instead.
+      placeholder: |
+        1. Pasted an Instagram link
+        2. Expected an image memo
+        3. Got a blank card
+    validations:
+      required: true
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs or screenshots
+      description: |
+        Docker: `docker logs openmemo-openmemo-api-1 --tail 50`. Blur anything
+        private — never paste your Telegram bot token or cookie file.
+      render: shell
+  - type: dropdown
+    id: browser
+    attributes:
+      label: Browser (if UI bug)
+      options:
+        - Chrome / Edge / Brave
+        - Firefox
+        - Safari
+        - Not a UI bug
