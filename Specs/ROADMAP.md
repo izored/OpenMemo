@@ -6,6 +6,15 @@ Single source of truth for all planned work. Versioned milestones + unversioned 
 
 ## ✅ Shipped
 
+### v3.1.0 — Phone Capture (Telegram relay) *(SHIPPED — PR #120 + #121, ADR-020)*
+
+- [x] **Telegram bot relay** — share any link from the phone share sheet to a private bot; openMemo polls outbound (no VPN, no open ports), messages queue while the PC sleeps; owner auto-lock; token never crosses the API
+- [x] **Instagram photo posts as image memos** — three-tier resolution ladder (gallery-dl + cookies full-res → headless ~1080 uncropped → crawler 640 crop), reel double-guard, caption + author captured, survives post deletion
+- [x] **Pull media locally per bot save** — `telegram_force_localize` setting (default on), Settings toggle
+- [x] **Bot receipt UX** — paged keyboard over ALL collections (‹ 1/N ›) + reply-with-name re-file (exact → prefix → substring)
+- [x] **Source dedupe** — canonicalized IG URLs (`?igsh=` stripped); re-saving returns the existing memo
+- [x] **Settings → Phone capture card** — token (write-only), enable, cadence, pull toggle, live status
+
 ### v1.7.0 — Open-Source Readiness & UX Polish
 
 - [x] Open-source readiness — community files, `CONTRIBUTING.md`, `CODE_OF_CONDUCT.md`, `SECURITY.md`, CI skeleton, docs
@@ -127,12 +136,12 @@ Mixcloud, Audius, + graceful fallback), never SoundCloud-only.
 ## v1.8.0 — Collections, Notes, Detail Polish *(P3 + P4)*
 
 **Collections & notes (existing):**
-- [ ] **Collection management page** — `/collections`: grid view, drag-to-reorder, inline edit thumbnail + name
+- [x] **Collection management page** — `/collections`: grid view, drag-to-reorder, inline edit thumbnail + name
 - [ ] **Collection detail page** — `/collection/:id` with dedicated memo grid
 - [ ] **Full-page note editor** — "Add Memo" note tab: simple textarea → "Expand" → full-page MDXEditor (Gmail-style)
 - [ ] **Bulk select & drag** — Multi-select memos, drag as group into collection
 - [ ] **Collection reordering** — Drag-to-reorder collections in sidebar
-- [ ] **Full-text search UI** — Wire FTS5 backend into frontend search modal
+- [x] **Full-text search UI** — Wire FTS5 backend into frontend search modal
 - [ ] **Tag system v2** — Sidebar tag filtering, tag cloud, quick-add from dashboard
 
 **Detail page redesign (P4):**
@@ -160,13 +169,13 @@ Mixcloud, Audius, + graceful fallback), never SoundCloud-only.
 - [ ] **Widget system** — Sticky widgets on dashboard canvas: clock, weather, quick-note, stock ticker, app shortcuts, news feed; per-user customizable layout
 - [ ] **Dashboard edit mode** — "Customize" button enters edit mode: cards movable, widget slots revealed
 - [ ] **Chrome extension polish** — Site-specific extractors, quick-save popup with collection picker
-- [ ] **Voice memo recording** — Web Audio API → `POST /api/ingest/voice` → Whisper → `type: audio` memo
-- [ ] **Drag & drop file upload on dashboard**
-- [ ] **Mobile responsive pass** — Sidebar drawer, 1–2 col grid
+- [x] **Voice memo recording** — Web Audio API → `POST /api/ingest/voice` → Whisper → `type: audio` memo
+- [x] **Drag & drop file upload on dashboard**
+- [x] **Mobile responsive pass** — Sidebar drawer, 1–2 col grid
 - [ ] **PWA / offline support**
 
 **AskMemo polish (P4):**
-- [ ] **[U] Chat history panel** — Two-column side panel as chat history (history left, active chat right). Each entry: truncated first user message + timestamp
+- [x] **[U] Chat history panel** — Two-column side panel as chat history (history left, active chat right). Each entry: truncated first user message + timestamp
 - [ ] **[T] Info dropdown on model selector** — ℹ️ icon left of selector → dropdown panel with AskMemo description, best practices, example queries
 - [ ] **[S] Disclaimer banner** — Small `--color-text-muted` centered banner under chat header: "Chat history is not saved — this session will be cleared on refresh. AskMemo is a work in progress." Dismissible × per session
 
