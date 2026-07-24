@@ -558,7 +558,16 @@ async def extract_video(url: str) -> dict:
         pass
 
     # yt-dlp failed (private, login-required, unsupported, or a non-video item
-    # like a photo post) — enrich via Microlink + OG.
+    # like a photo post). An Instagram /p/ that yt-dlp can't pull is almost
+    # always a PHOTO post ("No video formats found") — resolve it as a real
+    # image memo via the crawler-UA OpenGraph path instead of a video-shaped
+    # embed card, so the photo itself lands in openMemo (OPNMMO plan:
+    # instagram-telegram-capture, ADR-020).
+    if "instagram.com" in domain:
+        ig = await _instagram_photo_meta(url, domain)
+        if ig is not None:
+            return ig
+
     result = await _minimal_link(url, domain)
     # A photo post on a video host must not become a video memo. Downgrade to
     # image only when the URL path clearly says photo; an audio-only host stays
@@ -575,16 +584,73 @@ _BROWSER_UA_HTML = (
     "Chrome/124.0.0.0 Safari/537.36"
 )
 
+# Link-preview crawler UA. Meta serves full OpenGraph tags (og:image with a
+# signed CDN URL, og:title/og:description with author + caption) to link-preview
+# bots with NO login wall — while a browser UA gets redirected to the login
+# page. Verified against a live photo post 2026-07-24 (plan:
+# instagram-telegram-capture Phase 0).
+_CRAWLER_UA = "facebookexternalhit/1.1 (+http://www.facebook.com/externalhit_uatext.php)"
 
-async def _fetch_og_meta(url: str) -> dict:
+
+def canonical_source_url(url: str) -> str:
+    """Strip query + fragment from an Instagram URL so share-sheet tracking
+    params (?igsh=…, ?utm_…) never make the same post look like two different
+    sources. Non-Instagram URLs pass through untouched — query strings can be
+    load-bearing elsewhere (e.g. youtube.com/watch?v=)."""
+    try:
+        parsed = urlparse(url)
+        if "instagram.com" in parsed.netloc.lower():
+            return parsed._replace(query="", fragment="").geturl()
+    except Exception:
+        pass
+    return url
+
+
+async def _instagram_photo_meta(url: str, domain: str) -> dict | None:
+    """Resolve an Instagram photo post into an image-memo dict via the
+    crawler-UA OpenGraph fetch. Returns None when no og:image comes back
+    (login-walled even for crawlers, deleted post, network error) so the
+    caller can fall through to the generic link path.
+
+    Known ceiling (accepted in plan): og:image is ~640px and only the first
+    slide of a carousel. Full-res / all-slides needs the cookie-jar +
+    gallery-dl upgrade (future, opt-in)."""
+    meta = await _fetch_og_meta(url, user_agent=_CRAWLER_UA)
+    thumbnail = meta.get("thumbnail_path")
+    if not thumbnail:
+        return None
+    # og:video present = this is a VIDEO page yt-dlp merely failed on (private,
+    # rate-limited). Its og:image is just the poster frame — don't misfile the
+    # memo as an image; let the caller keep the video/embed shape.
+    if meta.get("video_url"):
+        return None
+    description = meta.get("description") or ""
+    return {
+        "title": meta.get("title") or url,
+        "description": description[:500],
+        "content_text": description,
+        "source_url": canonical_source_url(url),
+        "source_domain": domain,
+        "source_favicon": f"https://www.google.com/s2/favicons?domain={domain}&sz=32",
+        # The signed CDN URL expires (oe= param) — ingest's cache_thumbnail
+        # downloads it locally right after save, which is what makes the memo
+        # survive the post being deleted.
+        "thumbnail_path": thumbnail,
+        "type": "image",
+    }
+
+
+async def _fetch_og_meta(url: str, user_agent: str | None = None) -> dict:
     """Last-resort metadata extractor: fetch the page with a browser UA and
     parse OpenGraph / Twitter card / <title> tags.
 
     Used when both yt-dlp and Microlink fail (Microlink rate limit, free-tier
     flake, regional block). No third-party dependency, no API key.
+    `user_agent` overrides the browser UA for hosts that only serve OG tags to
+    link-preview crawlers (Instagram — see _CRAWLER_UA).
     """
     headers = {
-        "User-Agent": _BROWSER_UA_HTML,
+        "User-Agent": user_agent or _BROWSER_UA_HTML,
         "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
         "Accept-Language": "en-US,en;q=0.9",
     }
@@ -621,11 +687,15 @@ async def _fetch_og_meta(url: str) -> dict:
         or _meta("twitter:image", "name")
         or _meta("twitter:image:src", "name")
     )
+    # og:video presence distinguishes a video page from a photo page on hosts
+    # where both carry og:image (Instagram — a reel's og:image is its poster).
+    video_url = _meta("og:video") or _meta("og:video:url") or _meta("og:video:secure_url")
 
     return {
         "title": title,
         "description": description,
         "thumbnail_path": thumbnail,
+        "video_url": video_url,
     }
 
 
