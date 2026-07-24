@@ -25,7 +25,9 @@ Anti-detection layers (Cloudflare / Turnstile):
   4. Human-like timing — random scroll + variable waits instead of a fixed delay.
   5. CF challenge detection — if the JS challenge is still running, waits an
      extra 6-9 s for it to self-resolve before reading the final DOM.
-  6. Richer headers — sec-ch-ua / sec-fetch-* headers present in real Chrome.
+  6. Richer headers — sec-ch-ua client hints present in real Chrome. Sec-Fetch-*
+     is left to Chromium: those values are per-request, and forcing navigation
+     values onto subresources makes strict sites (Meta) serve an empty body.
 """
 import asyncio
 import json
@@ -240,15 +242,18 @@ async def render_page(
             viewport={"width": 1280, "height": 800},
             locale="en-US",
             timezone_id="America/New_York",
+            # Client hints only. Sec-Fetch-* and Upgrade-Insecure-Requests are
+            # deliberately NOT set here: extra_http_headers applies to EVERY
+            # request (images, XHR, fetch), and pinning navigation values
+            # ("dest: document", "site: none") onto subresource requests is an
+            # invalid combination that Fetch Metadata resource-isolation
+            # policies reject — Meta/Facebook returns an empty document body,
+            # so the real photo never renders and main_image comes back None.
+            # Chromium already sends the correct per-request Sec-Fetch-* values.
             extra_http_headers={
                 "sec-ch-ua": '"Chromium";v="124", "Google Chrome";v="124", "Not-A.Brand";v="99"',
                 "sec-ch-ua-mobile": "?0",
                 "sec-ch-ua-platform": '"Windows"',
-                "sec-fetch-dest": "document",
-                "sec-fetch-mode": "navigate",
-                "sec-fetch-site": "none",
-                "sec-fetch-user": "?1",
-                "upgrade-insecure-requests": "1",
             },
         )
 
