@@ -27,6 +27,7 @@ All notable changes to OpenMemo are documented here.
 - 🪧 **The Memos/Chat hint is one clear line.** The explainer strip wrapped to two lines and hedged; it's now a single line: "Memos answers from your saved memos, with citations. Chat ignores them and talks to the AI directly."
 
 - 🍎 **The macOS build can actually attach its .dmg to the release.** The tag-build workflow uploaded the .dmg to the GitHub release with the default Actions token, which is read-only for releases — so v3.0.0's upload died with HTTP 403 and the fallback claimed "no release yet" when the release was sitting right there. The workflow now requests `contents: write`, and the fallback tells the truth: a 403 fails the job loudly as a permissions problem, while a genuinely missing release stays a gentle warning.
+- 💾 **The macOS build stopped hoarding old .dmg artifacts.** Every run of the workflow uploaded a fresh ~400MB `OpenMemo-macos-arm64` artifact without ever clearing the last one, and three of them together blew straight through GitHub's 0.5GB Actions storage quota. The workflow now deletes any existing artifact of that name before uploading the new one, so storage never holds more than one build's worth.
 
 ---
 ## [3.0.0] - 2026-07-13
