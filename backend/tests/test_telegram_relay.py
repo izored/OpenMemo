@@ -3,8 +3,12 @@
 Covers the pieces that can break silently: Instagram URL canonicalization
 (share-sheet tracking params must not mint twin memos), URL extraction from a
 message, callback_data round-trip sizing, and the owner-lock gate settings."""
-from backend.core.extractor import canonical_source_url
-from backend.services.telegram_relay import _URL_RE
+from backend.core.extractor import (
+    canonical_source_url,
+    _is_instagram_video_path,
+    _parse_gallery_dl_dump,
+)
+from backend.services.telegram_relay import _URL_RE, _match_collection
 
 
 class TestCanonicalSourceUrl:
@@ -50,6 +54,63 @@ class TestMessageUrlExtraction:
         m = _URL_RE.search("look: https://www.instagram.com/p/ABC/, wow")
         assert m is not None
         assert m.group(0).rstrip(".,;:!?)]}’”") == "https://www.instagram.com/p/ABC/"
+
+
+class TestInstagramVideoPath:
+    """Reels must never be misfiled as photos: Instagram's crawler pages do
+    NOT reliably carry og:video (verified live 2026-07-24), so the URL path
+    itself is the guard."""
+
+    def test_reel_is_video(self):
+        assert _is_instagram_video_path("https://www.instagram.com/reel/DYfBJL4ER4w/")
+
+    def test_reels_and_tv_are_video(self):
+        assert _is_instagram_video_path("https://instagram.com/reels/XYZ/")
+        assert _is_instagram_video_path("https://instagram.com/tv/XYZ/")
+
+    def test_photo_post_is_not(self):
+        assert not _is_instagram_video_path("https://www.instagram.com/p/DKKxnIZOX1f/")
+
+    def test_garbage_never_raises(self):
+        assert not _is_instagram_video_path("::not a url::")
+
+
+class TestGalleryDlDump:
+    def test_picks_first_type3_url_and_caption(self):
+        dump = (
+            '[[2, {"category": "instagram"}],'
+            ' [3, "https://cdn.example/full.jpg", {"description": "the caption"}],'
+            ' [3, "https://cdn.example/second.jpg", {"description": "the caption"}]]'
+        )
+        assert _parse_gallery_dl_dump(dump) == ("https://cdn.example/full.jpg", "the caption")
+
+    def test_garbage_returns_none(self):
+        assert _parse_gallery_dl_dump("not json") is None
+        assert _parse_gallery_dl_dump("[[2, {}]]") is None
+
+
+class _C:
+    def __init__(self, name):
+        self.name = name
+
+
+class TestCollectionMatch:
+    COLLS = [_C("Faces"), _C("Film Photography"), _C("IG Inbox"), _C("Style refs")]
+
+    def test_exact_ci(self):
+        assert _match_collection(self.COLLS, "faces").name == "Faces"
+
+    def test_prefix_beats_substring(self):
+        assert _match_collection(self.COLLS, "film").name == "Film Photography"
+
+    def test_substring(self):
+        assert _match_collection(self.COLLS, "inbox").name == "IG Inbox"
+
+    def test_no_match(self):
+        assert _match_collection(self.COLLS, "zzz") is None
+
+    def test_empty_query(self):
+        assert _match_collection(self.COLLS, "  ") is None
 
 
 class TestCallbackDataSize:
