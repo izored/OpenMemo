@@ -5,6 +5,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Icon } from './Icon';
 import { VoiceRecorder } from './VoiceRecorder';
 import { ingestApi, collectionApi, spaceApi } from '@/lib/api';
+import { collectionEmojiOrDefault } from '@/lib/collectionEmoji';
 import { playlistShape } from '@/lib/playlistUrl';
 import { useAppStore } from '@/stores/appStore';
 import { cn } from '@/lib/utils';
@@ -46,8 +47,6 @@ export function AddMemoPanel({ embedded = false }: { embedded?: boolean } = {}) 
   const bottomBarPresent = useAppStore((s) => s.bottomBarPresent);
   const setWriterOpen = useAppStore((s) => s.setWriterOpen);
   const setAddMemoBusy = useAppStore((s) => s.setAddMemoBusy);
-  const setCollectionModalOpen = useAppStore((s) => s.setCollectionModalOpen);
-  const setEditingCollection = useAppStore((s) => s.setEditingCollection);
   const lastCreatedCollectionId = useAppStore((s) => s.lastCreatedCollectionId);
   const setLastCreatedCollectionId = useAppStore((s) => s.setLastCreatedCollectionId);
   // When a Space is open, adds land in it (ADR-020) and the collection picker
@@ -79,6 +78,13 @@ export function AddMemoPanel({ embedded = false }: { embedded?: boolean } = {}) 
   const [tags, setTags] = useState<string[]>([]);
   const [collection, setCollection] = useState<string>('');
   const [collOpen, setCollOpen] = useState(false);
+  // Inline "create collection" inside the picker (ADR-021): the whole flow stays
+  // in the open panel instead of launching the separate modal (which the island's
+  // click-outside then closed, losing the in-progress memo). The new collection
+  // is auto-selected on create.
+  const [creatingColl, setCreatingColl] = useState(false);
+  const [newCollName, setNewCollName] = useState('');
+  const [collBusy, setCollBusy] = useState(false);
   // The collection popup renders through a portal in FIXED coords measured off
   // the select button. In-flow it lived inside the panel's scrolling body,
   // which clipped its top and swallowed wheel scroll — unscrollable with many
@@ -92,8 +98,34 @@ export function AddMemoPanel({ embedded = false }: { embedded?: boolean } = {}) 
         const r = collBtnRef.current.getBoundingClientRect();
         setCollPos({ left: r.left, width: r.width, bottom: window.innerHeight - r.top + 4 });
       }
+      // Always reopen the picker in its list state, never mid-create.
+      if (!next) { setCreatingColl(false); setNewCollName(''); }
       return next;
     });
+  };
+
+  // Create a collection inline and immediately select it for this memo. Lands in
+  // the active Space when one is open (ADR-020), else the main library.
+  const createColl = async () => {
+    const name = newCollName.trim();
+    if (!name || collBusy) return;
+    setCollBusy(true);
+    try {
+      const created = await collectionApi.create({
+        name,
+        emoji: collectionEmojiOrDefault(name),
+        workspace_id: activeSpace || undefined,
+      });
+      await queryClient.invalidateQueries({ queryKey: ['collections'] });
+      if (created?.id) setCollection(created.id);
+      setCreatingColl(false);
+      setNewCollName('');
+      setCollOpen(false);
+    } catch (e) {
+      setError((e as Error).message || 'Failed to create collection');
+    } finally {
+      setCollBusy(false);
+    }
   };
   const [busy, setBusy] = useState(false);
   // Files staged for the prefill flow (dropped elsewhere, waiting for the user
@@ -634,6 +666,41 @@ export function AddMemoPanel({ embedded = false }: { embedded?: boolean } = {}) 
                   aria-label="Choose collection"
                   style={{ position: 'fixed', left: collPos.left, width: collPos.width, bottom: collPos.bottom, zIndex: 500 }}
                 >
+                  {/* New collection sits at the TOP of the picker — create,
+                      then land back in the full list with it selected. */}
+                  {creatingColl ? (
+                    <div className="om-add-coll-new">
+                      <span className="om-add-coll-new-emoji">{collectionEmojiOrDefault(newCollName)}</span>
+                      <input
+                        className="om-add-coll-new-input"
+                        autoFocus
+                        value={newCollName}
+                        onChange={(e) => setNewCollName(e.target.value)}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter') { e.preventDefault(); createColl(); }
+                          else if (e.key === 'Escape') { setCreatingColl(false); setNewCollName(''); }
+                        }}
+                        placeholder="Collection name…"
+                      />
+                      <button
+                        className="om-add-coll-new-go"
+                        onClick={createColl}
+                        disabled={collBusy || !newCollName.trim()}
+                        aria-label="Create collection"
+                        title="Create"
+                      >
+                        <Icon name={collBusy ? 'refresh' : 'check'} size={12} className={collBusy ? 'om-spin' : undefined} />
+                      </button>
+                    </div>
+                  ) : (
+                    <button
+                      className="om-add-coll-opt new"
+                      onClick={() => { setNewCollName(''); setCreatingColl(true); }}
+                    >
+                      <Icon name="plus" size={12} />
+                      <span>New collection…</span>
+                    </button>
+                  )}
                   <button
                     className={cn('om-add-coll-opt', !collection && 'active')}
                     onClick={() => { setCollection(''); setCollOpen(false); }}
@@ -653,13 +720,6 @@ export function AddMemoPanel({ embedded = false }: { embedded?: boolean } = {}) 
                       <span className="mono" />
                     </button>
                   ))}
-                  <button
-                    className="om-add-coll-opt new"
-                    onClick={() => { setEditingCollection(null); setCollectionModalOpen(true); setCollOpen(false); }}
-                  >
-                    <Icon name="plus" size={12} />
-                    <span>New collection…</span>
-                  </button>
                 </div>
               </div>,
               document.body

@@ -324,6 +324,7 @@ async def ingest_url_core(data: URLIngest, db: AsyncSession, schedule) -> dict:
     fire-and-forget scheduler. All jobs are handed over only after commit."""
     from backend.core.extractor import (
         extract_url, extract_video, detect_url_type, canonical_source_url,
+        concise_title,
     )
 
     # Same source must never mint a twin memo (share-sheet URLs carry tracking
@@ -365,12 +366,21 @@ async def ingest_url_core(data: URLIngest, db: AsyncSession, schedule) -> dict:
             log.warning("URL extraction failed for %s: %s", data.url, e)
             raise HTTPException(status_code=400, detail="Failed to extract content from this URL")
 
+    # Caption-as-title guard: sources with no title field (Facebook, TikTok…)
+    # hand back the whole post as the title. Shorten it to a heading and, if the
+    # shortening would otherwise lose text, keep the full caption in description.
+    full_title = extracted.get("title") or data.url
+    short_title, title_shortened = concise_title(full_title)
+    description = extracted.get("description")
+    if title_shortened and not (description and str(description).strip()):
+        description = full_title
+
     memo = Memo(
         id=str(uuid.uuid4()),
         workspace_id=sanitize_workspace_id(data.workspace_id),
         type=extracted.get("type", "link"),
-        title=extracted.get("title", data.url),
-        description=extracted.get("description"),
+        title=short_title,
+        description=description,
         content_text=extracted.get("content_text"),
         content_raw=extracted.get("content_raw"),
         video_description=extracted.get("video_description"),
