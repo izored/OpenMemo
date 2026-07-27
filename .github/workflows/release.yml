@@ -25,6 +25,8 @@ jobs:
       # heading in the changelog.
       - name: Extract changelog section for this tag
         id: notes
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
           VERSION="${GITHUB_REF_NAME#v}"
@@ -46,11 +48,18 @@ jobs:
             echo "$section"
             echo "__RELEASE_EOF__"
           } >> "$GITHUB_OUTPUT"
-          # Name the release from the annotated tag's subject (bump-version.ps1 -Title).
-          # Falls back to the bare version name when the tag carries no custom title.
+          # Name the release from the annotated tag's message (bump-version.ps1
+          # -Title). Read it via the API, not local git: actions/checkout peels
+          # the tag to its commit, so `git for-each-ref … %(contents:subject)`
+          # returns the release COMMIT subject ("release: vX.Y.Z"), not the tag.
+          # The API returns the true annotation and never fails the job.
           name="openMemo ${GITHUB_REF_NAME}"
-          title="$(git for-each-ref "refs/tags/${GITHUB_REF_NAME}" --format='%(contents:subject)' 2>/dev/null || true)"
-          if [ -n "$title" ] && [ "$title" != "$name" ] && [ "$title" != "openMemo ${GITHUB_REF_NAME}" ]; then
+          title=""
+          sha="$(gh api "repos/${GITHUB_REPOSITORY}/git/ref/tags/${GITHUB_REF_NAME}" --jq 'select(.object.type=="tag") | .object.sha' 2>/dev/null || true)"
+          if [ -n "$sha" ]; then
+            title="$(gh api "repos/${GITHUB_REPOSITORY}/git/tags/${sha}" --jq '.message' 2>/dev/null | head -n1 || true)"
+          fi
+          if [ -n "$title" ] && [ "$title" != "openMemo ${GITHUB_REF_NAME}" ] && [ "$title" != "release: ${VERSION}" ]; then
             name="${name} — ${title}"
           fi
           echo "name=$name" >> "$GITHUB_OUTPUT"
