@@ -3,6 +3,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import { Loader2 } from 'lucide-react';
 import { useAppStore } from '@/stores/appStore';
 import { collectionApi } from '@/lib/api';
+import { deriveCollectionEmoji } from '@/lib/collectionEmoji';
 
 const PRESET_EMOJIS = [
   '📁','📂','🗂️','⭐','🔖','📌',
@@ -13,35 +14,6 @@ const PRESET_EMOJIS = [
   '🌟','🔥','❤️','🚀','⚡','🎉',
   '💼','📷','🌱','🏆','⚽','🎪',
 ];
-
-const KEYWORD_EMOJI: [RegExp, string][] = [
-  [/\b(code|dev|program|script|software|tech|web|app|api)\b/i, '💻'],
-  [/\b(design|ui|ux|figma|sketch|art|creative|graphic)\b/i, '🎨'],
-  [/\b(book|read|learn|study|educat|course|class|school)\b/i, '📚'],
-  [/\b(money|finance|budget|invest|bank|crypto|stock|wallet)\b/i, '💰'],
-  [/\b(travel|trip|vacation|flight|hotel|tour)\b/i, '✈️'],
-  [/\b(health|fitness|gym|workout|sport|run|diet|medical)\b/i, '🏋️'],
-  [/\b(food|cook|recipe|restaurant|meal|eat|drink)\b/i, '🍕'],
-  [/\b(music|song|playlist|album|artist|band|audio|podcast)\b/i, '🎵'],
-  [/\b(video|movie|film|tv|series|watch|cinema|youtube)\b/i, '🎬'],
-  [/\b(game|gaming|play|esport|steam|xbox|playstation)\b/i, '🎮'],
-  [/\b(research|science|lab|experiment|data|analysis)\b/i, '🔬'],
-  [/\b(work|job|office|career|business|meeting|project)\b/i, '💼'],
-  [/\b(home|personal|life|family|house|daily)\b/i, '🏠'],
-  [/\b(social|chat|team|community|friends|network)\b/i, '💬'],
-  [/\b(security|crypto|password|vault|key|lock|privacy)\b/i, '🔐'],
-  [/\b(photo|image|picture|gallery|camera)\b/i, '📷'],
-  [/\b(note|memo|journal|diary|write|blog)\b/i, '📝'],
-  [/\b(idea|thought|brain|mind|think|concept)\b/i, '💡'],
-  [/\b(star|fav|important|key|main|primary)\b/i, '⭐'],
-];
-
-function deriveEmoji(name: string): string | null {
-  for (const [re, emoji] of KEYWORD_EMOJI) {
-    if (re.test(name)) return emoji;
-  }
-  return null;
-}
 
 const PRESET_COLORS = [
   '#D97706', '#DC2626', '#7C3AED', '#2563EB',
@@ -87,7 +59,7 @@ export function AddCollectionModal() {
   // Auto-derive emoji from name unless user manually picked one
   useEffect(() => {
     if (emojiManual) return;
-    const derived = deriveEmoji(name);
+    const derived = deriveCollectionEmoji(name);
     // eslint-disable-next-line react-hooks/set-state-in-effect -- intentional emoji derivation from the name field
     setEmoji(derived ?? '📁');
   }, [name, emojiManual]);

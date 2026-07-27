@@ -3,7 +3,8 @@ import { useNavigate } from 'react-router-dom';
 import { Icon } from './Icon';
 import { useAppStore } from '@/stores/appStore';
 import { mediaSrc } from '@/lib/media';
-import { videoEmbedUrl, embedKind } from '@/lib/platforms';
+import { videoEmbedUrl, resolveEmbedShape } from '@/lib/platforms';
+import { useImageAspect } from '@/lib/useMediaOrientation';
 
 // Single shared lightbox for the whole app. Reads the active media group +
 // index from the store so arrow keys / on-screen arrows page between memos.
@@ -15,6 +16,14 @@ export function Lightbox() {
   const step = useAppStore((s) => s.lightboxStep);
 
   const open = index >= 0 && index < group.length;
+  const memo = open ? group[index] : undefined;
+
+  // Poster aspect for a remote embed — same provider-agnostic signal as the memo
+  // page: a portrait clip's thumbnail is portrait, so the frame follows it
+  // instead of cropping the video into a 16/9 box. Must run before any early
+  // return so hook order stays stable.
+  const posterSrc = memo && memo.type === 'video' && !memo.file_path ? mediaSrc(memo) : null;
+  const posterAspect = useImageAspect(posterSrc);
 
   useEffect(() => {
     if (!open) return;
@@ -27,9 +36,8 @@ export function Lightbox() {
     return () => document.removeEventListener('keydown', onKey);
   }, [open, close, step]);
 
-  if (!open) return null;
+  if (!open || !memo) return null;
 
-  const memo = group[index];
   const src = mediaSrc(memo);
   // Prefer a local file (no network, never expires) over a remote embed.
   const localVideo = memo.type === 'video' && memo.file_path ? `/api/memos/${memo.id}/file` : null;
@@ -40,11 +48,12 @@ export function Lightbox() {
   // --sidebar-w in CSS) rather than the raw viewport — so the embed stays centered
   // in the visible area whether the sidebar is open or collapsed. Widths use 100%
   // (of the inset overlay), not vw (the full window).
-  const kind = embed ? embedKind(memo) : 'video';
+  const shape = embed ? resolveEmbedShape(memo, posterAspect) : { kind: 'video' as const, aspectRatio: '16/9' };
+  const kind = shape.kind;
   const shadow = '0 30px 80px rgba(0,0,0,0.5)';
   const embedStyle: CSSProperties =
     kind === 'portrait'
-      ? { height: 'min(85vh, 720px)', aspectRatio: '9/16', width: 'auto', maxWidth: '100%', border: 0, borderRadius: 12, boxShadow: shadow }
+      ? { height: 'min(85vh, 720px)', aspectRatio: shape.aspectRatio, width: 'auto', maxWidth: '100%', border: 0, borderRadius: 12, boxShadow: shadow }
       : kind === 'card'
       ? { width: 'min(100%, 550px)', height: 'min(85vh, 800px)', border: 0, borderRadius: 12, boxShadow: shadow, background: '#15202b' }
       : { width: 'min(100%, 1280px)', aspectRatio: '16/9', maxHeight: '85vh', border: 0, borderRadius: 12, boxShadow: shadow };
