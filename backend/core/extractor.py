@@ -596,6 +596,47 @@ _BROWSER_UA_HTML = (
 _CRAWLER_UA = "facebookexternalhit/1.1 (+http://www.facebook.com/externalhit_uatext.php)"
 
 
+# A leading engagement banner some networks bake into a caption, e.g.
+# "417 reactions · 30 shares | Today is…". Stripped so the heading starts at the
+# real first word. Requires the trailing "|" so a normal title is never touched.
+_ENGAGEMENT_PREFIX = re.compile(
+    r"^\s*\d[\d.,]*\s*[KMB]?\s*"
+    r"(?:reactions?|likes?|views?|shares?|comments?|followers?)\b.*?\|\s*",
+    re.I,
+)
+
+
+def concise_title(title: str, max_len: int = 100, target: int = 80) -> tuple[str, bool]:
+    """Derive a heading-length title, returning (title, was_shortened).
+
+    Some sources (Facebook, TikTok, a few YouTube/IG posts) have no title field,
+    so yt-dlp / OpenGraph hand back the whole caption as the title — a memo can
+    arrive with an 800-character "title". We keep the full text elsewhere (the
+    memo's description / video_description) and only derive a short heading here:
+    drop any engagement banner, take the first sentence, then hard-cut at a word
+    boundary. Titles at or under `max_len` pass through untouched, so a normal
+    title is never altered."""
+    t = (title or "").strip()
+    if len(t) <= max_len:
+        return t, False
+    # Drop a leading "417 reactions · 30 shares |" banner, keep the caption.
+    t = (_ENGAGEMENT_PREFIX.sub("", t).strip() or (title or "").strip())
+    # First line, then first sentence, if that already gives a clean heading.
+    t = t.splitlines()[0].strip()
+    m = re.match(r"(.+?[.!?])(?:\s|$)", t)
+    if m and 20 <= len(m.group(1)) <= max_len:
+        return m.group(1).strip(), True
+    if len(t) <= max_len:
+        return t, True
+    # Still long → cut at the last word boundary near `target`, drop trailing
+    # punctuation, add an ellipsis.
+    piece = t[:target]
+    sp = piece.rfind(" ")
+    cut = piece[:sp] if sp > target * 0.6 else piece
+    cut = re.sub(r"[\s.,;:!?|–—-]+$", "", cut)
+    return cut + "…", True
+
+
 def canonical_source_url(url: str) -> str:
     """Strip query + fragment from an Instagram URL so share-sheet tracking
     params (?igsh=…, ?utm_…) never make the same post look like two different

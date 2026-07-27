@@ -276,6 +276,35 @@ export function embedKind(memo: Memo): 'video' | 'portrait' | 'card' {
   return 'video';
 }
 
+export interface EmbedShape {
+  kind: 'video' | 'portrait' | 'card';
+  /** CSS aspect-ratio value for the frame ('auto' for card). */
+  aspectRatio: string;
+}
+
+// A poster taller than this (w/h) is treated as portrait. 0.9 keeps true 16/9
+// and near-square posters landscape (matching aspectToOrient's square→landscape
+// convention) while catching any genuinely vertical clip.
+const PORTRAIT_MAX = 0.9;
+
+/**
+ * Resolve the embed frame shape, letting a MEASURED poster aspect override the
+ * ambiguous default. Platforms with a declared orientation (Instagram/TikTok
+ * portrait, X card) are authoritative and ignore the poster — their embeds are
+ * fixed-shape widgets. Everything else defaults to 16/9 UNLESS the poster we
+ * measured is portrait, in which case the frame takes the poster's exact ratio
+ * so a vertical clip fills the box instead of being letterbox-cropped.
+ */
+export function resolveEmbedShape(memo: Memo, posterAspect?: number | null): EmbedShape {
+  const def = defFor(memo.source_url);
+  if (def?.embedOrientation === 'card') return { kind: 'card', aspectRatio: 'auto' };
+  if (def?.embedOrientation === 'portrait') return { kind: 'portrait', aspectRatio: '9/16' };
+  if (posterAspect != null && posterAspect > 0 && posterAspect < PORTRAIT_MAX) {
+    return { kind: 'portrait', aspectRatio: String(posterAspect) };
+  }
+  return { kind: 'video', aspectRatio: '16/9' };
+}
+
 /** True if we can play this memo somewhere (local file or a platform embed). */
 export function isPlayableVideo(memo: Memo): boolean {
   return Boolean(memo.file_path || videoEmbedUrl(memo));

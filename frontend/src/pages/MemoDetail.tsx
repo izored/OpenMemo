@@ -40,8 +40,10 @@ import { AskMemoPanel } from '@/components/AskMemoPanel';
 import { BorderBeam } from 'border-beam';
 import { useBeamConfig, resolveBeamTheme } from '@/lib/beamConfig';
 import { useIsMobile } from '@/lib/useBreakpoint';
-import { audioEmbed, audioPlatformMeta, canMakeLocal, canTranscript, canSummarize, audioKind } from '@/lib/media';
-import { videoEmbedUrl, embedKind, platformMeta } from '@/lib/platforms';
+import { audioEmbed, audioPlatformMeta, canMakeLocal, canTranscript, canSummarize, audioKind, mediaSrc } from '@/lib/media';
+import { videoEmbedUrl, resolveEmbedShape, platformMeta } from '@/lib/platforms';
+import { useImageAspect } from '@/lib/useMediaOrientation';
+import { truncateTitle, isLongTitle } from '@/lib/title';
 import { useAppStore } from '@/stores/appStore';
 import { useAudioPlayer, formatTime } from '@/lib/audioPlayer';
 import { useCoverMood } from '@/lib/coverMood';
@@ -222,7 +224,7 @@ function MediaPreview({ src, alt, kind, poster, seek, theater: theaterProp, onTh
 //                tweet's own height (reported via postMessage) so it never clips.
 // A clicked transcript/summary timestamp appends ?start= and reloads the iframe
 // (keyed by the seek nonce) to seek + autoplay.
-function PlatformEmbed({ memo, src, kind, seek }: { memo: Memo; src: string; kind: 'video' | 'portrait' | 'card'; seek?: SeekSignal | null }) {
+function PlatformEmbed({ memo, src, kind, aspectRatio, seek }: { memo: Memo; src: string; kind: 'video' | 'portrait' | 'card'; aspectRatio?: string; seek?: SeekSignal | null }) {
   const url = seek ? src + (src.includes('?') ? '&' : '?') + `start=${seek.sec}&autoplay=1` : src;
   // Card embeds (X/Twitter) report their content height to the parent via
   // postMessage. Start at a sensible height, then track the real one.
@@ -264,7 +266,7 @@ function PlatformEmbed({ memo, src, kind, seek }: { memo: Memo; src: string; kin
   return (
     <div
       className={`om-video-embed${kind === 'portrait' ? ' om-video-embed--portrait' : ''}`}
-      style={{ marginBottom: '24px', aspectRatio: kind === 'portrait' ? '9/16' : '16/9' }}
+      style={{ marginBottom: '24px', aspectRatio: aspectRatio ?? (kind === 'portrait' ? '9/16' : '16/9') }}
     >
       <iframe
         key={seek?.nonce ?? 'base'}
@@ -1419,6 +1421,14 @@ export function MemoDetail() {
     queryFn: () => collectionApi.list(),
   });
 
+  // Poster aspect for a remote video embed, measured off the thumbnail so a
+  // portrait clip (FB reel, YouTube Short) gets a portrait frame instead of a
+  // letterbox-cropped 16/9 box. Called here — before the loading/not-found early
+  // returns — so the hook order never changes between renders (Rules of Hooks).
+  const posterSrc =
+    memo && memo.type === 'video' && !memo.file_path && videoEmbedUrl(memo) ? mediaSrc(memo) : null;
+  const posterAspect = useImageAspect(posterSrc);
+
   /* eslint-disable react-hooks/set-state-in-effect */
   // Initialize edit form when memo loads
   useEffect(() => {
@@ -1563,7 +1573,10 @@ export function MemoDetail() {
   // platform in the registry — YouTube, Vimeo, Instagram, TikTok, etc. Null →
   // no embeddable player; the "Make it local" panel + Open Original still show.
   const videoEmbed = memo.type === 'video' && !memo.file_path ? videoEmbedUrl(memo) : null;
-  const videoEmbedKind = videoEmbed ? embedKind(memo) : 'video';
+  // posterAspect is measured up top (before the early returns) so hook order
+  // stays stable; resolveEmbedShape itself is a pure call and can run here.
+  const videoEmbedShape = resolveEmbedShape(memo, posterAspect);
+  const videoEmbedKind = videoEmbed ? videoEmbedShape.kind : 'video';
   const isWebType = memo.type === 'article' || memo.type === 'link';
 
   // Tool rail (OPNMMO-0042): AI Summary + Make-it-local + future tools hug the
@@ -1736,7 +1749,7 @@ export function MemoDetail() {
                 style={{ marginBottom: '8px' }}
               />
             ) : (
-              <h1 className="om-detail-title" style={{ marginBottom: '8px' }}>{memo.title}</h1>
+              <h1 className="om-detail-title" style={{ marginBottom: '8px' }} title={isLongTitle(memo.title) ? memo.title : undefined}>{truncateTitle(memo.title)}</h1>
             )}
 
             {isEditing && (
@@ -1917,7 +1930,7 @@ export function MemoDetail() {
 
             {/* Inline platform embed (YouTube, Vimeo, Instagram, TikTok, X, …) */}
             {videoEmbed && !isEditing && (
-              <PlatformEmbed memo={memo} src={videoEmbed} kind={videoEmbedKind} seek={videoSeek} />
+              <PlatformEmbed memo={memo} src={videoEmbed} kind={videoEmbedKind} aspectRatio={videoEmbedShape.aspectRatio} seek={videoSeek} />
             )}
 
             {/* Portrait-platform hint: Instagram/TikTok embeds carry full platform UI.

@@ -3,6 +3,18 @@
 All notable changes to OpenMemo are documented here.
 
 ---
+## [Unreleased]
+
+### Added
+
+- 🗂️ **Create a collection right inside the New-Memo panel.** Making a new collection while adding a memo used to launch a separate modal that stole focus and closed the New-Memo panel out from under you — losing the link or note you'd already typed and dropping you back at square one. The picker now creates inline: "New collection…" sits at the **top** of the dropdown, opens a name field in place, auto-picks an emoji from the name, and on Enter files the collection and selects it for the memo you're adding — no modal, no lost work, no reselect. The full collection list stays right below it.
+
+### Fixed
+
+- 📐 **Portrait videos keep their shape instead of being cropped into a 16:9 box.** A vertical clip pulled from a provider with no declared orientation (a Facebook reel, a YouTube Short) was force-framed 16:9 on the memo page and in the lightbox, so the video sat cropped inside black bars. openMemo now reads the real shape from the memo's poster — the cached thumbnail shares the video's aspect — and frames the embed to match, portrait or landscape, for any source that gave us a thumbnail. Platforms that already declare their orientation (Instagram, TikTok, X) are untouched.
+- ✂️ **Posts with no title stop dumping their whole caption into the heading.** Sources like Facebook and TikTok have no separate title field, so the entire post body arrived as an 800-character "title" that blew up the layout and leaked into cards, the browser tab, and search. Over-long titles are now shortened to a real heading at save time — a leading engagement banner ("417 reactions · 30 shares |") is stripped, the first sentence kept, capped at a word boundary — while the full caption stays in the memo's description, nothing lost. Existing long-title memos are tidied on the page too: the heading truncates with the full text on hover.
+
+---
 ## [3.1.0] - 2026-07-24
 
 ### Added

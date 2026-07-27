@@ -3116,9 +3116,37 @@ body.om-has-bbar .om-fab { display: none !important; }
 .om-add-coll-opt:hover { background: rgba(255,255,255,0.08); color: var(--text); }
 .om-add-coll-opt.active { background: var(--accent-soft); color: var(--accent); }
 .om-add-coll-opt .mono { font-size: 9.5px; color: var(--text-4); }
-.om-add-coll-opt.new { color: var(--text-3); border-top: 0.5px solid rgba(255,255,255,0.06); margin-top: 2px; padding-top: 8px; }
+/* New-collection lives at the TOP of the picker → its divider sits BELOW it,
+   separating it from the collection list. */
+.om-add-coll-opt.new { color: var(--text-3); border-bottom: 0.5px solid rgba(255,255,255,0.06); margin-bottom: 2px; padding-bottom: 8px; }
 [data-theme="light"] .om-add-coll-opt:hover { background: rgba(0,0,0,0.05); }
-[data-theme="light"] .om-add-coll-opt.new { border-top-color: rgba(0,0,0,0.06); }
+[data-theme="light"] .om-add-coll-opt.new { border-bottom-color: rgba(0,0,0,0.06); }
+
+/* Inline "create collection" row — replaces the New-collection button in place,
+   so the whole flow stays inside the open Add-memo picker. */
+.om-add-coll-new {
+  display: grid; grid-template-columns: 18px 1fr 22px; gap: 6px; align-items: center;
+  margin-bottom: 2px; padding: 5px 8px 8px 6px;
+  border-bottom: 0.5px solid rgba(255,255,255,0.06);
+}
+[data-theme="light"] .om-add-coll-new { border-bottom-color: rgba(0,0,0,0.06); }
+.om-add-coll-new-emoji { font-size: 13px; text-align: center; line-height: 1; }
+.om-add-coll-new-input {
+  background: rgba(255,255,255,0.06);
+  border: 0.5px solid rgba(255,255,255,0.12);
+  border-radius: 5px; outline: none;
+  font-size: 11.5px; color: var(--text); padding: 4px 7px;
+  font-family: var(--font-mono);
+}
+.om-add-coll-new-input:focus { border-color: color-mix(in oklab, var(--accent) 55%, transparent); }
+[data-theme="light"] .om-add-coll-new-input { background: rgba(0,0,0,0.04); border-color: rgba(0,0,0,0.10); }
+.om-add-coll-new-go {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 22px; height: 22px; border-radius: 5px;
+  background: var(--accent); color: var(--accent-contrast, #0b0b0b);
+  border: 0; cursor: pointer;
+}
+.om-add-coll-new-go:disabled { opacity: 0.4; cursor: default; }
 
 /* Tag chip input */
 .om-add-tag-input {
