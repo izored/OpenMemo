@@ -3,6 +3,11 @@ param(
     [ValidateSet("major", "minor", "patch")]
     [string]$Bump,
 
+    # Human headline for this release. Becomes the annotated-tag subject, which
+    # release.yml reads to name the GitHub Release ("openMemo v3.1.1 — <Title>").
+    # Optional: omit and the release is named by version alone.
+    [string]$Title = "",
+
     [string]$Date = (Get-Date -Format "yyyy-MM-dd"),
 
     [switch]$DryRun
@@ -43,8 +48,11 @@ function Update-FileVersion($path, $pattern, $replacement) {
 $branch = git rev-parse --abbrev-ref HEAD
 if ($branch -ne "main") { throw "Must be on main. Currently on: $branch" }
 
-$dirty = git status --porcelain
-if ($dirty) { throw "Working tree is dirty. Commit or stash changes first." }
+# Only block on uncommitted changes to TRACKED files — a release commit never
+# picks up stray local untracked files (skills caches, scratch notes), so those
+# must not gate the release.
+$dirty = git status --porcelain --untracked-files=no
+if ($dirty) { throw "Tracked files have uncommitted changes. Commit or stash first." }
 
 $gh = Find-Gh
 & $gh auth status | Out-Null
@@ -74,6 +82,29 @@ Write-Host "  $old  →  $new  ($Bump)" -ForegroundColor Cyan
 if ($DryRun) { Write-Host "  [DRY RUN — no changes made]" -ForegroundColor Yellow; return }
 Write-Host ""
 
+# ── Promote the changelog's Unreleased section to this version ────────────────
+# release.yml extracts the "## [$new]" section from docs/CHANGELOG.md verbatim as
+# the GitHub Release body, so that heading MUST exist and match the tag. Rename
+# the working "## [Unreleased]" heading to "## [$new] - $Date". Fail loudly if
+# there's nothing to release, rather than pushing a tag whose release job dies.
+
+$clPath = "docs/CHANGELOG.md"
+$clContent = Get-Content $clPath -Raw
+$unreleasedRx = [regex]'(?m)^##\s*\[Unreleased\].*$'
+$versionRx = [regex]("(?m)^##\s*\[" + [regex]::Escape($new) + "\]")
+if ($unreleasedRx.IsMatch($clContent)) {
+    $clNew = $unreleasedRx.Replace($clContent, "## [$new] - $Date", 1)
+    Set-Content $clPath $clNew -NoNewline
+    git add $clPath
+    Write-Host "  changelog: [Unreleased] -> [$new] - $Date"
+}
+elseif ($versionRx.IsMatch($clContent)) {
+    Write-Host "  changelog: [$new] section already present — leaving as-is"
+}
+else {
+    throw "docs/CHANGELOG.md has no '## [Unreleased]' section and no '## [$new]' section. release.yml would find no notes for $tag. Add an '## [Unreleased]' section (with this release's entries) first."
+}
+
 # ── Bump version files ────────────────────────────────────────────────────────
 
 Update-FileVersion "backend/config.py" `
@@ -96,8 +127,9 @@ Update-FileVersion "README.md" `
 
 # ── Commit & tag ──────────────────────────────────────────────────────────────
 
+$tagMessage = if ($Title) { $Title } else { "openMemo $tag" }
 git commit -m "release: v$new"
-git tag -a $tag -m "OpenMemo $tag"
+git tag -a $tag -m $tagMessage
 
 Write-Host ""
 Write-Host "  Tagged $tag locally. Pushing..." -ForegroundColor Cyan
