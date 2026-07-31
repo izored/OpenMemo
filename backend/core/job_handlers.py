@@ -24,9 +24,14 @@ Concurrency caps are deliberate, not arbitrary:
 """
 from __future__ import annotations
 
-from typing import Any
+import asyncio
+import logging
+from typing import Any, Callable
 
+from backend.core import jobs
 from backend.core.jobs import register
+
+logger = logging.getLogger(__name__)
 
 # Job kind names. Constants rather than bare strings so a typo is an
 # ImportError at startup instead of a ValueError on a live ingest route.
@@ -34,6 +39,11 @@ KIND_PROCESS = "process"
 KIND_PROCESS_FILE = "process_file"
 KIND_THUMBNAIL = "thumbnail"
 KIND_LOCALIZE = "localize"
+# Auto-localize is a SEPARATE kind from explicit localize on purpose. Both
+# fire for the same memo on the auto-download path (ingest.py ~2215), and
+# dedupe keys on (kind, memo_id) — one shared kind would silently drop the
+# explicit job and quietly break "make it local".
+KIND_LOCALIZE_AUTO = "localize_auto"
 KIND_TRANSCRIBE = "transcribe"
 KIND_TRANSCRIPT = "transcript"
 KIND_PLAYLIST_DOWNLOAD = "playlist_download"
@@ -63,17 +73,20 @@ async def _thumbnail(payload: dict[str, Any]) -> None:
 
 @register(KIND_LOCALIZE, concurrency=3)
 async def _localize(payload: dict[str, Any]) -> None:
-    """Handles both localize entry points. `mode` absent means the auto-localize
-    path (`_localize_memo_task`), which picks the mode itself."""
-    from backend.api.ingest import _localize_memo_task, localize_memo_task
+    """Explicit localize: the caller chose the mode."""
+    from backend.api.ingest import localize_memo_task
 
-    mode = payload.get("mode")
-    if mode is None:
-        await _localize_memo_task(payload["memo_id"])
-    else:
-        await localize_memo_task(
-            payload["memo_id"], mode, payload.get("quality", 1080)
-        )
+    await localize_memo_task(
+        payload["memo_id"], payload["mode"], payload.get("quality", 1080)
+    )
+
+
+@register(KIND_LOCALIZE_AUTO, concurrency=3)
+async def _localize_auto(payload: dict[str, Any]) -> None:
+    """Auto-localize: works out its own mode from the memo."""
+    from backend.api.ingest import _localize_memo_task
+
+    await _localize_memo_task(payload["memo_id"])
 
 
 @register(KIND_TRANSCRIBE, concurrency=1)
@@ -104,3 +117,98 @@ async def _playlist_thumbs(payload: dict[str, Any]) -> None:
     from backend.api.ingest import cache_playlist_thumbs_task
 
     await cache_playlist_thumbs_task(payload["memo_ids"])
+
+
+# ---------------------------------------------------------------------------
+# queue_task — the drop-in replacement for BackgroundTasks.add_task
+# ---------------------------------------------------------------------------
+
+# Maps a task function to (kind, how its positional args become a payload).
+# Keyed by function NAME rather than the function object on purpose: the task
+# functions live in backend.api.ingest, which imports this module for
+# queue_task, so importing them here would be a cycle.
+def _p_memo(args: tuple) -> tuple[str | None, dict[str, Any]]:
+    return (args[0] if args else None), {}
+
+
+def _p_localize(args: tuple) -> tuple[str | None, dict[str, Any]]:
+    # localize_memo_task(memo_id, mode, quality=1080)
+    payload: dict[str, Any] = {"mode": args[1]}
+    if len(args) > 2:
+        payload["quality"] = args[2]
+    return args[0], payload
+
+
+def _p_localize_auto(args: tuple) -> tuple[str | None, dict[str, Any]]:
+    # _localize_memo_task(memo_id) — picks its own mode, so no "mode" key.
+    return args[0], {}
+
+
+def _p_process_file(args: tuple) -> tuple[str | None, dict[str, Any]]:
+    # process_file_memo(memo_id, file_path, memo_type)
+    return args[0], {"file_path": args[1], "memo_type": args[2]}
+
+
+def _p_playlist_download(args: tuple) -> tuple[str | None, dict[str, Any]]:
+    # download_playlist_task(collection_id, memo_ids) — not per-memo work, so
+    # memo_id stays None and dedupe does not apply (NULLs are distinct).
+    return None, {"collection_id": args[0], "memo_ids": list(args[1])}
+
+
+def _p_playlist_thumbs(args: tuple) -> tuple[str | None, dict[str, Any]]:
+    return None, {"memo_ids": list(args[0])}
+
+
+_ROUTING: dict[str, tuple[str, Callable[[tuple], tuple[str | None, dict[str, Any]]]]] = {
+    "process_memo": (KIND_PROCESS, _p_memo),
+    "process_file_memo": (KIND_PROCESS_FILE, _p_process_file),
+    "cache_thumbnail": (KIND_THUMBNAIL, _p_memo),
+    "localize_memo_task": (KIND_LOCALIZE, _p_localize),
+    "_localize_memo_task": (KIND_LOCALIZE_AUTO, _p_localize_auto),
+    "transcribe_memo_task": (KIND_TRANSCRIBE, _p_memo),
+    "transcript_memo_task": (KIND_TRANSCRIPT, _p_memo),
+    "download_playlist_task": (KIND_PLAYLIST_DOWNLOAD, _p_playlist_download),
+    "cache_playlist_thumbs_task": (KIND_PLAYLIST_THUMBS, _p_playlist_thumbs),
+}
+
+
+def queue_task(fn, *args) -> None:
+    """Hand a background chore to the durable queue.
+
+    Signature-compatible with `BackgroundTasks.add_task(fn, *args)` and with the
+    `schedule(fn, *args)` callable that `ingest_url_core` accepts (the Telegram
+    relay passes its own). That compatibility is the point: every call site is a
+    one-word change and no function signature moves.
+
+    Stays **synchronous** deliberately. Making it async would mean awaiting it at
+    ~28 call sites and changing `ingest_url_core`'s contract plus the relay's
+    scheduler — a much wider blast radius for no gain, since the durability that
+    matters starts the moment the row is inserted, not when the coroutine is
+    created. The insert itself is scheduled with a done-callback that logs
+    failures, the same pattern `schedule_processing` already uses (plans/007).
+
+    An unroutable function is a programming error and raises immediately rather
+    than silently dropping the user's work.
+    """
+    name = getattr(fn, "__name__", str(fn))
+    route = _ROUTING.get(name)
+    if route is None:
+        raise ValueError(
+            f"queue_task got an unrouted function {name!r} — add it to _ROUTING"
+        )
+    kind, to_payload = route
+    memo_id, payload = to_payload(args)
+
+    async def _enqueue() -> None:
+        await jobs.enqueue(kind, memo_id=memo_id, payload=payload)
+
+    task = asyncio.create_task(_enqueue())
+
+    def _log(t: asyncio.Task) -> None:
+        if t.cancelled():
+            return
+        exc = t.exception()
+        if exc is not None:
+            logger.error("jobs: failed to enqueue %s for %s: %s", kind, memo_id, exc)
+
+    task.add_done_callback(_log)

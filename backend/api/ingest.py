@@ -15,6 +15,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from pydantic import BaseModel
 
 from backend.config import settings
+from backend.core.job_handlers import queue_task
 from backend.db.database import get_db, AsyncSessionLocal
 from sqlalchemy import select
 from sqlalchemy.orm.attributes import set_committed_value
@@ -292,18 +293,14 @@ async def process_memo(memo_id: str):
 
 
 def schedule_processing(memo_id: str) -> None:
-    """Fire-and-forget embed with a done-callback so exceptions are logged,
-    not swallowed by the event loop (plans/007)."""
-    task = asyncio.create_task(process_memo(memo_id))
+    """Queue the embed pass for a memo.
 
-    def _log(t: asyncio.Task) -> None:
-        if t.cancelled():
-            return
-        exc = t.exception()
-        if exc:
-            log.error("process_memo task failed for %s: %r", memo_id, exc)
-
-    task.add_done_callback(_log)
+    Was a bare `asyncio.create_task(process_memo(...))` with a done-callback so
+    exceptions were logged rather than swallowed (plans/007). The queue keeps
+    that guarantee and adds the ones a loose task cannot give: the work survives
+    a restart, retries on failure, and cannot pile up unbounded.
+    """
+    queue_task(process_memo, memo_id)
 
 
 # --- Routes ---
@@ -342,7 +339,7 @@ async def ingest_url(
     db: AsyncSession = Depends(get_db),
 ):
     """Ingest content from a URL."""
-    return await ingest_url_core(data, db, background_tasks.add_task)
+    return await ingest_url_core(data, db, queue_task)
 
 
 async def ingest_url_core(data: URLIngest, db: AsyncSession, schedule) -> dict:
@@ -716,11 +713,11 @@ async def ingest_playlist(
 
     if data.download and download_ids:
         # The download pass caches each track's thumbnail as it goes.
-        background_tasks.add_task(download_playlist_task, collection.id, download_ids)
+        queue_task(download_playlist_task, collection.id, download_ids)
     elif new_ids:
         # Still cache the remote cover thumbnails so the tiles survive the
         # source vanishing — metadata-only, no media downloads.
-        background_tasks.add_task(cache_playlist_thumbs_task, new_ids)
+        queue_task(cache_playlist_thumbs_task, new_ids)
 
     return {
         "collection_id": collection.id,
@@ -858,9 +855,9 @@ async def ingest_spotify(
         await db.commit()
 
         if memo.thumbnail_path and memo.thumbnail_path.startswith("http"):
-            background_tasks.add_task(cache_thumbnail, memo.id)
+            queue_task(cache_thumbnail, memo.id)
         if data.download:
-            background_tasks.add_task(localize_memo_task, memo.id, "audio")
+            queue_task(localize_memo_task, memo.id, "audio")
 
         return {"id": memo.id, "title": memo.title, "type": "audio",
                 "status": "processing" if data.download else "saved"}
@@ -967,9 +964,9 @@ async def ingest_spotify(
     await db.commit()
 
     if data.download and download_ids:
-        background_tasks.add_task(download_playlist_task, collection.id, download_ids)
+        queue_task(download_playlist_task, collection.id, download_ids)
     elif new_ids:
-        background_tasks.add_task(cache_playlist_thumbs_task, new_ids)
+        queue_task(cache_playlist_thumbs_task, new_ids)
 
     return {
         "collection_id": collection.id,
@@ -1116,9 +1113,9 @@ async def ingest_apple(
         await db.commit()
 
         if memo.thumbnail_path and memo.thumbnail_path.startswith("http"):
-            background_tasks.add_task(cache_thumbnail, memo.id)
+            queue_task(cache_thumbnail, memo.id)
         if data.download:
-            background_tasks.add_task(localize_memo_task, memo.id, "audio")
+            queue_task(localize_memo_task, memo.id, "audio")
 
         return {"id": memo.id, "title": memo.title, "type": "audio",
                 "status": "processing" if data.download else "saved"}
@@ -1223,9 +1220,9 @@ async def ingest_apple(
     await db.commit()
 
     if data.download and download_ids:
-        background_tasks.add_task(download_playlist_task, collection.id, download_ids)
+        queue_task(download_playlist_task, collection.id, download_ids)
     elif new_ids:
-        background_tasks.add_task(cache_playlist_thumbs_task, new_ids)
+        queue_task(cache_playlist_thumbs_task, new_ids)
 
     return {
         "collection_id": collection.id,
@@ -1349,7 +1346,7 @@ async def ingest_note(
     await _attach_collection(db, memo, data.collection_id)
     await db.commit()
 
-    background_tasks.add_task(process_memo, memo.id)
+    queue_task(process_memo, memo.id)
 
     return {"id": memo.id, "title": memo.title, "type": "note", "status": "processing"}
 
@@ -1413,9 +1410,9 @@ async def ingest_file(
     await db.commit()
 
     # Process in background (extract text from file)
-    background_tasks.add_task(process_file_memo, memo.id, result.path, memo_type)
+    queue_task(process_file_memo, memo.id, result.path, memo_type)
     if want_transcript:
-        background_tasks.add_task(transcribe_memo_task, memo.id)
+        queue_task(transcribe_memo_task, memo.id)
 
     return {"id": memo.id, "title": memo.title, "type": memo_type, "status": "processing"}
 
@@ -1579,7 +1576,7 @@ async def ingest_album(
 
     # Embed each track's (sparse) text so it is searchable like any memo.
     for t in saved_tracks:
-        background_tasks.add_task(process_memo, Path(t["path"]).stem)
+        queue_task(process_memo, Path(t["path"]).stem)
 
     first = created[0]
     return {
@@ -2114,9 +2111,9 @@ async def ingest_from_ai(
 
     await db.commit()
 
-    background_tasks.add_task(process_memo, memo.id)
+    queue_task(process_memo, memo.id)
     if memo.thumbnail_path and memo.thumbnail_path.startswith("http"):
-        background_tasks.add_task(cache_thumbnail, memo.id)
+        queue_task(cache_thumbnail, memo.id)
 
     return {
         "id": memo.id,
@@ -2212,13 +2209,13 @@ async def ingest_from_extension(
     await _attach_collection(db, memo, data.collection_id)
     await db.commit()
 
-    background_tasks.add_task(process_memo, memo.id)
+    queue_task(process_memo, memo.id)
     if memo.thumbnail_path and memo.thumbnail_path.startswith("http"):
-        background_tasks.add_task(cache_thumbnail, memo.id)
-    background_tasks.add_task(_localize_memo_task, memo.id)
+        queue_task(cache_thumbnail, memo.id)
+    queue_task(_localize_memo_task, memo.id)
     if auto_localize_audio:
-        background_tasks.add_task(localize_memo_task, memo.id, "audio")
+        queue_task(localize_memo_task, memo.id, "audio")
     elif auto_localize_video:
-        background_tasks.add_task(localize_memo_task, memo.id, "video")
+        queue_task(localize_memo_task, memo.id, "video")
 
     return {"id": memo.id, "title": memo.title, "status": "saved"}

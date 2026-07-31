@@ -30,7 +30,7 @@ Legend: `TODO` · `WIP` · `REVIEW` (code done, passes pending) · `DONE`
 
 | # | Phase | Gated by `mesh_enabled` | Status | Notes |
 |---|-------|------------------------|--------|-------|
-| 0 | Job queue | **No** — plain infra, fixes live bug | **WIP** | built, wired, reviewed. Only the call-site migration left |
+| 0 | Job queue | **No** — plain infra, fixes live bug | **DONE** | built, wired, migrated, 3 passes run |
 | 1 | Mesh flag + Settings section | is the flag | TODO | ADR §0 |
 | 2 | `change_log`, triggers, HLC | Yes | TODO | ADR §4, §5 |
 | 3 | Merge engine (pure, both directions) | inert lib | TODO | ADR §6, §10 |
@@ -227,6 +227,53 @@ a kind string becomes a 500 on an ingest route. Cover each kind with a test.
 ## Phase log
 
 Newest entry at the top. One entry per working turn.
+
+### 2026-08-01 — Phase 0 DONE: call sites migrated, ticket queue chosen
+
+Owner picked the **ticket queue** over the turnstile. Open decision closed.
+
+- Added `queue_task(fn, *args)` to `job_handlers.py` — signature-compatible with
+  `BackgroundTasks.add_task`, so every call site was a one-word change and no
+  function signature moved, including `ingest_url_core`'s injected `schedule`
+  callable that the Telegram relay also supplies. Kept **synchronous** on
+  purpose: an async shim would have meant awaiting at 27 sites plus changing the
+  relay's contract, for no durability gain — what matters starts at the INSERT.
+- Routing keys on the function **name**, not the object, because the task
+  functions live in `ingest.py` which now imports this module. Avoids a cycle.
+- Migrated 27 call sites (ingest 21, memos 5, music 1) plus
+  `schedule_processing`, which was the last bare `asyncio.create_task`.
+- `backend/tests/test_job_routing.py` (14 tests) pins the arg-shape contract for
+  every routed function. That is the real safety net for a mechanical refactor:
+  the danger was never a loud failure, it was an argument silently landing in
+  the wrong payload slot and exploding later inside a worker.
+
+**Review pass 1 caught a real regression, fixed:** ingest's auto-download path
+queues auto-localize *and* an explicit audio/video localize for the same memo.
+Both mapped to kind `localize`, and dedupe keys on (kind, memo_id) — so the
+explicit job was silently dropped and "make it local" would have quietly stopped
+downloading. Split into `localize` and `localize_auto`, with a regression test.
+
+**Pass 2 (data safety):** no new bugs. Two nuances recorded rather than changed:
+
+1. *Dedupe collapses against `running`, not just `queued`.* Edit a memo while its
+   embed job is already running and the second request is deduped, so the
+   embedding can be one revision stale until the next edit. Not data loss —
+   `process_memo` re-reads from the DB — and dropping to queued-only dedupe would
+   let an expensive download start twice. Left as is deliberately.
+2. *A tiny enqueue window.* `queue_task` schedules the INSERT rather than
+   awaiting it, so a process death in that instant loses the request — the same
+   window `add_task` always had. Durability starts at the insert.
+
+**Pass 3 (fit):** no bugs. `BackgroundTasks` parameters are now unused on several
+routes; harmless (FastAPI still injects them) and removing them would widen the
+diff for no behaviour change. Worth a tidy-up pass later.
+
+Suite: **110 passed** across 3 consecutive runs, up from 96.
+
+**Not yet verified in the real app.** Tests run with workers disabled, so no test
+exercises a job actually executing end to end through a route. Before trusting
+this in daily use, run the app and import a playlist: downloads should start 3
+at a time, and `job_queue` should drain.
 
 ### 2026-07-31 (end of session) — review passes 2 and 3 done, 2 more bugs fixed
 
