@@ -270,10 +270,15 @@ diff for no behaviour change. Worth a tidy-up pass later.
 
 Suite: **110 passed** across 3 consecutive runs, up from 96.
 
-**Not yet verified in the real app.** Tests run with workers disabled, so no test
-exercises a job actually executing end to end through a route. Before trusting
-this in daily use, run the app and import a playlist: downloads should start 3
-at a time, and `job_queue` should drain.
+**Verified in the running app.** Booted the worktree backend on a throwaway
+DATA_DIR (never the main DB — this branch adds a table and unmerged migrations
+have no business touching real data), then hit `POST /api/memos/{id}/localize`.
+The job went `queued → running → done` with the worker picking it up on its own.
+Route → shim → queue → worker → completion all confirmed outside the test suite.
+
+Still unverified: the *concurrency cap* under real load. Proving 40 downloads
+start 3 at a time needs a real playlist import, which downloads gigabytes.
+Worth doing once on a real machine before trusting it for a big import.
 
 ### 2026-07-31 (end of session) — review passes 2 and 3 done, 2 more bugs fixed
 
