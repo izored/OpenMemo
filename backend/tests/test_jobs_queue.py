@@ -188,6 +188,54 @@ async def test_failure_retries_then_parks_as_failed():
     assert "RuntimeError" in err
 
 
+async def test_unreadable_payload_is_parked_not_looped():
+    """Review pass 2. Decoding the payload after claiming meant a malformed one
+    left the row `running`, the janitor requeued it an hour later, and it failed
+    again forever without ever counting an attempt or showing as failed."""
+    ran = False
+
+    @jobs.register("badpayload", concurrency=1)
+    async def _handler(payload):
+        nonlocal ran
+        ran = True
+
+    job_id = await jobs.enqueue("badpayload", memo_id="m")
+    async with AsyncSessionLocal() as db:
+        await db.execute(
+            text("UPDATE job_queue SET payload = '{not json' WHERE id = :id"),
+            {"id": job_id},
+        )
+        await db.commit()
+
+    assert await jobs._claim("badpayload") is None
+    assert ran is False
+    states = await _states()
+    assert states.get("failed") == 1, f"should be parked as failed, got {states}"
+    assert states.get("running") is None, "must not be left claimed"
+
+
+async def test_long_job_keeps_its_lease_renewed():
+    """Review pass 2. LEASE_SECONDS was a hard ceiling on job duration: a
+    playlist download outliving it got requeued while still running, so the same
+    download ran twice. The heartbeat must push lease_until forward."""
+    jobs.LEASE_SECONDS = 0.3  # renew interval is LEASE/3 = 0.1s
+    try:
+        @jobs.register("slow", concurrency=1)
+        async def _handler(payload):
+            await asyncio.sleep(0.5)  # outlives the lease
+
+        await jobs.enqueue("slow", memo_id="m")
+        await jobs.start_workers()
+        await asyncio.sleep(0.35)
+
+        # Mid-flight, an expiry sweep must not be able to steal it.
+        assert await jobs.reclaim() == 0, "expired lease stolen from a live job"
+        assert await _drain(timeout=5.0)
+        assert (await _states()).get("done") == 1
+    finally:
+        jobs.LEASE_SECONDS = 3600
+
+
 async def test_unregistered_kind_is_rejected_loudly():
     with pytest.raises(ValueError, match="no handler registered"):
         await jobs.enqueue("does-not-exist", memo_id="m")

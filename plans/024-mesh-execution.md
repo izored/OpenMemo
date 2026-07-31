@@ -30,7 +30,7 @@ Legend: `TODO` · `WIP` · `REVIEW` (code done, passes pending) · `DONE`
 
 | # | Phase | Gated by `mesh_enabled` | Status | Notes |
 |---|-------|------------------------|--------|-------|
-| 0 | Job queue | **No** — plain infra, fixes live bug | **WIP** | core + tests landed; startup wiring blocked, see below |
+| 0 | Job queue | **No** — plain infra, fixes live bug | **WIP** | built, wired, reviewed. Only the call-site migration left |
 | 1 | Mesh flag + Settings section | is the flag | TODO | ADR §0 |
 | 2 | `change_log`, triggers, HLC | Yes | TODO | ADR §4, §5 |
 | 3 | Merge engine (pure, both directions) | inert lib | TODO | ADR §6, §10 |
@@ -205,6 +205,36 @@ a kind string becomes a 500 on an ingest route. Cover each kind with a test.
 ## Phase log
 
 Newest entry at the top. One entry per working turn.
+
+### 2026-07-31 (end of session) — review passes 2 and 3 done, 2 more bugs fixed
+
+**Pass 2 (data safety) — 2 real bugs, both fixed, both with regression tests:**
+
+1. *An unreadable payload looped forever, invisibly.* `_claim` decoded the
+   payload **after** marking the row `running`. A malformed payload therefore
+   raised with the job already claimed: the worker logged and moved on, the row
+   sat `running` for a full hour-long lease, the janitor requeued it, and it
+   failed again — forever, never counting an attempt, never showing as `failed`.
+   Now decoded before the claim, and parked as `failed` with the reason.
+2. *`LEASE_SECONDS` was a hard ceiling on job duration.* A playlist download
+   outliving one hour got requeued by the janitor **while still running**, so
+   the same download ran twice at once. Duplicate work is the exact thing this
+   queue exists to prevent. Added a lease heartbeat that renews every
+   `LEASE_SECONDS / 3` while the handler runs.
+
+**Pass 3 (fit and simplicity) — no bugs.** One note: `stats()` has no API
+endpoint yet, so it is unused until the Activity view is built. Deliberate, not
+dead code. Confirmed `datetime.utcnow()` matches the rest of the repo
+(`models.py`) despite the deprecation warning — consistency wins here.
+
+Queue tests now 9, full suite green.
+
+**Also this session:** promoted the Mesh log in ADR §13 from a rollback
+mechanism to a first-class product feature — complete (an unlogged write is a
+bug), readable as sentences, attributable, reversible, scoped, bounded. Added
+the inline per-memo history surface, a separate connection log, and a hard rule
+that the seed and derived keys must never reach a log file, with a test rather
+than a habit.
 
 ### 2026-07-31 (later still) — blocker root-caused and fixed, wiring landed
 

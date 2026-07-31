@@ -245,6 +245,27 @@ async def _claim(kind: str) -> dict[str, Any] | None:
         if row is None:
             return None
 
+        # Decode BEFORE claiming. Decoding after the row is marked `running`
+        # means a malformed payload raises with the job already claimed: the
+        # worker logs and moves on, the row sits `running` for a full lease, the
+        # janitor requeues it, and it fails again — an hourly loop that never
+        # counts an attempt and never surfaces as `failed`. Park it instead.
+        try:
+            payload = json.loads(row[3] or "{}")
+        except (ValueError, TypeError) as exc:
+            logger.error("jobs: job %s has an unreadable payload, failing it", row[0])
+            await db.execute(
+                text("""
+                    UPDATE job_queue
+                    SET state = 'failed', last_error = :err, lease_until = NULL,
+                        updated_at = :now
+                    WHERE id = :id AND state = 'queued'
+                """),
+                {"id": row[0], "err": f"unreadable payload: {exc}"[:2000], "now": now},
+            )
+            await db.commit()
+            return None
+
         claimed = await db.execute(
             text("""
                 UPDATE job_queue
@@ -265,9 +286,40 @@ async def _claim(kind: str) -> dict[str, Any] | None:
             "id": row[0],
             "kind": row[1],
             "memo_id": row[2],
-            "payload": json.loads(row[3] or "{}"),
+            "payload": payload,
             "attempts": row[4],
         }
+
+
+async def _renew_lease(job_id: str) -> None:
+    """Keep a running job's lease fresh until it finishes.
+
+    Without this the lease is a hard ceiling on how long a job may take. A big
+    playlist download can outlive an hour, and then the janitor requeues it
+    *while it is still running* — a second worker starts the same download
+    alongside the first. Duplicate work is precisely what this queue exists to
+    prevent, so the lease has to track the job rather than guess its length.
+    """
+    interval = LEASE_SECONDS / 3
+    while True:
+        await asyncio.sleep(interval)
+        try:
+            async with AsyncSessionLocal() as db:
+                await db.execute(
+                    text("""
+                        UPDATE job_queue
+                        SET lease_until = :lease, updated_at = :now
+                        WHERE id = :id AND state = 'running'
+                    """),
+                    {
+                        "id": job_id,
+                        "lease": datetime.utcnow() + timedelta(seconds=LEASE_SECONDS),
+                        "now": datetime.utcnow(),
+                    },
+                )
+                await db.commit()
+        except Exception:
+            logger.warning("jobs: could not renew lease for %s", job_id, exc_info=True)
 
 
 async def _finish(job_id: str, *, error: str | None, attempts: int) -> None:
@@ -360,6 +412,7 @@ async def _worker(kind: str, slot: int) -> None:
 
         started = time.monotonic()
         error: str | None = None
+        heartbeat = asyncio.create_task(_renew_lease(job["id"]))
         try:
             await handler.fn({"memo_id": job["memo_id"], **job["payload"]})
         except asyncio.CancelledError:
@@ -368,10 +421,13 @@ async def _worker(kind: str, slot: int) -> None:
             # and raise from inside the handler. The row stays `running` and
             # reclaim(all_running=True) requeues it on next boot, without
             # burning a retry attempt.
+            heartbeat.cancel()
             raise
         except Exception as exc:
             error = f"{type(exc).__name__}: {exc}"
             logger.exception("jobs: %s job %s failed", kind, job["id"])
+        finally:
+            heartbeat.cancel()
 
         try:
             await _finish(job["id"], error=error, attempts=job["attempts"])
