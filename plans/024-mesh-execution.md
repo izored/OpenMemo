@@ -69,7 +69,34 @@ Queue core, janitor, startup wiring and `job_handlers.py` are all committed and
 stable (94 passed over 5 consecutive full runs). **Two** tasks remain, and the
 first is a genuine unsolved problem — read it before touching anything.
 
-### 1. UNSOLVED: registering handlers makes `GET /api/memos` return empty
+### ~~1. UNSOLVED: registering handlers makes `GET /api/memos` return empty~~ — RESOLVED
+
+Resolved 2026-07-31. Both hypotheses below were tested and **both failed**;
+the cause was a third thing. Kept for the record so nobody retries them.
+
+- **Hypothesis 1 (connection churn from polling): disproved.** Raising
+  `IDLE_POLL_SECONDS` from 2s to 60s left the failure rate unchanged (3 of 5
+  runs either way). At 60s each worker polls exactly once, at startup — which
+  narrowed it to the startup burst rather than ongoing churn.
+- **Hypothesis 2 (thundering herd / WAL snapshot): disproved.** Staggering each
+  worker's first poll with jitter did not fix it and made the failures
+  *deterministic* (3 every run) instead of intermittent. Reverted.
+- **Actual cause:** `jobs.py` keeps `_workers` and `_shutdown` in **module
+  globals**. That is correct for the app, which has one event loop for its
+  entire life, but wrong for a suite that builds ~90 TestClients each with its
+  own loop. Workers spawned in one test's loop outlived it and interfered with
+  the next.
+- **Fix:** `OPENMEMO_DISABLE_JOB_WORKERS=1`, set by `conftest.py`. Production is
+  untouched and handlers are now registered for real. `test_jobs_queue.py` opts
+  back in via `monkeypatch.delenv`, since it drives the pool explicitly inside a
+  single loop — the safe way to use it.
+- Verified: **94 passed across 5 consecutive full runs**, runtime back to ~8s.
+
+Worth knowing: this means no test currently covers the real startup path with
+workers live. If that ever matters, the fix is to give the queue instance scope
+instead of module globals rather than to remove the gate.
+
+### 1. (historical detail, kept for context)
 
 Adding one line to `main.py`:
 
@@ -117,7 +144,31 @@ Best next hypotheses, in order:
 Do **not** ship the handler import until this is understood. An intermittently
 empty memo list is the worst possible failure mode for this app.
 
-### 2. Then migrate the ~25 call sites
+### 2. NEXT UP — migrate the ~25 call sites
+
+**Recommended approach: a shim, not 25 rewrites.** `ingest.py:345` passes
+`background_tasks.add_task` into `ingest_url_core` as an injected callable (the
+Telegram relay passes its own), so rewriting every site by hand means changing
+that signature too. Instead define one adapter that maps a task function to its
+kind:
+
+```python
+_KIND_BY_FN = {process_memo: KIND_PROCESS, cache_thumbnail: KIND_THUMBNAIL, ...}
+
+async def queue_task(fn, *args) -> None:
+    """Drop-in for background_tasks.add_task that routes through the queue."""
+```
+
+Then the change at each site is textual — `background_tasks.add_task(` →
+`await jobs.queue_task(` — and the injected-callable path keeps working by
+passing `queue_task` instead. Every call site is already inside an async route
+handler, so the `await` is free.
+
+Sites: `ingest.py` ~17 + one `asyncio.create_task(process_memo(...))` at line
+297, `memos.py` 5, `music.py` 1.
+
+Verify after: full suite green ×5, then manually import a playlist and confirm
+downloads are capped rather than all starting at once.
 
 Replace fire-and-forget background tasks with `enqueue`:
 

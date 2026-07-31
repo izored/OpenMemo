@@ -228,11 +228,8 @@ async def lifespan(app: FastAPI):
     # later and off the startup path.
     from backend.core import jobs
 
-    # NOTE: backend.core.job_handlers is deliberately NOT imported yet, so no
-    # kinds are registered and start_workers() stays a no-op. Importing it makes
-    # 15 workers poll the database every 2s, which intermittently makes
-    # GET /api/memos return an empty list in the test suite. Unresolved — see
-    # plans/024-mesh-execution.md before enabling.
+    import backend.core.job_handlers  # noqa: F401 — registers the job kinds
+
     await jobs.start_workers()
 
     scheduler = AsyncIOScheduler()

@@ -26,3 +26,11 @@ _tmpdir = tempfile.mkdtemp(prefix="openmemo-test-")
 _db_path = Path(_tmpdir, "openmemo.db").as_posix()
 os.environ.setdefault("DATA_DIR", _tmpdir)
 os.environ.setdefault("DATABASE_URL", f"sqlite+aiosqlite:///{_db_path}")
+
+# The job-queue worker pool keeps its worker set and shutdown Event in module
+# globals — fine for the app (one event loop for its whole life), wrong for a
+# suite that builds a TestClient per test, each with its own loop. Workers
+# spawned in one test's loop outlived it and interfered with the next, which
+# surfaced as GET /api/memos intermittently returning an empty list. The queue
+# itself is covered directly by test_jobs_queue.py.
+os.environ.setdefault("OPENMEMO_DISABLE_JOB_WORKERS", "1")

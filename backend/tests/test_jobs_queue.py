@@ -13,8 +13,15 @@ from backend.db.database import AsyncSessionLocal
 
 
 @pytest.fixture(autouse=True)
-async def _clean_queue():
-    """Fresh table + empty handler registry around every test."""
+async def _clean_queue(monkeypatch):
+    """Fresh table + empty handler registry around every test.
+
+    conftest sets OPENMEMO_DISABLE_JOB_WORKERS=1 so the API tests never run a
+    background pool (see backend/core/jobs.start_workers). These tests are the
+    exception: they exist to exercise the pool, and they do it inside a single
+    event loop with explicit start/stop, which is the safe way to use it.
+    """
+    monkeypatch.delenv("OPENMEMO_DISABLE_JOB_WORKERS", raising=False)
     await jobs.create_table()
     async with AsyncSessionLocal() as db:
         await db.execute(text("DELETE FROM job_queue"))

@@ -33,6 +33,7 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
+import os
 import time
 import uuid
 from dataclasses import dataclass
@@ -422,7 +423,19 @@ async def start_workers() -> None:
     Does no database I/O itself — see `_janitor`. With nothing registered there
     is nothing to run, so this is a no-op and the queue costs a fresh install
     exactly nothing.
+
+    `OPENMEMO_DISABLE_JOB_WORKERS=1` skips the pool entirely. The test suite sets
+    it, because this module keeps its worker set and shutdown Event in module
+    globals — correct for the app, which has exactly one event loop for its
+    whole life, but wrong for a suite that builds ~90 TestClients each with its
+    own loop. Workers spawned in one test's loop outlive it and interfere with
+    the next, which showed up as `GET /api/memos` intermittently returning an
+    empty list. The queue's own behaviour is covered by `test_jobs_queue.py`,
+    which starts and stops the pool explicitly inside a single loop.
     """
+    if os.environ.get("OPENMEMO_DISABLE_JOB_WORKERS") == "1":
+        logger.debug("jobs: worker pool disabled by OPENMEMO_DISABLE_JOB_WORKERS")
+        return
     if _workers or not _HANDLERS:
         return
     _shutdown.clear()
