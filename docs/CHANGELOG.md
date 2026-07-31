@@ -3,6 +3,14 @@
 All notable changes to OpenMemo are documented here.
 
 ---
+## [Unreleased]
+
+### Added
+
+- 🕸️ **Mesh: the design for keeping two computers on one library.** A MacBook and a Windows box can each hold the whole library, both able to write, with no account, no cloud, and no server in the middle — you pair them once with a 12-word code (or a QR) and forget about it. The design is settled and documented in `docs/ADR-024-MESH.md`; the code lands in phases tracked in `plans/024-mesh-execution.md`. Two measurements shaped it: the library's metadata is 7 MB while its media is 25 GB, and 94% of that media is re-downloadable from where it came from. So Mesh syncs the *recipe*, not the payload — the other device refetches what it needs, on demand, and only asks its peer for the 6% that exists nowhere else. Transcripts and AI summaries travel as plain data, so joining a Mesh never re-runs Whisper or Ollama. Nothing overwrites your work silently: a real conflict opens one dialogue that shows both versions and keeps both by default, and every change a sync makes is logged and reversible. Off by default, behind a single toggle in Settings.
+- 🔍 **`scripts/blob-split.py`** — measures how much of the library is re-downloadable versus how much only exists on this machine. Run it any time to re-check the split as the library grows.
+
+---
 ## [3.2.0] - 2026-07-31
 
 ### Added
