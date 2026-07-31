@@ -429,6 +429,24 @@ export const settingsApi = {
       method: 'DELETE',
     }),
   telegramStatus: () => fetchJSON<TelegramRelayStatus>('/settings/telegram/status'),
+  // Instagram login (final-fallback session for IG pulls). Writes into the same
+  // shared cookie jar. The password is never stored — used once to sign in.
+  instagramStatus: () =>
+    fetchJSON<{ connected: boolean; who: string | null }>('/settings/instagram/status'),
+  instagramImportSession: (cookies: string) =>
+    fetchJSON<{ connected: boolean; who: string | null }>('/settings/instagram/session', {
+      method: 'POST',
+      body: JSON.stringify({ cookies }),
+    }),
+  instagramLogin: (username: string, password: string) =>
+    fetchJSON<{ status: string; connected: boolean; who: string | null }>('/settings/instagram/login', {
+      method: 'POST',
+      body: JSON.stringify({ username, password }),
+    }),
+  instagramDisconnect: () =>
+    fetchJSON<{ connected: boolean; who: string | null }>('/settings/instagram/session', {
+      method: 'DELETE',
+    }),
   // Upload a custom appearance background, stored full-quality server-side.
   // Returns the active extension; the image is served at /api/settings/background.
   uploadBackground: async (file: File): Promise<{ bg_image_ext: string }> => {

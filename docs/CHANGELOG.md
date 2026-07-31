@@ -3,6 +3,22 @@
 All notable changes to OpenMemo are documented here.
 
 ---
+## [3.2.0] - 2026-07-31
+
+### Added
+
+- 🎠 **Instagram carousels save every photo, not just one.** A multi-photo Instagram post (a "sidecar") used to land as a single image — often the wrong slide, or nothing at all. openMemo now pulls the whole carousel: the memo page shows a swipeable viewer with prev/next arrows, an "n / N" counter, and a thumbnail strip; the lightbox pages through every slide with the arrow keys; and the dashboard card keeps one clean cover with a small "N images" badge so the feed stays tidy. The full gallery is stored on the memo and each slide is downloaded locally, so the set survives the post being deleted. Built on a new `gallery` field, so any future multi-image source (X, Facebook) can reuse the same viewer.
+- 🔑 **Connect Instagram right inside openMemo.** Instagram now requires a login to read post media, so Settings has an "Instagram login" section with two ways in: **Import session** (paste a cookies.txt from a browser you're already signed into — no password ever touches openMemo) or **Username & password** (a headless browser signs in once, captures the session, and discards the password — never stored, never logged). The session lives only on your machine, in the same `yt_cookies.txt` jar yt-dlp and gallery-dl already use, so one login unlocks every Instagram save. The password path carries a plain-English warning that automated logins can trip Instagram's checks, so a throwaway account is the safe choice.
+
+### Fixed
+
+- 🖼️ **Instagram posts pull again.** Instagram stopped serving post data to logged-out scrapers — the old OpenGraph-tag path now gets back an empty login shell, so a shared carousel arrived as a dead "video" card with no image, no caption, no title. openMemo now resolves Instagram the way public downloaders do: through Instagram's own guest media-info API (the `X-IG-App-ID` endpoint), which returns structured JSON with the full carousel, caption, and author. It runs anonymously first (works when your IP is "warm"), then with your connected session as a robust fallback, then gallery-dl / a logged-in headless render — and if every tier is blocked, the save lands as a clean, retryable link that says "connect Instagram, then save again" instead of a dead media card. Re-saving after you connect upgrades that link in place into the real carousel, keeping its collections.
+
+### Changed
+
+- 🔒 **A commit can no longer leak personal data.** A pre-commit guard (`scripts/check_secrets.py`, wired through `.githooks/pre-commit`) combs every commit and blocks it if a cookie jar, session, password, bot token, database, or anything under `data/` is staged — a backstop behind `.gitignore` for a stray `git add -f`. Run `python scripts/check_secrets.py --all` before any merge to audit the whole tree. Full procedure in `docs/SECURITY-personal-data.md`.
+
+---
 ## [3.1.1] - 2026-07-27
 
 ### Added

@@ -599,6 +599,16 @@ export function MemoCard({ memo, dragHandleProps, lightboxGroup }: CardProps) {
             ) : (
               <div className="om-hero-noise" />
             )}
+            {memo.gallery && memo.gallery.length > 1 && (
+              <div
+                className="om-gallery-badge"
+                aria-label={`${memo.gallery.length} images`}
+                style={{ position: 'absolute', top: 8, right: 8, display: 'flex', alignItems: 'center', gap: 4, background: 'rgba(0,0,0,0.6)', color: '#fff', fontSize: 11, fontWeight: 500, padding: '3px 7px', borderRadius: 999, pointerEvents: 'none' }}
+              >
+                <Icon name="layers" size={12} />
+                <span>{memo.gallery.length}</span>
+              </div>
+            )}
             <div className="om-min-hover" />
           </div>
           <div className="om-card-body tight">

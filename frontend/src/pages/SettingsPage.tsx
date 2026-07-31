@@ -204,6 +204,101 @@ function TrashRow() {
   );
 }
 
+/** Instagram connect: the final-fallback session for IG pulls. Two ways in —
+ *  paste a session (safe, no password) or username/password (convenient, but IG
+ *  may checkpoint your main account; the UI warns). Feeds the shared cookie jar. */
+function InstagramConnectRows() {
+  const [status, setStatus] = useState<{ connected: boolean; who: string | null } | null>(null);
+  const [user, setUser] = useState('');
+  const [pass, setPass] = useState('');
+  const [cookies, setCookies] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [msg, setMsg] = useState('');
+  const [mode, setMode] = useState<'password' | 'session'>('password');
+
+  const refresh = () => settingsApi.instagramStatus().then(setStatus).catch(() => setStatus(null));
+  useEffect(() => { refresh(); }, []);
+
+  const doLogin = async () => {
+    setBusy(true); setMsg('');
+    try {
+      const r = await settingsApi.instagramLogin(user.trim(), pass);
+      setStatus({ connected: r.connected, who: r.who });
+      setPass(''); setMsg(r.connected ? 'Connected ✓' : '');
+    } catch (e) { setMsg(e instanceof Error ? e.message : 'Login failed'); }
+    finally { setBusy(false); }
+  };
+  const doImport = async () => {
+    setBusy(true); setMsg('');
+    try {
+      const r = await settingsApi.instagramImportSession(cookies);
+      setStatus(r); setCookies(''); setMsg(r.connected ? 'Connected ✓' : '');
+    } catch (e) { setMsg(e instanceof Error ? e.message : 'Import failed'); }
+    finally { setBusy(false); }
+  };
+  const doDisconnect = async () => {
+    setBusy(true); setMsg('');
+    try { setStatus(await settingsApi.instagramDisconnect()); }
+    catch (e) { setMsg(e instanceof Error ? e.message : 'Failed'); }
+    finally { setBusy(false); }
+  };
+
+  return (
+    <div className="om-setting-row" style={{ flexDirection: 'column', alignItems: 'stretch', gap: 12 }}>
+      <div className="om-setting-row-text" style={{ maxWidth: 560 }}>
+        <p>Instagram login</p>
+        <span className="mono">
+          openMemo pulls Instagram post media through a login. Connect an account here and every Instagram save — photos, carousels, reels — resolves. The session is stored only on this machine (in <code>yt_cookies.txt</code>), never sent anywhere. Use a throwaway account.
+        </span>
+      </div>
+
+      {status?.connected ? (
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+          <span style={{ color: 'var(--text-success, #1D9E75)', fontWeight: 500 }}>
+            Connected{status.who ? ` (${status.who})` : ''} ✓
+          </span>
+          <button className="om-btn-secondary" onClick={doDisconnect} disabled={busy}>Disconnect</button>
+        </div>
+      ) : (
+        <>
+          <div style={{ display: 'flex', gap: 8 }}>
+            <button className="om-btn-secondary" style={{ opacity: mode === 'password' ? 1 : 0.6 }} onClick={() => setMode('password')}>Username & password</button>
+            <button className="om-btn-secondary" style={{ opacity: mode === 'session' ? 1 : 0.6 }} onClick={() => setMode('session')}>Import session</button>
+          </div>
+
+          {mode === 'password' ? (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 8, maxWidth: 360 }}>
+              <input className="om-input" placeholder="Instagram username" value={user} onChange={(e) => setUser(e.target.value)} autoComplete="off" />
+              <input className="om-input" type="password" placeholder="Password" value={pass} onChange={(e) => setPass(e.target.value)} autoComplete="new-password" />
+              <button className="om-btn-secondary" onClick={doLogin} disabled={busy || !user || !pass}>
+                {busy ? 'Logging in…' : 'Log in'}
+              </button>
+              <span className="mono" style={{ color: 'var(--text-warning, #BA7517)' }}>
+                Heads up: automated logins can trip Instagram's checks and flag your account. For your main account, prefer "Import session". The password is used once to sign in and is never stored.
+              </span>
+            </div>
+          ) : (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 8, maxWidth: 480 }}>
+              <textarea
+                className="om-input"
+                placeholder="Paste your Instagram cookies.txt (Netscape format) — export it from a browser where you're logged in"
+                value={cookies}
+                onChange={(e) => setCookies(e.target.value)}
+                rows={4}
+                style={{ resize: 'vertical', fontFamily: 'monospace', fontSize: 12 }}
+              />
+              <button className="om-btn-secondary" onClick={doImport} disabled={busy || !cookies.trim()}>
+                {busy ? 'Importing…' : 'Import session'}
+              </button>
+            </div>
+          )}
+        </>
+      )}
+      {msg && <span className="mono" style={{ color: msg.includes('✓') ? 'var(--text-success, #1D9E75)' : 'var(--text-danger, #E24B4A)' }}>{msg}</span>}
+    </div>
+  );
+}
+
 /** In-brand dropdown for the app-wide default chat model. Writes to the
  *  persisted `chatModel` in the app store (read by every Ask/chat surface) AND
  *  to the server-side `chat_model` setting, so backend-initiated calls
@@ -987,6 +1082,9 @@ export function SettingsPage() {
                 </span>
               </div>
               <CookiesUpload />
+            </div>
+            <div className="om-setting-row" style={{ borderTop: '1px solid var(--border)', marginTop: 8, paddingTop: 8, flexDirection: 'column', alignItems: 'stretch' }}>
+              <InstagramConnectRows />
             </div>
             <div className="om-setting-row" style={{ borderTop: '1px solid var(--border)', marginTop: 8, paddingTop: 8 }}>
               <TrashRow />

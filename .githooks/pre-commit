@@ -1,0 +1,17 @@
+#!/bin/sh
+# Mandatory secret / personal-data comb-through before EVERY commit.
+# Blocks the commit if a cookie jar, session, password, token, database, or any
+# data/ runtime file is staged. See docs/SECURITY-personal-data.md.
+#
+# Enable once per clone:  git config core.hooksPath .githooks
+
+if command -v python >/dev/null 2>&1; then
+  PY=python
+elif command -v python3 >/dev/null 2>&1; then
+  PY=python3
+else
+  echo "check_secrets: python not found — skipping (install Python to enable the guard)." >&2
+  exit 0
+fi
+
+"$PY" scripts/check_secrets.py || exit 1

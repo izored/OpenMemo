@@ -14,6 +14,14 @@ export function Lightbox() {
   const index = useAppStore((s) => s.lightboxIndex);
   const close = useAppStore((s) => s.closeLightbox);
   const step = useAppStore((s) => s.lightboxStep);
+  const gallery = useAppStore((s) => s.lightboxGallery);
+  const slide = useAppStore((s) => s.lightboxSlide);
+  const galleryStep = useAppStore((s) => s.galleryStep);
+
+  // Gallery mode (intra-memo carousel paging) takes precedence — a single memo's
+  // slides, arrows page SLIDES. Rendered before the hook-dependent memo mode so
+  // its own keyboard handler runs; keep the early return AFTER all hooks below.
+  const galleryOpen = slide >= 0 && slide < gallery.length;
 
   const open = index >= 0 && index < group.length;
   const memo = open ? group[index] : undefined;
@@ -26,15 +34,44 @@ export function Lightbox() {
   const posterAspect = useImageAspect(posterSrc);
 
   useEffect(() => {
-    if (!open) return;
+    if (!open && !galleryOpen) return;
+    const pageStep = galleryOpen ? galleryStep : step;
     const onKey = (e: KeyboardEvent) => {
       if (e.key === 'Escape') close();
-      else if (e.key === 'ArrowRight') step(1);
-      else if (e.key === 'ArrowLeft') step(-1);
+      else if (e.key === 'ArrowRight') pageStep(1);
+      else if (e.key === 'ArrowLeft') pageStep(-1);
     };
     document.addEventListener('keydown', onKey);
     return () => document.removeEventListener('keydown', onKey);
-  }, [open, close, step]);
+  }, [open, galleryOpen, close, step, galleryStep]);
+
+  // Gallery (carousel) mode: page a single memo's image slides.
+  if (galleryOpen) {
+    const multi = gallery.length > 1;
+    return (
+      <div className="om-lightbox" role="dialog" aria-modal="true" onClick={close}>
+        <img key={slide} src={gallery[slide]} alt={`Slide ${slide + 1}`} onClick={(e) => e.stopPropagation()} />
+        {multi && (
+          <>
+            <button className="om-lightbox-nav prev" onClick={(e) => { e.stopPropagation(); galleryStep(-1); }} aria-label="Previous image">
+              <Icon name="chevronLeft" size={26} />
+            </button>
+            <button className="om-lightbox-nav next" onClick={(e) => { e.stopPropagation(); galleryStep(1); }} aria-label="Next image">
+              <Icon name="chevronRight" size={26} />
+            </button>
+            <div className="om-lightbox-count" onClick={(e) => e.stopPropagation()}>
+              {slide + 1} / {gallery.length}
+            </div>
+          </>
+        )}
+        <div className="om-lightbox-toolbar" onClick={(e) => e.stopPropagation()}>
+          <button className="om-lightbox-close" onClick={close} aria-label="Close">
+            <Icon name="x" size={20} />
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   if (!open || !memo) return null;
 

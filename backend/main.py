@@ -67,6 +67,10 @@ async def lifespan(app: FastAPI):
             for col in ("transcript_status", "transcript_lang", "localize_status", "localize_error", "audio_kind", "audio_artist", "audio_album"):
                 if col not in names:
                     await db.execute(_sql_text(f"ALTER TABLE memos ADD COLUMN {col} VARCHAR"))
+            # Carousel gallery (Instagram sidecar, multi-photo). JSON list stored
+            # as TEXT in SQLite; the SQLAlchemy JSON type (de)serializes it.
+            if "gallery" not in names:
+                await db.execute(_sql_text("ALTER TABLE memos ADD COLUMN gallery JSON"))
             if "playlist_born" not in names:
                 await db.execute(_sql_text(
                     "ALTER TABLE memos ADD COLUMN playlist_born BOOLEAN DEFAULT 0"

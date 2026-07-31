@@ -190,6 +190,65 @@ async def remove_cookies():
     return {"yt_cookies_present": cookies_present()}
 
 
+# --- Instagram login (final-fallback session for IG pulls) ------------------
+# Feeds the same shared cookie jar as /cookies, but scoped to Instagram. Two
+# ways in: paste a session (safe, no password) or username+password headless
+# login (convenient, but IG may checkpoint your main account — the UI warns).
+
+
+class InstagramSession(BaseModel):
+    # A pasted Netscape cookies.txt (only its instagram.com lines are taken).
+    cookies: str
+
+
+class InstagramLogin(BaseModel):
+    username: str
+    password: str
+
+
+@router.get("/instagram/status")
+async def instagram_status():
+    from backend.core.instagram_login import session_status
+    return session_status()
+
+
+@router.post("/instagram/session")
+async def instagram_import_session(data: InstagramSession):
+    """Import an Instagram session from a pasted cookies.txt. No password."""
+    if len(data.cookies) > _MAX_COOKIES_BYTES:
+        raise HTTPException(status_code=413, detail="Cookie text is too large.")
+    from backend.core.instagram_login import import_session_cookies
+    result = import_session_cookies(data.cookies)
+    if result.get("error"):
+        raise HTTPException(status_code=400, detail=result["error"])
+    return result
+
+
+@router.post("/instagram/login")
+async def instagram_login(data: InstagramLogin):
+    """Headless username/password login. The password is used once to sign in and
+    is never stored or logged. May return a checkpoint/2FA status IG imposes."""
+    from backend.core.instagram_login import login_with_password
+    result = await login_with_password(data.username.strip(), data.password)
+    status = result.get("status")
+    if status == "ok":
+        return result
+    messages = {
+        "bad_credentials": "Instagram rejected that username or password.",
+        "two_factor": "Instagram asked for a 2FA code. Use 'Import session' instead.",
+        "checkpoint": "Instagram flagged this login (checkpoint). Use 'Import session' instead.",
+        "unavailable": "Automated login isn't available here. Use 'Import session' instead.",
+    }
+    raise HTTPException(status_code=400, detail=messages.get(status, "Instagram login failed."))
+
+
+@router.delete("/instagram/session")
+async def instagram_disconnect():
+    """Remove only the Instagram cookies from the shared jar."""
+    from backend.core.instagram_login import disconnect
+    return disconnect()
+
+
 # --- Custom appearance background ------------------------------------------
 
 # Magic-byte sniff -> canonical extension. We trust content, not the filename.

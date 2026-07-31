@@ -58,6 +58,11 @@ def derive_memo_type(memo) -> str:
             current = (getattr(memo, "type", None) or "").lower()
             if current in ("image", "audio"):
                 return current
+            # Instagram's resolver is authoritative (core/extractor._instagram_resolve).
+            # A "link" from it is the deliberate graceful needs-login bookmark — keep
+            # it a link, don't let the video-host default drag it back to a dead video.
+            if current == "link" and "instagram.com" in (source_url or "").lower():
+                return "link"
             from backend.core.extractor import _url_media_hint, is_audio_host
             # Audio-only host (SoundCloud/Bandcamp/Mixcloud/…) is audio, never
             # video — even if yt-dlp couldn't probe it (ADR-005, ADR-001).

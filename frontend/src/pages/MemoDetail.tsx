@@ -9,6 +9,8 @@ import {
   X,
   ChevronDown,
   ChevronUp,
+  ChevronLeft,
+  ChevronRight,
   Save,
   Tag,
   Folder,
@@ -54,7 +56,7 @@ import { VolumeControl } from '@/components/VolumeControl';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { motion, AnimatePresence } from 'framer-motion';
-import type { Memo, Collection, CollectionRef, SummaryMode } from '@/types';
+import type { Memo, Collection, CollectionRef, SummaryMode, GalleryItem } from '@/types';
 
 // A signal to seek the open player (embed iframe or local <video>). The nonce
 // lets the same timestamp fire repeated seeks (OPNMMO-0042).
@@ -213,6 +215,59 @@ function MediaPreview({ src, alt, kind, poster, seek, theater: theaterProp, onTh
         </div>
       )}
     </>
+  );
+}
+
+// Carousel viewer for a multi-image memo (Instagram sidecar, multi-photo). Shows
+// one large slide with prev/next + an "n / N" counter and a thumbnail strip;
+// clicking the big image opens the shared lightbox in gallery (slide-paging)
+// mode. Single-image memos never reach here (the caller checks gallery.length).
+function GalleryCarousel({ gallery, alt }: { gallery: GalleryItem[]; alt: string }) {
+  const [i, setI] = useState(0);
+  const openGalleryLightbox = useAppStore((s) => s.openGalleryLightbox);
+  const urls = gallery.map((g) => g.url);
+  const n = gallery.length;
+  const go = (delta: number) => setI((prev) => (prev + delta + n) % n);
+  const cur = gallery[Math.min(i, n - 1)];
+
+  return (
+    <div className="om-gallery" style={{ marginBottom: '24px' }}>
+      <div className="om-gallery-stage" style={{ position: 'relative' }}>
+        <img
+          key={cur.url}
+          src={cur.url}
+          alt={`${alt} — ${i + 1} of ${n}`}
+          onClick={() => openGalleryLightbox(urls, i)}
+          style={{ cursor: 'zoom-in', width: '100%', borderRadius: 12, display: 'block' }}
+        />
+        <button type="button" className="om-lightbox-nav prev" onClick={() => go(-1)} aria-label="Previous image" style={{ position: 'absolute', left: 8, top: '50%', transform: 'translateY(-50%)' }}>
+          <ChevronLeft size={24} />
+        </button>
+        <button type="button" className="om-lightbox-nav next" onClick={() => go(1)} aria-label="Next image" style={{ position: 'absolute', right: 8, top: '50%', transform: 'translateY(-50%)' }}>
+          <ChevronRight size={24} />
+        </button>
+        <div className="om-gallery-count" style={{ position: 'absolute', top: 10, right: 10, background: 'rgba(0,0,0,0.6)', color: '#fff', fontSize: 12, padding: '3px 9px', borderRadius: 999 }}>
+          {i + 1} / {n}
+        </div>
+      </div>
+      <div className="om-gallery-thumbs" style={{ display: 'flex', gap: 8, marginTop: 10, overflowX: 'auto', paddingBottom: 4 }}>
+        {gallery.map((g, idx) => (
+          <button
+            key={g.url + idx}
+            type="button"
+            onClick={() => setI(idx)}
+            aria-label={`Go to image ${idx + 1}`}
+            aria-current={idx === i}
+            style={{
+              flex: '0 0 auto', width: 56, height: 56, padding: 0, borderRadius: 8, overflow: 'hidden', cursor: 'pointer',
+              border: idx === i ? '2px solid var(--accent, #D97706)' : '2px solid transparent', opacity: idx === i ? 1 : 0.65,
+            }}
+          >
+            <img src={g.url} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} />
+          </button>
+        ))}
+      </div>
+    </div>
   );
 }
 
@@ -1883,7 +1938,9 @@ export function MemoDetail() {
                 images serve from the file route; scraped image memos (a Facebook
                 /photo, an Instagram/X photo, etc.) have no local file — their
                 real, localized image lives in thumbnail_path. */}
-            {memo.type === 'image' && !isEditing && (memo.file_path || memo.thumbnail_path) && (
+            {memo.type === 'image' && !isEditing && memo.gallery && memo.gallery.length > 1 ? (
+              <GalleryCarousel gallery={memo.gallery} alt={memo.title} />
+            ) : memo.type === 'image' && !isEditing && (memo.file_path || memo.thumbnail_path) ? (
               <MediaPreview
                 src={memo.file_path ? `/api/memos/${memo.id}/file` : memo.thumbnail_path || ''}
                 alt={memo.title}
@@ -1891,7 +1948,7 @@ export function MemoDetail() {
                 theater={theater}
                 onTheaterChange={setTheater}
               />
-            )}
+            ) : null}
 
             {/* Local video preview — with theater + fullscreen */}
             {memo.type === 'video' && memo.file_path && !isEditing && (
