@@ -59,21 +59,36 @@ function isLocalAppUrl(url: string): boolean {
 }
 
 /**
- * Load the SPA into the main window and hard-reset any window-drag region.
+ * Load the SPA into the main window and install the window-drag region.
  *
- * macOS Electron can carry a `-webkit-app-region: drag` region from a
- * previously loaded page (the loading/lock screens used to set one) across an
- * in-place navigation — the whole window then swallows every mouse click as a
- * window-drag attempt while the keyboard keeps working. The static pages no
- * longer declare drag regions, and this reset guarantees the SPA never
- * inherits one regardless.
+ * The window is frameless (`titleBarStyle: 'hiddenInset'`), so there is no OS
+ * title bar to grab — the web content must declare its own drag region or the
+ * window can't be moved at all. A blanket `no-drag` (added earlier to stop the
+ * loading/lock pages from hijacking every click) had removed the LAST drag
+ * region too, leaving the window stuck in place, AND the traffic-light buttons
+ * overlapped the sidebar's top (the "openMemo" logo / the hamburger).
+ *
+ * Fix (macOS shell only, injected here so the web app is untouched):
+ *  1. Inset the sidebar head below the traffic lights so nothing collides.
+ *  2. Make the sidebar head a drag region, with its buttons no-drag. Children
+ *     paint above their parent, so the header's now-empty top band drags the
+ *     window while the logo / collapse / search buttons stay fully clickable.
+ *     Scoping the region to a real container (not a full-width overlay) means it
+ *     can never swallow a click anywhere else in the UI.
  */
 async function loadAppUrl(url: string): Promise<void> {
   if (!mainWindow) return;
   await mainWindow.loadURL(url);
-  await mainWindow.webContents.insertCSS(
-    'html, body { -webkit-app-region: no-drag !important; }',
-  );
+  await mainWindow.webContents.insertCSS(`
+    html, body { -webkit-app-region: no-drag; }
+    /* Clear the macOS traffic lights, then let the header band move the window. */
+    .om-sidebar-head { padding-top: 26px; -webkit-app-region: drag; }
+    .om-sidebar.collapsed .om-sidebar-head { padding-top: 26px; }
+    .om-sidebar-head button,
+    .om-sidebar-head a,
+    .om-sidebar-head input,
+    .om-sidebar-head [role="button"] { -webkit-app-region: no-drag; }
+  `);
 }
 
 function appendLog(line: string): void {
