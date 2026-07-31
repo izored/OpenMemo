@@ -65,10 +65,59 @@ re-run.
 
 ## ⚠️ START HERE NEXT SESSION — finish Phase 0
 
-The queue core **and** its startup wiring are committed and stable (94 passed,
-verified over 5 consecutive full runs). One task remains.
+Queue core, janitor, startup wiring and `job_handlers.py` are all committed and
+stable (94 passed over 5 consecutive full runs). **Two** tasks remain, and the
+first is a genuine unsolved problem — read it before touching anything.
 
-### Migrate the ~25 call sites
+### 1. UNSOLVED: registering handlers makes `GET /api/memos` return empty
+
+Adding one line to `main.py`:
+
+```python
+import backend.core.job_handlers  # noqa: F401 — registers the job kinds
+```
+
+makes `test_playlist_feed_filter` fail intermittently — **3 of 5 full runs**,
+1–3 tests each, different tests each time. The line is currently commented out
+with a pointer to this section, so the suite is green.
+
+**What is ruled out** (each verified, do not redo):
+
+| hypothesis | verdict |
+|---|---|
+| The queue schema / `create_table` in migrations | ❌ innocent — passes 5/5 alone |
+| DB I/O during lifespan startup | ✅ was a *real* and *separate* bug, fixed by the janitor. Not this. |
+| Write-lock contention with the raw `sqlite3` writer | ❌ a read-only `SELECT` at startup also reproduced it |
+| The test helper's UPDATE silently affecting 0 rows | ❌ **disproved** — added `expect_rows=1` with retries to `_db_exec`; it never once fired, so the write always lands |
+
+**Where that leaves it.** The row is written correctly, yet the subsequent
+`GET /api/memos` returns `200` with an empty `items` list. So it is a **read**
+problem, not a write problem. Registering the handlers spawns 15 workers
+(2+2+4+3+1+1+1+1) plus the janitor, each opening a **fresh aiosqlite connection
+every 2 seconds** because the engine uses `NullPool` — and aiosqlite runs each
+connection on its own thread.
+
+Best next hypotheses, in order:
+
+1. **Thread/connection churn starving the test event loop.** 16 tasks × a new
+   connection every 2s, across ~90 TestClient lifecycles. Try raising
+   `IDLE_POLL_SECONDS` sharply, or having idle workers back off exponentially,
+   and see if the failure rate tracks it. That would confirm load as the cause.
+2. **A WAL read snapshot held open by a worker connection**, making the API's
+   connection read a stale view. Try `PRAGMA read_uncommitted` off / explicit
+   `COMMIT` after the claim SELECT, or wrap `_claim` in an explicit transaction
+   that closes promptly.
+3. **Workers should not run in tests at all.** Arguably correct regardless: a
+   test asserting API behaviour has no business running a background pool. Gate
+   `start_workers()` on an env var the conftest sets, and test the queue
+   directly (as `test_jobs_queue.py` already does). This is the pragmatic
+   escape hatch if 1 and 2 do not pan out — but treat it as a last resort,
+   because it stops the suite from ever covering the real startup path.
+
+Do **not** ship the handler import until this is understood. An intermittently
+empty memo list is the worst possible failure mode for this app.
+
+### 2. Then migrate the ~25 call sites
 
 Replace fire-and-forget background tasks with `enqueue`:
 
