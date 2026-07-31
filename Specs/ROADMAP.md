@@ -240,6 +240,25 @@ no user action required. All run on the existing APScheduler instance wired in
 
 ---
 
+## v3.3.0 — Mesh: two-way device sync *(IN PROGRESS — ADR-024)*
+
+Design settled, phased implementation tracked in `plans/024-mesh-execution.md`.
+A MacBook and a Windows/Docker box hold one library, both writable, no account
+and no server. Paired once with a 12-word code. Off by default behind a single
+Settings toggle.
+
+- [ ] **Phase 0 — Job queue** *(not Mesh-gated; fixes a live bug)* — persistent `job_queue` with bounded concurrency, priority and retry. Today 25 `background_tasks.add_task` sites run unbounded and lose everything on restart, so importing 40 memos spawns 40 downloads.
+- [ ] **Phase 1 — Mesh flag + Settings section** — `mesh_enabled`, gating helper, triggers created on enable and dropped on disable
+- [ ] **Phase 2 — `change_log`, triggers, HLC** — tombstones for tables that hard-delete today; hybrid logical clock instead of wall-clock LWW
+- [ ] **Phase 3 — Merge engine** — pure functions, two-device simulation, every test run in both directions
+- [ ] **Phase 4 — Journal, snapshot, rollback** — every synced write logged and reversible, before the first one happens
+- [ ] **Phase 5 — Transport + protocol** — WebSocket dialed outward, metadata only. Shippable on its own.
+- [ ] **Phase 6 — Verification dialogue** — one field-diff dialog for every memo type; keep-both preselected
+- [ ] **Phase 7 — Magnets + resolver** — sync the recipe not the payload; 94% of media refetched from source, peer as backstop
+- [ ] **Phase 8 — Mesh code, discovery, pairing, roles** — BIP39 + HKDF + keychain, mDNS, QR, primary-device role incl. Telegram singleton guard
+
+---
+
 ## v2.0.0 — Collaboration *(Future)*
 
 - [ ] **Multi-user / workspace sharing**
