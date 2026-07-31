@@ -526,6 +526,14 @@ async def extract_video(url: str) -> dict:
     parsed = urlparse(url)
     domain = parsed.netloc.lstrip("www.")
 
+    # Instagram resolves through the guest media-info API first (extractor tier
+    # ladder in _instagram_resolve): yt-dlp login-walls every IG post now, and
+    # only the media-info JSON carries the full carousel. Photo/carousel/video
+    # all come back here; a total block returns a graceful needs-login link
+    # instead of a dead video card.
+    if "instagram.com" in domain:
+        return await _instagram_resolve(url, domain)
+
     try:
         result = subprocess.run(
             ["yt-dlp", "--dump-json", "--no-playlist",
@@ -561,17 +569,8 @@ async def extract_video(url: str) -> dict:
     except Exception:
         pass
 
-    # yt-dlp failed (private, login-required, unsupported, or a non-video item
-    # like a photo post). An Instagram /p/ that yt-dlp can't pull is almost
-    # always a PHOTO post ("No video formats found") — resolve it as a real
-    # image memo via the crawler-UA OpenGraph path instead of a video-shaped
-    # embed card, so the photo itself lands in openMemo (OPNMMO plan:
-    # instagram-telegram-capture, ADR-020).
-    if "instagram.com" in domain:
-        ig = await _instagram_photo_meta(url, domain)
-        if ig is not None:
-            return ig
-
+    # yt-dlp failed (private, login-required, unsupported, or a non-video item).
+    # Instagram is handled earlier via _instagram_resolve and never reaches here.
     result = await _minimal_link(url, domain)
     # A photo post on a video host must not become a video memo. Downgrade to
     # image only when the URL path clearly says photo; an audio-only host stays
@@ -663,14 +662,18 @@ def _is_instagram_video_path(url: str) -> bool:
     return any(seg in path for seg in ("/reel/", "/reels/", "/tv/"))
 
 
-def _parse_gallery_dl_dump(text: str) -> tuple[str, str] | None:
-    """First full-size image URL + caption out of `gallery-dl -j` output.
+def _parse_gallery_dl_dump(text: str) -> tuple[list[str], str] | None:
+    """ALL full-size image URLs + caption out of `gallery-dl -j` output.
 
     The dump is a JSON array of [type, ...] entries; type 3 = a downloadable
-    URL with its metadata dict (description holds the caption). Defensive by
+    URL with its metadata dict (description holds the caption). A carousel yields
+    one type-3 entry PER slide, so we collect them all (ordered) instead of just
+    the first — that is what makes the whole gallery land. Defensive by
     construction — any shape surprise returns None, never raises."""
     try:
         entries = json.loads(text)
+        urls: list[str] = []
+        caption = ""
         for entry in entries:
             if (
                 isinstance(entry, list)
@@ -679,15 +682,19 @@ def _parse_gallery_dl_dump(text: str) -> tuple[str, str] | None:
                 and isinstance(entry[1], str)
                 and entry[1].startswith("http")
             ):
-                meta = entry[2] if isinstance(entry[2], dict) else {}
-                return entry[1], str(meta.get("description") or "")
+                urls.append(entry[1])
+                if not caption:
+                    meta = entry[2] if isinstance(entry[2], dict) else {}
+                    caption = str(meta.get("description") or "")
+        if urls:
+            return urls, caption
     except Exception:
         pass
     return None
 
 
-async def _instagram_gallery_dl(url: str) -> tuple[str, str] | None:
-    """Full-size image URL + caption via gallery-dl and the ADR-012 cookie
+async def _instagram_gallery_dl(url: str) -> tuple[list[str], str] | None:
+    """All full-size image URLs + caption via gallery-dl and the ADR-012 cookie
     jar. None when cookies are absent, the tool is missing (dev venv), or
     extraction fails — the caller falls down the tier ladder."""
     from backend.core.app_settings import cookies_present, get_cookies_path
@@ -713,69 +720,113 @@ async def _instagram_gallery_dl(url: str) -> tuple[str, str] | None:
         return None
 
 
-async def _instagram_photo_meta(url: str, domain: str) -> dict | None:
-    """Resolve an Instagram photo post into an image-memo dict. Returns None
-    for video paths (/reel/), video pages (og:video), or when every tier
-    fails, so the caller can fall through to the generic link path.
-
-    Resolution ladder, best first (IG re-encodes all uploads server-side, so
-    ~1080–1440 px is the ceiling that exists anywhere — the true original
-    never leaves Instagram):
-      1. gallery-dl + cookie jar  → IG's full display file, uncropped
-      2. headless DOM grab        → rendered image, ~1080 px, uncropped
-      3. crawler-UA og:image      → 640 px square CROP (IG's CDN bakes the
-         crop into the signed URL — stp=c…, verified untamperable, 403)
-    The winning tier is logged per save so resolution stays observable."""
-    if _is_instagram_video_path(url):
-        return None
-    # Crawler fetch always runs: cheapest source of title/caption, and its
-    # og:video tag is the video-page guard for ambiguous /p/ URLs.
-    meta = await _fetch_og_meta(url, user_agent=_CRAWLER_UA)
-    thumbnail = meta.get("thumbnail_path")
-    if not thumbnail:
-        return None
-    # og:video present = this is a VIDEO page yt-dlp merely failed on (private,
-    # rate-limited). Its og:image is just the poster frame — don't misfile the
-    # memo as an image; let the caller keep the video/embed shape.
-    if meta.get("video_url"):
-        return None
-
-    description = meta.get("description") or ""
-    tier = "crawler-og-640"
-
-    # Tier 1 — gallery-dl with cookies: full display resolution.
-    full = await _instagram_gallery_dl(url)
-    if full:
-        thumbnail = full[0]
-        description = full[1] or description
-        tier = "gallery-dl-full"
-    else:
-        # Tier 2 — headless render, largest visible image (uncropped ~1080).
-        try:
-            from backend.core.headless import render_page
-
-            rendered = await render_page(url, want_main_image=True)
-            main_img = (rendered or {}).get("main_image")
-            if main_img:
-                thumbnail = main_img
-                tier = "headless-dom"
-        except Exception:
-            pass
-
-    log.info("instagram photo resolved via %s: %s", tier, url)
+def _instagram_needs_cookies(url: str, domain: str) -> dict:
+    """Graceful fallback when every IG tier is blocked: a real LINK memo (never a
+    dead 'video' card) whose description tells the user to connect Instagram.
+    Retryable — once a session exists, re-saving resolves it fully."""
+    log.info("instagram unresolved (login/rate-limit): %s", url)
     return {
-        "title": meta.get("title") or url,
-        "description": description[:500],
-        "content_text": description,
+        "title": "Instagram post",
+        "description": (
+            "Couldn't pull this Instagram post — Instagram now requires a login "
+            "to read post media. Connect Instagram in Settings, then save the "
+            "link again to pull the photo(s)."
+        ),
+        "content_text": url,
         "source_url": canonical_source_url(url),
         "source_domain": domain,
         "source_favicon": f"https://www.google.com/s2/favicons?domain={domain}&sz=32",
-        # The signed CDN URL expires (oe= param) — ingest's cache_thumbnail
-        # downloads it locally right after save, which is what makes the memo
-        # survive the post being deleted.
-        "thumbnail_path": thumbnail,
-        "type": "image",
+        "thumbnail_path": "",
+        "type": "link",
     }
+
+
+async def _instagram_resolve(url: str, domain: str) -> dict:
+    """Resolve any Instagram post (photo / carousel / video) to a memo dict.
+
+    Tier ladder, cheapest-first (see core/instagram.py for the API details):
+      1. guest media-info API, no cookies   — works from a "warm" IP
+      2. guest media-info API + cookie jar  — a logged-in session is trusted
+         even from a rate-limited IP (yt_cookies.txt: ADR-012 + in-app login)
+      3. gallery-dl + cookies                — all carousel slides, full-res
+      4. headless logged-in DOM grab         — single largest rendered image
+      5. graceful needs-login LINK memo      — never a dead card
+    A carousel becomes a `gallery` (type=image, first slide = thumbnail); a
+    single photo is type=image; a single video keeps the video/embed shape with
+    a real poster. Always returns a dict (never None) — the caller stores it."""
+    from backend.core.app_settings import cookies_present, get_cookies_path
+    from backend.core.instagram import fetch_media_info
+
+    fav = f"https://www.google.com/s2/favicons?domain={domain}&sz=32"
+    cookies = get_cookies_path() if cookies_present() else None
+
+    # Tiers 1–2: the guest media-info API (anonymous, then with the session jar).
+    info = await fetch_media_info(url)
+    if info is None and cookies is not None:
+        info = await fetch_media_info(url, cookies_path=cookies)
+    if info is not None:
+        caption = info.get("caption") or ""
+        base = {
+            "title": info.get("title") or "Instagram post",
+            "description": caption[:500],
+            "content_text": caption,
+            "source_url": canonical_source_url(url),
+            "source_domain": domain,
+            "source_favicon": fav,
+            # Signed CDN URLs expire (oe=) — ingest.cache_thumbnail localizes the
+            # thumbnail right after save so the memo survives the post's deletion.
+            "thumbnail_path": info.get("thumbnail") or "",
+        }
+        if info.get("media_type") == "carousel":
+            base["gallery"] = info.get("gallery")
+            base["type"] = "image"
+        elif info.get("media_type") == "video":
+            base["video_description"] = caption
+            base["type"] = "video"
+        else:
+            base["type"] = "image"
+        return base
+
+    # Tier 3 — gallery-dl (cookies): all carousel slides, uncropped.
+    full = await _instagram_gallery_dl(url)
+    if full and full[0]:
+        urls, caption = full
+        slides = [{"url": u, "type": "image"} for u in urls]
+        return {
+            "title": (caption.splitlines()[0].strip() if caption else "") or "Instagram post",
+            "description": caption[:500],
+            "content_text": caption,
+            "source_url": canonical_source_url(url),
+            "source_domain": domain,
+            "source_favicon": fav,
+            "thumbnail_path": urls[0],
+            "gallery": slides if len(slides) > 1 else None,
+            "type": "image",
+        }
+
+    # Tier 4 — headless render, largest visible image (needs a logged-in context;
+    # unavailable in dev where patchright isn't installed → skipped gracefully).
+    try:
+        from backend.core.headless import render_page
+
+        rendered = await render_page(url, want_main_image=True)
+        main_img = (rendered or {}).get("main_image")
+        if main_img:
+            return {
+                "title": "Instagram post",
+                "description": "",
+                "content_text": "",
+                "source_url": canonical_source_url(url),
+                "source_domain": domain,
+                "source_favicon": fav,
+                "thumbnail_path": main_img,
+                "type": "image",
+            }
+    except Exception:
+        pass
+
+    # Tier 5 — nothing worked: a clean, retryable needs-login link.
+    return _instagram_needs_cookies(url, domain)
 
 
 async def _fetch_og_meta(url: str, user_agent: str | None = None) -> dict:

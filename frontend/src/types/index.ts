@@ -11,6 +11,10 @@ export interface Memo {
   source_favicon?: string;
   file_path?: string;
   thumbnail_path?: string;
+  /** Multi-image carousel (Instagram sidecar, multi-photo posts). Ordered
+   *  slides; thumbnail_path is the first one so the dashboard shows one cover.
+   *  Absent/≤1 item = single-media memo. */
+  gallery?: GalleryItem[] | null;
   ai_summary?: string;
   // On-demand AI summaries cached per mode (timestamp | insights | essay).
   summaries?: Partial<Record<SummaryMode, string>> | null;
@@ -52,6 +56,15 @@ export interface Memo {
 }
 
 export type MemoType = 'note' | 'article' | 'video' | 'image' | 'audio' | 'document' | 'link' | 'code' | 'file';
+
+/** One slide of a carousel memo. `url` is always a still (a photo, or a video
+ *  slide's poster) so it renders without a player; `video_url` is present when
+ *  the slide is a video, for a future inline-play upgrade. */
+export interface GalleryItem {
+  url: string;
+  type: 'image' | 'video';
+  video_url?: string;
+}
 
 export type SummaryMode = 'timestamp' | 'insights' | 'essay';
 

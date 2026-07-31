@@ -139,7 +139,7 @@ async def list_memos(
         load_only(
             Memo.id, Memo.type, Memo.title, Memo.description,
             Memo.source_url, Memo.source_domain, Memo.source_favicon,
-            Memo.thumbnail_path, Memo.file_path, Memo.ai_summary, Memo.notes,
+            Memo.thumbnail_path, Memo.gallery, Memo.file_path, Memo.ai_summary, Memo.notes,
             Memo.sort_order, Memo.pinned, Memo.liked, Memo.hidden, Memo.card_size,
             Memo.audio_kind, Memo.audio_artist, Memo.audio_album, Memo.is_processed,
             Memo.embed_status, Memo.localize_status, Memo.localize_error,
@@ -227,6 +227,8 @@ async def list_memos(
                 "source_domain": m.source_domain,
                 "source_favicon": m.source_favicon,
                 "thumbnail_path": m.thumbnail_path,
+                # Carousel: the whole ordered gallery so a card can badge "1/N".
+                "gallery": m.gallery,
                 "file_path": m.file_path,
                 "ai_summary": m.ai_summary,
                 "notes": m.notes,
@@ -293,6 +295,7 @@ async def get_memo(memo_id: str, db: AsyncSession = Depends(get_db)):
         "source_favicon": memo.source_favicon,
         "file_path": memo.file_path,
         "thumbnail_path": memo.thumbnail_path,
+        "gallery": memo.gallery,
         "ai_summary": memo.ai_summary,
         "summaries": memo.summaries,
         "notes": memo.notes,

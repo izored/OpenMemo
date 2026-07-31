@@ -209,6 +209,35 @@ async def cache_thumbnail(memo_id: str):
             await db.commit()
 
 
+async def cache_gallery(memo_id: str):
+    """Localize every slide of a carousel memo so the gallery survives the source
+    being deleted (Instagram CDN URLs are signed and expire). Each remote slide
+    is downloaded to the thumbs dir and its URL rewritten to the local path; the
+    first local slide also becomes thumbnail_path. Best-effort per slide — a
+    dead slide keeps its remote URL rather than aborting the rest."""
+    async with AsyncSessionLocal() as db:
+        memo = await db.get(Memo, memo_id)
+        if not memo or not memo.gallery:
+            return
+        slides = list(memo.gallery)
+        changed = False
+        for i, slide in enumerate(slides):
+            src = (slide or {}).get("url") if isinstance(slide, dict) else None
+            if not src or not src.startswith("http"):
+                continue
+            local = await _download_thumb(src, f"{memo_id}_g{i}")
+            if local:
+                slides[i] = {**slide, "url": local}
+                changed = True
+        if changed:
+            memo.gallery = slides
+            first = slides[0].get("url") if isinstance(slides[0], dict) else None
+            if first and not first.startswith("http"):
+                memo.thumbnail_path = first
+            memo.updated_at = datetime.utcnow()
+            await db.commit()
+
+
 # --- Background processing ---
 
 async def _localize_memo_task(memo_id: str):
@@ -333,6 +362,11 @@ async def ingest_url_core(data: URLIngest, db: AsyncSession, schedule) -> dict:
     # audio_only is exempt: "give me the SONG of this link" is a different ask
     # than the earlier bookmark of the same URL (Music page "+").
     data.url = canonical_source_url(data.url)
+    # An unresolved Instagram "needs login" bookmark that we UPGRADE in place on a
+    # re-save (after the user connects Instagram) instead of returning "duplicate"
+    # — otherwise the dedup guard would freeze it as a dead link forever, even
+    # though its own message tells the user to save it again.
+    upgrade_memo: Optional[Memo] = None
     if not data.audio_only:
         existing = (
             await db.execute(
@@ -342,12 +376,21 @@ async def ingest_url_core(data: URLIngest, db: AsyncSession, schedule) -> dict:
             )
         ).scalars().first()
         if existing is not None:
-            return {
-                "id": existing.id,
-                "title": existing.title,
-                "type": existing.type,
-                "status": "duplicate",
-            }
+            stale_ig_link = (
+                not data.no_pull
+                and existing.type == "link"
+                and "instagram.com" in (existing.source_domain or "")
+                and not existing.gallery
+                and not (existing.thumbnail_path or "")
+            )
+            if not stale_ig_link:
+                return {
+                    "id": existing.id,
+                    "title": existing.title,
+                    "type": existing.type,
+                    "status": "duplicate",
+                }
+            upgrade_memo = existing
 
     if data.no_pull:
         # "Don't pull" (OPNMMO-0049): no yt-dlp, no headless render, no media
@@ -375,22 +418,47 @@ async def ingest_url_core(data: URLIngest, db: AsyncSession, schedule) -> dict:
     if title_shortened and not (description and str(description).strip()):
         description = full_title
 
-    memo = Memo(
-        id=str(uuid.uuid4()),
-        workspace_id=sanitize_workspace_id(data.workspace_id),
-        type=extracted.get("type", "link"),
-        title=short_title,
-        description=description,
-        content_text=extracted.get("content_text"),
-        content_raw=extracted.get("content_raw"),
-        video_description=extracted.get("video_description"),
-        source_url=data.url,
-        source_domain=extracted.get("source_domain"),
-        source_favicon=extracted.get("source_favicon"),
-        thumbnail_path=extracted.get("thumbnail_path"),
-        created_at=datetime.utcnow(),
-        updated_at=datetime.utcnow(),
-    )
+    # Upgrading a stale Instagram link: if it STILL resolves to nothing (cookies
+    # not connected yet, or IP still throttled), leave the bookmark untouched
+    # rather than churning it — the user can retry once connected.
+    if upgrade_memo is not None and extracted.get("type") == "link" and not extracted.get("gallery"):
+        return {"id": upgrade_memo.id, "title": upgrade_memo.title, "type": "link", "status": "duplicate"}
+
+    if upgrade_memo is not None:
+        # In-place upgrade: keep the id + collection memberships, replace the
+        # resolved fields with the freshly pulled media (photo / carousel / video).
+        memo = upgrade_memo
+        memo.type = extracted.get("type", "link")
+        memo.title = short_title
+        memo.description = description
+        memo.content_text = extracted.get("content_text")
+        memo.content_raw = extracted.get("content_raw")
+        memo.video_description = extracted.get("video_description")
+        memo.source_domain = extracted.get("source_domain")
+        memo.source_favicon = extracted.get("source_favicon")
+        memo.thumbnail_path = extracted.get("thumbnail_path")
+        memo.gallery = extracted.get("gallery")
+        memo.updated_at = datetime.utcnow()
+    else:
+        memo = Memo(
+            id=str(uuid.uuid4()),
+            workspace_id=sanitize_workspace_id(data.workspace_id),
+            type=extracted.get("type", "link"),
+            title=short_title,
+            description=description,
+            content_text=extracted.get("content_text"),
+            content_raw=extracted.get("content_raw"),
+            video_description=extracted.get("video_description"),
+            source_url=data.url,
+            source_domain=extracted.get("source_domain"),
+            source_favicon=extracted.get("source_favicon"),
+            thumbnail_path=extracted.get("thumbnail_path"),
+            # Carousel: the ordered multi-image gallery (Instagram sidecar, …). The
+            # first slide is also the thumbnail, so the dashboard shows one cover.
+            gallery=extracted.get("gallery"),
+            created_at=datetime.utcnow(),
+            updated_at=datetime.utcnow(),
+        )
     # "Don't pull" stays a plain link: skip the domain-based type forcing (so a
     # Threads/Reddit URL isn't reclassified video) and the audio kind, and never
     # auto-localize below (OPNMMO-0049).
@@ -447,13 +515,21 @@ async def ingest_url_core(data: URLIngest, db: AsyncSession, schedule) -> dict:
     if auto_localize_audio or auto_localize_video:
         memo.localize_status = "pending"
 
-    db.add(memo)
-    await _attach_collection(db, memo, data.collection_id)
+    if upgrade_memo is None:
+        # New memo: persist it and file it into the requested collection. An
+        # in-place upgrade is already persistent and keeps its memberships —
+        # re-attaching would reset its collections (set_committed_value wipes).
+        db.add(memo)
+        await _attach_collection(db, memo, data.collection_id)
     await db.commit()
 
     # Process in background
     schedule(process_memo, memo.id)
-    if memo.thumbnail_path and memo.thumbnail_path.startswith("http"):
+    # A carousel localizes ALL slides (cache_gallery also owns slide 0's thumbnail);
+    # a single-image/link memo just localizes its one thumbnail.
+    if memo.gallery:
+        schedule(cache_gallery, memo.id)
+    elif memo.thumbnail_path and memo.thumbnail_path.startswith("http"):
         schedule(cache_thumbnail, memo.id)
     schedule(_localize_memo_task, memo.id)
     if auto_localize_audio:

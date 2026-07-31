@@ -91,6 +91,11 @@ class Memo(Base):
     source_favicon = Column(String, nullable=True)
     file_path = Column(String, nullable=True)
     thumbnail_path = Column(String, nullable=True)
+    # Multi-image carousel (Instagram sidecar, X/FB multi-photo, …). Ordered list
+    # of media items: [{"url": str, "type": "image"|"video"}]. thumbnail_path stays
+    # = the FIRST item so the dashboard/card render one cover; MemoDetail + Lightbox
+    # page through the whole gallery when len > 1. NULL/empty = single-media memo.
+    gallery = Column(JSON, nullable=True)
     ai_summary = Column(Text, nullable=True)
     embedding_ids = Column(JSON, nullable=True)  # list of chunk IDs in ChromaDB
     notes = Column(Text, nullable=True)

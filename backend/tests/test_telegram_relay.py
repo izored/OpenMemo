@@ -76,13 +76,22 @@ class TestInstagramVideoPath:
 
 
 class TestGalleryDlDump:
-    def test_picks_first_type3_url_and_caption(self):
+    def test_collects_all_type3_urls_and_first_caption(self):
+        # A carousel yields one type-3 entry per slide — the parser must return
+        # ALL of them (ordered), not just the first, so the whole gallery lands.
         dump = (
             '[[2, {"category": "instagram"}],'
             ' [3, "https://cdn.example/full.jpg", {"description": "the caption"}],'
             ' [3, "https://cdn.example/second.jpg", {"description": "the caption"}]]'
         )
-        assert _parse_gallery_dl_dump(dump) == ("https://cdn.example/full.jpg", "the caption")
+        assert _parse_gallery_dl_dump(dump) == (
+            ["https://cdn.example/full.jpg", "https://cdn.example/second.jpg"],
+            "the caption",
+        )
+
+    def test_single_image_returns_one(self):
+        dump = '[[3, "https://cdn.example/only.jpg", {"description": "cap"}]]'
+        assert _parse_gallery_dl_dump(dump) == (["https://cdn.example/only.jpg"], "cap")
 
     def test_garbage_returns_none(self):
         assert _parse_gallery_dl_dump("not json") is None

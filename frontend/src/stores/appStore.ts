@@ -173,6 +173,13 @@ interface AppState {
   openLightbox: (group: Memo[], index: number) => void;
   closeLightbox: () => void;
   lightboxStep: (delta: number) => void;
+  // Carousel (intra-memo) lightbox mode: a single memo's gallery of image URLs.
+  // Arrows page SLIDES, not memos. Separate from the memo-group mode above so
+  // the two never entangle. Empty = not in gallery mode.
+  lightboxGallery: string[];
+  lightboxSlide: number;
+  openGalleryLightbox: (urls: string[], index: number) => void;
+  galleryStep: (delta: number) => void;
 
   // Appearance tweaks (theme / accent / card / density / grid / background)
   tweaks: Tweaks;
@@ -289,13 +296,23 @@ export const useAppStore = create<AppState>((set) => ({
 
   lightboxGroup: [],
   lightboxIndex: -1,
-  openLightbox: (group, index) => set({ lightboxGroup: group, lightboxIndex: index }),
-  closeLightbox: () => set({ lightboxGroup: [], lightboxIndex: -1 }),
+  openLightbox: (group, index) => set({ lightboxGroup: group, lightboxIndex: index, lightboxGallery: [], lightboxSlide: -1 }),
+  closeLightbox: () => set({ lightboxGroup: [], lightboxIndex: -1, lightboxGallery: [], lightboxSlide: -1 }),
   lightboxStep: (delta) =>
     set((s) => {
       if (s.lightboxIndex < 0 || s.lightboxGroup.length === 0) return {};
       const n = s.lightboxGroup.length;
       return { lightboxIndex: (s.lightboxIndex + delta + n) % n };
+    }),
+  lightboxGallery: [],
+  lightboxSlide: -1,
+  openGalleryLightbox: (urls, index) =>
+    set({ lightboxGallery: urls, lightboxSlide: index, lightboxGroup: [], lightboxIndex: -1 }),
+  galleryStep: (delta) =>
+    set((s) => {
+      if (s.lightboxSlide < 0 || s.lightboxGallery.length === 0) return {};
+      const n = s.lightboxGallery.length;
+      return { lightboxSlide: (s.lightboxSlide + delta + n) % n };
     }),
 
   tweaks: loadTweaks(),
