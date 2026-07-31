@@ -63,76 +63,75 @@ re-run.
 
 ---
 
-## ⚠️ START HERE NEXT SESSION — Phase 0 blocker
+## ⚠️ START HERE NEXT SESSION — finish Phase 0
 
-`backend/core/jobs.py` and its tests are committed and green (94 passed). Two
-things remain before Phase 0 is `DONE`.
+The queue core **and** its startup wiring are committed and stable (94 passed,
+verified over 5 consecutive full runs). One task remains.
 
-### 1. Startup wiring causes a test regression (must debug first)
+### Migrate the ~25 call sites
 
-Adding `await jobs.start_workers()` to the `main.py` lifespan makes
-`backend/tests/test_playlist_feed_filter.py` fail 4 of 5 tests — the memo list
-endpoint starts returning an **empty set** from the second test onward. The
-first test in the file passes, so it is state leaking across TestClient
-instances, not a broken query.
+Replace fire-and-forget background tasks with `enqueue`:
 
-Isolated by bisecting the two edits:
-
-| change | result |
+| file | sites |
 |---|---|
-| `database.py` migration only (`create_table` in `_run_migrations`) | ✅ 5 passed |
-| `+ main.py` lifespan wiring | ❌ 4 failed |
+| `backend/api/ingest.py` | ~17 `background_tasks.add_task` + 1 `asyncio.create_task` (line 297) |
+| `backend/api/memos.py` | 5 |
+| `backend/api/music.py` | 1 |
 
-So the queue schema is innocent; the lifespan hook is the trigger. With no
-handlers registered `start_workers()` spawns **zero** worker tasks, so it is
-almost certainly `reclaim(all_running=True)` opening an `AsyncSessionLocal`
-during lifespan startup, interacting badly with the session-scoped test DB and
-the per-test event loop. Suspect NullPool + aiosqlite connections bound to a
-closed loop.
+Steps:
 
-**Do not commit the wiring until this is understood** — the memo list going
-empty is exactly the class of bug that must not reach a user. The reverted hunk,
-to reapply once fixed:
-
-```python
-# in the lifespan, before the scheduler is created
-from backend.core import jobs
-await jobs.start_workers()
-
-# alongside the reclassify cron
-scheduler.add_job(
-    jobs.reclaim,
-    CronTrigger(minute="*/15"),
-    id="jobs_reclaim_expired",
-    replace_existing=True,
-)
-
-# in shutdown, before scheduler.shutdown
-try:
-    await jobs.stop_workers()
-except Exception:
-    pass
-```
-
-Worth trying first: make `start_workers()` a no-op when `_HANDLERS` is empty
-(nothing to run, so nothing to reclaim for), which both fixes the symptom and is
-correct on its own.
-
-### 2. Then migrate the call sites
-
-25 `background_tasks.add_task` sites in `ingest.py`, `memos.py`, `music.py` plus
-bare `asyncio.create_task` in `main.py` and `telegram_relay.py`. Register a
-handler per kind and swap `add_task(fn, id)` → `enqueue(kind, memo_id=id)`.
-Suggested caps: network/download 3, transcribe 1 (it already needs
-`transcribe._infer_lock`), embed 1, thumbnail 4.
+1. Create `backend/core/job_handlers.py` that imports the existing task
+   functions and registers one handler per kind. **Import it from `main.py`
+   before `start_workers()`** — `start_workers` is a no-op while `_HANDLERS` is
+   empty, so an unimported handler module means a silently idle queue.
+2. Suggested kinds and caps: `process` 2, `thumbnail` 4, `localize` 3,
+   `transcribe` 1 (it already needs `transcribe._infer_lock`), `embed` 1,
+   `playlist_download` 1.
+3. Swap `background_tasks.add_task(fn, memo_id)` →
+   `await jobs.enqueue("kind", memo_id=memo_id)`. Note the signature shift:
+   handlers take a single `payload` dict, so a task taking extra args
+   (`localize_memo_task(memo_id, "audio")`) passes them via `payload`.
+4. Keep `BackgroundTasks` in the route signatures where FastAPI needs it, or
+   remove the param if nothing else uses it.
 
 Then run review passes 2 and 3, and only then mark Phase 0 `DONE`.
+
+**Watch for:** `enqueue` raises `ValueError` for an unregistered kind. That is
+deliberate (fail loudly rather than drop work silently), but it means a typo in
+a kind string becomes a 500 on an ingest route. Cover each kind with a test.
 
 ---
 
 ## Phase log
 
 Newest entry at the top. One entry per working turn.
+
+### 2026-07-31 (later still) — blocker root-caused and fixed, wiring landed
+
+The previous entry's blocker is resolved. It was **not** what it looked like.
+
+- Bisected further: the trigger was not `start_workers` spawning workers (with
+  no handlers it spawns none) but **`reclaim()` doing database I/O inside the
+  lifespan startup**. Replacing the write with a read-only `SELECT` still broke
+  a test, so it was not write-lock contention specifically.
+- The failure was **intermittent** (3 failed, then 1, then 0 across identical
+  runs) — a race between the app's startup query and the raw `sqlite3`
+  connection `test_playlist_feed_filter._db_exec` uses to set `audio_kind`
+  straight on the DB. When that UPDATE lost the race the column stayed NULL, so
+  an `audio_kind=music` filter matched nothing and the list came back empty.
+- **Rejected the tempting fix.** Making `start_workers` a no-op when no handlers
+  are registered would have gone green immediately and hidden the bug until the
+  call sites were migrated and handlers actually existed.
+- **Real fix:** startup does no database I/O at all. A new `_janitor` task owns
+  every reclaim and runs its first sweep one poll interval later, in the
+  background. This is better design regardless — nothing sits between boot and
+  serving traffic — and it removed the need for a separate APScheduler cron
+  entry. `start_workers` is still a no-op with no handlers, but now that is a
+  statement about there being nothing to run, not a workaround.
+- Hardened `_db_exec` with an explicit `busy_timeout`. On its own it only
+  narrowed the window (still 2/1/0 failures across runs), so it is defence in
+  depth, not the fix.
+- Verified over **5 consecutive full-suite runs: 94 passed every time.**
 
 ### 2026-07-31 (later) — Phase 0 core landed, wiring blocked
 

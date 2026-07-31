@@ -23,7 +23,8 @@ def _db_exec(sql: str, *params):
     # MemoCreate exposes neither audio_kind nor playlist_born (only ingest
     # sets them), so flip the columns directly on the test DB.
     db_path = settings.DATABASE_URL.split("///", 1)[1]
-    con = sqlite3.connect(db_path)
+    con = sqlite3.connect(db_path, timeout=5.0)
+    con.execute("PRAGMA busy_timeout=5000")
     con.execute(sql, params)
     con.commit()
     con.close()

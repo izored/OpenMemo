@@ -65,6 +65,11 @@ MAX_ATTEMPTS = 3
 # instant when the user clicks play, cheap enough to idle on.
 IDLE_POLL_SECONDS = 2.0
 
+# How often the janitor sweeps for jobs whose worker died without releasing the
+# lease. Only matters for a process that stays up a long time — a restart is
+# handled by the janitor's first pass.
+RECLAIM_INTERVAL_SECONDS = 900.0
+
 
 @dataclass
 class _Handler:
@@ -379,17 +384,54 @@ async def _worker(kind: str, slot: int) -> None:
         )
 
 
+async def _janitor() -> None:
+    """Owns every reclaim. One of these runs alongside the worker pool.
+
+    Deliberately does its first reclaim from inside this background task rather
+    than from the app's lifespan startup. Touching the database synchronously
+    during startup races with anything that writes immediately after the app
+    comes up — it made `test_playlist_feed_filter` lose a raw-sqlite3 UPDATE and
+    return an empty memo list, intermittently. Startup does no I/O now; the
+    janitor picks up interrupted work a moment later, in the background, which
+    is also one less thing between boot and serving traffic.
+    """
+    first = True
+    while not _shutdown.is_set():
+        try:
+            await asyncio.wait_for(
+                _shutdown.wait(),
+                timeout=IDLE_POLL_SECONDS if first else RECLAIM_INTERVAL_SECONDS,
+            )
+            return  # shutdown signalled
+        except asyncio.TimeoutError:
+            pass
+        try:
+            # The first sweep ignores leases: a job left `running` when the
+            # process was down cannot actually be running. Later sweeps only
+            # take jobs whose lease genuinely expired, so they never steal work
+            # from a healthy in-flight worker.
+            await reclaim(all_running=first)
+        except Exception:
+            logger.exception("jobs: reclaim sweep failed")
+        first = False
+
+
 async def start_workers() -> None:
-    """Spawn the worker pool. Called once from the app lifespan startup."""
-    if _workers:
+    """Spawn the worker pool. Called once from the app lifespan startup.
+
+    Does no database I/O itself — see `_janitor`. With nothing registered there
+    is nothing to run, so this is a no-op and the queue costs a fresh install
+    exactly nothing.
+    """
+    if _workers or not _HANDLERS:
         return
     _shutdown.clear()
-    await reclaim(all_running=True)
     for kind, handler in _HANDLERS.items():
         for slot in range(handler.concurrency):
             _workers.append(asyncio.create_task(_worker(kind, slot)))
+    _workers.append(asyncio.create_task(_janitor()))
     logger.info(
-        "jobs: started %d worker(s) across %d kind(s)", len(_workers), len(_HANDLERS)
+        "jobs: started %d worker(s) across %d kind(s)", len(_workers) - 1, len(_HANDLERS)
     )
 
 

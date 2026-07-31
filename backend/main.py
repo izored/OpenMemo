@@ -222,6 +222,14 @@ async def lifespan(app: FastAPI):
 
     asyncio.create_task(run_relay_loop())
 
+    # Persistent job queue (ADR-024 §9). Spawns the bounded worker pool; it does
+    # no database I/O itself, and is a no-op until job kinds are registered.
+    # Requeuing work interrupted by a restart is the janitor's job, a moment
+    # later and off the startup path.
+    from backend.core import jobs
+
+    await jobs.start_workers()
+
     scheduler = AsyncIOScheduler()
     scheduler.add_job(
         _run_reclassify_job,
@@ -234,7 +242,11 @@ async def lifespan(app: FastAPI):
 
     yield
 
-    # Shutdown — stop the scheduler cleanly.
+    # Shutdown — stop the workers, then the scheduler, cleanly.
+    try:
+        await jobs.stop_workers()
+    except Exception:
+        pass
     try:
         scheduler.shutdown(wait=False)
     except Exception:
