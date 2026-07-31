@@ -144,6 +144,28 @@ Best next hypotheses, in order:
 Do **not** ship the handler import until this is understood. An intermittently
 empty memo list is the worst possible failure mode for this app.
 
+### 0. OPEN DECISION — confirm this before writing any code
+
+The owner raised a fair alternative and it is NOT yet settled. Ask first.
+
+**Turnstile (their idea):** leave the work where it is, just make each call site
+wait for a free slot. A semaphore. Far smaller change, much lower risk.
+
+**Ticket queue (what is built):** call sites hand work to the queue.
+
+Turnstile fixes the pile-up only. It does NOT survive app close (waiting work
+lives in memory), does not retry, cannot be reprioritised when the user clicks
+play, and cannot be shown on an Activity screen. The queue was chosen because
+Mesh phase 7 needs downloads that survive restarts — a device may fetch 20 GB
+over days — and because the owner asked for robust handling of a 40-memo
+mass import.
+
+Both are legitimate. If the owner prefers the smaller change, switch to the
+turnstile and drop the queue; do not build both.
+
+**The real count is 29 call sites, not 25** (ingest.py 23, memos.py 5,
+music.py 1). Earlier notes saying 25 are wrong.
+
 ### 2. NEXT UP — migrate the ~25 call sites
 
 **Recommended approach: a shim, not 25 rewrites.** `ingest.py:345` passes
