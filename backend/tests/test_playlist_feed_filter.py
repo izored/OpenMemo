@@ -4,6 +4,7 @@ exclude them, including the Music page library (audio_kind=music). A
 standalone song added to a playlist later (playlist_born=False) keeps its
 library spot — Spotify model."""
 import sqlite3
+import time
 
 import pytest
 from fastapi.testclient import TestClient
@@ -19,14 +20,35 @@ def client():
         yield c
 
 
-def _db_exec(sql: str, *params):
-    # MemoCreate exposes neither audio_kind nor playlist_born (only ingest
-    # sets them), so flip the columns directly on the test DB.
+def _db_exec(sql: str, *params, expect_rows: int | None = None):
+    """Flip columns straight on the test DB — MemoCreate exposes neither
+    audio_kind nor playlist_born (only ingest sets them).
+
+    This opens a second writer against a database the running app also holds
+    open in WAL mode, so it needs more care than a bare execute. `expect_rows`
+    asserts the statement actually matched something: without it a write that
+    silently affects zero rows surfaces much later as an unrelated, confusing
+    "the list came back empty" assertion, and only on some runs.
+    """
     db_path = settings.DATABASE_URL.split("///", 1)[1]
-    con = sqlite3.connect(db_path)
-    con.execute(sql, params)
-    con.commit()
-    con.close()
+    last_error: Exception | None = None
+    for attempt in range(10):
+        con = sqlite3.connect(db_path, timeout=5.0)
+        try:
+            con.execute("PRAGMA busy_timeout=5000")
+            cur = con.execute(sql, params)
+            con.commit()
+            if expect_rows is None or cur.rowcount == expect_rows:
+                return
+            last_error = AssertionError(
+                f"expected {expect_rows} row(s) affected, got {cur.rowcount}: {sql}"
+            )
+        except sqlite3.OperationalError as exc:  # locked/busy under contention
+            last_error = exc
+        finally:
+            con.close()
+        time.sleep(0.05 * (attempt + 1))
+    raise AssertionError(f"_db_exec never applied after retries: {last_error}")
 
 
 def _create_music_memo(client: TestClient, title: str, born: bool = False) -> str:
@@ -37,6 +59,7 @@ def _create_music_memo(client: TestClient, title: str, born: bool = False) -> st
         "UPDATE memos SET audio_kind = 'music', playlist_born = ? WHERE id = ?",
         1 if born else 0,
         memo_id,
+        expect_rows=1,
     )
     return memo_id
 

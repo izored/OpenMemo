@@ -677,10 +677,38 @@ Allowlist, not blocklist. A new field defaults to not-synced.
 
 ---
 
-## 13. Journal, snapshots, rollback
+## 13. The Mesh log, snapshots, rollback
 
 Sync is the first feature that writes to the database on the user's behalf,
-based on data from another machine. It gets a paper trail.
+based on data from another machine. It gets a paper trail — and that paper trail
+is a **first-class feature**, not debug plumbing.
+
+### Why the log is a feature, not a diagnostic
+
+Every other part of openMemo is something the user did. Mesh is the first part
+that acts on its own, driven by a machine that is not in front of them. When a
+memo looks wrong after a sync, "what touched this, when, and why" has to be
+answerable in the product — not by reading a terminal, and not by asking someone
+to reproduce it.
+
+So the Mesh log is held to product standards:
+
+- **Complete.** Every write Mesh makes has a row. If it is not logged, it did
+  not happen — that is an invariant to test, not an aspiration. A code path that
+  can write without journaling is a bug.
+- **Readable.** Rows render as sentences: *"Notes on 'Wesley's Theory' changed —
+  MacBook's version kept, yours saved as a copy"*, not `notes: lww`.
+- **Attributable.** Which device, which rule, which sync batch.
+- **Reversible.** Every row carries `old_value`, so any entry can be undone.
+- **Scoped.** Filterable by memo, by device, by batch, by time. Opening a memo
+  shows its own Mesh history inline.
+- **Bounded.** Retention by age and row count, capped, with the oldest pruned
+  first. Text against a 7 MB database, so the cap can be generous.
+
+It is also the debugging tool, but the order matters: build it for the user and
+it works for debugging; build it for debugging and it never becomes usable.
+
+### The table
 
 ### Every merge decision is logged
 
@@ -728,10 +756,30 @@ Two rules that keep it from making things worse:
   the peer sees a stale value and helpfully re-applies exactly what was undone.
 - **Rollback is itself journaled**, so undoing an undo works.
 
-In the UI: Settings → Sync → History. A list of batches — *"14 changes from
-Redas-MacBook, 6 minutes ago"* — expandable to the field level, each with
-**Undo**. Not a debug panel; the thing you reach for when a memo looks wrong and
-you want to know what touched it.
+In the UI, two surfaces onto the same log:
+
+- **Settings → Mesh → History.** Batches — *"14 changes from Redas-MacBook, 6
+  minutes ago"* — expandable to the field level, each row with **Undo**, plus
+  filters by device and date and an export for when something needs escalating.
+- **Inline on the memo.** A memo touched by Mesh shows its own history in the
+  detail view: what changed, from which device, when. This is where the question
+  usually gets asked, so this is where the answer belongs.
+
+Not a debug panel. The thing you reach for when a memo looks wrong and you want
+to know what touched it.
+
+### Logging that is not the journal
+
+Two other streams, deliberately separate from the per-write journal:
+
+- **Connection log** — pairing, connect, disconnect, auth failure, protocol
+  version mismatch. Answers "why is it not syncing", which is a different
+  question from "why did this memo change". Keep it short and rolling.
+- **Structured file log** for support, at `data/mesh.log`, rotating and capped.
+  Redacted by construction: **the seed, the PSK and any derived key must never
+  be logged**, and that is worth a test rather than a code review habit — a log
+  the user might send to someone else is exactly where a library-wide secret
+  must not appear.
 
 ---
 
