@@ -228,6 +228,32 @@ a kind string becomes a 500 on an ingest route. Cover each kind with a test.
 
 Newest entry at the top. One entry per working turn.
 
+### 2026-08-01 (third review round) — widened to deploy surface, no new bugs
+
+Swept the areas outside the backend entirely, as asked.
+
+| checked | verdict |
+|---|---|
+| Chrome extension | Clean. Hits one route, `/ingest/extension`, already migrated. Its response shape is unchanged and its `"status": "processing"` is a literal, not derived from job state. |
+| macOS wrapper | Clean. `macOS/src/backend.ts` spawns a single uvicorn, no `--workers`. |
+| Dockerfile / compose | Clean. Single uvicorn, no `--workers`, no replicas or scale directives. |
+| nginx | Unaffected. Response timing did not change — `add_task` already ran after the response — so `proxy_read_timeout` and buffering are untouched. |
+| Frontend timing | Clean, and better than expected. The UI treats `pending` and `processing` as the same "working" state (`MemoCard.tsx:143`, `MemoDetail.tsx:1976`), so the ≤2s gap before a worker flips one to the other is invisible. Refetch intervals are 2500–4000ms, comfortably longer than the poll. |
+
+**One latent hazard, now guarded.** The queue assumes **one process per
+database**: `reclaim(all_running=True)` requeues everything left `running` at
+startup, which is only safe because a job cannot be running if the process was
+down. Adding `--workers 4` to the Dockerfile would silently break that — process
+B's startup sweep would steal jobs process A is actively running, and the same
+download would run twice with no error anywhere.
+
+Both deployments are single-process today, so nothing is wrong. But the failure
+is silent and the change that causes it looks completely harmless, so
+`test_deployments_stay_single_process` now fails the build if either deployment
+gains `--workers`, with the reason and the fix in the assertion message.
+
+Suite: **113 passed**.
+
 ### 2026-08-01 (second review round) — 2 more real bugs, found by widening scope
 
 Owner asked for another 3-pass before merging, explicitly covering things not

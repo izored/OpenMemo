@@ -144,3 +144,32 @@ async def test_no_background_task_call_sites_remain():
             if "background_tasks.add_task(" in s:
                 offenders.append(f"{f}:{i}")
     assert not offenders, f"un-migrated call sites: {offenders}"
+
+
+def test_deployments_stay_single_process():
+    """The queue assumes ONE process per database.
+
+    `reclaim(all_running=True)` requeues every row left in `running` at startup,
+    because a job cannot be running if the process was down. Add a second
+    uvicorn worker and that becomes false: process B's startup sweep would steal
+    jobs process A is actively running, and the same download would run twice
+    with no error anywhere.
+
+    Both deployments currently spawn a single uvicorn (no --workers), so the
+    assumption holds. This pins it, because the failure mode is silent and the
+    change that breaks it looks harmless.
+    """
+    import pathlib
+
+    docker = pathlib.Path("backend/Dockerfile").read_text(encoding="utf-8")
+    assert "--workers" not in docker, (
+        "Dockerfile now starts multiple uvicorn workers. The job queue's startup "
+        "reclaim assumes one process per database — see backend/core/jobs.reclaim. "
+        "Give the queue a leader election or disable it on all but one worker."
+    )
+
+    mac = pathlib.Path("macOS/src/backend.ts")
+    if mac.exists():
+        assert "--workers" not in mac.read_text(encoding="utf-8"), (
+            "macOS wrapper now starts multiple uvicorn workers — same problem."
+        )
