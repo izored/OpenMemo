@@ -114,3 +114,33 @@ async def test_auto_and_explicit_localize_both_survive_dedupe():
     rows = await _rows()
     assert len(rows) == 2, f"one of the two localize jobs was deduped away: {rows}"
     assert {r[0] for r in rows} == {"localize", "localize_auto"}
+
+
+async def test_relay_path_routes_through_the_queue():
+    """Review pass 1 (second round). The Telegram relay collected follow-up jobs
+    and ran them itself with _fire_and_forget, bypassing the queue entirely — so
+    the heaviest ingest path kept the exact pile-up the queue exists to stop.
+    It must hand them over instead."""
+    import inspect
+    from backend.services import telegram_relay
+
+    src = inspect.getsource(telegram_relay._save_url)
+    assert "queue_task(fn, *args)" in src, "relay must hand follow-ups to the queue"
+    assert "_fire_and_forget" not in src, "relay must not run follow-ups itself"
+    assert not hasattr(telegram_relay, "_fire_and_forget"), "dead helper should be gone"
+
+
+async def test_no_background_task_call_sites_remain():
+    """Nothing should start a background chore outside the queue."""
+    import pathlib
+
+    offenders = []
+    for f in ["backend/api/ingest.py", "backend/api/memos.py", "backend/api/music.py",
+              "backend/services/telegram_relay.py"]:
+        for i, line in enumerate(pathlib.Path(f).read_text(encoding="utf-8").splitlines(), 1):
+            s = line.strip()
+            if s.startswith("#") or s.startswith('"') or s.startswith("*"):
+                continue
+            if "background_tasks.add_task(" in s:
+                offenders.append(f"{f}:{i}")
+    assert not offenders, f"un-migrated call sites: {offenders}"

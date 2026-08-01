@@ -143,6 +143,20 @@ async def restore_backup(file: UploadFile = File(...)):
                 sidecar.unlink(missing_ok=True)
             except OSError:
                 logging.getLogger(__name__).warning("Could not remove stale sidecar %s", sidecar)
+        # Drop any queued work carried in by the backup. job_queue is this
+        # device's transient to-do list, not user data: restoring it would
+        # resurrect jobs from whenever the backup was taken and re-run downloads
+        # for memos that may not exist in the restored library. The startup
+        # sweep would then dutifully requeue them. Best-effort — a backup taken
+        # before the queue existed simply has no such table.
+        try:
+            con = sqlite3.connect(str(tmp_db))
+            con.execute("DELETE FROM job_queue")
+            con.commit()
+            con.close()
+        except sqlite3.Error:
+            pass
+
         shutil.copy2(tmp_db, db_path)
 
     if scope == "full":

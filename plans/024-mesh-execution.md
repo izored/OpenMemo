@@ -228,6 +228,45 @@ a kind string becomes a 500 on an ingest route. Cover each kind with a test.
 
 Newest entry at the top. One entry per working turn.
 
+### 2026-08-01 (second review round) — 2 more real bugs, found by widening scope
+
+Owner asked for another 3-pass before merging, explicitly covering things not
+looked at yet. Two genuine bugs surfaced — both outside the files changed so far,
+which is exactly why the wider sweep was worth it.
+
+**Pass 1 — the Telegram relay never got migrated.** `_save_url` collected its
+follow-up jobs and ran them itself via `_fire_and_forget`, bypassing the queue
+completely. That is the owner's heaviest ingest path (Telegram, ~20 saves/day,
+and batch forwards), so the pile-up the queue exists to prevent survived exactly
+where it hurts most: a batch of forwarded links started a download per link at
+once, and a restart lost all of them. Now hands every job to `queue_task`. Jobs
+are still collected during ingest and handed over only after commit, so nothing
+is queued for a memo that failed to save. `_fire_and_forget` is now dead and
+removed.
+
+**Pass 2 — backup/restore resurrected stale jobs.** `_sqlite_backup` copies the
+whole database, `job_queue` included. Restoring therefore reinstated whatever was
+queued when the backup was taken, and the startup sweep dutifully requeued it —
+re-running downloads for memos that may not exist in the restored library.
+`job_queue` is this device's transient to-do list, not user data, so restore now
+clears it. Guarded, since a backup predating the queue has no such table.
+
+**Pass 3 — no bugs.** `BackgroundTasks` parameters remain in several route
+signatures, unused but harmless (FastAPI still injects them); removing them
+widens the diff for no behaviour change. Confirmed the f-string SQL in
+`reclaim()` interpolates only a hardcoded literal chosen by a bool, never user
+input. No new dependencies — everything used is stdlib or SQLAlchemy.
+
+Two new guard tests: one pins the relay to the queue, one fails if any
+`background_tasks.add_task` call site ever reappears in the migrated files.
+
+Suite: **112 passed** across 3 consecutive runs.
+
+**Process note.** A first-round review that only looked at the files I had just
+edited missed both of these. Reviewing the blast radius — callers, sibling
+services, backup/restore, deploy config — found them immediately. Worth
+repeating for every later phase.
+
 ### 2026-08-01 — Phase 0 DONE: call sites migrated, ticket queue chosen
 
 Owner picked the **ticket queue** over the turnstile. Open decision closed.

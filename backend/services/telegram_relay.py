@@ -33,6 +33,7 @@ from backend.core.app_settings import (
     get_telegram_allowed_user,
     set_telegram_allowed_user,
 )
+from backend.core.job_handlers import queue_task
 from backend.db.database import AsyncSessionLocal
 
 log = logging.getLogger(__name__)
@@ -78,20 +79,6 @@ async def _tg(client: httpx.AsyncClient, token: str, method: str, **params):
     return None
 
 
-def _fire_and_forget(coro, label: str) -> None:
-    """Run a follow-up ingest job with logged exceptions (ingest.py pattern)."""
-    task = asyncio.create_task(coro)
-
-    def _done(t: asyncio.Task) -> None:
-        if t.cancelled():
-            return
-        exc = t.exception()
-        if exc:
-            log.error("relay job %s failed: %r", label, exc)
-
-    task.add_done_callback(_done)
-
-
 async def _get_or_create_collection(db, name: str) -> str:
     """Id of the standard collection with this name (auto-created if missing)."""
     from sqlalchemy import select
@@ -135,8 +122,14 @@ async def _save_url(url: str, collection_name: str, force_localize: bool) -> dic
         log.warning("relay save failed for %s: %r", url, e)
         return {"status": "error", "url": url, "error": str(e)[:120]}
 
+    # Hand every follow-up to the durable queue (ADR-024 §9) rather than
+    # starting it here. This path matters most: Telegram is the heaviest ingest
+    # route, and a batch of forwarded links used to start a download per link
+    # all at once, with every one of them lost if the app restarted mid-run.
+    # Jobs are still collected during ingest and only handed over after commit,
+    # so nothing is queued for a memo that failed to save.
     for fn, args in jobs:
-        _fire_and_forget(fn(*args), fn.__name__)
+        queue_task(fn, *args)
     result["url"] = url
     return result
 
