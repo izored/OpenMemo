@@ -303,6 +303,44 @@ function InstagramConnectRows() {
  *  persisted `chatModel` in the app store (read by every Ask/chat surface) AND
  *  to the server-side `chat_model` setting, so backend-initiated calls
  *  (summaries without an explicit model) use the same default. */
+function MeshRows({ profile, save }: { profile: AppSettings | null; save: (p: Partial<AppSettings>) => void }) {
+  const enabled = profile?.mesh_enabled ?? false;
+
+  return (
+    <>
+      <div className="om-setting-row">
+        <div className="om-setting-row-text">
+          <p>Mesh</p>
+          <span className="mono">
+            Keep this computer and another one on the same library. Both can add and edit; changes flow both ways. No account, no cloud, no server in the middle — you pair them once with a 12-word code. Off by default, and while it is off Mesh costs this install nothing at all.
+          </span>
+        </div>
+        <button
+          type="button"
+          className="om-add-toggle"
+          onClick={() => profile && save({ mesh_enabled: !profile.mesh_enabled })}
+          aria-pressed={enabled}
+        >
+          <span className={'om-add-toggle-switch' + (enabled ? ' on' : '')}>
+            <span className="om-add-toggle-knob" />
+          </span>
+        </button>
+      </div>
+      {enabled && (
+        <div className="om-setting-row" style={{ borderTop: '1px solid var(--border)', marginTop: 8, paddingTop: 8 }}>
+          <div className="om-setting-row-text">
+            <p>Not ready to pair yet</p>
+            <span className="mono">
+              Mesh is switched on, which wakes up its plumbing, but pairing and syncing arrive in a later update. Nothing is being sent anywhere and no other device can reach this one. Leave it on if you want it ready, or switch it back off — either is fine.
+            </span>
+          </div>
+        </div>
+      )}
+    </>
+  );
+}
+
+
 function TelegramRelayRows({ profile, save }: { profile: AppSettings | null; save: (p: Partial<AppSettings>) => void }) {
   const [tokenInput, setTokenInput] = useState('');
   const [tokenPresent, setTokenPresent] = useState<boolean | null>(null);
@@ -591,7 +629,7 @@ export function SettingsPage() {
       })
       .catch(() => {
         setMaxUploadMb(5120);
-        setProfile({ max_upload_mb: 5120, display_name: '', email: '', avatar_data_url: '', mailing_list_consent: false, auto_download_audio: true, auto_download_video: true, music_quality: '16', music_provider: 'qobuz', chat_model: '', num_ctx: 0, yt_cookies_present: false, bg_image_ext: '', hidden_passcode_set: false, telegram_enabled: false, telegram_poll_minutes: 15, telegram_default_collection: 'IG Inbox', telegram_force_localize: true, telegram_token_present: false, telegram_user_locked: false });
+        setProfile({ max_upload_mb: 5120, display_name: '', email: '', avatar_data_url: '', mailing_list_consent: false, auto_download_audio: true, auto_download_video: true, music_quality: '16', music_provider: 'qobuz', chat_model: '', num_ctx: 0, yt_cookies_present: false, bg_image_ext: '', hidden_passcode_set: false, telegram_enabled: false, telegram_poll_minutes: 15, telegram_default_collection: 'IG Inbox', telegram_force_localize: true, telegram_token_present: false, telegram_user_locked: false, mesh_enabled: false });
       });
   }, []);
 
@@ -1093,6 +1131,10 @@ export function SettingsPage() {
 
           <SettingCard title="Phone capture" eyebrow="Telegram relay">
             <TelegramRelayRows profile={profile} save={saveProfile} />
+          </SettingCard>
+
+          <SettingCard title="Mesh" eyebrow="Two-way device sync">
+            <MeshRows profile={profile} save={saveProfile} />
           </SettingCard>
 
           <div className="om-setting-card om-creator-card">

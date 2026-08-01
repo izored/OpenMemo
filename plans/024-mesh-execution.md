@@ -31,7 +31,7 @@ Legend: `TODO` · `WIP` · `REVIEW` (code done, passes pending) · `DONE`
 | # | Phase | Gated by `mesh_enabled` | Status | Notes |
 |---|-------|------------------------|--------|-------|
 | 0 | Job queue | **No** — plain infra, fixes live bug | **DONE** | built, wired, migrated, 3 passes run |
-| 1 | Mesh flag + Settings section | is the flag | TODO | ADR §0 |
+| 1 | Mesh flag + Settings section | is the flag | **DONE** | ADR §0 · verified in the running UI |
 | 2 | `change_log`, triggers, HLC | Yes | TODO | ADR §4, §5 |
 | 3 | Merge engine (pure, both directions) | inert lib | TODO | ADR §6, §10 |
 | 4 | Journal, snapshot, rollback | Yes | TODO | ADR §13 |
@@ -227,6 +227,51 @@ a kind string becomes a 500 on an ingest route. Cover each kind with a test.
 ## Phase log
 
 Newest entry at the top. One entry per working turn.
+
+### 2026-08-01 — Phase 1 DONE: Mesh flag + Settings section
+
+Phase 0 merged to main (PR #124). Branch reset to main, then phase 1 built.
+
+- `backend/core/mesh.py` — the single gate. `is_enabled()` reads settings on
+  every call rather than caching: a stale cache would mean sync quietly
+  continuing after the user switched it off, the one outcome worth a file read
+  to avoid. `require_enabled()` returns **404, not 403** — a disabled feature
+  should be indistinguishable from one that was never built, since 403
+  advertises the endpoint and invites probing on a LAN-exposed port.
+- `backend/api/mesh.py` — `/api/mesh/status`, entirely behind the gate. `paired`
+  is hardcoded `False` so the shape is stable for the UI without pretending to
+  know something it cannot yet.
+- `mesh_enabled` added to settings defaults, the `SettingsPatch` model, the
+  frontend `AppSettings` type, and the fallback profile object.
+- Settings → Mesh card, matching the existing `SettingCard` pattern. When on it
+  reveals an honest "not ready to pair yet" panel rather than implying sync
+  works.
+
+**Review pass 1 found a real bug: settings have TWO allowlists.** `_DEFAULTS` in
+`app_settings.py` and the `SettingsPatch` model in `api/settings.py`. A key in
+the first but missing from the second is dropped **silently** — the PUT still
+returns 200, so the toggle would have appeared to work and changed nothing.
+Caught because a test asserted persistence rather than just a 200.
+`test_every_setting_default_is_writable_through_the_api` now pins it, and it
+immediately surfaced a pre-existing case, `bg_image_ext`, which is legitimately
+server-managed by the background-upload route and is documented as exempt.
+
+**Pass 2 (blast radius):** no bugs. `/api/mesh` is a new prefix with no
+collision. `mesh_enabled` is a boolean, not a secret, so exposing it through
+`GET /api/settings` is fine. Backups cover the DB and files, not
+`app_settings.json`, so the flag is unaffected either way. No extension, macOS,
+Docker or nginx impact — this adds one gated route.
+
+**Pass 3 (fit):** no bugs. `core/mesh.py` is a module now and becomes a package
+when phases 2+ add tables; the import path `backend.core.mesh` stays valid.
+
+**Verified in the running UI**, not just tests: booted against a throwaway
+DATA_DIR, loaded Settings, and clicked the real toggle. It went off→on,
+persisted through `PUT /api/settings`, flipped `/api/mesh/status` from 404 to
+200, and revealed the not-ready panel. Screenshot taken. Card sits correctly in
+the bento grid between Phone capture and Made by.
+
+Suite: **119 passed**.
 
 ### 2026-08-01 (third review round) — widened to deploy surface, no new bugs
 

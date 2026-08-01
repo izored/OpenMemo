@@ -48,6 +48,11 @@ class SettingsPatch(BaseModel):
     telegram_poll_minutes: Optional[int] = None
     telegram_default_collection: Optional[str] = None
     telegram_force_localize: Optional[bool] = None
+    # Mesh (ADR-024). Must be listed here as well as in _DEFAULTS: this model is
+    # a second allowlist, and a key missing from it is dropped silently — the
+    # PUT still returns 200, so a Settings toggle would appear to work and do
+    # nothing.
+    mesh_enabled: Optional[bool] = None
 
 
 @router.get("")
