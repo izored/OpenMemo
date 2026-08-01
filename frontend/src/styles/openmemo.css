@@ -5081,6 +5081,12 @@ body.om-has-bbar .om-fab { display: none !important; }
 .om-bento-stack { display: flex; flex-direction: column; gap: 14px; }
 
 .om-settings-masonry { columns: 2; column-gap: 14px; }
+
+/* Deterministic column split. CSS multicol balances by HEIGHT, so one tall
+   unbreakable card (Files & limits carries cookies + Instagram + Trash) forced
+   an ugly gap beside it. Choosing the break point ourselves keeps the columns
+   grouped by meaning instead of by pixel height. */
+.om-col-break { break-before: column; -webkit-column-break-before: always; }
 .om-settings-masonry > * {
   break-inside: avoid;
   -webkit-column-break-inside: avoid;
@@ -5088,7 +5094,9 @@ body.om-has-bbar .om-fab { display: none !important; }
   display: block;            /* play nice inside multicol */
 }
 
-.om-duo { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; align-items: start; }
+/* .om-duo removed with the Settings bento rework: nesting a 2-col grid inside a
+   masonry column fought the column split and forced a 3-card row. Every card is
+   a plain masonry child now. */
 
 /* Right-aligned inline control cluster (number input + unit + Save). */
 .om-inline-control { display: flex; align-items: center; gap: 8px; flex: none; }
@@ -5300,7 +5308,7 @@ body.om-has-bbar .om-fab { display: none !important; }
 /* ── Bento responsive ──────────────────────────────────────────────────── */
 @media (max-width: 900px) {
   .om-settings-masonry { columns: 1; }
-  .om-duo { grid-template-columns: 1fr; }
+  .om-col-break { break-before: auto; -webkit-column-break-before: auto; }
   .om-ap-hero { grid-template-columns: 1fr; }
   .om-ap-hero-vis { display: none; }
   .om-ap-hero-title { font-size: 25px; }
@@ -6745,3 +6753,22 @@ button.om-add-link { background: none; border: 0; padding: 0; cursor: pointer; f
   transition: background .15s;
 }
 .om-spm-continue:hover { background: rgba(220,38,38,.08); }
+
+/* ─ Mesh walkthrough (ADR-024) ─────────────────────────────────────────── */
+.om-mesh-intro-art {
+  width: 44px; height: 44px; border-radius: 12px;
+  display: inline-flex; align-items: center; justify-content: center;
+  background: var(--accent-soft); color: var(--accent);
+}
+.om-mesh-intro-foot {
+  display: flex; align-items: center; justify-content: space-between;
+  gap: 12px; padding: 14px 20px 18px;
+  border-top: 1px solid var(--border);
+}
+.om-mesh-intro-dots { display: flex; gap: 6px; }
+.om-mesh-intro-dot {
+  width: 7px; height: 7px; border-radius: 50%; padding: 0;
+  background: var(--border-strong, var(--border)); border: none; cursor: pointer;
+  transition: background var(--transition-fast), width var(--transition-fast);
+}
+.om-mesh-intro-dot.on { background: var(--accent); width: 18px; border-radius: 4px; }

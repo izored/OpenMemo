@@ -5,6 +5,7 @@ import { motion } from 'framer-motion';
 import { Icon } from '@/components/Icon';
 import { PageHeader } from '@/components/PageHeader';
 import { ChangelogModal, cmpVersion } from '@/components/ChangelogModal';
+import { MeshIntroModal } from '@/components/MeshIntroModal';
 import { ONBOARDING_KEY } from '@/lib/onboarding';
 import { useAppStore } from '@/stores/appStore';
 import { useIsMobile } from '@/lib/useBreakpoint';
@@ -305,6 +306,17 @@ function InstagramConnectRows() {
  *  (summaries without an explicit model) use the same default. */
 function MeshRows({ profile, save }: { profile: AppSettings | null; save: (p: Partial<AppSettings>) => void }) {
   const enabled = profile?.mesh_enabled ?? false;
+  const [introOpen, setIntroOpen] = useState(false);
+
+  // Explain Mesh at the moment it is switched ON, not on every render and not
+  // when it is switched off — an explainer that appears while you are turning
+  // something off is noise.
+  const toggle = () => {
+    if (!profile) return;
+    const next = !profile.mesh_enabled;
+    save({ mesh_enabled: next });
+    if (next) setIntroOpen(true);
+  };
 
   return (
     <>
@@ -318,7 +330,7 @@ function MeshRows({ profile, save }: { profile: AppSettings | null; save: (p: Pa
         <button
           type="button"
           className="om-add-toggle"
-          onClick={() => profile && save({ mesh_enabled: !profile.mesh_enabled })}
+          onClick={toggle}
           aria-pressed={enabled}
         >
           <span className={'om-add-toggle-switch' + (enabled ? ' on' : '')}>
@@ -326,16 +338,20 @@ function MeshRows({ profile, save }: { profile: AppSettings | null; save: (p: Pa
           </span>
         </button>
       </div>
-      {enabled && (
-        <div className="om-setting-row" style={{ borderTop: '1px solid var(--border)', marginTop: 8, paddingTop: 8 }}>
-          <div className="om-setting-row-text">
-            <p>Not ready to pair yet</p>
-            <span className="mono">
-              Mesh is switched on, which wakes up its plumbing, but pairing and syncing arrive in a later update. Nothing is being sent anywhere and no other device can reach this one. Leave it on if you want it ready, or switch it back off — either is fine.
-            </span>
-          </div>
+      <div className="om-setting-row" style={{ borderTop: '1px solid var(--border)', marginTop: 8, paddingTop: 8 }}>
+        <div className="om-setting-row-text">
+          <p>{enabled ? 'Not ready to pair yet' : 'How Mesh works'}</p>
+          <span className="mono">
+            {enabled
+              ? 'Mesh is switched on, which wakes up its groundwork, but pairing and syncing arrive in a later update. Nothing is being sent anywhere and no other device can reach this one. Leave it on if you want it ready, or switch it back off — either is fine. '
+              : 'One library across both computers, paired once with a 12-word code, with nothing in the middle. '}
+            <button type="button" onClick={() => setIntroOpen(true)} style={{ color: 'var(--accent)', fontWeight: 500 }}>
+              {enabled ? 'Read the walkthrough again' : 'What is Mesh?'}
+            </button>
+          </span>
         </div>
-      )}
+      </div>
+      {introOpen && <MeshIntroModal onClose={() => setIntroOpen(false)} />}
     </>
   );
 }
@@ -998,46 +1014,6 @@ export function SettingsPage() {
             <ReindexRow />
           </SettingCard>
 
-          <SettingCard title="Browser extension" eyebrow="Capture">
-            <div className="om-ext-card-body">
-              <div className="om-ext-cta">
-                <p className="om-ext-cta-sub">
-                  Save pages, highlight text, or clip tabs directly from your browser. Load unpacked from <code>chrome-extension/</code> in the repo.
-                </p>
-                <a
-                  className="om-ext-install-btn"
-                  href="https://github.com/izored/OpenMemo/tree/main/chrome-extension"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                >
-                  <Icon name="arrowUpRight" size={13} />
-                  Install extension
-                </a>
-              </div>
-              <motion.div
-                initial={{ y: 20, opacity: 0 }}
-                whileInView={{ y: 0, opacity: 1 }}
-                viewport={{ once: true }}
-                transition={{ duration: 0.45, ease: [0.2, 0.8, 0.2, 1] }}
-              >
-                <div className="om-ext-mockup">
-                  <div className="om-ext-mockup-header">
-                    <div className="om-ext-mockup-logo">O</div>
-                    <span className="om-ext-mockup-title">OpenMemo</span>
-                    <div className="om-ext-mockup-dot" />
-                  </div>
-                  <div className="om-ext-mockup-body">
-                    <div className="om-ext-mockup-preview">
-                      <div className="om-ext-mockup-line" />
-                      <div className="om-ext-mockup-line short" />
-                    </div>
-                    <div className="om-ext-mockup-btn" />
-                  </div>
-                </div>
-              </motion.div>
-            </div>
-          </SettingCard>
-
           <SettingCard title="Files & limits" eyebrow="Files">
             <div className="om-setting-row">
               <div className="om-setting-row-text">
@@ -1129,6 +1105,47 @@ export function SettingsPage() {
             </div>
           </SettingCard>
 
+          <SettingCard title="Browser extension" eyebrow="Capture" className="om-col-break">
+            <div className="om-ext-card-body">
+              <div className="om-ext-cta">
+                <p className="om-ext-cta-sub">
+                  Save pages, highlight text, or clip tabs directly from your browser. Load unpacked from <code>chrome-extension/</code> in the repo.
+                </p>
+                <a
+                  className="om-ext-install-btn"
+                  href="https://github.com/izored/OpenMemo/tree/main/chrome-extension"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                >
+                  <Icon name="arrowUpRight" size={13} />
+                  Install extension
+                </a>
+              </div>
+              <motion.div
+                initial={{ y: 20, opacity: 0 }}
+                whileInView={{ y: 0, opacity: 1 }}
+                viewport={{ once: true }}
+                transition={{ duration: 0.45, ease: [0.2, 0.8, 0.2, 1] }}
+              >
+                <div className="om-ext-mockup">
+                  <div className="om-ext-mockup-header">
+                    <div className="om-ext-mockup-logo">O</div>
+                    <span className="om-ext-mockup-title">OpenMemo</span>
+                    <div className="om-ext-mockup-dot" />
+                  </div>
+                  <div className="om-ext-mockup-body">
+                    <div className="om-ext-mockup-preview">
+                      <div className="om-ext-mockup-line" />
+                      <div className="om-ext-mockup-line short" />
+                    </div>
+                    <div className="om-ext-mockup-btn" />
+                  </div>
+                </div>
+              </motion.div>
+            </div>
+          </SettingCard>
+
+
           <SettingCard title="Phone capture" eyebrow="Telegram relay">
             <TelegramRelayRows profile={profile} save={saveProfile} />
           </SettingCard>
@@ -1137,37 +1154,7 @@ export function SettingsPage() {
             <MeshRows profile={profile} save={saveProfile} />
           </SettingCard>
 
-          <div className="om-setting-card om-creator-card">
-            <div className="om-setting-head">
-              <span className="mono om-setting-eyebrow">Made by</span>
-            </div>
-            <div className="om-setting-body">
-              <p className="om-creator-name">Reda Izo</p>
-              <span className="om-creator-role">Creative Director · openMemo</span>
-              <p className="om-creator-bio">
-                I build tools I want to use. openMemo keeps the links, files,
-                notes and videos worth saving. On your machine.
-              </p>
-              <div className="om-creator-links">
-                <a className="om-creator-link" href="https://dev.izo.red" target="_blank" rel="noopener noreferrer">
-                  <Icon name="globe" size={12} /> dev.izo.red
-                </a>
-                <a className="om-creator-link" href="https://github.com/izored/OpenMemo" target="_blank" rel="noopener noreferrer">
-                  <Icon name="github" size={12} /> GitHub
-                </a>
-              </div>
-            </div>
-          </div>
 
-        </div>
-
-        {/* ── Built with — full-width auto-scroll marquee ─────── */}
-        <SettingCard title="Built with ❤️" eyebrow="Open source">
-          <BuiltWith entries={BUILT_WITH} />
-        </SettingCard>
-
-        {/* ── Data safety + Danger — half/half at the bottom ──── */}
-        <div className="om-duo">
           <SettingCard title="Backup & Restore" eyebrow="Data safety">
             <div className="om-setting-row">
               <div className="om-setting-row-text">
@@ -1245,6 +1232,35 @@ export function SettingsPage() {
               </div>
             </div>
           </SettingCard>
+
+
+        {/* ── Built with — full-width auto-scroll marquee ─────── */}
+        <SettingCard title="Built with ❤️" eyebrow="Open source">
+          <BuiltWith entries={BUILT_WITH} />
+        </SettingCard>
+        {/* Credits last — about-the-app cards belong after the functional
+            ones, not wedged between sync and data safety. */}
+        <div className="om-setting-card om-creator-card">
+          <div className="om-setting-head">
+            <span className="mono om-setting-eyebrow">Made by</span>
+          </div>
+          <div className="om-setting-body">
+            <p className="om-creator-name">Reda Izo</p>
+            <span className="om-creator-role">Creative Director · openMemo</span>
+            <p className="om-creator-bio">
+              I build tools I want to use. openMemo keeps the links, files,
+              notes and videos worth saving. On your machine.
+            </p>
+            <div className="om-creator-links">
+              <a className="om-creator-link" href="https://dev.izo.red" target="_blank" rel="noopener noreferrer">
+                <Icon name="globe" size={12} /> dev.izo.red
+              </a>
+              <a className="om-creator-link" href="https://github.com/izored/OpenMemo" target="_blank" rel="noopener noreferrer">
+                <Icon name="github" size={12} /> GitHub
+              </a>
+            </div>
+          </div>
+        </div>
         </div>
 
       </div>
