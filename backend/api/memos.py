@@ -16,6 +16,7 @@ from sqlalchemy.orm import selectinload, load_only
 from pydantic import BaseModel
 
 from backend.config import settings
+from backend.core.job_handlers import queue_task
 from backend.db.database import get_db, AsyncSessionLocal
 from backend.db.models import Memo, Collection, Tag, memo_collections, memo_tags
 from backend.core.security import sanitize_workspace_id
@@ -468,9 +469,9 @@ async def transcribe_memo(
     # a downloaded video can be transcribed too. Remote-only memos use the
     # caption-first extractor so the original stays a remote embed.
     if memo.file_path:
-        background_tasks.add_task(transcribe_memo_task, memo_id)
+        queue_task(transcribe_memo_task, memo_id)
     else:
-        background_tasks.add_task(transcript_memo_task, memo_id)
+        queue_task(transcript_memo_task, memo_id)
     return {"id": memo_id, "status": "pending"}
 
 
@@ -508,7 +509,7 @@ async def localize_memo(
 
     from backend.api.ingest import localize_memo_task
 
-    background_tasks.add_task(localize_memo_task, memo_id, body.mode, body.quality)
+    queue_task(localize_memo_task, memo_id, body.mode, body.quality)
     return {"id": memo_id, "status": "pending", "mode": body.mode, "quality": body.quality}
 
 
@@ -928,9 +929,9 @@ async def generate_memo_summary(
             await db.commit()
             from backend.api.ingest import transcribe_memo_task, transcript_memo_task
             if memo.file_path:
-                background_tasks.add_task(transcribe_memo_task, memo_id)
+                queue_task(transcribe_memo_task, memo_id)
             else:
-                background_tasks.add_task(transcript_memo_task, memo_id)
+                queue_task(transcript_memo_task, memo_id)
         if memo.transcript_status in ("pending", "processing"):
             return {"id": memo.id, "mode": body.mode, "summary": None, "status": "transcript_pending"}
 

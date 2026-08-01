@@ -127,3 +127,9 @@ async def _run_migrations():
         if "deleted_at" not in columns:
             await db.execute("ALTER TABLE memos ADD COLUMN deleted_at TIMESTAMP")
             await db.commit()
+
+    # Persistent background job queue (ADR-024 §9). Owns its own schema so the
+    # table + indexes stay next to the code that reads them. Idempotent.
+    from backend.core.jobs import create_table as _create_job_queue
+
+    await _create_job_queue()

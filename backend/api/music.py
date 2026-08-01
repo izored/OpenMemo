@@ -15,6 +15,7 @@ from sqlalchemy import select, desc
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.db.database import get_db
+from backend.core.job_handlers import queue_task
 from backend.db.models import Collection, Memo, memo_collections
 
 router = APIRouter(prefix="/api/music", tags=["music"])
@@ -149,7 +150,7 @@ async def download_playlist(
 
         # Starting (or resuming) a download wipes any stale pause request.
         clear_playlist_pause(playlist_id)
-        background_tasks.add_task(download_playlist_task, playlist_id, queued)
+        queue_task(download_playlist_task, playlist_id, queued)
 
     return {"id": playlist_id, "queued": len(queued), "status": "processing" if queued else "nothing-to-do"}
 
