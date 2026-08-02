@@ -53,6 +53,13 @@ LINK_TABLES: dict[str, tuple[str, str]] = {
     "memo_tags": ("memo_id", "tag_id"),
 }
 
+# Declared, not implied. Every table in the model must appear in exactly one of
+# SYNCED_TABLES, LINK_TABLES or this set — a contract test enforces it, so a new
+# table cannot quietly end up unsynced because nobody thought about it.
+NOT_SYNCED: dict[str, str] = {
+    "users": "one local user per install; merging identities is meaningless",
+}
+
 _LOG_TABLE = "mesh_change_log"
 
 

@@ -68,6 +68,59 @@ history) appears only after it is on.
 
 ---
 
+## 0b. Mesh must not become a tax on openMemo
+
+**Confirmed by the owner, 2026-08-02.** Two promises, both enforced by
+`backend/tests/test_mesh_contract.py` rather than by remembering.
+
+### Promise 1 — disabled means inert, not "mostly harmless"
+
+| when off | asserted by the sweep |
+|---|---|
+| Triggers | zero installed |
+| Writing memos through the app | records **nothing** in the change log |
+| The Mesh port | not listening |
+| `/api/mesh/*` | 404 |
+
+The strongest of these is the second: use openMemo normally with Mesh off, and
+the change log must sit at exactly the sequence it started on.
+
+### Promise 2 — Mesh stays out of the way
+
+Measured 2026-08-02: **~2,200 lines of Mesh, 17 lines inside core files.**
+
+| core file | why it touches Mesh |
+|---|---|
+| `main.py` | create tables at boot, match triggers to the flag |
+| `api/settings.py` | the toggle has to physically install/drop triggers |
+| `core/app_settings.py` | the flag's default |
+| `api/backup.py` | restore must not inherit another machine's identity |
+| `core/jobs.py` | one comment: the queue is deliberately *not* gated |
+
+The sweep fails if any other file starts importing Mesh. The fix is to move the
+logic into `backend/core/mesh/`, not to extend the list — the list is a budget,
+not a registry.
+
+### The sweep: what to run when you change openMemo
+
+This is the answer to "how do I make sure a core change did not quietly break
+sync". Each check fails with instructions rather than a bare assertion.
+
+| you changed | what catches it | what it tells you |
+|---|---|---|
+| Added a **table** | `test_every_table_is_classified` | put it in `SYNCED_TABLES`, `LINK_TABLES`, or `NOT_SYNCED` *with a reason* |
+| Added a **memo column** | `test_merge_policy_covers_every_synced_column` | pick its tier: local-only, machine, human, or plain |
+| Renamed an **id / link column** | `test_every_synced_table_still_has_the_key_mesh_assumes` | triggers assume `NEW.id`; update `LINK_TABLES` |
+| Added a **setting** | `test_settings_written_by_mesh_are_actually_writable` | there are two allowlists; a key in one is dropped silently |
+| Imported Mesh **somewhere new** | `test_mesh_stays_out_of_the_rest_of_the_codebase` | keep it self-contained |
+
+Deliberately *not* guarded, because the design already handles it: changing how
+a route writes to the database. The triggers sit below the application, so any
+write is caught however it was made. That is the whole reason the change log is
+in SQL rather than in the API layer (§4).
+
+---
+
 ## 1. Sync the recipe, not the payload
 
 Measured on the live library (`scripts/blob-split.py`):

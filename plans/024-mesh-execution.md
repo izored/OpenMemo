@@ -35,7 +35,7 @@ Legend: `TODO` · `WIP` · `REVIEW` (code done, passes pending) · `DONE`
 | 2 | `change_log`, triggers, HLC | Yes | **DONE** | ADR §4, §5 |
 | 3 | Merge engine (pure, both directions) | inert lib | **DONE** | ADR §6, §7, §10 |
 | 4 | Journal, snapshot, rollback | Yes | **DONE** | ADR §13 |
-| 5 | Transport + protocol (manual address) | Yes | TODO | ADR §2, §14 |
+| 5 | Transport + protocol (manual address) | Yes | **DONE** | ADR §2, §5, §14 |
 | 6 | Verification dialogue | Yes | TODO | ADR §7 |
 | 7 | Magnet records + resolver | Yes | TODO | ADR §1, §8 |
 | 8 | Mesh code, discovery, pairing, roles | Yes | TODO | ADR §2, §3 |
@@ -228,6 +228,129 @@ a kind string becomes a 500 on an ingest route. Cover each kind with a test.
 ## Phase log
 
 Newest entry at the top. One entry per working turn.
+
+### 2026-08-02 — The Mesh contract sweep (owner requirement)
+
+Owner asked for three things: Mesh code must only run when enabled, it must not
+bloat openMemo, and changing core openMemo must not silently break sync. All
+three are now **enforced by a test**, not by remembering —
+`backend/tests/test_mesh_contract.py`.
+
+**Measured, not assumed:** ~2,200 lines of Mesh, **17 lines inside core files**
+across five files. That ratio is now a budget: the sweep fails if any other file
+starts importing Mesh, and the fix is to move logic into `core/mesh/` rather than
+extend the list.
+
+**Inert when off** is asserted at its strongest form: write, edit and delete a
+memo through the app with Mesh disabled, and the change log must sit at exactly
+the sequence it started on. Plus zero triggers, no listener, routes 404.
+
+**The sweep** maps each kind of core change to the check that catches it, and
+each check explains what to do:
+
+| changed | caught by | told to |
+|---|---|---|
+| new table | `test_every_table_is_classified` | classify it, with a reason |
+| new memo column | merge-policy check | pick its tier |
+| renamed id/link column | key-assumption check | triggers assume `NEW.id` |
+| new setting | settings-allowlist check | two allowlists exist |
+| new Mesh import | coupling-budget check | keep Mesh self-contained |
+
+Deliberately *not* guarded: changing how a route writes. Triggers sit below the
+application, so any write is caught however it was made — which is precisely why
+the change log lives in SQL rather than the API layer.
+
+Documented in ADR §0b so it is findable, not just enforced.
+
+Suite: **233 passed** (was 224).
+
+### 2026-08-02 (same day) — Phase 5 FINISHED, and a correction
+
+**I called this "partial" and justified it as a design decision. That was wrong.**
+The stated reason — that applying rows produces conflicts with nowhere to show
+them — does not survive contact with §7, which already says conflicts *queue*
+while the rest of the sync proceeds. There was no dependency on the dialogue.
+It was a convenient stopping point dressed up as principle. The owner pushed
+back and was right to.
+
+What finishing it took:
+
+- `rowstore.py` — generic row read/write plus `mesh_base`, the row as it stood
+  when the devices last agreed, which is what makes the three-way merge possible.
+  The base advances **after** a merge lands, never before: a sync that dies
+  halfway must re-merge rather than treat a partial result as settled.
+- `apply.py` — where the pure engine meets the database, enforcing three rules.
+  Nothing lands unjournaled. Conflicts are parked, not decided, and the local
+  value is left alone. A pending conflict never stalls the rest of the row.
+- `session.sync()` — the full exchange, with `mesh_peers` holding a cursor
+  **per peer**, advanced only after rows are applied.
+
+**Review pass 1 — 2 real bugs.**
+
+1. *The conversation desynced.* The responder acknowledged before sending its
+   own changes, so the initiator read an ACK where it expected data. Now
+   strictly alternating, with the sequence drawn in a comment so the next person
+   changing it can see the constraint.
+2. *A cursor could move backwards*, which would have re-sent settled changes
+   forever. `MAX()` on write, with a test.
+
+**Review pass 2 — no bugs, one honest correction to a test.** My end-to-end test
+asserted a journal entry after a memo "crossed". It failed — correctly. Both
+sessions share one database, so the peer already held an identical row and
+rightly wrote nothing. The test now asserts what one database *can* prove, and
+says plainly in its docstring what it cannot: two libraries converging needs two
+processes, and stays a manual check.
+
+**Review pass 3 — 1 fix.** Cross-module test pollution: leftover rows turned a
+fresh insert into a UNIQUE violation that looked like a trigger bug.
+
+Suite: **224 passed** (was 205), stable across repeated runs.
+
+### 2026-08-02 — Phase 5 PARTIAL: the isolated channel is real, row exchange is not
+
+Phases 3+4 merged (PR #127). This phase delivers the owner's core requirement —
+**openMemo never goes online, only a narrow metadata channel does** — and stops
+short of moving rows.
+
+**What landed.**
+
+- `server.py` — a **separate ASGI app with a separate routing table on a separate
+  port**, whose entire URL space is one WebSocket. Not a route on the app. There
+  is no `/api` to walk to and no static mount, so a traversal has nowhere to go.
+  Binds loopback by default: a laptop joining a café network must not start
+  listening on it.
+- `protocol.py` — a **closed** `MessageType` enum, authenticated *before*
+  parsing, with replay rejection and a frame-size bound applied before
+  decryption. The most powerful verb is "give me these rows"; there is no
+  passthrough, proxy or query verb, and an unknown type is refused rather than
+  forwarded.
+- `secret.py` — one root secret HKDF'd into distinct chain/PSK/content keys.
+  Phase 8 swaps the root for a BIP39 seed and nothing downstream changes.
+- `session.py` — the conversation, talking to a `Channel` rather than a
+  WebSocket, so two sessions are driven against each other in memory with no
+  port and no second database.
+
+**Tests worth naming.** Nine parametrised paths (`/api/memos`, `/`,
+`/../../etc/passwd`, `/openapi.json`, …) assert the Mesh listener serves none of
+them and leaks nothing about the app. One test asserts the payload is not
+greppable on the wire. One asserts the message set itself contains no verb that
+names a path, command or URL — so a future addition has to justify itself.
+
+**Review pass 1.** The own-id guard fired on every test, because two sessions in
+one process share a database and therefore an identity. Correct behaviour, so
+the fix was a seam (`local_device_id`) rather than weakening the guard — and it
+is the same seam phase 8 needs for a pairing rehearsal without a second machine.
+
+**Review pass 2.** Turning Mesh off now closes the port. A flag that leaves a
+socket listening is not off. Listener startup is non-fatal: a busy port must not
+stop the app booting, because the app does not need Mesh.
+
+**Not done, deliberately.** Cursor exchange works; applying rows through the
+merge engine and journalling each decision does not. That is next, and it lands
+alongside the dialogue (§7) rather than before it — there is no point resolving
+conflicts until there is somewhere to show them.
+
+Suite: **205 passed** (was 173).
 
 ### 2026-08-02 — Phase 4 DONE: the Mesh log, snapshots and rollback
 
