@@ -142,6 +142,35 @@ CORE_FILES_TOUCHING_MESH = {
 }
 
 
+FRONTEND_FILES_TOUCHING_MESH = {
+    "frontend/src/pages/SettingsPage.tsx",  # the card, conflicts banner, history
+    "frontend/src/lib/api.ts",              # the client
+}
+
+
+def test_mesh_stays_out_of_the_frontend_too():
+    """Same budget on the UI side. Mesh owns its own components; everything else
+    should be able to ignore it entirely."""
+    import pathlib
+
+    root = pathlib.Path("frontend/src")
+    if not root.exists():
+        pytest.skip("frontend not present")
+
+    offenders = []
+    for path in root.rglob("*.ts*"):
+        rel = path.as_posix()
+        if "Mesh" in path.name:
+            continue
+        if "mesh" in path.read_text(encoding="utf-8").lower() and rel not in FRONTEND_FILES_TOUCHING_MESH:
+            offenders.append(rel)
+
+    assert not offenders, (
+        f"{offenders} now depend on Mesh. Keep it in components named Mesh*, or "
+        f"add the file to FRONTEND_FILES_TOUCHING_MESH with a reason."
+    )
+
+
 def test_mesh_stays_out_of_the_rest_of_the_codebase():
     """The whole feature is ~2,200 lines, and only a handful reach into core
     openMemo. That ratio is the point: Mesh must be removable and must not

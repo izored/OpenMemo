@@ -6,6 +6,8 @@ import { Icon } from '@/components/Icon';
 import { PageHeader } from '@/components/PageHeader';
 import { ChangelogModal, cmpVersion } from '@/components/ChangelogModal';
 import { MeshIntroModal } from '@/components/MeshIntroModal';
+import { MeshConflictModal } from '@/components/MeshConflictModal';
+import { meshApi, type MeshBatch } from '@/lib/api';
 import { ONBOARDING_KEY } from '@/lib/onboarding';
 import { useAppStore } from '@/stores/appStore';
 import { useIsMobile } from '@/lib/useBreakpoint';
@@ -307,6 +309,22 @@ function InstagramConnectRows() {
 function MeshRows({ profile, save }: { profile: AppSettings | null; save: (p: Partial<AppSettings>) => void }) {
   const enabled = profile?.mesh_enabled ?? false;
   const [introOpen, setIntroOpen] = useState(false);
+  const [conflictsOpen, setConflictsOpen] = useState(false);
+  const [conflictCount, setConflictCount] = useState(0);
+  const [batches, setBatches] = useState<MeshBatch[]>([]);
+  const [meshError, setMeshError] = useState('');
+
+  // Everything Mesh exposes 404s while it is off, so a failure here is the
+  // normal disabled state rather than something worth showing the user.
+  useEffect(() => {
+    if (!enabled) {
+      setConflictCount(0);
+      setBatches([]);
+      return;
+    }
+    meshApi.conflicts().then((r) => setConflictCount(r.count)).catch(() => setConflictCount(0));
+    meshApi.history(5).then((r) => setBatches(r.batches)).catch(() => setBatches([]));
+  }, [enabled, conflictsOpen]);
 
   // Explain Mesh at the moment it is switched ON, not on every render and not
   // when it is switched off — an explainer that appears while you are turning
@@ -351,7 +369,62 @@ function MeshRows({ profile, save }: { profile: AppSettings | null; save: (p: Pa
           </span>
         </div>
       </div>
+      {enabled && conflictCount > 0 && (
+        <div className="om-setting-row" style={{ borderTop: '1px solid var(--border)', marginTop: 8, paddingTop: 8 }}>
+          <div className="om-setting-row-text">
+            <p>{conflictCount} {conflictCount === 1 ? 'thing needs' : 'things need'} your decision</p>
+            <span className="mono">
+              Both computers changed the same thing. Nothing has been overwritten — openMemo is waiting for you to choose, and keeping both is the default.
+            </span>
+          </div>
+          <button type="button" className="om-btn-primary" onClick={() => setConflictsOpen(true)}>
+            Review
+          </button>
+        </div>
+      )}
+      {enabled && batches.length > 0 && (
+        <div className="om-setting-row" style={{ borderTop: '1px solid var(--border)', marginTop: 8, paddingTop: 8, flexDirection: 'column', alignItems: 'stretch' }}>
+          <div className="om-setting-row-text" style={{ marginBottom: 6 }}>
+            <p>Recent syncs</p>
+            <span className="mono">Every change Mesh made, and where it came from. Any of these can be undone.</span>
+          </div>
+          {meshError && (
+            <p className="mono" style={{ color: '#EF5048', margin: '0 0 6px' }}>{meshError}</p>
+          )}
+          {batches.map((b) => (
+            <div key={b.batch_id} className="om-mesh-batch">
+              <div className="om-mesh-batch-main">
+                <b>{b.changes} {b.changes === 1 ? 'change' : 'changes'} from {b.peer || 'a device'}</b>
+                <span>{new Date(b.at).toLocaleString()}{b.undone ? ' · undone' : ''}</span>
+              </div>
+              {!b.undone && (
+                <button
+                  type="button"
+                  className="om-btn-secondary"
+                  onClick={async () => {
+                    // An undo that fails must say so. Swallowing it would leave
+                    // the user believing a sync was reversed when it was not,
+                    // which is worse than the original bad sync.
+                    try {
+                      await meshApi.undo(b.batch_id);
+                      setMeshError('');
+                    } catch (e) {
+                      setMeshError(e instanceof Error ? e.message : 'Could not undo that sync');
+                      return;
+                    }
+                    const r = await meshApi.history(5).catch(() => ({ batches: [] as MeshBatch[] }));
+                    setBatches(r.batches);
+                  }}
+                >
+                  Undo
+                </button>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
       {introOpen && <MeshIntroModal onClose={() => setIntroOpen(false)} />}
+      {conflictsOpen && <MeshConflictModal onClose={() => setConflictsOpen(false)} />}
     </>
   );
 }
