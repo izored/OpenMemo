@@ -58,15 +58,32 @@ def main() -> int:
     thumbs = sum(f.stat().st_size for f in (FILES / "thumbs").rglob("*") if f.is_file())
     db_size = DB.stat().st_size
 
+    # Covers live in data/, NOT files/ — which is why the first version of this
+    # script missed them entirely, and why the sync design nearly did too. They
+    # have no source to refetch from, so every byte here must cross the wire.
+    covers = 0
+    n_covers = 0
+    for folder in ("space_covers", "playlist_covers"):
+        d = Path("data") / folder
+        if d.exists():
+            for f in d.rglob("*"):
+                if f.is_file():
+                    covers += f.stat().st_size
+                    n_covers += 1
+
+    must_cross = local + covers
+
     print(f"RE-DERIVABLE  {n_derivable:5d} files  {derivable/GB:6.2f} GB   magnet, refetch from source")
     print(f"LOCAL-ONLY    {n_local:5d} files  {local/GB:6.2f} GB   must transfer peer to peer")
+    print(f"COVERS        {n_covers:5d} files  {covers/GB:6.2f} GB   no source; structural, sent first")
     print(f"THUMBS                     {thumbs/GB:6.2f} GB   regenerate locally")
     print(f"UNACCOUNTED                {(total-thumbs-derivable-local)/GB:6.2f} GB   gallery, extracted, orphans")
-    print(f"DISK TOTAL                 {total/GB:6.2f} GB")
+    print(f"DISK TOTAL                 {total/GB:6.2f} GB   (excludes covers, which live in data/)")
     print(f"DATABASE                   {db_size/GB:6.4f} GB   the actual sync")
     print()
     if total:
-        print(f"must cross the wire: {local/total*100:.1f}% of disk")
+        print(f"must cross the wire: {must_cross/GB:.2f} GB "
+              f"({must_cross/(total + covers)*100:.1f}% of everything)")
     return 0
 
 

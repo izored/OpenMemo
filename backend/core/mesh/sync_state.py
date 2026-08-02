@@ -10,7 +10,7 @@ import logging
 
 # Relative imports: the package __init__ imports THIS module, so importing
 # it back by absolute path is a cycle that only works by accident of order.
-from . import apply as apply_mod, changelog, clock, journal, rowstore, server
+from . import apply as apply_mod, changelog, clock, journal, magnet, rowstore, server
 
 logger = logging.getLogger(__name__)
 
@@ -27,6 +27,7 @@ async def mesh_schema_init() -> None:
     await journal.create_table()
     await rowstore.create_table()
     await apply_mod.create_table()
+    await magnet.create_table()
 
 
 async def apply_enabled_state(enabled: bool) -> int:
