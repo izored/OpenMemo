@@ -35,7 +35,7 @@ Legend: `TODO` · `WIP` · `REVIEW` (code done, passes pending) · `DONE`
 | 2 | `change_log`, triggers, HLC | Yes | **DONE** | ADR §4, §5 |
 | 3 | Merge engine (pure, both directions) | inert lib | **DONE** | ADR §6, §7, §10 |
 | 4 | Journal, snapshot, rollback | Yes | **DONE** | ADR §13 |
-| 5 | Transport + protocol (manual address) | Yes | **PARTIAL** | channel + isolation done; row exchange pending |
+| 5 | Transport + protocol (manual address) | Yes | **DONE** | ADR §2, §5, §14 |
 | 6 | Verification dialogue | Yes | TODO | ADR §7 |
 | 7 | Magnet records + resolver | Yes | TODO | ADR §1, §8 |
 | 8 | Mesh code, discovery, pairing, roles | Yes | TODO | ADR §2, §3 |
@@ -228,6 +228,48 @@ a kind string becomes a 500 on an ingest route. Cover each kind with a test.
 ## Phase log
 
 Newest entry at the top. One entry per working turn.
+
+### 2026-08-02 (same day) — Phase 5 FINISHED, and a correction
+
+**I called this "partial" and justified it as a design decision. That was wrong.**
+The stated reason — that applying rows produces conflicts with nowhere to show
+them — does not survive contact with §7, which already says conflicts *queue*
+while the rest of the sync proceeds. There was no dependency on the dialogue.
+It was a convenient stopping point dressed up as principle. The owner pushed
+back and was right to.
+
+What finishing it took:
+
+- `rowstore.py` — generic row read/write plus `mesh_base`, the row as it stood
+  when the devices last agreed, which is what makes the three-way merge possible.
+  The base advances **after** a merge lands, never before: a sync that dies
+  halfway must re-merge rather than treat a partial result as settled.
+- `apply.py` — where the pure engine meets the database, enforcing three rules.
+  Nothing lands unjournaled. Conflicts are parked, not decided, and the local
+  value is left alone. A pending conflict never stalls the rest of the row.
+- `session.sync()` — the full exchange, with `mesh_peers` holding a cursor
+  **per peer**, advanced only after rows are applied.
+
+**Review pass 1 — 2 real bugs.**
+
+1. *The conversation desynced.* The responder acknowledged before sending its
+   own changes, so the initiator read an ACK where it expected data. Now
+   strictly alternating, with the sequence drawn in a comment so the next person
+   changing it can see the constraint.
+2. *A cursor could move backwards*, which would have re-sent settled changes
+   forever. `MAX()` on write, with a test.
+
+**Review pass 2 — no bugs, one honest correction to a test.** My end-to-end test
+asserted a journal entry after a memo "crossed". It failed — correctly. Both
+sessions share one database, so the peer already held an identical row and
+rightly wrote nothing. The test now asserts what one database *can* prove, and
+says plainly in its docstring what it cannot: two libraries converging needs two
+processes, and stays a manual check.
+
+**Review pass 3 — 1 fix.** Cross-module test pollution: leftover rows turned a
+fresh insert into a UNIQUE violation that looked like a trigger bug.
+
+Suite: **224 passed** (was 205), stable across repeated runs.
 
 ### 2026-08-02 — Phase 5 PARTIAL: the isolated channel is real, row exchange is not
 

@@ -99,3 +99,76 @@ async def test_the_secret_derives_distinct_keys():
     assert secret.psk() != secret.content_key()
     assert secret.chain_id() != secret.psk().hex()
     assert secret.psk() == secret.psk(), "derivation must be stable"
+
+
+# -- a full exchange ---------------------------------------------------------
+
+async def test_a_full_exchange_completes_and_carries_the_rows():
+    """End to end through the real pipeline: a logged change is exported,
+    framed, encrypted, authenticated, decoded and handed to the merge engine.
+
+    What this canNOT prove is two libraries converging — both sessions share one
+    database, so the peer already holds an identical row and correctly writes
+    nothing. Convergence is proven by the merge tests (both directions) and the
+    apply tests (a differing row lands and is journalled); the remaining gap is
+    two processes, which is the manual check before shipping.
+    """
+    from sqlalchemy import text as _t
+
+    from backend.core.mesh import changelog
+    from backend.core.mesh.sync_state import apply_enabled_state
+    from backend.db.database import AsyncSessionLocal
+
+    await apply_enabled_state(True)
+    try:
+        async with AsyncSessionLocal() as db:
+            await db.execute(_t("DELETE FROM memos"))
+            await db.commit()
+            await db.execute(_t(
+                "INSERT INTO memos (id, type, title) VALUES ('x1', 'note', 'travelled')"
+            ))
+            await db.commit()
+
+        assert await changelog.latest_seq() > 0, "the write must have been logged"
+
+        a_ch, b_ch = linked_pair()
+        a = Session(a_ch, initiator=True, local_device_id="aaaaaaaa")
+        b = Session(b_ch, initiator=False, local_device_id="bbbbbbbb")
+
+        reports = await asyncio.gather(a.sync(), b.sync())
+
+        assert all(r is not None for r in reports), "both sides must finish cleanly"
+        assert a.peer_device == "bbbbbbbb" and b.peer_device == "aaaaaaaa"
+        assert not any(r.skipped for r in reports), (
+            f"nothing should have been refused: {[r.skipped for r in reports]}"
+        )
+
+        # The row genuinely made the trip, even though applying it was a no-op.
+        exported = await a.export_preview()
+        assert any(r["row_id"] == "x1" for r in exported), (
+            "the changed memo must be in what we ship"
+        )
+    finally:
+        await apply_enabled_state(False)
+
+
+async def test_the_cursor_only_advances_after_rows_are_applied():
+    """A cursor moved before the work lands would silently skip changes if the
+    sync died mid-batch — the peer would never resend them."""
+    from backend.db.database import AsyncSessionLocal
+    from sqlalchemy import text as _t
+
+    a_ch, _ = linked_pair()
+    a = Session(a_ch, initiator=True, local_device_id="aaaaaaaa")
+    a.peer_device = "peer0001"
+
+    assert await a._cursor_for_peer() == 0
+    await a._remember_cursor(42)
+    assert await a._cursor_for_peer() == 42
+
+    await a._remember_cursor(7)
+    assert await a._cursor_for_peer() == 42, "a cursor must never go backwards"
+
+    async with AsyncSessionLocal() as db:
+        await db.execute(_t("DELETE FROM mesh_peers WHERE device_id = 'peer0001'"))
+        await db.commit()

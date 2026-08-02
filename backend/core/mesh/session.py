@@ -13,10 +13,14 @@ exists to handle what merging turns up.
 from __future__ import annotations
 
 import logging
+from datetime import datetime
 from typing import Any, Protocol as TypingProtocol
 
+from backend.core.mesh import apply as mesh_apply
 from backend.core.mesh import changelog, clock, protocol, secret
 from backend.core.mesh.protocol import Frame, MessageType, ProtocolError, Sequencer
+from backend.db.database import AsyncSessionLocal
+from sqlalchemy import text
 
 logger = logging.getLogger(__name__)
 
@@ -113,12 +117,118 @@ class Session:
         logger.info("mesh: handshake complete with %s", self.peer_device)
 
     async def exchange_cursors(self) -> int:
-        """Tell the peer how far we have read, and learn how far they have."""
-        await self.send(MessageType.CURSOR, {"seq": await changelog.latest_seq()})
+        """Tell the peer how far through THEIR log we have read, and learn how
+        far through ours they have.
+
+        The cursor is per peer, not global: "I have seen up to entry 400 of your
+        history" is only meaningful about one specific device.
+        """
+        await self.send(MessageType.CURSOR, {"seq": await self._cursor_for_peer()})
         frame = await self.recv()
         if frame.type is not MessageType.CURSOR:
             raise ProtocolError(f"expected cursor, got {frame.type.value}")
         return int(frame.payload.get("seq", 0))
+
+    async def _cursor_for_peer(self) -> int:
+        if not self.peer_device:
+            return 0
+        async with AsyncSessionLocal() as db:
+            row = (await db.execute(
+                text("SELECT last_seen_seq FROM mesh_peers WHERE device_id = :d"),
+                {"d": self.peer_device},
+            )).first()
+        return int(row[0]) if row else 0
+
+    async def _remember_cursor(self, seq: int) -> None:
+        """Only advance after the rows are applied and journalled. A cursor moved
+        early would silently skip changes if the sync died mid-batch."""
+        if not self.peer_device or seq <= 0:
+            return
+        async with AsyncSessionLocal() as db:
+            await db.execute(
+                text("""
+                    INSERT INTO mesh_peers (device_id, name, last_seen_seq, last_sync)
+                    VALUES (:d, :n, :s, :t)
+                    ON CONFLICT (device_id) DO UPDATE SET
+                        name = :n,
+                        last_seen_seq = MAX(last_seen_seq, :s),
+                        last_sync = :t
+                """),
+                {"d": self.peer_device, "n": self.peer_name or "",
+                 "s": seq, "t": datetime.utcnow().isoformat() + "Z"},
+            )
+            await db.commit()
+
+    async def send_our_changes(self, since: int) -> int:
+        """Ship everything the peer has not seen, as current row state."""
+        entries = await changelog.changes_since(since, limit=2000)
+        rows = await mesh_apply.export_rows(entries)
+        high = max((e["seq"] for e in entries), default=since)
+        await self.send(MessageType.CHANGES, {"rows": rows, "high_seq": high})
+        return len(rows)
+
+    async def export_preview(self, since: int = 0) -> list[dict[str, Any]]:
+        """What we would ship a peer from `since`. Used by the sync-status API
+        and by tests that need to see the payload without a second machine."""
+        entries = await changelog.changes_since(since, limit=2000)
+        return await mesh_apply.export_rows(entries)
+
+    async def receive_their_changes(self) -> mesh_apply.ApplyReport:
+        """Apply what the peer sent, then acknowledge how far we got."""
+        frame = await self.recv()
+        if frame.type is not MessageType.CHANGES:
+            raise ProtocolError(f"expected changes, got {frame.type.value}")
+
+        rows = frame.payload.get("rows") or []
+        if not isinstance(rows, list):
+            raise ProtocolError("changes payload is not a list")
+
+        report = await mesh_apply.apply_rows(
+            rows, peer=self.peer_name or self.peer_device or "peer"
+        )
+        high = int(frame.payload.get("high_seq") or 0)
+        await self._remember_cursor(high)
+        await self.send(MessageType.ACK, {
+            "applied": report.rows_applied,
+            "conflicts": report.conflicts,
+            "high_seq": high,
+        })
+        return report
+
+    async def sync(self) -> mesh_apply.ApplyReport:
+        """One full exchange. Both sides run the same code; the initiator simply
+        speaks first, which is what keeps the conversation from deadlocking."""
+        await self.handshake()
+        their_cursor = await self.exchange_cursors()
+
+        # Strictly alternating, because both sides read from the same stream:
+        # the responder acknowledges BEFORE sending its own changes, so the
+        # initiator never finds an ack where it expects data. Getting this wrong
+        # deadlocks or desyncs the conversation rather than failing cleanly.
+        #
+        #   initiator            responder
+        #   ---------            ---------
+        #   changes  ---------->
+        #            <---------- ack
+        #            <---------- changes
+        #   ack      ---------->
+        if self.initiator:
+            await self.send_our_changes(their_cursor)
+            await self._expect(MessageType.ACK)
+            report = await self.receive_their_changes()
+        else:
+            report = await self.receive_their_changes()
+            await self.send_our_changes(their_cursor)
+            await self._expect(MessageType.ACK)
+        return report
+
+    async def _expect(self, mtype: MessageType) -> Frame:
+        frame = await self.recv()
+        if frame.type is MessageType.ERROR:
+            raise ProtocolError(str(frame.payload.get("reason", "peer reported an error")))
+        if frame.type is not mtype:
+            raise ProtocolError(f"expected {mtype.value}, got {frame.type.value}")
+        return frame
 
 
 async def handle_connection(websocket) -> None:
@@ -132,5 +242,4 @@ async def handle_connection(websocket) -> None:
             return await websocket.receive_bytes()
 
     session = Session(_WS(), initiator=False)
-    await session.handshake()
-    await session.exchange_cursors()
+    await session.sync()
