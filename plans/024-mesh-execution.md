@@ -34,7 +34,7 @@ Legend: `TODO` · `WIP` · `REVIEW` (code done, passes pending) · `DONE`
 | 1 | Mesh flag + Settings section | is the flag | **DONE** | ADR §0 · verified in the running UI |
 | 2 | `change_log`, triggers, HLC | Yes | **DONE** | ADR §4, §5 |
 | 3 | Merge engine (pure, both directions) | inert lib | **DONE** | ADR §6, §7, §10 |
-| 4 | Journal, snapshot, rollback | Yes | TODO | ADR §13 |
+| 4 | Journal, snapshot, rollback | Yes | **DONE** | ADR §13 |
 | 5 | Transport + protocol (manual address) | Yes | TODO | ADR §2, §14 |
 | 6 | Verification dialogue | Yes | TODO | ADR §7 |
 | 7 | Magnet records + resolver | Yes | TODO | ADR §1, §8 |
@@ -228,6 +228,42 @@ a kind string becomes a 500 on an ingest route. Cover each kind with a test.
 ## Phase log
 
 Newest entry at the top. One entry per working turn.
+
+### 2026-08-02 — Phase 4 DONE: the Mesh log, snapshots and rollback
+
+Lands *before* anything writes on another machine's say-so, which was the whole
+point of putting it this early in the order.
+
+- `mesh_journal` records every field Mesh changes with `old_value`, `new_value`
+  and — the column that matters — **`rule`**. After a bad sync the question is
+  never "what changed" but "why did it change", and that is now one query
+  instead of an afternoon reasoning about clocks.
+- **Snapshots** via sqlite3's own backup API rather than a file copy, which is
+  consistent against a live database. ~7 MB each, twenty kept: 150 MB of full
+  undo history against a 25 GB library.
+- **Rollback** replays a batch backwards. Metadata only, and that is a feature:
+  media is re-pullable from its magnet (§1), so history is text rather than
+  files.
+
+Two rules that stop rollback making things worse, both tested: an undo writes a
+**new** stamp (a fresh edit, not time travel — otherwise the peer sees a stale
+value and re-applies exactly what was undone), and an undo is **itself
+journaled**, so undoing an undo works.
+
+**Review pass 1 — 2 bugs in my own fresh code.** A mangled SQL string that
+duplicated `FROM mesh_journal`, and values round-tripped through JSON on the way
+back, which would have stored the string `"true"` into a boolean column.
+
+**Review pass 2 — 1 hardening.** Undo builds `UPDATE {tbl} SET {field}`, so both
+identifiers are interpolated rather than bound. They are now checked against the
+live schema before use — not because the journal is untrusted today, but because
+a table name reaching SQL from a stored row is exactly the shape that becomes an
+injection the day something upstream stops validating. Covered by a test that
+feeds it `sqlite_master` and a `--` comment payload.
+
+**Review pass 3 — 1 fix.** `shutil` imported and never used.
+
+Suite: **173 passed** (was 162).
 
 ### 2026-08-02 — Phase 3 DONE: the merge engine
 
