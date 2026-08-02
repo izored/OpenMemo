@@ -9,8 +9,12 @@ their own library. Today the only way to move work between them is
 backup/restore, which overwrites one side wholesale — it is a migration tool,
 not a sync tool.
 
-**Mesh** is the feature name. Both devices can write. No account, no cloud, no
-relay. Turn it on once, never think about it again.
+**Mesh** is the feature name. Both devices can write. No account, and openMemo
+runs no server of its own. Turn it on once, never think about it again.
+
+On the same network that is the whole story. Reaching a machine on a *different*
+network needs something to carry the connection, and §2 covers how — using a
+network the user already controls, so openMemo still ships and hosts nothing.
 
 Two things this ADR refuses, and both are refusals of *silence*: no rule
 overwrites human work without asking (§7), and no sync writes a row that is not
@@ -171,24 +175,151 @@ Two devices holding the same 12 words are the same library. Nothing else is
 consulted, because there is nothing else. No server issues it, no server can
 revoke it, no server ever sees it.
 
-**Where it differs from Comet/Brave:** they still bounce encrypted records
-through a relay (`sync-v2.brave.com`) — the server cannot read your data, but it
-exists, and Comet layered an account on top of it. We drop the relay entirely.
-The code stays; the server does not.
+**Where it differs from Comet/Brave:** they route every record through a relay
+they operate (`sync-v2.brave.com`) — it cannot read your data, but it is theirs,
+it is mandatory, and Comet layered an account on top of it.
 
-### Losing the relay costs us rendezvous — mDNS buys it back
+Mesh keeps the code and drops the *mandatory* server. On a LAN nothing sits in
+the middle at all. Across networks the connection rides an overlay the user
+already runs (§2 Reachability) — still no openMemo account, still no openMemo
+infrastructure, and nothing for us to keep online.
 
-A relay is how Brave devices find each other across networks. Without one,
-devices must find each other on the LAN. mDNS/Bonjour, service
-`_openmemo._tcp.local`, TXT record carrying device name + `hash(chain_id)`.
+### Reachability — the MacBook has to sync from a café
 
-Two machines advertising the same chain hash recognize each other and connect —
-**automatically, forever, on any network they share.** The words are typed once,
-at pairing. Never again. That is the plug-and-play part.
+**Revised 2026-08-02.** This section originally said "same network required" and
+the Rejected list ruled out a relay. The owner needs the MacBook to sync while
+travelling, so that constraint is lifted. What follows replaces it.
 
-Consequence to state plainly: **same network required.** Mac at a café and PC at
-home do not sync until they meet. Queue changes, sync on reunion, say so in the
-status pill. Do not fake it.
+Two things make this far smaller than general peer-to-peer NAT traversal.
+
+**The problem is not symmetric.** The Windows box is always on, always at the
+same home network, and is already the primary (§3). The MacBook is the only
+device that moves. So this is a *roaming client reaching a stationary home
+machine* — not two mobile peers hole-punching at each other. Only one side ever
+needs to be reachable, and it is the side that never moves.
+
+**The original objection to a relay was mostly already solved.** Everything on
+the wire is encrypted with the seed-derived key and authenticated by the PSK
+(above). Anything in the middle is a dumb pipe that cannot read the library. The
+objection that survives is not privacy, it is *dependency*: something must exist,
+and someone must run it.
+
+### Three tiers, one socket
+
+The sync layer does not know or care which tier it is on. It dials a host and
+port and speaks the same protocol. That is the whole design decision here —
+**reachability is a separate concern from sync**, so adding a tier never touches
+the merge engine, the journal or the resolver.
+
+| tier | how the Mac finds the PC | when |
+|---|---|---|
+| **1 — Same network** | mDNS, `_openmemo._tcp.local`, TXT carrying `hash(chain_id)` | at home. Zero config, automatic, forever. |
+| **2 — Overlay network** | a stable private IP that works from anywhere | on the move. The supported answer. |
+| **3 — Manual address** | typed host:port, or the QR hint | debugging, LAN with broken multicast |
+
+Tier 1 is unchanged: two machines advertising the same chain hash find each
+other automatically and the 12 words are typed once, ever.
+
+### Tier 2 — an overlay network, not a relay we build
+
+Recommended: **Tailscale, or any WireGuard overlay.** Installed once on both
+machines, it gives each a private IP that follows it anywhere. Mesh then dials
+that IP exactly as it would a LAN address — **zero Mesh code changes**.
+
+Why this over the alternatives:
+
+- **No ports exposed to the internet.** Nothing about the home machine becomes
+  publicly reachable. This matters more than it looks — see the warning below.
+- **Data stays end-to-end encrypted** by WireGuard, and again by Mesh's own key
+  inside that. The coordination server exchanges public keys, not traffic; the
+  fallback relay, used only when a direct path fails, also cannot read it.
+- **It is a real product with a GUI**, not a niche self-hosted contraption. It
+  already appears in `docs/DECISIONS.md` as the secure fix for reachability.
+- **openMemo takes on no server, no account, and no ops burden.** The dependency
+  is the user's network, not our infrastructure.
+
+The honest cost: it is a third-party account and a background daemon. That does
+not contradict "Mesh needs no account" — the *Mesh code* is still the only
+identity Mesh has. It contradicts "nothing in the middle", and the walkthrough
+copy must not claim otherwise once this ships.
+
+### Isolation — Mesh is the only thing that ever faces a network
+
+**Confirmed by the owner, 2026-08-02, and load-bearing.** openMemo itself never
+goes online. What crosses a network is a narrow metadata channel and nothing
+else.
+
+Concretely, the Mesh listener is a separate service with a separate surface:
+
+| | app API | Mesh listener |
+|---|---|---|
+| Port | the existing one | **its own, different port** |
+| Auth | none, by design (local-first) | PSK handshake, every frame |
+| Binds to | loopback / LAN | loopback + the overlay interface |
+| Speaks | the whole application | change rows, magnets, blob range requests |
+| Serves the UI | yes | **never** |
+| Serves `/api/*` | yes | **never** |
+
+Rules that follow, and they are not negotiable:
+
+- **One process, two listeners, no shared routing.** The Mesh listener is not a
+  FastAPI route on the app. It cannot be reachable by walking the app's URL
+  space, because it does not live there.
+- **A Mesh frame can never become an app request.** The protocol is a closed set
+  of message types (§5 protocol). There is no passthrough, no proxy, no
+  "forward this to the API" verb. Adding one would defeat the whole design.
+- **Reject before parse.** Frames fail the PSK check before any payload is
+  decoded, so an unauthenticated peer cannot reach a parser.
+- **The UI is never served off it.** No HTML, no static files, no SPA fallback.
+
+This is why the port separation matters more than it looks: it means the blast
+radius of Mesh being reachable is *the sync protocol*, not *the application*.
+Even a total compromise of the Mesh listener yields memo rows and blobs to
+someone who already had to hold the 12-word code — not shell-adjacent access to
+an unauthenticated local API.
+
+### The trap to avoid: never expose the API
+
+`docs/DECISIONS.md` records that the local API is **unauthenticated by design** —
+it is a local-first app and the port was never meant to face the internet.
+
+So a port-forward is not merely riskier than an overlay, it is a different
+category of mistake: forwarding the app port publishes the entire library to
+anyone who finds it. Even forwarding only the Mesh port puts an internet-facing
+service on a home machine that a non-expert has to keep patched.
+
+Therefore, and this is a hard rule for phase 8:
+
+- **Mesh listens on its own port, never the API port**, with its own PSK
+  handshake. The two must not share a listener.
+- **openMemo never opens a port to the internet itself**, and never instructs
+  the user to. Reaching another network is the overlay's job.
+- If a user has port-forwarded anyway, Mesh still refuses unauthenticated
+  frames — but the docs must not present that as a supported setup.
+
+### Being away is the normal case, not an error
+
+Worth stating because it changes what "works on the move" has to mean: the
+design already tolerates long absences. Changes accumulate in the change log
+(§4) with HLC ordering (§5), so the MacBook is **fully usable offline** — read,
+write, edit, tag — and reconciles whenever it next reaches the PC.
+
+So the requirement is *eventual* reachability, not constant connectivity. A tier
+2 that only works on hotel Wi-Fi and not on a plane is still a complete answer.
+The status pill already has a state for it.
+
+### Security once it leaves the LAN
+
+On a LAN, TLS and the PSK were defence in depth. Off it, they are load-bearing,
+so phase 8 must treat them as such:
+
+- **Replay protection** — a monotonic sequence per session, so a captured frame
+  cannot be re-sent later.
+- **Handshake rate limiting and backoff**, so the PSK cannot be ground down.
+- **Revocation is now security, not tidiness** (§3). A lost laptop is a device
+  that must stop syncing, and it may be on a network we do not control.
+- **Pin the cert at pairing**, and refuse a changed cert loudly rather than
+  prompting — a prompt on a café network is a prompt users click through.
 
 ### QR is the fast path
 
@@ -816,7 +947,7 @@ Sidebar status pill, one line:
 | idle | `Synced 2 min ago` |
 | resolving | `Getting 6 tracks` |
 | peer away | `MacBook offline — will sync when it's back` |
-| different network | `Waiting for MacBook — not on this network` |
+| different network, no overlay | `Waiting for MacBook — not reachable from here` |
 | conflict | `1 conflict — both copies kept` |
 
 Per-memo, a card with no local file is not an error. It shows a small cloud
@@ -861,6 +992,7 @@ source of truth for the order.
 | **6** | Verification dialogue (§7) | yes | |
 | **7** | Magnets + resolver (§1, §8) | yes | Enqueues into the phase-0 queue. |
 | **8** | Mesh code, discovery, pairing, roles (§2, §3) | yes | Plug-and-play on top of a working system. |
+| **9** | Cross-network reachability (§2 tier 2) | yes | Overlay support, replay protection, cert pinning, rate limiting. Splits out because it is security work, not transport work. |
 
 Phases 0–4 are the foundation and the ones that must be right. **Nothing before
 phase 5 touches the user's data on another machine's say-so**, and by the end of
@@ -897,6 +1029,16 @@ until all three have run. The tracker records the outcome of each.
 - **An account.** Nothing needs it. An account exists to tell a server who you
   are, and there is no server. Comet asks for one because it kept Brave's relay;
   we did not.
-- **A relay, even an encrypted one.** It is the single thing that would let this
-  work across networks, and it is the single thing the user ruled out. Worth
-  revisiting only as an explicit opt-in later, never as the default.
+- **~~A relay, even an encrypted one.~~** *Reversed 2026-08-02.* The owner needs
+  the MacBook to sync while travelling, so cross-network reachability is now a
+  requirement rather than a nice-to-have. Resolved without building or running
+  anything: an overlay network (tier 2 above) carries the same socket, so
+  openMemo still ships no server and holds no account. See §2 Reachability.
+- **A relay we build, host or pay for.** Still rejected. The moment openMemo
+  runs infrastructure it stops being local-first, gains an outage surface, and
+  becomes something to keep patched. An overlay the user already controls costs
+  us nothing and can be swapped for any other WireGuard setup.
+- **Port-forwarding the app to the internet.** Rejected hard. The local API is
+  unauthenticated by design (`docs/DECISIONS.md`), so forwarding it publishes
+  the entire library. Even forwarding only the Mesh port asks a non-expert to
+  run an internet-facing service on their home machine.
