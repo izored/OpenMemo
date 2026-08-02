@@ -448,6 +448,7 @@ from backend.api.export import router as export_router
 from backend.api.search import router as search_router
 from backend.api.maintenance import router as maintenance_router
 from backend.api.backup import router as backup_router
+from backend.api.mesh import router as mesh_router
 from backend.api.settings import router as settings_router
 from backend.api.music import router as music_router
 from backend.api.spaces import router as spaces_router
@@ -463,6 +464,8 @@ app.include_router(backup_router)
 app.include_router(settings_router)
 app.include_router(music_router)
 app.include_router(spaces_router)
+# Mesh (ADR-024). Every route 404s until the user enables it (core/mesh.py).
+app.include_router(mesh_router)
 
 
 def _dir_size(path: Path) -> int:

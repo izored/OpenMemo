@@ -84,6 +84,11 @@ _DEFAULTS: dict[str, Any] = {
     # takedown without a manual "Make it local" visit. Off = bot saves follow
     # the same auto-download rules as a WebUI paste.
     "telegram_force_localize": True,
+    # Mesh (ADR-024): two-way device sync. Off by default and gating EVERY
+    # table, trigger, worker, socket and route the feature adds, so an install
+    # that never turns it on pays nothing. Read through backend/core/mesh.py,
+    # never directly, so there is one switch to reason about.
+    "mesh_enabled": False,
 }
 
 _UNCAPPED_SENTINEL = 0
