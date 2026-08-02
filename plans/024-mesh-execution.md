@@ -229,6 +229,41 @@ a kind string becomes a 500 on an ingest route. Cover each kind with a test.
 
 Newest entry at the top. One entry per working turn.
 
+### 2026-08-02 — The Mesh contract sweep (owner requirement)
+
+Owner asked for three things: Mesh code must only run when enabled, it must not
+bloat openMemo, and changing core openMemo must not silently break sync. All
+three are now **enforced by a test**, not by remembering —
+`backend/tests/test_mesh_contract.py`.
+
+**Measured, not assumed:** ~2,200 lines of Mesh, **17 lines inside core files**
+across five files. That ratio is now a budget: the sweep fails if any other file
+starts importing Mesh, and the fix is to move logic into `core/mesh/` rather than
+extend the list.
+
+**Inert when off** is asserted at its strongest form: write, edit and delete a
+memo through the app with Mesh disabled, and the change log must sit at exactly
+the sequence it started on. Plus zero triggers, no listener, routes 404.
+
+**The sweep** maps each kind of core change to the check that catches it, and
+each check explains what to do:
+
+| changed | caught by | told to |
+|---|---|---|
+| new table | `test_every_table_is_classified` | classify it, with a reason |
+| new memo column | merge-policy check | pick its tier |
+| renamed id/link column | key-assumption check | triggers assume `NEW.id` |
+| new setting | settings-allowlist check | two allowlists exist |
+| new Mesh import | coupling-budget check | keep Mesh self-contained |
+
+Deliberately *not* guarded: changing how a route writes. Triggers sit below the
+application, so any write is caught however it was made — which is precisely why
+the change log lives in SQL rather than the API layer.
+
+Documented in ADR §0b so it is findable, not just enforced.
+
+Suite: **233 passed** (was 224).
+
 ### 2026-08-02 (same day) — Phase 5 FINISHED, and a correction
 
 **I called this "partial" and justified it as a design decision. That was wrong.**

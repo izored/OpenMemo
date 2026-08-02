@@ -10,6 +10,20 @@ import pytest
 from backend.core.mesh import merge
 from backend.core.mesh.clock import HLC
 
+# Columns where plain newest-wins is the right call. Lives at module level so
+# the Mesh contract sweep can import it rather than duplicating the list.
+PLAIN_LWW_MEMO = {
+    # identity + provenance
+    "id", "workspace_id", "type", "source_url", "source_domain", "source_favicon",
+    # user-visible flags and ordering
+    "pinned", "liked", "hidden", "sort_order", "card_size", "playlist_born",
+    # audio metadata that arrives with the file
+    "audio_kind", "audio_artist", "audio_album", "gallery",
+    # lifecycle
+    "is_processed", "is_deleted", "deleted_at",
+    "created_at", "updated_at", "recency_at",
+}
+
 OLD = str(HLC(1_700_000_000_000, 0, "aaaaaaaa"))
 NEW = str(HLC(1_700_000_009_000, 0, "bbbbbbbb"))
 
@@ -253,17 +267,7 @@ def test_every_memo_column_has_a_deliberate_merge_policy():
     """
     from backend.db.models import Memo
 
-    PLAIN_LWW = {
-        # identity + provenance
-        "id", "workspace_id", "type", "source_url", "source_domain", "source_favicon",
-        # user-visible flags and ordering
-        "pinned", "liked", "hidden", "sort_order", "card_size", "playlist_born",
-        # audio metadata that arrives with the file
-        "audio_kind", "audio_artist", "audio_album", "gallery",
-        # lifecycle
-        "is_processed", "is_deleted", "deleted_at",
-        "created_at", "updated_at", "recency_at",
-    }
+    PLAIN_LWW = PLAIN_LWW_MEMO
     classified = merge.LOCAL_ONLY | merge.MACHINE | merge.HUMAN | merge.DICT_UNION
     columns = {c.name for c in Memo.__table__.columns}
 
