@@ -421,6 +421,16 @@ async def run_relay_loop() -> None:
                 await asyncio.sleep(30)
                 continue
 
+            # Exactly one device may poll (ADR-024 §3). Telegram hands each
+            # update to whoever asks first, exactly once, and the offset lives
+            # in memory per process — so two devices polling one token race and
+            # lose memos outright. Without Mesh this is always True.
+            from backend.core.mesh.pairing import may_run_singleton
+
+            if not await may_run_singleton("telegram_relay"):
+                await asyncio.sleep(60)
+                continue
+
             minutes = settings.get("telegram_poll_minutes") or 15
             try:
                 minutes = max(1, min(120, int(minutes)))

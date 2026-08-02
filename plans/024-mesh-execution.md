@@ -38,7 +38,7 @@ Legend: `TODO` · `WIP` · `REVIEW` (code done, passes pending) · `DONE`
 | 5 | Transport + protocol (manual address) | Yes | **DONE** | ADR §2, §5, §14 |
 | 6 | Verification dialogue | Yes | **DONE** | ADR §7 · verified in the browser |
 | 7 | Magnets, covers, fetch policy | Yes | **DONE** | ADR §1, §8 · backfill verified on the real library |
-| 8 | Mesh code, discovery, pairing, roles | Yes | TODO | ADR §2, §3 |
+| 8 | Mesh code, QR, devices, primary role | Yes | **WIP** | backend done; pairing UI next |
 | 9 | Cross-network reachability (overlay) | Yes | TODO | ADR §2 Reachability · **new 2026-08-02** |
 
 **Shippable checkpoints.** Phase 0 ships alone (bug fix). Phase 5 is a complete
@@ -228,6 +228,47 @@ a kind string becomes a 500 on an ingest route. Cover each kind with a test.
 ## Phase log
 
 Newest entry at the top. One entry per working turn.
+
+### 2026-08-02 — Phase 8 backend + the Mesh handbook
+
+Phase 7 merged (PR #130).
+
+**The 12-word code.** BIP39 128-bit seed → the same HKDF derivation phase 5
+already used, so switching the root from `os.urandom` to the user's words
+touched **nothing downstream**. That was the point of deriving keys properly in
+phase 5 rather than using the secret directly.
+
+Two dependencies added, both pure-python, and worth naming as a cost:
+`mnemonic` (the standard wordlist — a hand-rolled one would be a silent
+correctness bug in the one value the user writes on paper) and `qrcode` (SVG
+output, so no Pillow and no binary dependency).
+
+**Typos fail at entry.** The checksum turns a mistyped word into "that isn't
+quite right" instead of a pairing that mysteriously never connects. Messy paste
+— commas, capitals, line breaks — normalises rather than failing.
+
+**The primary role, and the reason it exists.** `telegram_relay` polls
+`getUpdates` with an in-memory offset, and Telegram hands each update to whoever
+asks first, exactly once. Two devices polling one token race and lose memos
+outright. `may_run_singleton()` guards it, and returns True whenever Mesh is off
+so a single-device install is completely unaffected.
+
+**The contract sweep caught me.** Adding that guard made `telegram_relay.py`
+import Mesh, and the coupling-budget test failed immediately. Exactly what the
+owner asked for. Added to the budget *with the reason*, not silently.
+
+**The handbook** (`docs/MESH-HANDBOOK.md`) is written for an outside reviewer
+with no session context: every decision and what was rejected, the measurements,
+all 18 bugs found during construction and how each surfaced, the 10 invariants
+worth attacking, and — most importantly — **§7, what is not proven**. Two real
+machines have still never synced; the cipher is a placeholder; workers are
+disabled in tests. It ends with seven questions worth asking of the design,
+offered rather than left to be discovered.
+
+Suite: **286 passed** (was 264).
+
+Still to do in phase 8: the pairing UI (reveal-once code, QR, join field,
+device list).
 
 ### 2026-08-02 — Phase 7 DONE: magnets, covers and the fetch policy
 
