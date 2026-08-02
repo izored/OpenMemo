@@ -35,7 +35,7 @@ Legend: `TODO` · `WIP` · `REVIEW` (code done, passes pending) · `DONE`
 | 2 | `change_log`, triggers, HLC | Yes | **DONE** | ADR §4, §5 |
 | 3 | Merge engine (pure, both directions) | inert lib | **DONE** | ADR §6, §7, §10 |
 | 4 | Journal, snapshot, rollback | Yes | **DONE** | ADR §13 |
-| 5 | Transport + protocol (manual address) | Yes | TODO | ADR §2, §14 |
+| 5 | Transport + protocol (manual address) | Yes | **PARTIAL** | channel + isolation done; row exchange pending |
 | 6 | Verification dialogue | Yes | TODO | ADR §7 |
 | 7 | Magnet records + resolver | Yes | TODO | ADR §1, §8 |
 | 8 | Mesh code, discovery, pairing, roles | Yes | TODO | ADR §2, §3 |
@@ -228,6 +228,52 @@ a kind string becomes a 500 on an ingest route. Cover each kind with a test.
 ## Phase log
 
 Newest entry at the top. One entry per working turn.
+
+### 2026-08-02 — Phase 5 PARTIAL: the isolated channel is real, row exchange is not
+
+Phases 3+4 merged (PR #127). This phase delivers the owner's core requirement —
+**openMemo never goes online, only a narrow metadata channel does** — and stops
+short of moving rows.
+
+**What landed.**
+
+- `server.py` — a **separate ASGI app with a separate routing table on a separate
+  port**, whose entire URL space is one WebSocket. Not a route on the app. There
+  is no `/api` to walk to and no static mount, so a traversal has nowhere to go.
+  Binds loopback by default: a laptop joining a café network must not start
+  listening on it.
+- `protocol.py` — a **closed** `MessageType` enum, authenticated *before*
+  parsing, with replay rejection and a frame-size bound applied before
+  decryption. The most powerful verb is "give me these rows"; there is no
+  passthrough, proxy or query verb, and an unknown type is refused rather than
+  forwarded.
+- `secret.py` — one root secret HKDF'd into distinct chain/PSK/content keys.
+  Phase 8 swaps the root for a BIP39 seed and nothing downstream changes.
+- `session.py` — the conversation, talking to a `Channel` rather than a
+  WebSocket, so two sessions are driven against each other in memory with no
+  port and no second database.
+
+**Tests worth naming.** Nine parametrised paths (`/api/memos`, `/`,
+`/../../etc/passwd`, `/openapi.json`, …) assert the Mesh listener serves none of
+them and leaks nothing about the app. One test asserts the payload is not
+greppable on the wire. One asserts the message set itself contains no verb that
+names a path, command or URL — so a future addition has to justify itself.
+
+**Review pass 1.** The own-id guard fired on every test, because two sessions in
+one process share a database and therefore an identity. Correct behaviour, so
+the fix was a seam (`local_device_id`) rather than weakening the guard — and it
+is the same seam phase 8 needs for a pairing rehearsal without a second machine.
+
+**Review pass 2.** Turning Mesh off now closes the port. A flag that leaves a
+socket listening is not off. Listener startup is non-fatal: a busy port must not
+stop the app booting, because the app does not need Mesh.
+
+**Not done, deliberately.** Cursor exchange works; applying rows through the
+merge engine and journalling each decision does not. That is next, and it lands
+alongside the dialogue (§7) rather than before it — there is no point resolving
+conflicts until there is somewhere to show them.
+
+Suite: **205 passed** (was 173).
 
 ### 2026-08-02 — Phase 4 DONE: the Mesh log, snapshots and rollback
 
