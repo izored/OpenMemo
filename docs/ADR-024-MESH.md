@@ -160,6 +160,61 @@ The peer is **just another source in the list, ranked last**. No separate
 transfer subsystem, no special case — one resolver, one queue, sources tried in
 order. That single decision is what makes the whole thing small.
 
+### Structure comes first, and covers were nearly missed
+
+**Owner requirement, 2026-08-02.** Spaces, collections, hidden memos, playlists
+and albums are the *shape* of the library. They must sync, and they must arrive
+before media — a library that has every track but has forgotten which playlist
+they belong to is worse than one that is still downloading.
+
+Most of that was already covered, because structure is rows:
+
+| structure | how it syncs |
+|---|---|
+| Spaces | `workspaces` where `kind='space'` — a synced table |
+| Collections | a synced table |
+| Playlists / albums | `collections` where `kind='playlist'`, with `music_kind` |
+| Playlist membership | `memo_collections` — a synced link table |
+| Hidden | `memos.hidden` — an ordinary column |
+| Ordering, pins | `sort_order` / `pinned` — ordinary columns |
+
+**But cover images were not, and that was a real hole.** Space and playlist
+covers live in `DATA_DIR/space_covers/` and `DATA_DIR/playlist_covers/` —
+*outside* `files/`. So the magnet design missed them, and so did
+`scripts/blob-split.py`, which means they were absent from the 94% measurement
+too. Measured today: **5 MB of Space covers.**
+
+They are the one case that breaks the §1 rule cleanly, so they get their own
+treatment:
+
+- **No source to refetch from.** A cover the user cropped and positioned exists
+  nowhere else. Peer transfer is the only path, not the last one.
+- **Small enough not to care.** Megabytes, not gigabytes. There is no reason to
+  be lazy about them.
+- **Structural, so they go first.** A Space arriving without its cover looks
+  broken in a way a track without audio does not.
+
+So covers transfer eagerly, ahead of all media, and `cover_ext` on the row is
+the trigger: if a row arrives with a cover this device does not have, fetch it.
+
+### Fetch policy — 20 recent, then fill in
+
+**Owner decision, 2026-08-02**, replacing the earlier fetch-on-open default.
+
+| | |
+|---|---|
+| On pairing | structure and covers immediately, then media for the **20 most recent memos** |
+| After that | the rest fills in gradually, in the background, newest first |
+| On demand | anything the user opens jumps the queue |
+
+The reasoning: pure fetch-on-open makes a new device feel empty and every first
+play feel slow. Keeping everything makes pairing a 24 GB event. Twenty recent
+memos is enough that the device is immediately *useful*, while the long tail
+arrives without anyone watching a progress bar.
+
+It also means the backfill is interruptible by definition: it is a queue (§9),
+so closing the laptop mid-fill loses nothing.
+
 ### Peer is the backstop, and that is non-negotiable
 
 Refetch fails permanently and often: video pulled from YouTube, Instagram post

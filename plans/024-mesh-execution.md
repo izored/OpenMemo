@@ -37,7 +37,7 @@ Legend: `TODO` · `WIP` · `REVIEW` (code done, passes pending) · `DONE`
 | 4 | Journal, snapshot, rollback | Yes | **DONE** | ADR §13 |
 | 5 | Transport + protocol (manual address) | Yes | **DONE** | ADR §2, §5, §14 |
 | 6 | Verification dialogue | Yes | **DONE** | ADR §7 · verified in the browser |
-| 7 | Magnet records + resolver | Yes | TODO | ADR §1, §8 |
+| 7 | Magnets, covers, fetch policy | Yes | **DONE** | ADR §1, §8 · backfill verified on the real library |
 | 8 | Mesh code, discovery, pairing, roles | Yes | TODO | ADR §2, §3 |
 | 9 | Cross-network reachability (overlay) | Yes | TODO | ADR §2 Reachability · **new 2026-08-02** |
 
@@ -228,6 +228,49 @@ a kind string becomes a 500 on an ingest route. Cover each kind with a test.
 ## Phase log
 
 Newest entry at the top. One entry per working turn.
+
+### 2026-08-02 — Phase 7 DONE: magnets, covers and the fetch policy
+
+Phase 6 merged (PR #129).
+
+**The owner caught a real hole.** Structural metadata — Spaces, collections,
+playlists, albums, hidden — must sync and must take priority. Most of it already
+did, because structure is rows. But **cover images live in
+`DATA_DIR/space_covers/` and `playlist_covers/`, outside `files/`**, so the
+magnet design missed them *and so did `scripts/blob-split.py`* — meaning they
+were absent from the 94% measurement too.
+
+Covers are the one clean exception to §1: no source to refetch from, small, and
+structural. A Space arriving without its cover looks broken in a way a track
+without audio does not. So they transfer eagerly and **first**, ahead of all
+media, with `cover_ext` as the trigger.
+
+**Fetch policy, per the owner's decision:** 20 most recent eagerly, then the
+long tail fills in as background work. Pure fetch-on-open made a new device feel
+empty and every first play slow; keeping everything made pairing a 24 GB event.
+
+**Verified against a copy of the real library**, not a fixture:
+
+- **419 magnets built** — exactly the measured count.
+- Sample source order `qobuz → origin → peer`, correct.
+- 2 missing covers detected, and they lead the fetch plan.
+- Backfill is idempotent on a second run.
+
+**Review pass 1 — 1 real bug.** `WHERE is_deleted = 0` silently skipped rows
+where the column is NULL, because `NULL = 0` is NULL rather than false. Legacy
+rows predating that column look exactly like that, so they would have been left
+without magnets and never synced. Now `COALESCE(is_deleted, 0)`.
+
+**Review pass 2 — my own measurement was wrong.** `blob-split.py` never counted
+covers, and I cited its output in the ADR. Fixed, and it now reports covers as
+their own line. Re-measured: covers are 0.01 GB, so the 5.9% must-cross figure
+holds.
+
+**Review pass 3 — no bugs.** Magnets live in their own table rather than on
+`memos`, which is already 39 columns; they are derived data that can be rebuilt,
+so adding one does not force a migration on a table the whole app reads.
+
+Suite: **264 passed** (was 244).
 
 ### 2026-08-02 — Phase 6 DONE: the dialogue and history view
 
