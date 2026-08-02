@@ -243,6 +243,41 @@ not contradict "Mesh needs no account" — the *Mesh code* is still the only
 identity Mesh has. It contradicts "nothing in the middle", and the walkthrough
 copy must not claim otherwise once this ships.
 
+### Isolation — Mesh is the only thing that ever faces a network
+
+**Confirmed by the owner, 2026-08-02, and load-bearing.** openMemo itself never
+goes online. What crosses a network is a narrow metadata channel and nothing
+else.
+
+Concretely, the Mesh listener is a separate service with a separate surface:
+
+| | app API | Mesh listener |
+|---|---|---|
+| Port | the existing one | **its own, different port** |
+| Auth | none, by design (local-first) | PSK handshake, every frame |
+| Binds to | loopback / LAN | loopback + the overlay interface |
+| Speaks | the whole application | change rows, magnets, blob range requests |
+| Serves the UI | yes | **never** |
+| Serves `/api/*` | yes | **never** |
+
+Rules that follow, and they are not negotiable:
+
+- **One process, two listeners, no shared routing.** The Mesh listener is not a
+  FastAPI route on the app. It cannot be reachable by walking the app's URL
+  space, because it does not live there.
+- **A Mesh frame can never become an app request.** The protocol is a closed set
+  of message types (§5 protocol). There is no passthrough, no proxy, no
+  "forward this to the API" verb. Adding one would defeat the whole design.
+- **Reject before parse.** Frames fail the PSK check before any payload is
+  decoded, so an unauthenticated peer cannot reach a parser.
+- **The UI is never served off it.** No HTML, no static files, no SPA fallback.
+
+This is why the port separation matters more than it looks: it means the blast
+radius of Mesh being reachable is *the sync protocol*, not *the application*.
+Even a total compromise of the Mesh listener yields memo rows and blobs to
+someone who already had to hold the 12-word code — not shell-adjacent access to
+an unauthenticated local API.
+
 ### The trap to avoid: never expose the API
 
 `docs/DECISIONS.md` records that the local API is **unauthenticated by design** —
