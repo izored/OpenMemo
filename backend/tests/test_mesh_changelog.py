@@ -21,7 +21,12 @@ async def _fresh():
     await mesh_schema_init()
     await apply_enabled_state(True)
     async with AsyncSessionLocal() as db:
-        await db.execute(text("DELETE FROM mesh_change_log"))
+        # Clear the rows this module creates as well as the log. Other modules
+        # seed the same ids, and a leftover row turns a fresh insert into a
+        # UNIQUE violation that looks like a trigger bug.
+        for tbl in ("mesh_change_log", "memo_collections", "memo_tags",
+                    "memos", "collections", "tags"):
+            await db.execute(text(f"DELETE FROM {tbl}"))
         await db.commit()
     yield
     await apply_enabled_state(False)
