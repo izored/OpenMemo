@@ -88,7 +88,28 @@ async def start(
     if _task is not None and not _task.done():
         return
 
+    import socket
+
     import uvicorn
+
+    # Claim the port ourselves first. uvicorn calls sys.exit(1) from INSIDE the
+    # serve task when a bind fails, which no try/except around start() can catch
+    # — it took down a whole test run before this check existed. A busy Mesh
+    # port must never be able to stop the app, because the app does not need
+    # Mesh to work.
+    probe = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    try:
+        probe.bind((host, port))
+    except OSError as exc:
+        probe.close()
+        logger.warning(
+            "mesh: port %s:%d is already in use (%s) — the metadata channel is "
+            "not listening. openMemo is unaffected.", host, port, exc,
+        )
+        return
+    finally:
+        if probe.fileno() != -1:
+            probe.close()
 
     config = uvicorn.Config(
         build_app(handler),
@@ -100,7 +121,17 @@ async def start(
         access_log=False,
     )
     _server = uvicorn.Server(config)
-    _task = asyncio.create_task(_server.serve())
+
+    async def _serve() -> None:
+        """Belt and braces: even with the probe above, a race between closing it
+        and uvicorn binding could still lose. SystemExit from a background task
+        must not escape into the app."""
+        try:
+            await _server.serve()
+        except SystemExit:
+            logger.warning("mesh: the listener could not start; continuing without it")
+
+    _task = asyncio.create_task(_serve())
     logger.info("mesh: listening on %s:%d (metadata channel only)", host, port)
 
 
