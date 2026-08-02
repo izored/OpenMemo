@@ -33,7 +33,7 @@ Legend: `TODO` · `WIP` · `REVIEW` (code done, passes pending) · `DONE`
 | 0 | Job queue | **No** — plain infra, fixes live bug | **DONE** | built, wired, migrated, 3 passes run |
 | 1 | Mesh flag + Settings section | is the flag | **DONE** | ADR §0 · verified in the running UI |
 | 2 | `change_log`, triggers, HLC | Yes | **DONE** | ADR §4, §5 |
-| 3 | Merge engine (pure, both directions) | inert lib | TODO | ADR §6, §10 |
+| 3 | Merge engine (pure, both directions) | inert lib | **DONE** | ADR §6, §7, §10 |
 | 4 | Journal, snapshot, rollback | Yes | TODO | ADR §13 |
 | 5 | Transport + protocol (manual address) | Yes | TODO | ADR §2, §14 |
 | 6 | Verification dialogue | Yes | TODO | ADR §7 |
@@ -228,6 +228,45 @@ a kind string becomes a 500 on an ingest route. Cover each kind with a test.
 ## Phase log
 
 Newest entry at the top. One entry per working turn.
+
+### 2026-08-02 — Phase 3 DONE: the merge engine
+
+Phase 2 merged (PR #126). The engine is pure functions — no database, no
+network, no clock, every input an argument — so the part that decides whether
+the user keeps their work is exhaustively testable without standing up two
+machines.
+
+**Three-way, not two-way.** Comparing local against remote cannot tell "you
+edited the title, I edited the tags" apart from "we both set the title"; both
+just look *different*. So the merge takes a `base` (the row as it stood when the
+devices last agreed) and diffs each side against it. Who touched what becomes a
+fact instead of a guess, and the common case merges silently. Where `base` comes
+from is phase 5's problem.
+
+Field policy: `LOCAL_ONLY` never crosses the wire, `MACHINE` never prompts and
+absence never beats presence, `HUMAN` is the only tier that can raise a
+conflict, everything else is plain last-writer-wins.
+
+**Every test runs in both directions** via a `both_ways()` helper and asserts
+identical output. A merge that depends on which machine is asking is not a merge.
+
+**Review pass 1 — 1 real bug, and the nastiest kind.** The `summaries` union kept
+whichever side happened to be called "local", which is different on each machine.
+Both libraries would have drifted apart **permanently and silently**, with no
+conflict ever raised. Now the base decides when only one side moved, and the HLC
+decides when both did. Caught by writing the symmetry test *before* assuming the
+union was safe.
+
+**Review pass 2 — no bugs, one guard added.** Audited all 39 `Memo` columns: 17
+classified, 22 deliberately plain. A column added later would silently default to
+last-writer-wins, which is wrong for machine fields (an empty value could beat a
+real transcript) and dangerous for per-device fields (one machine's file path
+would sync onto the other). The plain set is now written down, so adding a column
+fails a test until someone picks its tier.
+
+**Review pass 3 — no bugs.** Confirmed the tiers cannot overlap.
+
+Suite: **162 passed** (was 133).
 
 ### 2026-08-02 — Phase 2 DONE: change log, triggers, hybrid logical clock
 
