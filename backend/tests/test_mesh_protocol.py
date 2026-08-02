@@ -180,3 +180,32 @@ def test_the_socket_accepts_a_connection():
 
     with TestClient(server.build_app(_handler)).websocket_connect("/mesh") as ws:
         assert ws.receive_text() == "ok"
+
+
+async def test_a_busy_mesh_port_cannot_take_down_the_app():
+    """Review pass 1, found by a real test run rather than by reading code.
+
+    uvicorn calls sys.exit(1) from INSIDE its serve task when a bind fails, so a
+    try/except around start() catches nothing — a second openMemo already
+    holding the port killed the entire run. The app must not need Mesh to work,
+    so a busy port has to be a warning and nothing more.
+    """
+    import socket
+
+    from backend.core.mesh import server as mesh_server
+
+    hog = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    hog.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+    hog.bind(("127.0.0.1", 0))
+    hog.listen(1)
+    busy_port = hog.getsockname()[1]
+
+    async def _handler(ws):
+        await ws.close()
+
+    try:
+        await mesh_server.start(_handler, host="127.0.0.1", port=busy_port)
+        assert not mesh_server.is_running(), "it must decline, not fight for the port"
+    finally:
+        hog.close()
+        await mesh_server.stop()

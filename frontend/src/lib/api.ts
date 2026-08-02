@@ -400,6 +400,45 @@ export interface TelegramRelayStatus {
   telegram_user_locked: boolean;
 }
 
+// ── Mesh (ADR-024) ────────────────────────────────────────────────────────
+// Every endpoint 404s while Mesh is off, so callers must tolerate that rather
+// than treating it as an error worth showing.
+
+export interface MeshConflict {
+  id: string;
+  peer: string;
+  tbl: string;
+  row_id: string;
+  field: string;
+  local_value: string | null;
+  remote_value: string | null;
+  base_value: string | null;
+  created_at: string;
+}
+
+export interface MeshBatch {
+  batch_id: string;
+  peer: string;
+  at: string;
+  changes: number;
+  undone: number;
+}
+
+export type MeshChoice = 'local' | 'remote' | 'both';
+
+export const meshApi = {
+  status: () => fetchJSON<{ enabled: boolean; paired: boolean; peers: unknown[] }>('/mesh/status'),
+  conflicts: () => fetchJSON<{ conflicts: MeshConflict[]; count: number }>('/mesh/conflicts'),
+  resolve: (id: string, choice: MeshChoice, applyToAll = false) =>
+    fetchJSON<{ ok: boolean; copy_id?: string; resolved?: number }>(
+      `/mesh/conflicts/${id}/resolve`,
+      { method: 'POST', body: JSON.stringify({ choice, apply_to_all: applyToAll }) },
+    ),
+  history: (limit = 50) => fetchJSON<{ batches: MeshBatch[] }>(`/mesh/history?limit=${limit}`),
+  undo: (batchId: string) =>
+    fetchJSON<{ reverted: number }>(`/mesh/history/${batchId}/undo`, { method: 'POST' }),
+};
+
 export const settingsApi = {
   get: () => fetchJSON<AppSettings>('/settings'),
   update: (patch: Partial<AppSettings>) =>

@@ -36,7 +36,7 @@ Legend: `TODO` · `WIP` · `REVIEW` (code done, passes pending) · `DONE`
 | 3 | Merge engine (pure, both directions) | inert lib | **DONE** | ADR §6, §7, §10 |
 | 4 | Journal, snapshot, rollback | Yes | **DONE** | ADR §13 |
 | 5 | Transport + protocol (manual address) | Yes | **DONE** | ADR §2, §5, §14 |
-| 6 | Verification dialogue | Yes | TODO | ADR §7 |
+| 6 | Verification dialogue | Yes | **DONE** | ADR §7 · verified in the browser |
 | 7 | Magnet records + resolver | Yes | TODO | ADR §1, §8 |
 | 8 | Mesh code, discovery, pairing, roles | Yes | TODO | ADR §2, §3 |
 | 9 | Cross-network reachability (overlay) | Yes | TODO | ADR §2 Reachability · **new 2026-08-02** |
@@ -228,6 +228,70 @@ a kind string becomes a 500 on an ingest route. Cover each kind with a test.
 ## Phase log
 
 Newest entry at the top. One entry per working turn.
+
+### 2026-08-02 — Phase 6 DONE: the dialogue and history view
+
+One component for every memo and data type, driven by a field diff rather than
+per-type UI. Values are shown, not field names — *"the bass here is insane"*
+tells you what you are choosing; `notes: modified` does not.
+
+**Verified in the browser against a real conflict** seeded through the actual
+sync path, not a fixture:
+
+- The dialogue named both sides ("This computer" / "Redas-MacBook-Pro"), showed
+  the shared original, and preselected **keep both**.
+- Applying it left the memo with the peer's note and created a copy titled
+  *"Wesley's Theory (from Redas-MacBook-Pro)"* holding the local one.
+  **Nothing was lost.**
+- The journal recorded both changes with their rules: `remote` for the
+  uncontested `liked` field, `user-choice:both` for the contested note — which
+  also demonstrates §7's promise that a conflict does not stall the rest of the row.
+- Settings shows a conflict banner, a Review button, and recent syncs with Undo.
+
+**Review pass 1 — 1 real bug, found by running the suite rather than reading
+code.** A second openMemo already holding the Mesh port took down the *entire*
+test run: 6 failures and 52 errors. uvicorn calls `sys.exit(1)` from **inside**
+its serve task on a bind failure, so the `try/except` around `start()` — which I
+had described in a commit message as making startup non-fatal — caught nothing.
+Now the port is probed first and `SystemExit` is swallowed inside the task.
+Regression test added. The claim and the code finally agree.
+
+**Review pass 2 — 1 real bug.** A failed Undo was swallowed, leaving the user
+believing a sync had been reversed when it had not. That is worse than the bad
+sync it was meant to fix. Errors now surface.
+
+**Review pass 3 — 1 gap closed.** The coupling budget only covered the backend,
+so the frontend could have grown Mesh references freely. Extended: Mesh owns
+components named `Mesh*`, and only `SettingsPage.tsx` and `lib/api.ts` may
+reference it.
+
+Suite: **244 passed** (was 233).
+
+### 2026-08-02 — Phase 6: conflict resolution backend
+
+Phase 5 merged (PR #128). The dialogue's contract, in the layer beneath it.
+
+- **Three choices**, with `both` the default because it is the only one that
+  cannot lose someone's writing: the winner takes the field and the loser is
+  preserved as a linked copy, so a wrong click costs a tidy-up rather than text.
+- **A decision sticks.** Resolving advances the base over that field, so the
+  same disagreement is not raised again on the next sync. Tested by syncing the
+  same row twice and asserting the second raises nothing.
+- **Batching**: one choice answers every open conflict — forty from a mass
+  import is one decision, not forty modals.
+- **Journalled like anything else**, with the rule recorded as
+  `user-choice:remote` so history says a human decided rather than a rule.
+- API: list conflicts, resolve one or all, batch history, per-memo history, undo.
+  All behind the gate; a test confirms they 404 while Mesh is off.
+
+**Review pass 1 — 1 real bug.** `_keep_losing_copy` built its row as a single
+dict literal, so when the contested field *was* the title, the losing value
+overwrote the provenance marker and the copy became indistinguishable from an
+ordinary memo. The row is now built first and the title stamped after.
+
+Suite: **242 passed** (was 233).
+
+Next: the dialogue UI itself, then the same three-pass review across it.
 
 ### 2026-08-02 — The Mesh contract sweep (owner requirement)
 

@@ -269,3 +269,113 @@ async def export_rows(entries: list[dict[str, Any]]) -> list[dict[str, Any]]:
             values = {k: v for k, v in values.items() if k not in merge.LOCAL_ONLY}
         out.append({"tbl": tbl, "row_id": row_id, "hlc": e.get("hlc"), "values": values})
     return out
+
+
+# ── resolving (§7) ───────────────────────────────────────────────────────────
+
+KEEP_LOCAL = "local"
+KEEP_REMOTE = "remote"
+KEEP_BOTH = "both"
+
+
+async def resolve_conflict(conflict_id: str, choice: str, *, peer: str = "you") -> dict[str, Any]:
+    """Apply the user's decision to one parked conflict.
+
+    `both` is the default in the UI and the safest outcome: the winner takes the
+    field and the loser is preserved as a copy, so a wrong click costs a tidy-up
+    rather than someone's writing. Never silently discard what a human typed.
+    """
+    if choice not in (KEEP_LOCAL, KEEP_REMOTE, KEEP_BOTH):
+        raise ValueError(f"unknown choice {choice!r}")
+
+    async with AsyncSessionLocal() as db:
+        row = (await db.execute(
+            text("""SELECT batch_id, peer, tbl, row_id, field, local_value,
+                           remote_value, base_value
+                    FROM mesh_conflicts WHERE id = :i AND resolved = 0"""),
+            {"i": conflict_id},
+        )).first()
+    if row is None:
+        return {"ok": False, "reason": "already resolved or unknown"}
+
+    batch_id, origin_peer, tbl, row_id, field, local_v, remote_v, _base = row
+    winner = local_v if choice == KEEP_LOCAL else remote_v
+    resolve_batch = f"resolve-{uuid.uuid4().hex[:8]}"
+    entries: list[dict[str, Any]] = []
+    copy_id: str | None = None
+
+    if choice == KEEP_BOTH:
+        # Keep the remote text on the row and preserve the local one beside it,
+        # rather than making the user copy it out of a dialogue before deciding.
+        winner = remote_v
+        copy_id = await _keep_losing_copy(tbl, row_id, field, local_v, origin_peer)
+
+    current = await rowstore.read_row(tbl, row_id)
+    if current is not None and current.get(field) != winner:
+        await rowstore.apply_values(tbl, row_id, {field: winner})
+        entries.append({
+            "batch_id": resolve_batch, "peer": peer, "tbl": tbl, "row_id": row_id,
+            "field": field, "old_value": current.get(field), "new_value": winner,
+            "rule": f"user-choice:{choice}",
+        })
+
+    await journal.record_many(entries)
+
+    # The disagreement is settled, so the base may finally advance over it —
+    # otherwise the next sync would raise the same conflict again.
+    base = await rowstore.get_base(tbl, row_id) or {}
+    base[field] = winner
+    await rowstore.set_base(tbl, row_id, base, base.get("__hlc"))
+    await clock.tick()
+
+    async with AsyncSessionLocal() as db:
+        await db.execute(
+            text("UPDATE mesh_conflicts SET resolved = 1 WHERE id = :i"),
+            {"i": conflict_id},
+        )
+        await db.commit()
+
+    return {"ok": True, "choice": choice, "copy_id": copy_id, "batch_id": resolve_batch}
+
+
+async def _keep_losing_copy(tbl, row_id, field, value, origin_peer) -> str | None:
+    """Preserve the losing text so 'keep both' actually keeps both.
+
+    Only memos can hold a copy — for anything else the value still survives in
+    the journal, and inventing a duplicate collection would be worse than the
+    problem it solves.
+    """
+    if tbl != "memos" or value in (None, ""):
+        return None
+
+    original = await rowstore.read_row("memos", row_id)
+    if original is None:
+        return None
+
+    copy_id = str(uuid.uuid4())
+
+    # Build the row first, THEN stamp the title. When the contested field IS the
+    # title, setting them in one dict literal silently drops the provenance
+    # marker — the losing value overwrote it — and the copy became
+    # indistinguishable from an ordinary memo.
+    values: dict[str, Any] = {
+        "workspace_id": original.get("workspace_id"),
+        "type": original.get("type") or "note",
+        "notes": original.get("notes"),
+        field: value,
+    }
+    base_title = value if field == "title" else (original.get("title") or "Memo")
+    values["title"] = f"{base_title} (from {origin_peer})"
+
+    await rowstore.apply_values("memos", copy_id, values)
+    return copy_id
+
+
+async def resolve_all(choice: str, *, peer: str = "you") -> int:
+    """Apply one decision to every open conflict — the 'do the same for the
+    other 6' path (§7). Forty conflicts from a mass import is one decision."""
+    resolved = 0
+    for c in await open_conflicts(limit=1000):
+        result = await resolve_conflict(c["id"], choice, peer=peer)
+        resolved += 1 if result.get("ok") else 0
+    return resolved
