@@ -36,7 +36,7 @@ Legend: `TODO` · `WIP` · `REVIEW` (code done, passes pending) · `DONE`
 | 3 | Merge engine (pure, both directions) | inert lib | **DONE** | ADR §6, §7, §10 |
 | 4 | Journal, snapshot, rollback | Yes | **DONE** | ADR §13 |
 | 5 | Transport + protocol (manual address) | Yes | **DONE** | ADR §2, §5, §14 |
-| 6 | Verification dialogue | Yes | TODO | ADR §7 |
+| 6 | Verification dialogue | Yes | **WIP** | backend done; UI next |
 | 7 | Magnet records + resolver | Yes | TODO | ADR §1, §8 |
 | 8 | Mesh code, discovery, pairing, roles | Yes | TODO | ADR §2, §3 |
 | 9 | Cross-network reachability (overlay) | Yes | TODO | ADR §2 Reachability · **new 2026-08-02** |
@@ -228,6 +228,32 @@ a kind string becomes a 500 on an ingest route. Cover each kind with a test.
 ## Phase log
 
 Newest entry at the top. One entry per working turn.
+
+### 2026-08-02 — Phase 6: conflict resolution backend
+
+Phase 5 merged (PR #128). The dialogue's contract, in the layer beneath it.
+
+- **Three choices**, with `both` the default because it is the only one that
+  cannot lose someone's writing: the winner takes the field and the loser is
+  preserved as a linked copy, so a wrong click costs a tidy-up rather than text.
+- **A decision sticks.** Resolving advances the base over that field, so the
+  same disagreement is not raised again on the next sync. Tested by syncing the
+  same row twice and asserting the second raises nothing.
+- **Batching**: one choice answers every open conflict — forty from a mass
+  import is one decision, not forty modals.
+- **Journalled like anything else**, with the rule recorded as
+  `user-choice:remote` so history says a human decided rather than a rule.
+- API: list conflicts, resolve one or all, batch history, per-memo history, undo.
+  All behind the gate; a test confirms they 404 while Mesh is off.
+
+**Review pass 1 — 1 real bug.** `_keep_losing_copy` built its row as a single
+dict literal, so when the contested field *was* the title, the losing value
+overwrote the provenance marker and the copy became indistinguishable from an
+ordinary memo. The row is now built first and the title stamped after.
+
+Suite: **242 passed** (was 233).
+
+Next: the dialogue UI itself, then the same three-pass review across it.
 
 ### 2026-08-02 — The Mesh contract sweep (owner requirement)
 
