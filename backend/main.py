@@ -226,6 +226,15 @@ async def lifespan(app: FastAPI):
     # no database I/O itself, and is a no-op until job kinds are registered.
     # Requeuing work interrupted by a restart is the janitor's job, a moment
     # later and off the startup path.
+    # Mesh (ADR-024): tables always, triggers only while enabled (§0).
+    try:
+        from backend.core.mesh import apply_enabled_state, is_enabled, mesh_schema_init
+
+        await mesh_schema_init()
+        await apply_enabled_state(is_enabled())
+    except Exception as e:
+        logger.warning("Mesh schema init warning (non-critical): %s", e)
+
     from backend.core import jobs
 
     import backend.core.job_handlers  # noqa: F401 — registers the job kinds

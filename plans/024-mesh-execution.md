@@ -32,7 +32,7 @@ Legend: `TODO` · `WIP` · `REVIEW` (code done, passes pending) · `DONE`
 |---|-------|------------------------|--------|-------|
 | 0 | Job queue | **No** — plain infra, fixes live bug | **DONE** | built, wired, migrated, 3 passes run |
 | 1 | Mesh flag + Settings section | is the flag | **DONE** | ADR §0 · verified in the running UI |
-| 2 | `change_log`, triggers, HLC | Yes | TODO | ADR §4, §5 |
+| 2 | `change_log`, triggers, HLC | Yes | **DONE** | ADR §4, §5 |
 | 3 | Merge engine (pure, both directions) | inert lib | TODO | ADR §6, §10 |
 | 4 | Journal, snapshot, rollback | Yes | TODO | ADR §13 |
 | 5 | Transport + protocol (manual address) | Yes | TODO | ADR §2, §14 |
@@ -228,6 +228,43 @@ a kind string becomes a 500 on an ingest route. Cover each kind with a test.
 ## Phase log
 
 Newest entry at the top. One entry per working turn.
+
+### 2026-08-02 — Phase 2 DONE: change log, triggers, hybrid logical clock
+
+Phase 1 merged (PR #125). `core/mesh.py` became a package (`_gate`, `clock`,
+`changelog`, `sync_state`) with the public path unchanged.
+
+**The design call that made this small: the clock lives in SQL, not Python.**
+SQLite triggers cannot call a Python function, so the usual approach is to have
+the app stamp changes — which means the log's order and the database's order can
+drift apart under concurrency. Instead `mesh_clock` is a one-row table and each
+trigger advances it in the *same transaction* as the write it records. The log
+cannot disagree with the data, ever.
+
+Stamps are `0001754092800123-000004-a1b2c3d4`, zero-padded so a plain string sort
+equals the logical order — in SQL, in Python, and in a log a human is reading.
+
+Triggers cover memos, collections, tags, workspaces, chat_sessions, messages and
+both link tables (`row_id` is `memo|collection`, because the pair is the identity
+that gets added or removed). Created on enable, dropped on disable: a user who
+never turns Mesh on pays nothing per write.
+
+**Review pass 1 (correctness) — 1 real bug.** `observe()` ignored the peer's
+counter when both sides landed on the same millisecond, so the clock could mint
+a stamp the peer had already used. Now clears both. Regression test added.
+
+**Review pass 2 (blast radius) — 1 real bug, and a wrong assumption of mine.**
+I had written that `device_id` "must travel with the library". That is backwards:
+it identifies the **machine** and is the final tiebreak when two devices stamp
+the same millisecond, so restoring one backup onto both machines would hand them
+the same identity — breaking the total order and misattributing every change.
+Restore now mints a fresh id, drops the inherited change log, and re-applies
+*this* machine's trigger state so a restore cannot silently switch Mesh on.
+
+**Review pass 3 (fit) — 1 fix.** `sync_state` imported the package that imports
+it; it worked only by accident of import order. Now a relative import.
+
+Suite: **133 passed** (was 119 before this phase).
 
 ### 2026-08-02 — Requirement change: sync must work away from home
 

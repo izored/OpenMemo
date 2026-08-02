@@ -62,7 +62,16 @@ async def read_settings():
 
 @router.put("")
 async def write_settings(patch: SettingsPatch):
-    return update_settings(patch.model_dump(exclude_none=True))
+    data = patch.model_dump(exclude_none=True)
+    result = update_settings(data)
+    # Mesh's triggers are physical, so flipping the flag has to change the
+    # database, not just a JSON field. Doing it here keeps "enabled" meaning one
+    # thing (ADR-024 §0) instead of drifting from what is actually installed.
+    if "mesh_enabled" in data:
+        from backend.core.mesh import apply_enabled_state
+
+        await apply_enabled_state(bool(data["mesh_enabled"]))
+    return result
 
 
 # --- Hidden-section passcode (OPNMMO-0016) ----------------------------------
