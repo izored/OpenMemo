@@ -10,7 +10,7 @@ import logging
 
 # Relative imports: the package __init__ imports THIS module, so importing
 # it back by absolute path is a cycle that only works by accident of order.
-from . import changelog, clock
+from . import changelog, clock, journal
 
 logger = logging.getLogger(__name__)
 
@@ -24,6 +24,7 @@ async def mesh_schema_init() -> None:
     """
     await clock.create_table()
     await changelog.create_log_table()
+    await journal.create_table()
 
 
 async def apply_enabled_state(enabled: bool) -> int:
