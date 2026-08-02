@@ -5,6 +5,7 @@ import logging
 import shutil
 import sqlite3
 import tempfile
+import uuid
 import zipfile
 from datetime import datetime
 from pathlib import Path
@@ -157,6 +158,31 @@ async def restore_backup(file: UploadFile = File(...)):
         except sqlite3.Error:
             pass
 
+        # Mesh (ADR-024) state carried in by the backup needs the same
+        # treatment, for a sharper reason: `mesh_clock.device_id` identifies the
+        # MACHINE, and it is the final tiebreak when two devices stamp the same
+        # millisecond. Restore one backup onto both machines and they would
+        # share an identity — breaking the total order and misattributing every
+        # change in the log. So the restored copy gets a fresh id.
+        #
+        # The change log is cleared for the same reason: its entries are stamped
+        # by a device that this machine is no longer pretending to be, and a
+        # peer's cursor into it is meaningless after a restore anyway.
+        #
+        # Triggers ride along in the file too, so whether they should exist is
+        # re-decided from the live setting after the swap, below.
+        try:
+            con = sqlite3.connect(str(tmp_db))
+            con.execute("DELETE FROM mesh_change_log")
+            con.execute(
+                "UPDATE mesh_clock SET device_id = ?, counter = 0 WHERE id = 1",
+                (uuid.uuid4().hex[:8],),
+            )
+            con.commit()
+            con.close()
+        except sqlite3.Error:
+            pass
+
         shutil.copy2(tmp_db, db_path)
 
     if scope == "full":
@@ -172,5 +198,18 @@ async def restore_backup(file: UploadFile = File(...)):
         for name, dest in safe_entries:
             dest.parent.mkdir(parents=True, exist_ok=True)
             dest.write_bytes(zf.read(name))
+
+    # A backup carries whatever trigger state the source machine had. Re-apply
+    # THIS machine's setting so "Mesh is off" cannot be silently undone by a
+    # restore (ADR-024 §0).
+    try:
+        from backend.core.mesh import apply_enabled_state, is_enabled, mesh_schema_init
+
+        await mesh_schema_init()
+        await apply_enabled_state(is_enabled())
+    except Exception:
+        logging.getLogger(__name__).warning(
+            "Could not re-apply Mesh trigger state after restore", exc_info=True
+        )
 
     return {"ok": True, "scope": scope, "version": meta.get("app_version")}
