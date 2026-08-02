@@ -39,6 +39,7 @@ Legend: `TODO` · `WIP` · `REVIEW` (code done, passes pending) · `DONE`
 | 6 | Verification dialogue | Yes | TODO | ADR §7 |
 | 7 | Magnet records + resolver | Yes | TODO | ADR §1, §8 |
 | 8 | Mesh code, discovery, pairing, roles | Yes | TODO | ADR §2, §3 |
+| 9 | Cross-network reachability (overlay) | Yes | TODO | ADR §2 Reachability · **new 2026-08-02** |
 
 **Shippable checkpoints.** Phase 0 ships alone (bug fix). Phase 5 is a complete
 product on its own — library, transcripts and summaries sync end to end, paired
@@ -227,6 +228,55 @@ a kind string becomes a 500 on an ingest route. Cover each kind with a test.
 ## Phase log
 
 Newest entry at the top. One entry per working turn.
+
+### 2026-08-02 — Requirement change: sync must work away from home
+
+The owner needs the MacBook to sync from anywhere, not just on the home network.
+That directly contradicted §2 ("same network required") and the Rejected list
+("a relay… is the single thing the user ruled out"), so the ADR is revised
+rather than quietly stretched.
+
+**Two things made it much smaller than general P2P NAT traversal:**
+
+1. *The problem is not symmetric.* The Windows box never moves, is always on,
+   and is already the primary. Only the MacBook roams. So this is a roaming
+   client reaching a fixed home machine — one side needs to be reachable, and it
+   is the side that never moves.
+2. *The old objection was already half-solved.* Every frame is encrypted with the
+   seed-derived key and authenticated by the PSK, so anything in the middle is a
+   dumb pipe. What survived was not privacy but **dependency** — something must
+   exist and someone must run it.
+
+**Decision: three tiers, one socket.** Reachability is now explicitly a separate
+concern from sync, so adding a tier never touches the merge engine, journal or
+resolver. Tier 1 LAN via mDNS (unchanged), tier 2 a user-run WireGuard overlay
+(Tailscale recommended), tier 3 manual address. Mesh dials a host and port and
+cannot tell the difference — **tier 2 needs zero Mesh code changes**.
+
+**Rejected, and why:**
+
+- *A relay we build or host.* The moment openMemo runs infrastructure it stops
+  being local-first, gains an outage surface, and becomes something to patch.
+- *Port-forwarding.* `docs/DECISIONS.md` records that the local API is
+  unauthenticated by design, so forwarding it publishes the whole library. Even
+  forwarding just the Mesh port asks a non-expert to run an internet-facing
+  service at home. This produced a hard rule for phase 8: **Mesh listens on its
+  own port, never the API port, and openMemo never opens one itself.**
+
+**Reframe worth keeping:** being away is the normal case, not an error. Changes
+accumulate in the change log with HLC ordering, so the MacBook is fully usable
+offline and reconciles on reconnect. The requirement is *eventual* reachability,
+not constant connectivity.
+
+**New phase 9** splits the security work out from transport: replay protection,
+handshake rate limiting, cert pinned at pairing with a loud refusal on change,
+and revocation promoted from tidiness to security. On a LAN these were defence
+in depth; off it they are load-bearing.
+
+Honest cost recorded in the ADR: an overlay is a third-party account and a
+background daemon. That does not break "Mesh needs no account" — the Mesh code
+is still its only identity — but it does break "nothing in the middle", so the
+walkthrough copy gets revisited in phase 9 rather than being left to overclaim.
 
 ### 2026-08-01 — Phase 1 DONE: Mesh flag + Settings section
 
@@ -494,7 +544,10 @@ The previous entry's blocker is resolved. It was **not** what it looked like.
 These were argued through and settled. The ADR's "Rejected" section has the full
 list; these are the ones most likely to be second-guessed by a future session.
 
-- **No account, no relay.** The 12-word Mesh code *is* the identity (§2).
+- **No account.** The 12-word Mesh code *is* the identity (§2).
+- **~~No relay.~~ Reversed 2026-08-02** — the MacBook must sync while travelling.
+  Resolved *without* openMemo running anything: a user-controlled WireGuard
+  overlay carries the same socket. Still no openMemo account, server or ops.
 - **The primary device does not win merges** (§3). It owns Telegram polling,
   cron and heavy AI by default, and gets the preselected radio button in the
   conflict dialogue. That is all. A merge-primary would make the MacBook unsafe
