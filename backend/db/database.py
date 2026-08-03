@@ -128,6 +128,14 @@ async def _run_migrations():
             await db.execute("ALTER TABLE memos ADD COLUMN deleted_at TIMESTAMP")
             await db.commit()
 
+        # Which resolver tier produced this memo. A tier ladder degrades
+        # silently by design — every tier "succeeds", just with less. Recording
+        # the winner is what let Settings notice that six weeks of Instagram
+        # saves had quietly dropped to the last-resort tier (plan 026).
+        if "resolve_tier" not in columns:
+            await db.execute("ALTER TABLE memos ADD COLUMN resolve_tier TEXT")
+            await db.commit()
+
     # Persistent background job queue (ADR-024 §9). Owns its own schema so the
     # table + indexes stay next to the code that reads them. Idempotent.
     from backend.core.jobs import create_table as _create_job_queue

@@ -226,6 +226,80 @@ async def instagram_status():
     return session_status()
 
 
+# How many recent Instagram saves the health check looks at, and the share of
+# them that must have landed on a fallback tier before we say anything. One
+# throttled save is noise; most of the last dozen is a broken setup.
+_IG_HEALTH_WINDOW = 12
+_IG_HEALTH_RATIO = 0.5
+
+
+@router.get("/instagram/health")
+async def instagram_health():
+    """Is Instagram actually resolving properly, or only appearing to?
+
+    A tier ladder degrades silently: every tier returns a memo, so a lapsed
+    session looks exactly like success until you notice reels arriving as
+    stills. This reports what the last few saves actually used, so the UI can
+    say so out loud (plan 026).
+    """
+    from sqlalchemy import select
+
+    from backend.core.extractor import IG_FALLBACK_TIERS, IG_TIER_BLOCKED
+    from backend.core.instagram_login import session_status
+    from backend.db.database import AsyncSessionLocal
+    from backend.db.models import Memo
+
+    async with AsyncSessionLocal() as db:
+        rows = (
+            await db.execute(
+                select(Memo.resolve_tier)
+                .where(
+                    Memo.source_url.like("%instagram.com%"),
+                    Memo.resolve_tier.isnot(None),
+                    (Memo.is_deleted == False) | (Memo.is_deleted == None),  # noqa: E712
+                )
+                .order_by(Memo.created_at.desc())
+                .limit(_IG_HEALTH_WINDOW)
+            )
+        ).scalars().all()
+
+    session = session_status()
+    tiers = [t for t in rows if t]
+    degraded = [t for t in tiers if t in IG_FALLBACK_TIERS]
+    blocked = [t for t in tiers if t == IG_TIER_BLOCKED]
+    # No tagged saves yet (a library from before this shipped) is not a
+    # problem to report — there is simply nothing to judge.
+    unhealthy = bool(tiers) and len(degraded) / len(tiers) >= _IG_HEALTH_RATIO
+
+    # The canary is the other half: saves only reveal a problem once you make
+    # one, so a weekly re-check catches a lapsed session while the library is
+    # sitting idle (core/canary.py).
+    from backend.core.canary import last_result
+
+    canary = last_result()
+    if canary and canary.get("status") == "degraded":
+        unhealthy = True
+
+    if not unhealthy:
+        status = "ok"
+    elif session.get("connected"):
+        # Cookies are present and saves STILL cannot reach the API: the jar is
+        # there but Instagram is not accepting it any more.
+        status = "session_expired"
+    else:
+        status = "no_session"
+
+    return {
+        "status": status,
+        "connected": bool(session.get("connected")),
+        "checked": len(tiers),
+        "degraded": len(degraded),
+        "blocked": len(blocked),
+        "recent_tiers": tiers,
+        "canary": canary,
+    }
+
+
 @router.post("/instagram/session")
 async def instagram_import_session(data: InstagramSession):
     """Import an Instagram session from a pasted cookies.txt. No password."""

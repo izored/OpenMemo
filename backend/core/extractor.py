@@ -749,9 +749,40 @@ def _instagram_needs_cookies(url: str, domain: str) -> dict:
         "source_url": canonical_source_url(url),
         "source_domain": domain,
         "source_favicon": f"https://www.google.com/s2/favicons?domain={domain}&sz=32",
+        "resolve_tier": IG_TIER_BLOCKED,
         "thumbnail_path": "",
         "type": "link",
     }
+
+
+# The tiers of the Instagram ladder, best to worst. Stored on every memo the
+# resolver produces (`resolve_tier`) so the degradation is visible: the API
+# tiers carry the real caption, author and every carousel slide, while the
+# browser tiers only see what the page will show a logged-out visitor. Ordered
+# — `IG_TIERS.index(...)` is the quality rank, and everything from
+# IG_FALLBACK_TIERS down is what Settings warns about.
+IG_TIER_API_ANON = "instagram:api-anon"
+IG_TIER_API_COOKIE = "instagram:api-cookie"
+IG_TIER_GALLERY_DL = "instagram:gallery-dl"
+IG_TIER_BROWSER_SNIFF = "instagram:browser-sniff"
+IG_TIER_BROWSER_RENDER = "instagram:browser-render"
+IG_TIER_BLOCKED = "instagram:blocked"
+
+IG_TIERS = (
+    IG_TIER_API_ANON,
+    IG_TIER_API_COOKIE,
+    IG_TIER_GALLERY_DL,
+    IG_TIER_BROWSER_SNIFF,
+    IG_TIER_BROWSER_RENDER,
+    IG_TIER_BLOCKED,
+)
+
+# Tiers that mean "we could not read the post properly". A save landing here
+# still produces a memo — that is exactly why the drop went unnoticed for six
+# weeks — so these are the ones worth telling the user about.
+IG_FALLBACK_TIERS = frozenset(
+    {IG_TIER_BROWSER_SNIFF, IG_TIER_BROWSER_RENDER, IG_TIER_BLOCKED}
+)
 
 
 async def _instagram_resolve(url: str, domain: str) -> dict:
@@ -775,8 +806,10 @@ async def _instagram_resolve(url: str, domain: str) -> dict:
 
     # Tiers 1–2: the guest media-info API (anonymous, then with the session jar).
     info = await fetch_media_info(url)
+    tier = IG_TIER_API_ANON
     if info is None and cookies is not None:
         info = await fetch_media_info(url, cookies_path=cookies)
+        tier = IG_TIER_API_COOKIE
     if info is not None:
         caption = info.get("caption") or ""
         base = {
@@ -786,6 +819,7 @@ async def _instagram_resolve(url: str, domain: str) -> dict:
             "source_url": canonical_source_url(url),
             "source_domain": domain,
             "source_favicon": fav,
+            "resolve_tier": tier,
             # Signed CDN URLs expire (oe=) — ingest.cache_thumbnail localizes the
             # thumbnail right after save so the memo survives the post's deletion.
             "thumbnail_path": info.get("thumbnail") or "",
@@ -825,6 +859,7 @@ async def _instagram_resolve(url: str, domain: str) -> dict:
             "source_url": canonical_source_url(url),
             "source_domain": domain,
             "source_favicon": fav,
+            "resolve_tier": IG_TIER_GALLERY_DL,
             # An all-video post has no still to show — localize_memo_task
             # extracts an ffmpeg frame once the file lands, so leave it empty
             # rather than parking an mp4 URL in the thumbnail slot (cache_thumbnail
@@ -855,6 +890,7 @@ async def _instagram_resolve(url: str, domain: str) -> dict:
                 "source_url": canonical_source_url(url),
                 "source_domain": domain,
                 "source_favicon": fav,
+                "resolve_tier": IG_TIER_BROWSER_SNIFF,
                 "thumbnail_path": sniff_image,
                 "type": "video",
             }
@@ -886,6 +922,7 @@ async def _instagram_resolve(url: str, domain: str) -> dict:
                 "source_url": canonical_source_url(url),
                 "source_domain": domain,
                 "source_favicon": fav,
+                "resolve_tier": IG_TIER_BROWSER_RENDER,
                 "thumbnail_path": main_img,
                 "type": "video" if _is_instagram_video_path(url) else "image",
             }

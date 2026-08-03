@@ -213,6 +213,7 @@ function TrashRow() {
  *  may checkpoint your main account; the UI warns). Feeds the shared cookie jar. */
 function InstagramConnectRows() {
   const [status, setStatus] = useState<{ connected: boolean; who: string | null } | null>(null);
+  const [health, setHealth] = useState<Awaited<ReturnType<typeof settingsApi.instagramHealth>> | null>(null);
   const [user, setUser] = useState('');
   const [pass, setPass] = useState('');
   const [cookies, setCookies] = useState('');
@@ -220,7 +221,10 @@ function InstagramConnectRows() {
   const [msg, setMsg] = useState('');
   const [mode, setMode] = useState<'password' | 'session'>('password');
 
-  const refresh = () => settingsApi.instagramStatus().then(setStatus).catch(() => setStatus(null));
+  const refresh = () => {
+    settingsApi.instagramStatus().then(setStatus).catch(() => setStatus(null));
+    settingsApi.instagramHealth().then(setHealth).catch(() => setHealth(null));
+  };
   useEffect(() => { refresh(); }, []);
 
   const doLogin = async () => {
@@ -255,6 +259,36 @@ function InstagramConnectRows() {
           openMemo pulls Instagram post media through a login. Connect an account here and every Instagram save — photos, carousels, reels — resolves. The session is stored only on this machine (in <code>yt_cookies.txt</code>), never sent anywhere. Use a throwaway account.
         </span>
       </div>
+
+      {/* The silent-degradation warning. Instagram saves never fail outright —
+          a blocked tier still produces a memo, just a poorer one (a reel as a
+          still, a carousel as one photo), which is exactly how six weeks of
+          bad saves went unnoticed. Say it out loud instead. */}
+      {health && health.status !== 'ok' && (
+        <div
+          role="status"
+          style={{
+            border: '1px solid var(--border-warning, #E5C07B)',
+            background: 'var(--bg-warning, rgba(186,117,23,0.08))',
+            borderRadius: 10, padding: '10px 12px', maxWidth: 560,
+          }}
+        >
+          <p style={{ margin: 0, fontWeight: 500, color: 'var(--text-warning, #BA7517)' }}>
+            {health.status === 'session_expired'
+              ? 'Instagram session no longer works'
+              : 'Instagram saves are running without a session'}
+          </p>
+          <span className="mono" style={{ display: 'block', marginTop: 4 }}>
+            {health.degraded} of the last {health.checked} Instagram saves fell back to
+            reading the public page. Those still save, but only what a logged-out
+            visitor can see: reels can miss their video and carousels can arrive as a
+            single photo.{' '}
+            {health.status === 'session_expired'
+              ? 'Reconnect below to fix it.'
+              : 'Connect an account below to fix it.'}
+          </span>
+        </div>
+      )}
 
       {status?.connected ? (
         <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>

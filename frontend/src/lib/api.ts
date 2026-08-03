@@ -502,6 +502,18 @@ export const settingsApi = {
   // shared cookie jar. The password is never stored — used once to sign in.
   instagramStatus: () =>
     fetchJSON<{ connected: boolean; who: string | null }>('/settings/instagram/status'),
+  // Are Instagram saves actually resolving, or only appearing to? A tier ladder
+  // degrades silently — every tier returns a memo — so this reports which tiers
+  // the last few saves really used.
+  instagramHealth: () =>
+    fetchJSON<{
+      status: 'ok' | 'session_expired' | 'no_session';
+      connected: boolean;
+      checked: number;
+      degraded: number;
+      blocked: number;
+      recent_tiers: string[];
+    }>('/settings/instagram/health'),
   instagramImportSession: (cookies: string) =>
     fetchJSON<{ connected: boolean; who: string | null }>('/settings/instagram/session', {
       method: 'POST',

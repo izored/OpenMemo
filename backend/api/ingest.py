@@ -435,6 +435,7 @@ async def ingest_url_core(data: URLIngest, db: AsyncSession, schedule) -> dict:
         memo.source_favicon = extracted.get("source_favicon")
         memo.thumbnail_path = extracted.get("thumbnail_path")
         memo.gallery = extracted.get("gallery")
+        memo.resolve_tier = extracted.get("resolve_tier")
         memo.updated_at = datetime.utcnow()
     else:
         memo = Memo(
@@ -453,6 +454,9 @@ async def ingest_url_core(data: URLIngest, db: AsyncSession, schedule) -> dict:
             # Carousel: the ordered multi-image gallery (Instagram sidecar, …). The
             # first slide is also the thumbnail, so the dashboard shows one cover.
             gallery=extracted.get("gallery"),
+            # Which tier of the resolver ladder produced this. Lets Settings see
+            # that saves have quietly dropped to a fallback tier (plan 026).
+            resolve_tier=extracted.get("resolve_tier"),
             created_at=datetime.utcnow(),
             updated_at=datetime.utcnow(),
         )
