@@ -24,6 +24,42 @@ from sqlalchemy import text
 
 logger = logging.getLogger(__name__)
 
+# Handshake throttling (§2 security). On a LAN an attacker had to already be on
+# your network; off it, anyone who can reach the port can grind at the PSK. Slow
+# is enough — this is a 128-bit secret, so the point is to make a sustained
+# attempt obvious and expensive rather than to be clever.
+_MAX_FAILURES = 5
+_LOCKOUT_SECONDS = 60.0
+_failures: dict[str, list[float]] = {}
+
+
+def _throttle_key(peer: str) -> str:
+    return peer or "unknown"
+
+
+def note_handshake_failure(peer: str) -> None:
+    import time
+
+    key = _throttle_key(peer)
+    now = time.monotonic()
+    recent = [t for t in _failures.get(key, []) if now - t < _LOCKOUT_SECONDS]
+    recent.append(now)
+    _failures[key] = recent
+    if len(recent) >= _MAX_FAILURES:
+        logger.warning(
+            "mesh: %d failed handshakes from %s — refusing for %.0fs",
+            len(recent), key, _LOCKOUT_SECONDS,
+        )
+
+
+def handshake_allowed(peer: str) -> bool:
+    import time
+
+    now = time.monotonic()
+    recent = [t for t in _failures.get(_throttle_key(peer), []) if now - t < _LOCKOUT_SECONDS]
+    _failures[_throttle_key(peer)] = recent
+    return len(recent) < _MAX_FAILURES
+
 
 class Channel(TypingProtocol):
     """The minimum a transport must provide. A WebSocket satisfies it; so does
@@ -112,8 +148,20 @@ class Session:
             # misattributes every change. Usually one backup restored onto both.
             raise ProtocolError("peer reports this device's own id")
 
-        self.peer_device = theirs.get("device_id")
+        peer_id = theirs.get("device_id")
+
+        # A revoked device still holds the code — revocation cannot reach out and
+        # delete it — so the check has to happen here, on every connection, and
+        # not merely in the UI (§3).
+        from backend.core.mesh import pairing
+
+        if peer_id and await pairing.is_revoked(peer_id):
+            await self.send(MessageType.ERROR, {"reason": "this device was removed"})
+            raise ProtocolError(f"device {peer_id} has been revoked")
+
+        self.peer_device = peer_id
         self.peer_name = theirs.get("device_name")
+        await pairing.register_device(peer_id, self.peer_name or "", is_primary=False)
         logger.info("mesh: handshake complete with %s", self.peer_device)
 
     async def exchange_cursors(self) -> int:

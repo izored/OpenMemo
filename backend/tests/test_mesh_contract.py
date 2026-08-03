@@ -139,6 +139,11 @@ CORE_FILES_TOUCHING_MESH = {
     "backend/core/app_settings.py", # the flag's default
     "backend/api/backup.py",        # restore must not inherit another machine's identity
     "backend/core/jobs.py",         # one comment: the queue is deliberately NOT gated
+    # Added 2026-08-02, and caught by this very test rather than slipping in.
+    # Telegram hands each update to whoever asks first, exactly once, so two
+    # devices polling one token lose memos. The relay must ask whether it is the
+    # primary. One import, one call, and it returns True whenever Mesh is off.
+    "backend/services/telegram_relay.py",
 }
 
 

@@ -7,6 +7,7 @@ import { PageHeader } from '@/components/PageHeader';
 import { ChangelogModal, cmpVersion } from '@/components/ChangelogModal';
 import { MeshIntroModal } from '@/components/MeshIntroModal';
 import { MeshConflictModal } from '@/components/MeshConflictModal';
+import { MeshPairingPanel } from '@/components/MeshPairingPanel';
 import { meshApi, type MeshBatch } from '@/lib/api';
 import { ONBOARDING_KEY } from '@/lib/onboarding';
 import { useAppStore } from '@/stores/appStore';
@@ -369,6 +370,7 @@ function MeshRows({ profile, save }: { profile: AppSettings | null; save: (p: Pa
           </span>
         </div>
       </div>
+      {enabled && <MeshPairingPanel />}
       {enabled && conflictCount > 0 && (
         <div className="om-setting-row" style={{ borderTop: '1px solid var(--border)', marginTop: 8, paddingTop: 8 }}>
           <div className="om-setting-row-text">

@@ -89,17 +89,30 @@ def test_sequence_numbers_only_move_forward():
 
 # ── the closed message set ───────────────────────────────────────────────────
 
+def _seal(body_dict) -> bytes:
+    """Build a genuinely well-formed frame around an arbitrary body.
+
+    Goes through the real cipher rather than reproducing its internals, so these
+    tests survive the primitive changing — which is exactly what happened when
+    AES-GCM replaced the phase 5 keystream and broke the previous version.
+    """
+    import hashlib
+    import hmac
+    import os
+
+    body = json.dumps(body_dict).encode()
+    nonce = os.urandom(protocol._NONCE_LEN)
+    header = nonce + struct.pack(">Q", 1)
+    sealed = protocol._aead(KEY).encrypt(protocol._gcm_nonce(nonce), body, header)
+    tag = hmac.new(PSK, header + sealed, hashlib.sha256).digest()
+    return header + sealed + tag
+
+
 def test_an_unknown_message_type_is_refused_not_forwarded():
     """The line that stops the protocol growing a passthrough by accident."""
-    body = json.dumps({"t": "run_shell_command", "v": 1, "p": {}}).encode()
-    nonce = b"\x09" * protocol._NONCE_LEN
-    header = nonce + struct.pack(">Q", 1)
-    ct = protocol._xor(body, protocol._keystream(KEY, nonce, len(body)))
-    import hashlib, hmac
-    tag = hmac.new(PSK, header + ct, hashlib.sha256).digest()
-
     with pytest.raises(ProtocolError, match="unknown message type"):
-        protocol.decode(header + ct + tag, psk=PSK, content_key=KEY)
+        protocol.decode(_seal({"t": "run_shell_command", "v": 1, "p": {}}),
+                        psk=PSK, content_key=KEY)
 
 
 def test_the_protocol_has_no_verb_that_names_a_path_or_command():
@@ -117,14 +130,8 @@ def test_the_protocol_has_no_verb_that_names_a_path_or_command():
 
 
 def test_a_wrong_protocol_version_is_refused():
-    body = json.dumps({"t": "ack", "v": 999, "p": {}}).encode()
-    nonce = b"\x09" * protocol._NONCE_LEN
-    header = nonce + struct.pack(">Q", 1)
-    ct = protocol._xor(body, protocol._keystream(KEY, nonce, len(body)))
-    import hashlib, hmac
-    tag = hmac.new(PSK, header + ct, hashlib.sha256).digest()
     with pytest.raises(ProtocolError, match="unsupported protocol version"):
-        protocol.decode(header + ct + tag, psk=PSK, content_key=KEY)
+        protocol.decode(_seal({"t": "ack", "v": 999, "p": {}}), psk=PSK, content_key=KEY)
 
 
 # ── size and shape ───────────────────────────────────────────────────────────
@@ -209,3 +216,49 @@ async def test_a_busy_mesh_port_cannot_take_down_the_app():
     finally:
         hog.close()
         await mesh_server.stop()
+
+
+# ── AES-GCM (phase 9) ────────────────────────────────────────────────────────
+
+def test_the_sequence_number_is_authenticated_not_merely_compared():
+    """The header is AES-GCM associated data, so renumbering a captured frame
+    fails decryption outright rather than relying on a later comparison that a
+    future refactor could drop."""
+    import hashlib
+    import hmac
+
+    raw = bytearray(protocol.encode(
+        Frame(MessageType.ACK, 5, {}), psk=PSK, content_key=KEY))
+    raw[protocol._NONCE_LEN:protocol._HEADER_LEN] = struct.pack(">Q", 99)
+    raw[-protocol._TAG_LEN:] = hmac.new(
+        PSK, bytes(raw[:-protocol._TAG_LEN]), hashlib.sha256).digest()
+
+    with pytest.raises(ProtocolError, match="authenticated decryption"):
+        protocol.decode(bytes(raw), psk=PSK, content_key=KEY)
+
+
+def test_a_decryption_failure_does_not_explain_itself():
+    """Why a frame failed is information an attacker would like."""
+    import hashlib
+    import hmac
+
+    raw = bytearray(protocol.encode(
+        Frame(MessageType.ACK, 1, {}), psk=PSK, content_key=KEY))
+    raw[protocol._HEADER_LEN + 2] ^= 0xFF
+    raw[-protocol._TAG_LEN:] = hmac.new(
+        PSK, bytes(raw[:-protocol._TAG_LEN]), hashlib.sha256).digest()
+
+    with pytest.raises(ProtocolError) as exc:
+        protocol.decode(bytes(raw), psk=PSK, content_key=KEY)
+    assert "InvalidTag" not in str(exc.value)
+
+
+def test_every_frame_uses_a_fresh_nonce():
+    """Reusing a nonce with GCM is catastrophic: it leaks the keystream."""
+    nonces = {
+        protocol.encode(Frame(MessageType.ACK, i, {}), psk=PSK, content_key=KEY)[
+            : protocol._NONCE_LEN
+        ]
+        for i in range(200)
+    }
+    assert len(nonces) == 200

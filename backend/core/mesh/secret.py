@@ -54,6 +54,21 @@ def get_or_create_root() -> bytes:
     return bytes.fromhex(stored)
 
 
+def set_root(seed: bytes) -> None:
+    """Adopt a specific root — how pairing joins an existing Mesh (§2).
+
+    Phase 5 generated a random root; this is the same value arriving from twelve
+    words instead. Every derived key below is unchanged, which is why the switch
+    from "random secret" to "user's code" touched nothing downstream.
+    """
+    from backend.core.app_settings import _LOCK, _read, _write_raw
+
+    with _LOCK:
+        current = _read()
+        current[SECRET_KEY] = seed.hex()
+        _write_raw(current)
+
+
 def reset_root() -> None:
     """Forget the secret, so the next call mints a new one. Unpairs every device."""
     from backend.core.app_settings import _read, _write_raw, _LOCK

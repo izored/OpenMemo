@@ -6808,3 +6808,20 @@ button.om-add-link { background: none; border: 0; padding: 0; cursor: pointer; f
 .om-mesh-batch-main { flex: 1; min-width: 0; }
 .om-mesh-batch-main b { font-weight: 500; }
 .om-mesh-batch-main span { display: block; font-size: 11.5px; color: var(--text-4); }
+
+/* ─ Mesh pairing (ADR-024 §2) ──────────────────────────────────────────── */
+.om-mesh-start { display: flex; gap: 10px; flex-wrap: wrap; }
+.om-mesh-start button { display: flex; flex-direction: column; align-items: flex-start; gap: 2px; padding: 10px 14px; }
+.om-mesh-start .mono { font-size: 11px; opacity: .75; font-weight: 400; }
+
+.om-mesh-code { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 12px; }
+.om-mesh-words { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px 10px; transition: filter var(--transition-fast); }
+@media (max-width: 560px) { .om-mesh-words { grid-template-columns: repeat(2, 1fr); } }
+.om-mesh-words.hidden { filter: blur(6px); user-select: none; }
+.om-mesh-word { font-family: var(--font-mono); font-size: 13px; color: var(--text); display: flex; gap: 6px; }
+.om-mesh-word b { color: var(--text-4); font-weight: 400; min-width: 14px; font-size: 11px; }
+.om-mesh-code-actions { display: flex; gap: 8px; margin-top: 10px; }
+
+.om-mesh-qr { display: flex; flex-direction: column; align-items: flex-start; gap: 6px; margin-top: 10px; }
+.om-mesh-qr img { width: 168px; height: 168px; background: #fff; border-radius: 8px; padding: 8px; }
+.om-mesh-qr .mono { font-size: 11.5px; color: var(--text-4); }
