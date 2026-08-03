@@ -352,8 +352,25 @@ derives from the code, which changes when you *pair*. Both machines were
 shouting stale identities that could never match. No unit test could have caught
 this — it needs two processes that pair and then look for each other.
 
-**Still not covered:** a *conflicting* edit converging (both sides editing the
-same field), and a real network rather than loopback.
+**Scenario 2 covers the harder case** — both machines editing the *same field*
+of the *same* memo, which is the only situation the design says a human must
+decide. Verified output:
+
+```
+alpha: 1 pending [('notes', 'alpha thinks this', 'beta disagrees entirely')]
+beta:  1 pending [('notes', 'beta disagrees entirely', 'alpha thinks this')]
+alpha still shows: 'alpha thinks this'
+beta  still shows: 'beta disagrees entirely'
+CONFLICT PARKED IDENTICALLY
+```
+
+Mirror images, as they should be: each side keeps its own text untouched, sees
+the other's as the alternative, and both hold exactly one pending question about
+the same field. The harness fails if either side silently resolves it, if either
+side's text changes, or if the two disagree about what is contested.
+
+**Still not covered:** a real network rather than loopback, and a peer that
+disappears mid-sync.
 
 ### 7.2 The concurrency cap is unproven under real load
 
@@ -504,10 +521,10 @@ Ordered by how much damage a bug there would do:
 
 Be explicit about this, because it shapes how much the tests are worth:
 
-- **Two separate databases never converged.** Every test runs both sides against
-  one database in one process. The merge logic is proven; the *system* is not.
-- **No sync has crossed a real network.** The WebSocket path is exercised only
-  through in-memory channels and Starlette's test client.
+- ~~Two separate databases never converged.~~ **Closed** — see §7.1. Two real
+  processes, two databases, one socket, including a conflicting edit.
+- **No sync has crossed a real network.** Everything is loopback. Latency, MTU,
+  a dropped connection mid-batch and a peer vanishing are all untested.
 - **The concurrency cap was never observed under load.** 40 downloads becoming 3
   is asserted by a unit test with a fake handler, not by watching yt-dlp.
 - ~~**mDNS discovery is designed, not built.**~~ **Built and proven 2026-08-03.**
