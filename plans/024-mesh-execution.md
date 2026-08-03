@@ -229,6 +229,63 @@ a kind string becomes a 500 on an ingest route. Cover each kind with a test.
 
 Newest entry at the top. One entry per working turn.
 
+### 2026-08-03 — mDNS discovery, and a third bug only the harness could find
+
+Two machines now find each other by broadcast with **no address typed**. The TXT
+record carries `hash(chain_id)` — never the chain id, never the code — so a
+sniffer on the network learns that a machine runs openMemo and nothing more.
+Peers whose fingerprint does not match are filtered before any connection.
+
+**Two bugs found by running it, not by reading it:**
+
+1. *Self-exclusion was by IP address*, which hid a second instance on the same
+   machine from the first. Wrong in itself, and it made discovery untestable
+   without two pieces of hardware. Now excluded by endpoint.
+2. *The advertisement went stale the moment you paired.* Advertising started at
+   enable-time, but the broadcast fingerprint derives from the code — which
+   changes when pairing rewrites the root secret. Both machines were shouting
+   identities that could never match. `readvertise()` now runs after pairing.
+
+Neither was findable by unit test. Both needed two processes that pair and then
+look for each other, which is the whole argument for the harness.
+
+Suite: **296 passed**. Convergence and discovery both verified end to end.
+
+### 2026-08-03 — Flake hunt: not reproduced, and probably self-inflicted
+
+Fourteen consecutive full-suite runs, all green. The single observed failure
+happened during the phase 9 work, while `protocol.py` was being rewritten
+*between* runs — so the likeliest explanation is a run importing a half-written
+module, not a product flake.
+
+Stated as a hypothesis rather than a conclusion, because I cannot prove it. But
+the handbook now says so, so nobody spends a day hunting a ghost.
+
+### 2026-08-03 — CONVERGENCE PROVEN, and it found two real gaps
+
+The handbook's §7.1 — the single biggest untested area — is closed.
+`scripts/mesh-convergence-check.py` runs two separate uvicorn processes with two
+separate databases, pairs them with one code, writes a different memo on each,
+and syncs over a real WebSocket. Both libraries end up holding both memos.
+Repeatable.
+
+**Building the harness immediately found two gaps that 291 green unit tests had
+not:**
+
+1. **There was no dialer at all.** Phase 5 built a listener and nothing that
+   connects out. Two instances could never have started a sync with each other.
+   `client.py` and `POST /api/mesh/sync` exist because this harness demanded
+   them.
+2. **The Mesh port was hardcoded** to 8770, so two instances on one machine
+   collided immediately. Now `OPENMEMO_MESH_PORT`.
+
+Worth stating plainly: the feature could not physically have worked between two
+machines, and every unit test was green. That is the case for end-to-end
+harnesses, made without argument.
+
+Not yet covered: a *conflicting* edit converging, and a real network rather than
+loopback.
+
 ### 2026-08-03 — Ten-pass cleanup
 
 | pass | looked for | result |

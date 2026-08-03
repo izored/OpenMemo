@@ -112,6 +112,10 @@ async def start_pairing() -> dict:
     result = pairing.store_code(code)
     await pairing.register_device(await clock.device_id(), "This device", is_primary=True)
     await pairing.set_primary(await clock.device_id())
+    # The fingerprint we broadcast derives from the code, so it changed just now.
+    from backend.core.mesh.sync_state import readvertise
+
+    await readvertise()
     return {
         "code": code,
         "words": code.split(),
@@ -133,6 +137,9 @@ async def join_mesh(body: JoinBody) -> dict:
         raise HTTPException(status_code=400, detail=str(exc))
 
     await pairing.register_device(await clock.device_id(), "This device")
+    from backend.core.mesh.sync_state import readvertise
+
+    await readvertise()
     return {"ok": True}
 
 
@@ -197,3 +204,81 @@ async def make_primary(device_id: str) -> dict:
 
     await pairing.set_primary(device_id)
     return {"ok": True, "primary": device_id}
+
+
+class SyncBody(BaseModel):
+    host: str
+    port: int = 8770
+
+
+@router.post("/sync", dependencies=[Depends(require_enabled)])
+async def sync_now(body: SyncBody) -> dict:
+    """Dial a peer and run one exchange.
+
+    Manual for now: discovery (§2 tier 1) will call this on its own once it
+    lands. Until then this is how two machines are told about each other, and it
+    is what the convergence harness drives.
+    """
+    from backend.core.mesh.client import sync_with
+
+    try:
+        report = await sync_with(body.host, body.port)
+    except Exception as exc:
+        # A peer being unreachable is the normal case, not an error worth a 500.
+        raise HTTPException(status_code=503, detail=f"Could not reach that device: {exc}")
+
+    return {
+        "ok": True,
+        "batch_id": report.batch_id,
+        "rows_applied": report.rows_applied,
+        "conflicts": report.conflicts,
+        "skipped": report.skipped,
+    }
+
+
+@router.get("/discover", dependencies=[Depends(require_enabled)])
+async def discover() -> dict:
+    """Look for other machines in this Mesh on the local network.
+
+    Only peers whose broadcast fingerprint matches ours are returned, so a
+    stranger's openMemo on the same cafe Wi-Fi is never even dialed.
+    """
+    from backend.core.mesh import discovery, secret
+
+    from backend.core.mesh import server as mesh_server
+
+    peers = await discovery.browse(secret.chain_id(), own_port=mesh_server.DEFAULT_PORT)
+    return {
+        "peers": [vars(p) for p in peers],
+        "count": len(peers),
+        # An empty list is normal on Docker, where multicast does not work.
+        # The UI should offer the address field rather than implying a failure.
+        "note": None if peers else "No devices found. You can still pair by address.",
+    }
+
+
+@router.post("/sync/auto", dependencies=[Depends(require_enabled)])
+async def sync_auto() -> dict:
+    """Find the peer and sync with it — the zero-config path."""
+    from backend.core.mesh import discovery, secret
+    from backend.core.mesh.client import sync_with
+
+    from backend.core.mesh import server as mesh_server
+
+    peers = await discovery.browse(secret.chain_id(), own_port=mesh_server.DEFAULT_PORT)
+    if not peers:
+        raise HTTPException(
+            status_code=404,
+            detail="No other device found on this network. Try pairing by address.",
+        )
+
+    peer = peers[0]
+    try:
+        report = await sync_with(peer.host, peer.port)
+    except Exception as exc:
+        raise HTTPException(status_code=503, detail=f"Found {peer.name} but could not sync: {exc}")
+
+    return {
+        "ok": True, "peer": peer.name,
+        "rows_applied": report.rows_applied, "conflicts": report.conflicts,
+    }

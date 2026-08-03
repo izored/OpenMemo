@@ -56,3 +56,7 @@ qrcode>=7.4
 #              keystream that was acceptable on a LAN and is not once the
 #              laptop syncs from a cafe.
 cryptography>=42.0
+#   zeroconf     - mDNS, so two machines find each other with no address typed.
+#                  Optional at runtime: Docker blocks multicast and Mesh still
+#                  works by address there.
+zeroconf>=0.132
