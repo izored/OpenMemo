@@ -229,6 +229,16 @@ a kind string becomes a 500 on an ingest route. Cover each kind with a test.
 
 Newest entry at the top. One entry per working turn.
 
+### 2026-08-03 — Flake hunt: not reproduced, and probably self-inflicted
+
+Fourteen consecutive full-suite runs, all green. The single observed failure
+happened during the phase 9 work, while `protocol.py` was being rewritten
+*between* runs — so the likeliest explanation is a run importing a half-written
+module, not a product flake.
+
+Stated as a hypothesis rather than a conclusion, because I cannot prove it. But
+the handbook now says so, so nobody spends a day hunting a ghost.
+
 ### 2026-08-03 — CONVERGENCE PROVEN, and it found two real gaps
 
 The handbook's §7.1 — the single biggest untested area — is closed.

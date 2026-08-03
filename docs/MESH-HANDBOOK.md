@@ -508,8 +508,12 @@ Be explicit about this, because it shapes how much the tests are worth:
 - **mDNS discovery is designed, not built.** Tier 1 in the ADR is a plan.
 - **The overlay tier is designed, not built.** Tier 2 assumes the user installs
   Tailscale; nothing in the code helps them do it or verifies it works.
-- **The suite has a flake I could not reproduce.** One failure in six runs, test
-  unidentified.
+- **A single unexplained test failure, most likely my own fault.** One run
+  failed during the phase 9 work; **fourteen consecutive runs since have passed**.
+  The failure happened while I was actively rewriting `protocol.py` between
+  runs, so the most likely explanation is a test run importing a half-written
+  module rather than a real flake. Recorded because I cannot prove that, but a
+  reviewer should weight it accordingly rather than hunting a ghost.
 
 ---
 
