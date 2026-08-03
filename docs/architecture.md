@@ -61,6 +61,41 @@ OpenMemo is a local-first AI knowledge base. Everything runs on your machine —
 - **CSS variable theming** — light/dark via `html.dark` class + CSS custom properties
 - **yt-dlp self-updates on container start, not hard-pinned** — YouTube changes its player every few weeks and breaks older yt-dlp builds; image rebuilds happen far less often, so a hard pin guarantees the "Make it local" / YouTube ingest paths rot between rebuilds. Instead `requirements.txt` floor-pins (`yt-dlp>=2025.1.0`) and the backend Dockerfile entrypoint runs `pip install --upgrade yt-dlp` on each start (best-effort; failures are ignored when offline, and the whole step is skippable via `YTDLP_AUTOUPDATE=0`). Trade-off accepted: a few seconds of startup latency + nondeterministic yt-dlp version, in exchange for downloads that keep working without waiting on an image rebuild. The floor pin keeps a known-good baseline for offline/air-gapped deploys.
 
+## Mesh (two-way device sync)
+
+Optional, off by default, and inert until switched on in Settings. See
+[ADR-024](ADR-024-MESH.md) for the decisions and [the handbook](MESH-HANDBOOK.md)
+for the full picture.
+
+Two lanes, at very different speeds:
+
+| Lane | Size | Contents |
+| --- | --- | --- |
+| Metadata | ~7 MB | rows, transcripts, AI summaries, magnets |
+| Media | ~25 GB | fetched from the original source, or the peer |
+
+A Memo arrives complete, searchable and readable, long before its video does.
+
+- `backend/core/mesh/` holds the whole feature. Around 3,000 lines, with roughly
+  18 references to it in the rest of the backend. A contract sweep
+  (`backend/tests/test_mesh_contract.py`) fails the build if that grows.
+- **A separate listener on its own port.** Not a route on the app. The app has no
+  authentication by design, so it must never face a network. The Mesh port
+  serves one WebSocket and nothing else.
+- **Change tracking is SQLite triggers**, created on enable and dropped on
+  disable. They fire in the same transaction as the write they record, so the
+  log cannot disagree with the data.
+- **Ordering is a hybrid logical clock** kept in SQL, not wall time. Two
+  machines with drifting clocks still agree on what happened first.
+- **Merging is three-way** against the last agreed state, so edits to different
+  fields merge silently and only a genuine clash reaches the user.
+- **Every synced write is journalled and reversible**, with a database snapshot
+  taken before each batch.
+
+Adding a table or a Memo column fails a test until someone decides how it should
+sync. Ordinary feature work needs no Mesh awareness, because the triggers sit
+below the application and catch every write however it was made.
+
 ## Security
 
 - Path traversal sanitized via whitelist (`a-zA-Z0-9_-`)

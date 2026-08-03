@@ -438,3 +438,24 @@ The project uses forward slashes (`/`) in Python code and config, which work fin
 1. Check backend logs: `docker logs openmemo-api-1` or watch the uvicorn terminal
 2. Check liveness: `curl http://localhost:8000/api/ping` (dev) or `curl http://localhost:8091/api/ping` (Docker). Returns `{"status":"ok"}` with no Ollama dependency. `/api/health` additionally reports Ollama reachability (used by the Settings page).
 3. Verify Ollama: `curl http://localhost:11434/api/tags`
+
+---
+
+## Mesh (optional)
+
+Two-way sync between your own computers. Off unless you turn it on in
+Settings, and it costs nothing while off.
+
+When enabled, openMemo opens **one extra port, 8770**, bound to localhost. It
+serves the sync channel and nothing else. The app's own port is never exposed by
+Mesh and should never be port forwarded, because the local API has no
+authentication by design.
+
+To sync from another network, put both machines on a private overlay you
+control (Tailscale or any WireGuard setup). Mesh dials the overlay address the
+same way it dials a local one, so nothing else changes.
+
+Override the port with `OPENMEMO_MESH_PORT` if 8770 is taken, or if you run two
+instances on one machine.
+
+Full detail in [ADR-024](ADR-024-MESH.md) and [the handbook](MESH-HANDBOOK.md).
