@@ -22,6 +22,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import os
 from typing import Any, Callable, Awaitable
 
 from starlette.applications import Starlette
@@ -31,7 +32,9 @@ from starlette.websockets import WebSocket, WebSocketDisconnect
 
 logger = logging.getLogger(__name__)
 
-DEFAULT_PORT = 8770
+# Overridable so two instances can run on one machine — which is exactly what
+# scripts/mesh-convergence-check.py needs, and what nothing before it did.
+DEFAULT_PORT = int(os.environ.get("OPENMEMO_MESH_PORT", "8770"))
 
 # Loopback only unless the user opts into more. The overlay (§2 tier 2) hands
 # this machine a private address; binding that is an explicit act, not a default.

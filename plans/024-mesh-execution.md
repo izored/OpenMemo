@@ -229,6 +229,31 @@ a kind string becomes a 500 on an ingest route. Cover each kind with a test.
 
 Newest entry at the top. One entry per working turn.
 
+### 2026-08-03 — CONVERGENCE PROVEN, and it found two real gaps
+
+The handbook's §7.1 — the single biggest untested area — is closed.
+`scripts/mesh-convergence-check.py` runs two separate uvicorn processes with two
+separate databases, pairs them with one code, writes a different memo on each,
+and syncs over a real WebSocket. Both libraries end up holding both memos.
+Repeatable.
+
+**Building the harness immediately found two gaps that 291 green unit tests had
+not:**
+
+1. **There was no dialer at all.** Phase 5 built a listener and nothing that
+   connects out. Two instances could never have started a sync with each other.
+   `client.py` and `POST /api/mesh/sync` exist because this harness demanded
+   them.
+2. **The Mesh port was hardcoded** to 8770, so two instances on one machine
+   collided immediately. Now `OPENMEMO_MESH_PORT`.
+
+Worth stating plainly: the feature could not physically have worked between two
+machines, and every unit test was green. That is the case for end-to-end
+harnesses, made without argument.
+
+Not yet covered: a *conflicting* edit converging, and a real network rather than
+loopback.
+
 ### 2026-08-03 — Ten-pass cleanup
 
 | pass | looked for | result |

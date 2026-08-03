@@ -314,17 +314,41 @@ diff. A review that only reads changed files misses this entire class.
 
 Be sceptical here. These are the gaps a reviewer should probe hardest.
 
-### 7.1 Two real machines have never synced
+### 7.1 ~~Two real machines have never synced~~ — CLOSED 2026-08-03
 
-Every test runs both "devices" against **one database in one process**. That
-proves the pipeline, the protocol and the merge logic. It does **not** prove two
-independent libraries converge.
+`scripts/mesh-convergence-check.py` starts **two separate uvicorn processes**
+with **two separate databases and data directories**, pairs them with one
+twelve-word code, writes a different memo on each side, and syncs them over a
+**real WebSocket**. Nothing is shared but the code.
 
-An early test asserted a journal entry after a memo "crossed" and failed —
-correctly, because the peer already held an identical row and rightly wrote
-nothing. The test was rewritten to claim only what it proves.
+```
+alpha has 1, beta has 1
+syncing over a real socket…
+  {'ok': True, rows_applied: 1, conflicts: 0, skipped: []}
+alpha now has 2: ['written on beta', 'written on alpha']
+beta  now has 2: ['written on beta', 'written on alpha']
+CONVERGED
+```
 
-**This is the single biggest untested area.**
+Repeatable across runs. Exit code 0 means converged; anything else prints which
+rows disagree.
+
+**Building this immediately exposed two real gaps that every unit test had
+missed:**
+
+1. **There was no dialer.** Phase 5 built a listener and nothing that connects
+   out, so two instances could never have started a sync. `client.py` and
+   `POST /api/mesh/sync` exist because this harness demanded them.
+2. **The Mesh port was hardcoded**, so two instances on one machine collided.
+   Now `OPENMEMO_MESH_PORT`.
+
+That is the argument for end-to-end harnesses in one paragraph: 291 unit tests
+were green while the feature could not physically have worked between two
+machines.
+
+**Still not covered by this harness:** a *conflicting* edit converging (both
+sides editing the same field), and anything over a real network rather than
+loopback.
 
 ### 7.2 The concurrency cap is unproven under real load
 

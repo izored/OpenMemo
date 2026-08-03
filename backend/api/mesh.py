@@ -197,3 +197,33 @@ async def make_primary(device_id: str) -> dict:
 
     await pairing.set_primary(device_id)
     return {"ok": True, "primary": device_id}
+
+
+class SyncBody(BaseModel):
+    host: str
+    port: int = 8770
+
+
+@router.post("/sync", dependencies=[Depends(require_enabled)])
+async def sync_now(body: SyncBody) -> dict:
+    """Dial a peer and run one exchange.
+
+    Manual for now: discovery (§2 tier 1) will call this on its own once it
+    lands. Until then this is how two machines are told about each other, and it
+    is what the convergence harness drives.
+    """
+    from backend.core.mesh.client import sync_with
+
+    try:
+        report = await sync_with(body.host, body.port)
+    except Exception as exc:
+        # A peer being unreachable is the normal case, not an error worth a 500.
+        raise HTTPException(status_code=503, detail=f"Could not reach that device: {exc}")
+
+    return {
+        "ok": True,
+        "batch_id": report.batch_id,
+        "rows_applied": report.rows_applied,
+        "conflicts": report.conflicts,
+        "skipped": report.skipped,
+    }
