@@ -365,6 +365,130 @@ the 10-pass cleanup remain.
 
 ---
 
+## 7b. The data model, precisely
+
+Eight tables, all prefixed `mesh_`, none of them SQLAlchemy models (they are raw
+SQL so that adding one never forces a migration on a table the whole app reads).
+
+| Table | Holds | Survives disable? | Survives restore? |
+|---|---|---|---|
+| `mesh_clock` | one row: millis, counter, `device_id` | yes | **`device_id` regenerated** |
+| `mesh_change_log` | every local write, with an HLC stamp | yes | **cleared** |
+| `mesh_base` | last agreed state per row (the merge base) | yes | yes |
+| `mesh_journal` | every field Mesh wrote, with the rule | yes | yes |
+| `mesh_conflicts` | pending decisions | yes | yes |
+| `mesh_magnets` | one recipe per memo with a file | yes | yes |
+| `mesh_peers` | per-peer sync cursor | yes | yes |
+| `mesh_devices` | device list, primary flag, revocations | yes | yes |
+
+Only the **triggers** are conditional on the flag — 24 of them, three per synced
+table, created on enable and dropped on disable. That is what makes "off" mean
+zero per-write cost rather than a `WHEN` clause on every insert.
+
+### Why `device_id` is regenerated on restore
+
+It identifies the *machine*, and is the final tiebreak when two devices stamp the
+same millisecond with the same counter. Restore one backup onto both machines
+without regenerating it and they share an identity: the total order breaks and
+every change in the log is misattributed. This was a wrong assumption I wrote
+into a docstring first and had to reverse (bug 10).
+
+---
+
+## 7c. Data flow, end to end
+
+What happens when a memo is edited on the desktop and the laptop is running:
+
+```
+1. User edits a memo
+2. SQLite trigger fires INSIDE the same transaction
+      → mesh_clock advances (millis, counter)
+      → mesh_change_log gets (tbl, row_id, op, hlc, device_id)
+3. Sync session: cursors exchanged, "you have seen up to seq N of mine"
+4. changes_since(N) → export_rows() → deduped to current row state
+      (a memo edited ten times ships once)
+5. Frame: JSON → AES-256-GCM (header as AAD) → HMAC(psk) → WebSocket
+6. Peer: HMAC check → GCM decrypt → replay check → parse → closed-set verify
+7. apply_rows():
+      snapshot the database
+      for each row: read local, read base, merge_row(local, remote, base)
+        → clean fields written
+        → contested fields parked in mesh_conflicts, local value untouched
+        → every write journalled with the rule that produced it
+      base advances ONLY over settled fields
+      clock.observe(max remote stamp)
+8. Media: magnet resolved later, via the job queue, provider → origin → peer
+```
+
+**The property that matters:** step 7 can be interrupted at any point. The base
+only advances over what actually landed, so the next sync re-merges rather than
+treating a partial result as agreed.
+
+---
+
+## 7d. Failure modes, and what each looks like
+
+| Situation | Behaviour | Where |
+|---|---|---|
+| Peer offline | changes queue locally, sync on reunion | change log is durable |
+| Mesh port busy | listener declines, **app unaffected** | `server.start` probes first |
+| Both edited the same prose | parked, user asked, keep-both default | `apply` + dialogue |
+| Both edited different fields | merges silently | three-way merge |
+| Peer sends an unknown table | refused with a reason, never written | `apply_rows` |
+| Peer sends an unknown column | dropped, row still applies | version skew tolerance |
+| Peer on a newer protocol | frame refused, version named | `decode` |
+| Revoked device connects | refused at handshake | `session.handshake` |
+| 5 bad handshakes from one peer | that peer locked out 60s | `note_handshake_failure` |
+| Source URL dead | falls through to peer | resolver order |
+| Both sources dead, peer asleep | memo shows unavailable, says why | `localize_error` |
+| Sync made a mess | snapshot + journal undo | `journal.undo_batch` |
+| Restore an old backup | jobs cleared, device id fresh, triggers re-decided | `api/backup.py` |
+
+---
+
+## 7e. Things I would attack first if I were reviewing
+
+Ordered by how much damage a bug there would do:
+
+1. **`merge._merge_dict_field`** — the `summaries` union. It already had a
+   symmetry bug that passed 26 tests (bug 11) and would have caused **silent
+   permanent divergence**. Probe: both sides regenerate the same key with
+   different bases; equal HLCs; one side missing the key entirely.
+2. **`apply._apply_row` base advancement** — the rule is "base advances only
+   over settled fields". If a contested field's base ever advances, the conflict
+   silently resolves in the peer's favour on the next sync. Probe: conflict,
+   partial resolution, second sync.
+3. **`clock.observe`** — the SQL CASE has three branches and one was wrong
+   (bug 9). Probe: remote exactly equal to local; remote behind; remote ahead by
+   one millisecond with a huge counter.
+4. **Trigger + transaction interaction** — triggers write inside app
+   transactions. Probe: a rollback in application code; does the change log get
+   an entry for a write that never landed?
+5. **`export_rows` dedup** — keyed on `(tbl, row_id)`, keeping the *last* entry.
+   Probe: a row created then deleted within one batch.
+6. **The GCM nonce derivation** — 12 bytes hashed from 16 random bytes. Fine, but
+   uniqueness rests entirely on `os.urandom`.
+
+---
+
+## 7f. What a reviewer cannot verify from the code alone
+
+Be explicit about this, because it shapes how much the tests are worth:
+
+- **Two separate databases never converged.** Every test runs both sides against
+  one database in one process. The merge logic is proven; the *system* is not.
+- **No sync has crossed a real network.** The WebSocket path is exercised only
+  through in-memory channels and Starlette's test client.
+- **The concurrency cap was never observed under load.** 40 downloads becoming 3
+  is asserted by a unit test with a fake handler, not by watching yt-dlp.
+- **mDNS discovery is designed, not built.** Tier 1 in the ADR is a plan.
+- **The overlay tier is designed, not built.** Tier 2 assumes the user installs
+  Tailscale; nothing in the code helps them do it or verifies it works.
+- **The suite has a flake I could not reproduce.** One failure in six runs, test
+  unidentified.
+
+---
+
 ## 8. Where to look for trouble
 
 Suggested order for an adversarial review:
@@ -385,7 +509,7 @@ Suggested order for an adversarial review:
 Useful commands:
 
 ```bash
-python -m pytest backend/tests/ -q -o asyncio_mode=auto   # 286 tests
+python -m pytest backend/tests/ -q -o asyncio_mode=auto   # 291 tests
 python scripts/blob-split.py                              # re-measure the library
 grep -rn "mesh" backend/ --include=*.py | grep -v core/mesh | grep -v tests
 ```
@@ -406,12 +530,70 @@ grep -rn "mesh" backend/ --include=*.py | grep -v core/mesh | grep -v tests
 | 7 | Magnets, covers, fetch policy | merged |
 | 8 | Mesh code, QR, devices, primary role | done |
 | 9 | AES-GCM, revocation enforcement, handshake throttling | done |
-| 10 | Ten-pass cleanup | not started |
+| 10 | Ten-pass cleanup | done — 2 fixes, 1 unreproduced flake |
 
 **Phase 0 shipped first and is deliberately not gated.** There were 25
 fire-and-forget background tasks with no concurrency cap, no persistence and no
 retry: importing 40 memos started 40 downloads at once, and a restart lost them
 all. Mesh would have multiplied that into data loss.
+
+---
+
+## 9b. The build history, including what changed mid-flight
+
+Worth knowing because it explains why some code looks the way it does.
+
+| Decision | Original | Final | Why it moved |
+|---|---|---|---|
+| Reachability | same network only | three tiers, overlay for tier 2 | owner needs the MacBook to sync while travelling |
+| Relay | rejected outright | still no relay *we* run; an overlay the user controls carries it | privacy objection was already solved by E2E encryption; what remained was dependency |
+| Fetch policy | fetch-on-open | 20 recent, then fill in | fetch-on-open makes a device feel empty; keep-everything makes pairing a 24 GB event |
+| Cipher | hand-rolled SHA256 keystream | AES-256-GCM | acceptable on a LAN, not once it leaves one |
+| Covers | not considered | eager, ahead of all media | owner asked about structural metadata; they live outside `files/` and were missed by design *and* by the measuring script |
+| `device_id` | "travels with the library" | regenerated on restore | it identifies the machine, not the library — the original reasoning was simply wrong |
+| Primary device | "no primary, ever" | primary owns singletons, never merges | Telegram polling genuinely requires a singleton; merge authority genuinely must not exist |
+
+### Two moments where I was wrong and was corrected
+
+1. **I called phase 5 "partial" and justified stopping on a dependency that did
+   not exist.** The ADR already said conflicts queue while the rest of the sync
+   proceeds. The owner pushed back; finishing it took one turn and immediately
+   surfaced two real protocol bugs (the conversation desync, and the backwards
+   cursor). Both would have shipped behind a green checkmark.
+2. **I claimed in a commit message that a busy Mesh port could not affect the
+   app.** It was untrue when written: uvicorn calls `sys.exit(1)` from inside its
+   serve task, where the surrounding `try/except` never runs. It only surfaced
+   because a leftover server from my own browser verification collided with the
+   test suite. Reading the code would not have caught it.
+
+Both are recorded because the pattern matters more than the incidents: a claim
+in a commit message is not evidence, and a stopping point that feels natural is
+not the same as a blocker.
+
+---
+
+## 9c. Operational notes
+
+**Ports.** App on its usual port; Mesh on **8770**, loopback by default. These
+must never be the same listener — see §4.4.
+
+**Enabling.** Settings → Mesh. The toggle physically installs 24 triggers and
+opens the port; disabling drops and closes them. `apply_enabled_state()` is
+idempotent in both directions and is called on every boot, so the database
+always matches the flag.
+
+**Dependencies added** (all pure-python, all for one feature):
+`mnemonic` (BIP39 wordlist), `qrcode` (SVG only, no Pillow), `cryptography`
+(AES-GCM). Recorded in `backend/requirements.txt` with the reasoning inline.
+
+**Docker.** No compose changes. The Mesh port is not published — reaching
+another network is the overlay's job, never a port forward.
+
+**Testing.** `OPENMEMO_DISABLE_JOB_WORKERS=1` is set by `conftest.py`. Removing
+it will break the suite until the queue gets instance scope (see §7.3).
+
+**Re-measuring.** `python scripts/blob-split.py` from the repo root. Re-run it
+occasionally: the 94% refetchable figure decays as links die.
 
 ---
 

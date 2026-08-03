@@ -229,6 +229,31 @@ a kind string becomes a 500 on an ingest route. Cover each kind with a test.
 
 Newest entry at the top. One entry per working turn.
 
+### 2026-08-03 — Ten-pass cleanup
+
+| pass | looked for | result |
+|---|---|---|
+| 1 | dead code, unused imports | 1 real: `SYNCED_TABLES` imported into `apply.py` and never used. The `__init__` hits were deliberate re-exports. |
+| 2 | swallowed errors, bare excepts | clean — every `except Exception` logs or re-raises |
+| 3 | TODO / FIXME / HACK left behind | none |
+| 4 | docstrings describing code that changed | 1 stale mention of the old keystream, and it is correctly historical |
+| 5 | docs claiming what the code no longer does | 1 real: the protocol docstring still said "checks the HMAC", written before AES-GCM. Now describes both layers and why there are two. |
+| 6 | stale forward-references in the docs | none — the phase 9 "this will be replaced" notes were updated when it was |
+| 7 | every `mesh_*` table created at schema init | all 8 accounted for |
+| 8 | error-message consistency | consistent; user-facing text is plain, internal text does not leak reasons |
+| 9 | is the coupling budget still honest | 18 refs across 6 files, against ~3,000 lines of Mesh. Holding. |
+| 10 | suite stability across repeated runs | **one flaky failure found** — see below |
+
+Passes 1 and 5 produced fixes.
+
+**Pass 10 found a flake I could not reproduce.** One run of the full suite
+failed; the next five passed. I did not capture which test, and repeated runs
+have not reproduced it. Recorded here rather than claimed away — a suite that
+fails one run in six is not stable, and the likeliest culprits given this
+codebase are the timing-sensitive job-queue tests or leftover state between
+modules. **A reviewer should treat "291 passed" as "291 passed most of the
+time".**
+
 ### 2026-08-03 — Phases 8 and 9 complete
 
 **Phase 8 UI.** Empty state is two buttons, no third option. The code is blurred

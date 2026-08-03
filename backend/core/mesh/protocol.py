@@ -8,9 +8,11 @@ else.
 Three rules, and they are why the blast radius of Mesh being reachable is the
 sync protocol rather than the application:
 
-1. **Authenticate before parsing.** `decode()` checks the HMAC before it
-   deserializes anything. An unauthenticated peer never reaches a JSON parser,
-   let alone a database.
+1. **Authenticate before parsing.** `decode()` checks the PSK tag, then AES-GCM
+   authenticates the ciphertext, and only then is anything deserialized. An
+   unauthenticated peer never reaches a JSON parser, let alone a database. The
+   two layers are deliberate: the PSK check is cheap and rejects a stranger
+   before a single AES operation is spent on their bytes.
 2. **No passthrough verb.** `MessageType` is an enum, and an unknown type is
    rejected rather than forwarded. There is deliberately no "run this", no
    "proxy that", no generic query. Adding one would defeat the design.
