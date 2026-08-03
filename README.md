@@ -51,6 +51,19 @@ See a post worth keeping while you're out. Share it to your private Telegram bot
 ### 🎵 Music Library
 A full music page of its own. Paste a Spotify, Apple Music, or YouTube playlist and get it back as a real playlist: per-track downloads, lossless FLAC where the source allows, a play queue with OS media keys, and a now-playing player that follows you across the app. Voice notes and music live apart, each with their own dashboard filter.
 
+### 🕸️ Mesh
+Two computers, one library. Your Mac and your PC each hold everything, and both can write. Changes travel in both directions, so it stops mattering which machine you happen to be sat at.
+
+No account. No cloud. Nothing in the middle. You pair them once with a 12 word code, or point a camera at a QR, and they find each other on your network from then on.
+
+It does not shove 25 GB around. Your library's text is a few megabytes, and most of your media can be fetched again from where it came from. So the other machine pulls what you actually open, grabs your 20 most recent Memos up front, and fills in the rest quietly. Your laptop is usable in seconds instead of after a two hour progress bar. Notes, tags, transcripts and AI summaries all arrive as text, so joining a Mesh never re-runs Whisper or Ollama.
+
+Spaces, collections, playlists and covers come across first. A Space showing up without its artwork looks broken. A track still downloading does not.
+
+Nothing gets overwritten behind your back. Edit the same note on both machines and openMemo shows you both versions, says which device each came from, and keeps both by default. Every sync is written down with the reason it decided what it did, and any of them can be undone.
+
+openMemo itself never goes online. Mesh runs on its own separate port that serves exactly one thing, the sync channel, and everything on the wire is encrypted with AES-256. Off by default, behind one toggle in Settings. While it is off it costs your install nothing at all. Design in [ADR-024](docs/ADR-024-MESH.md), full write-up in [the handbook](docs/MESH-HANDBOOK.md).
+
 ### 🗂️ Spaces
 Group whole areas of your life. A Space bundles Memos and collections under one cover, one color, one name. Client work, home projects, research topics. Each Space gets its own page.
 
@@ -80,6 +93,7 @@ Ask questions in plain language. Get answers grounded in your actual saved conte
 | Closed-source black box AI | ✅ You choose the model. Ollama runs locally. |
 | Upload limits, usage caps | ✅ No limits. Your hardware is the ceiling. |
 | Privacy policy changes | ✅ No policy. No tracking. No telemetry. |
+| Sync means uploading to their servers | ✅ Your devices talk to each other. Nothing in between. |
 
 ---
 

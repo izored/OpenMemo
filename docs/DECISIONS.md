@@ -26,6 +26,12 @@ Three hard constraints shape the solution:
    securely, but demands the VPN be connected *and* the PC be awake at the moment of
    capture; a failed save silently loses the post. Capture happens on café 5G at 3pm;
    the PC is often asleep.
+
+   > **Later (ADR-024, Mesh).** This constraint held and shaped that feature too.
+   > Mesh never exposes the app: it runs a separate listener on its own port that
+   > serves one sync channel and nothing else, so the unauthenticated API stays
+   > unreachable. Reaching another network is an overlay's job, never a port
+   > forward. The reasoning here is why.
 2. **iOS offers no Web Share Target.** A PWA cannot appear in the Instagram share sheet
    on iOS (Android-only API). The native-feeling options are an iOS Shortcut or sharing
    to an app that already exists in the sheet.
