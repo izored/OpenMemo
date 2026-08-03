@@ -1,3 +1,10 @@
+# MANUAL BACKFILL ONLY. The automatic announcement is a job inside
+# release.yml, which runs in the same workflow run as the release itself —
+# because `release: published` does NOT fire for a release created by a
+# workflow using GITHUB_TOKEN, which is how release.yml creates ours. That
+# trigger is kept here for a release published BY HAND through the GitHub UI,
+# where the event does fire. Use the manual run to announce an older tag that
+# was missed:  gh workflow run notify-changelog.yml -f tag=v3.1.1
 name: Notify izored Changelog
 
 on:

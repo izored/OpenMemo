@@ -12,10 +12,55 @@ jobs:
   release:
     name: Create GitHub Release
     runs-on: ubuntu-latest
+    outputs:
+      body: ${{ steps.notes.outputs.body }}
+      name: ${{ steps.notes.outputs.name }}
     steps:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
+
+      # Refuse to publish a release whose code does not agree with the tag.
+      # A tag is public and permanent the moment it lands, so the cheap checks
+      # belong BEFORE the release is created, not after someone notices the
+      # footer says a different number than the download they just grabbed.
+      - name: Verify the tag matches what the code claims
+        run: |
+          set -euo pipefail
+          VERSION="${GITHUB_REF_NAME#v}"
+          fail=0
+
+          check() {  # name, actual
+            if [ "$2" != "$VERSION" ]; then
+              echo "::error::$1 says '$2' but the tag says '$VERSION'"
+              fail=1
+            else
+              echo "ok: $1 = $VERSION"
+            fi
+          }
+
+          check "backend/config.py" \
+            "$(sed -n 's/.*VERSION: str = "\([0-9.]*\)".*/\1/p' backend/config.py | head -n1)"
+          check "chrome-extension/manifest.json" \
+            "$(jq -r .version chrome-extension/manifest.json)"
+          check "macOS/package.json" \
+            "$(jq -r .version macOS/package.json)"
+          check "macOS/package-lock.json" \
+            "$(jq -r .version macOS/package-lock.json)"
+          check "README badge" \
+            "$(grep -o 'version-[0-9]\+\.[0-9]\+\.[0-9]\+' README.md | head -n1 | cut -d- -f2)"
+
+          if ! grep -q "^## \[${VERSION}\]" docs/CHANGELOG.md; then
+            echo "::error::docs/CHANGELOG.md has no '## [${VERSION}]' section"
+            fail=1
+          else
+            echo "ok: changelog has a [${VERSION}] section"
+          fi
+
+          if [ "$fail" -ne 0 ]; then
+            echo "::error::Refusing to publish ${GITHUB_REF_NAME}. Delete the tag, fix the mismatch, and tag again."
+            exit 1
+          fi
 
       # Use the hand-written section from docs/CHANGELOG.md as the release body,
       # verbatim. The release body must carry the FULL formatted changelog for
@@ -72,3 +117,57 @@ jobs:
           body: ${{ steps.notes.outputs.body }}
           draft: false
           prerelease: false
+
+  # Announce to the profile repo IN THIS RUN rather than waiting for a
+  # `release: published` event. That event does NOT fire for a release created
+  # by a workflow using GITHUB_TOKEN — which is exactly how the job above
+  # creates it — so notify-changelog.yml sat dormant and v3.2.0, v3.3.0 and
+  # v3.4.0 never reached izored/izored. A dependent job has no such problem:
+  # same run, ordered, and visible in the same log.
+  notify:
+    name: Announce to the profile changelog
+    needs: release
+    runs-on: ubuntu-latest
+    steps:
+      - name: Dispatch to izored/izored
+        uses: actions/github-script@v7
+        env:
+          # Passed through the environment, NEVER interpolated into the script
+          # body: the changelog is full of backticks and quotes, which would
+          # both break the script and make it injectable.
+          RELEASE_BODY: ${{ needs.release.outputs.body }}
+          RELEASE_NAME: ${{ needs.release.outputs.name }}
+        with:
+          github-token: ${{ secrets.CHANGELOG_TOKEN }}
+          script: |
+            const version = context.ref.replace('refs/tags/', '');
+            const owner = context.repo.owner;
+            const repoName = context.repo.repo;
+            // repository_dispatch caps client_payload around 64KB — v3.0.0's
+            // 108KB body was rejected outright and the profile entry silently
+            // never happened. Truncate at a line boundary and link the rest.
+            const MAX_DESC = 55000;
+            let description = (process.env.RELEASE_BODY || '').trim()
+              || `${version} released`;
+            if (description.length > MAX_DESC) {
+              const cut = description.lastIndexOf('\n', MAX_DESC);
+              description = description.slice(0, cut > 0 ? cut : MAX_DESC)
+                + `\n\n… truncated — full notes: https://github.com/${owner}/${repoName}/releases/tag/${version}`;
+            }
+            await github.rest.repos.createDispatchEvent({
+              owner: 'izored',
+              repo: 'izored',
+              event_type: 'release-published',
+              client_payload: {
+                repo: repoName,
+                version,
+                title: process.env.RELEASE_NAME || version,
+                description,
+                date: new Date().toISOString().split('T')[0],
+                type: 'launch',
+                emoji: '🚀',
+                projectUrl: `https://github.com/${owner}/${repoName}`,
+                releaseUrl: `https://github.com/${owner}/${repoName}/releases/tag/${version}`,
+              },
+            });
+            core.info(`Announced ${version} to izored/izored`);

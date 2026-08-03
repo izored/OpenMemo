@@ -192,9 +192,17 @@ def test_mesh_stays_out_of_the_rest_of_the_codebase():
     import pathlib
 
     root = pathlib.Path("backend")
+    # Only OUR code. A local checkout has backend/.venv, and plenty of
+    # third-party packages (yt-dlp, numpy, PIL, pygments) contain the word
+    # "mesh" — which made this fail in the main repo while passing in CI and in
+    # a worktree, where no venv exists. A test whose result depends on where it
+    # is run is a test people learn to skip.
+    vendored = ("/.venv/", "/node_modules/", "/__pycache__/", "/site-packages/")
     offenders = []
     for path in root.rglob("*.py"):
         rel = path.as_posix()
+        if any(v in f"/{rel}/" for v in vendored):
+            continue
         if "/mesh" in rel or "/tests/" in rel or rel.endswith("api/mesh.py"):
             continue
         if "mesh" in path.read_text(encoding="utf-8").lower() and rel not in CORE_FILES_TOUCHING_MESH:
