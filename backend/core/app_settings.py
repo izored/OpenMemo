@@ -130,6 +130,7 @@ def get_settings() -> dict[str, Any]:
     data.pop(_PASSCODE_KEY, None)
     data.pop(_TG_TOKEN_KEY, None)
     data.pop(_TG_USER_KEY, None)
+    data.pop(_CANARY_KEY, None)
     return {
         **data,
         "yt_cookies_present": cookies_present(),
@@ -250,6 +251,25 @@ def verify_hidden_passcode(passcode: str) -> bool:
     except ValueError:
         return False
     return hmac.compare_digest(candidate, digest)
+
+
+# Last Instagram canary run (core/canary.py). Persisted in the same JSON but
+# deliberately NOT in _DEFAULTS: it is a health RECORD, not a preference, so it
+# has no business being writable through the settings API. get_settings()
+# strips it; the /instagram/health endpoint is what surfaces it.
+_CANARY_KEY = "instagram_canary"
+
+
+def get_instagram_canary() -> dict | None:
+    value = _read().get(_CANARY_KEY)
+    return value if isinstance(value, dict) else None
+
+
+def set_instagram_canary(result: dict) -> None:
+    with _LOCK:
+        current = _read()
+        current[_CANARY_KEY] = result
+        _write_raw(current)
 
 
 def telegram_token_present() -> bool:

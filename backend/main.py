@@ -222,6 +222,13 @@ async def lifespan(app: FastAPI):
 
     asyncio.create_task(run_relay_loop())
 
+    # Instagram canary (plan 026) — re-checks a couple of saved posts weekly so
+    # the next time Instagram changes the rules, openMemo notices instead of
+    # quietly saving worse memos for six weeks. The loop never raises out.
+    from backend.core.canary import run_canary_loop
+
+    asyncio.create_task(run_canary_loop())
+
     # Persistent job queue (ADR-024 §9). Spawns the bounded worker pool; it does
     # no database I/O itself, and is a no-op until job kinds are registered.
     # Requeuing work interrupted by a restart is the janitor's job, a moment
