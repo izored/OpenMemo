@@ -129,6 +129,17 @@ def main() -> int:
             return 2
 
         print("\nsyncing over a real socket…")
+        # Discovery first: can beta find alpha without being told an address?
+        print("")
+        print("looking for the peer with mDNS...")
+        seen = api(DEVICES[1]["api"], "/mesh/discover", timeout=30)
+        if seen["count"]:
+            names = [pr["name"] for pr in seen["peers"]]
+            print(f"  found {seen['count']} peer(s) by broadcast: {names}")
+        else:
+            print("  none found - expected where multicast is blocked; "
+                  "falling back to the address")
+
         result = api(DEVICES[1]["api"], "/mesh/sync", "POST",
                      {"host": "127.0.0.1", "port": DEVICES[0]["mesh"]}, timeout=90)
         print(f"  {result}")

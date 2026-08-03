@@ -229,6 +229,28 @@ a kind string becomes a 500 on an ingest route. Cover each kind with a test.
 
 Newest entry at the top. One entry per working turn.
 
+### 2026-08-03 — mDNS discovery, and a third bug only the harness could find
+
+Two machines now find each other by broadcast with **no address typed**. The TXT
+record carries `hash(chain_id)` — never the chain id, never the code — so a
+sniffer on the network learns that a machine runs openMemo and nothing more.
+Peers whose fingerprint does not match are filtered before any connection.
+
+**Two bugs found by running it, not by reading it:**
+
+1. *Self-exclusion was by IP address*, which hid a second instance on the same
+   machine from the first. Wrong in itself, and it made discovery untestable
+   without two pieces of hardware. Now excluded by endpoint.
+2. *The advertisement went stale the moment you paired.* Advertising started at
+   enable-time, but the broadcast fingerprint derives from the code — which
+   changes when pairing rewrites the root secret. Both machines were shouting
+   identities that could never match. `readvertise()` now runs after pairing.
+
+Neither was findable by unit test. Both needed two processes that pair and then
+look for each other, which is the whole argument for the harness.
+
+Suite: **296 passed**. Convergence and discovery both verified end to end.
+
 ### 2026-08-03 — Flake hunt: not reproduced, and probably self-inflicted
 
 Fourteen consecutive full-suite runs, all green. The single observed failure

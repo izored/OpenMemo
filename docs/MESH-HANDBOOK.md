@@ -346,9 +346,14 @@ That is the argument for end-to-end harnesses in one paragraph: 291 unit tests
 were green while the feature could not physically have worked between two
 machines.
 
-**Still not covered by this harness:** a *conflicting* edit converging (both
-sides editing the same field), and anything over a real network rather than
-loopback.
+The harness now also exercises **discovery**, and that immediately found a third
+bug: advertising started when Mesh was *enabled*, but the broadcast fingerprint
+derives from the code, which changes when you *pair*. Both machines were
+shouting stale identities that could never match. No unit test could have caught
+this — it needs two processes that pair and then look for each other.
+
+**Still not covered:** a *conflicting* edit converging (both sides editing the
+same field), and a real network rather than loopback.
 
 ### 7.2 The concurrency cap is unproven under real load
 
@@ -505,7 +510,11 @@ Be explicit about this, because it shapes how much the tests are worth:
   through in-memory channels and Starlette's test client.
 - **The concurrency cap was never observed under load.** 40 downloads becoming 3
   is asserted by a unit test with a fake handler, not by watching yt-dlp.
-- **mDNS discovery is designed, not built.** Tier 1 in the ADR is a plan.
+- ~~**mDNS discovery is designed, not built.**~~ **Built and proven 2026-08-03.**
+  Two instances find each other by broadcast with no address typed. The TXT
+  record carries `hash(chain_id)`, never the chain id or the code, so a sniffer
+  learns a machine runs openMemo and nothing else. Peers whose fingerprint does
+  not match are never dialed.
 - **The overlay tier is designed, not built.** Tier 2 assumes the user installs
   Tailscale; nothing in the code helps them do it or verifies it works.
 - **A single unexplained test failure, most likely my own fault.** One run
