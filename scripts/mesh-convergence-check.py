@@ -161,7 +161,53 @@ def main() -> int:
                 print(f"  only on beta:  {sorted(only_b)}")
             return 1
 
-        print("\nCONVERGED — two separate databases now hold the same memos.")
+        print("\nCONVERGED - two separate databases now hold the same memos.")
+
+        # -- scenario 2: a genuine conflict ----------------------------------
+        #
+        # The harder case, and the one the design makes the most promises
+        # about. Both machines edit the SAME field of the SAME memo. The test
+        # is not that one side wins: it is that neither side's text is touched
+        # and both end up holding the same pending question.
+        print("\n" + "=" * 62)
+        print("scenario 2: both machines edit the same field")
+
+        shared = [m for m in after["alpha"] if m[1] == "written on alpha"][0][0]
+        api(DEVICES[0]["api"], f"/memos/{shared}", "PUT", {"notes": "alpha thinks this"})
+        api(DEVICES[1]["api"], f"/memos/{shared}", "PUT", {"notes": "beta disagrees entirely"})
+        print("  alpha wrote a note; beta wrote a different one on the same memo")
+
+        api(DEVICES[1]["api"], "/mesh/sync", "POST",
+            {"host": "127.0.0.1", "port": DEVICES[0]["mesh"]}, timeout=90)
+        time.sleep(2)
+        # Sync the other way too, so both sides have actually seen the clash.
+        api(DEVICES[0]["api"], "/mesh/sync", "POST",
+            {"host": "127.0.0.1", "port": DEVICES[1]["mesh"]}, timeout=90)
+        time.sleep(2)
+
+        pending = {d["name"]: api(d["api"], "/mesh/conflicts")["conflicts"] for d in DEVICES}
+        for name, items in pending.items():
+            print(f"  {name}: {len(items)} pending "
+                  f"{[(c['field'], c['local_value'], c['remote_value']) for c in items]}")
+
+        kept = {n: dict(rows(p, "memos", "id, notes")).get(shared) for n, p in dirs.items()}
+        print(f"  alpha still shows: {kept['alpha']!r}")
+        print(f"  beta  still shows: {kept['beta']!r}")
+
+        if not pending["alpha"] or not pending["beta"]:
+            print("\nFAILED - a disagreement must be parked on BOTH sides, "
+                  "never silently resolved on one")
+            return 1
+        if kept["alpha"] != "alpha thinks this" or kept["beta"] != "beta disagrees entirely":
+            print("\nFAILED - a contested field must stay untouched until the user decides")
+            return 1
+        if sorted(c["field"] for c in pending["alpha"]) != sorted(
+                c["field"] for c in pending["beta"]):
+            print("\nFAILED - the two sides disagree about what is contested")
+            return 1
+
+        print("\nCONFLICT PARKED IDENTICALLY - each side kept its own text, "
+              "and both are waiting on the same decision.")
         return 0
 
     finally:

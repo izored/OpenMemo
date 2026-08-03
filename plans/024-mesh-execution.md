@@ -229,6 +229,27 @@ a kind string becomes a 500 on an ingest route. Cover each kind with a test.
 
 Newest entry at the top. One entry per working turn.
 
+### 2026-08-03 — Conflict convergence proven
+
+The harness now covers the case the design makes the most promises about: both
+machines editing the same field of the same memo.
+
+```
+alpha: 1 pending [('notes', 'alpha thinks this', 'beta disagrees entirely')]
+beta:  1 pending [('notes', 'beta disagrees entirely', 'alpha thinks this')]
+alpha still shows: 'alpha thinks this'
+beta  still shows: 'beta disagrees entirely'
+```
+
+Perfect mirror images. Each side keeps its own text untouched, sees the other's
+as the alternative, and both hold exactly one pending question about the same
+field. **No bugs found** — the merge engine, the parking rule and the base
+non-advancement all behaved exactly as the unit tests said they would, which is
+the first time an end-to-end scenario has not turned something up.
+
+The harness fails if either side silently resolves, if either side's text
+changes, or if the two disagree about what is contested.
+
 ### 2026-08-03 — mDNS discovery, and a third bug only the harness could find
 
 Two machines now find each other by broadcast with **no address typed**. The TXT
