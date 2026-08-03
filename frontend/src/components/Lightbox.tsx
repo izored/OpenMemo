@@ -1,10 +1,65 @@
-import { useEffect, type CSSProperties } from 'react';
+import { useEffect, useState, type CSSProperties } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Icon } from './Icon';
 import { useAppStore } from '@/stores/appStore';
 import { mediaSrc } from '@/lib/media';
 import { videoEmbedUrl, resolveEmbedShape } from '@/lib/platforms';
 import { useImageAspect } from '@/lib/useMediaOrientation';
+
+// One slide of a carousel, with its controls ON the picture — the same shape as
+// the memo page's viewer. The lightbox's own arrows sit at the far edges of the
+// screen because they page between MEMOS; reusing that position for slides read
+// as "next memo" and left the photo with no visible carousel control at all.
+function SlideStage({
+  urls, index, onStep, alt,
+}: { urls: string[]; index: number; onStep: (d: number) => void; alt: string }) {
+  const i = Math.min(index, urls.length - 1);
+  return (
+    // inline-block, NOT flex: a flex wrapper lets the <img> take the full
+    // available width and `object-fit: contain` letterboxes the photo inside
+    // it, so controls anchored to the element sat hundreds of pixels out in
+    // the dark. Shrink-wrapping means the box IS the photo.
+    <div
+      style={{ position: 'relative', display: 'inline-block', lineHeight: 0, maxWidth: '100%', maxHeight: '100%' }}
+      onClick={(e) => e.stopPropagation()}
+    >
+      <img
+        key={`${i}-${urls[i]}`}
+        src={urls[i]}
+        alt={`${alt} — ${i + 1} of ${urls.length}`}
+        // The height cap is in viewport units on purpose: `max-height: 100%`
+        // cannot resolve against a shrink-wrapping parent (auto height), so a
+        // tall photo would size to full width and run off the screen. 64px is
+        // the lightbox's own 32px padding, top and bottom.
+        style={{
+          display: 'block', width: 'auto', height: 'auto',
+          maxWidth: '100%', maxHeight: 'calc(100vh - 64px)',
+        }}
+      />
+      <button
+        className="om-lightbox-nav prev"
+        style={{ left: 8 }}
+        onClick={(e) => { e.stopPropagation(); onStep(-1); }}
+        aria-label="Previous image"
+      >
+        <Icon name="chevronLeft" size={26} />
+      </button>
+      <button
+        className="om-lightbox-nav next"
+        style={{ right: 8 }}
+        onClick={(e) => { e.stopPropagation(); onStep(1); }}
+        aria-label="Next image"
+      >
+        <Icon name="chevronRight" size={26} />
+      </button>
+      {/* Top left, mirroring the memo page's counter — the lightbox toolbar
+          already owns the top right corner. */}
+      <div className="om-lightbox-count" style={{ top: 10, left: 10, bottom: 'auto', transform: 'none' }}>
+        {i + 1} / {urls.length}
+      </div>
+    </div>
+  );
+}
 
 // Single shared lightbox for the whole app. Reads the active media group +
 // index from the store so arrow keys / on-screen arrows page between memos.
@@ -33,9 +88,23 @@ export function Lightbox() {
   const posterSrc = memo && memo.type === 'video' && !memo.file_path ? mediaSrc(memo) : null;
   const posterAspect = useImageAspect(posterSrc);
 
+  // A carousel opened straight from a card (dashboard, search, a collection)
+  // used to show slide 1 and nothing else — the paging UI only existed for the
+  // memo page's own viewer. Any memo carrying a gallery pages here too, so the
+  // arrows mean the same thing wherever the lightbox was opened from.
+  const memoSlides =
+    !galleryOpen && memo && memo.type !== 'video' && (memo.gallery?.length ?? 0) > 1
+      ? memo.gallery!.map((g) => g.url)
+      : null;
+  const [slideIdx, setSlideIdx] = useState(0);
+  const memoSlideStep = (d: number) =>
+    setSlideIdx((prev) => (memoSlides ? (prev + d + memoSlides.length) % memoSlides.length : 0));
+  // Opening a different memo starts at its first slide, never a stale index.
+  useEffect(() => { setSlideIdx(0); }, [memo?.id]);
+
   useEffect(() => {
     if (!open && !galleryOpen) return;
-    const pageStep = galleryOpen ? galleryStep : step;
+    const pageStep = galleryOpen ? galleryStep : memoSlides ? memoSlideStep : step;
     const onKey = (e: KeyboardEvent) => {
       if (e.key === 'Escape') close();
       else if (e.key === 'ArrowRight') pageStep(1);
@@ -43,26 +112,17 @@ export function Lightbox() {
     };
     document.addEventListener('keydown', onKey);
     return () => document.removeEventListener('keydown', onKey);
-  }, [open, galleryOpen, close, step, galleryStep]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, galleryOpen, close, step, galleryStep, memoSlides?.length]);
 
   // Gallery (carousel) mode: page a single memo's image slides.
   if (galleryOpen) {
-    const multi = gallery.length > 1;
     return (
       <div className="om-lightbox" role="dialog" aria-modal="true" onClick={close}>
-        <img key={slide} src={gallery[slide]} alt={`Slide ${slide + 1}`} onClick={(e) => e.stopPropagation()} />
-        {multi && (
-          <>
-            <button className="om-lightbox-nav prev" onClick={(e) => { e.stopPropagation(); galleryStep(-1); }} aria-label="Previous image">
-              <Icon name="chevronLeft" size={26} />
-            </button>
-            <button className="om-lightbox-nav next" onClick={(e) => { e.stopPropagation(); galleryStep(1); }} aria-label="Next image">
-              <Icon name="chevronRight" size={26} />
-            </button>
-            <div className="om-lightbox-count" onClick={(e) => e.stopPropagation()}>
-              {slide + 1} / {gallery.length}
-            </div>
-          </>
+        {gallery.length > 1 ? (
+          <SlideStage urls={gallery} index={slide} onStep={galleryStep} alt="Slide" />
+        ) : (
+          <img key={slide} src={gallery[slide]} alt={`Slide ${slide + 1}`} onClick={(e) => e.stopPropagation()} />
         )}
         <div className="om-lightbox-toolbar" onClick={(e) => e.stopPropagation()}>
           <button className="om-lightbox-close" onClick={close} aria-label="Close">
@@ -142,13 +202,18 @@ export function Lightbox() {
             )}
           </div>
         )
+      ) : memoSlides ? (
+        <SlideStage urls={memoSlides} index={slideIdx} onStep={memoSlideStep} alt={memo.title} />
       ) : src ? (
         <img key={memo.id} src={src} alt={memo.title} onClick={(e) => e.stopPropagation()} />
       ) : (
         <div className="om-lightbox-empty" onClick={(e) => e.stopPropagation()}>No preview available</div>
       )}
 
-      {hasPrevNext && (
+      {/* Inside a carousel the arrows page SLIDES and live on the picture
+          (SlideStage); stepping between memos would skip the other eleven
+          photos the user just opened, so the screen-edge arrows stay off. */}
+      {!memoSlides && hasPrevNext && (
         <>
           <button
             className="om-lightbox-nav prev"

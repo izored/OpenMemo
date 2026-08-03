@@ -45,6 +45,10 @@ LOCAL_ONLY: frozenset[str] = frozenset({
 MACHINE: frozenset[str] = frozenset({
     "content_text", "ai_summary", "summaries", "video_description",
     "transcript_status", "transcript_lang", "transcript_source",
+    # Which resolver tier produced the memo. Machine-written and never edited,
+    # and absence must not win: the device that saved the post knows how well
+    # it resolved, while a peer that only received the row knows nothing.
+    "resolve_tier",
 })
 
 # Human-authored prose. The only fields that can reach the dialogue (§7).

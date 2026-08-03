@@ -49,11 +49,9 @@ _DELAY_S = (8, 20)
 _PLACEHOLDER_TITLES = {"Instagram post", "Instagram"}
 
 
-async def _candidates() -> list[Memo]:
-    """Instagram memos that are missing media: no local file, or a single
-    image that may really be a carousel."""
+async def _all_instagram() -> list[Memo]:
     async with AsyncSessionLocal() as db:
-        rows = (
+        return (
             await db.execute(
                 select(Memo)
                 .where(
@@ -66,14 +64,58 @@ async def _candidates() -> list[Memo]:
             )
         ).scalars().all()
 
+
+async def _candidates(captions_only: bool = False) -> list[Memo]:
+    """Instagram memos worth re-resolving.
+
+    Default: the ones missing media — no local file, or a single image that may
+    really be a carousel. `captions_only`: the opposite set, memos whose media
+    is already here but that still carry the "Instagram post" placeholder,
+    because the tier that could read a caption needed a session nobody had."""
+    rows = await _all_instagram()
     out = []
     for m in rows:
         kind = (m.type or "").lower()
-        if kind == "video" and not m.file_path:
+        has_media = bool(m.file_path) or bool(m.gallery)
+        if captions_only:
+            if has_media and (m.title or "") in _PLACEHOLDER_TITLES:
+                out.append(m)
+        elif kind == "video" and not m.file_path:
             out.append(m)          # a video whose download never happened
         elif kind == "image" and not m.gallery:
             out.append(m)           # may be a misfiled reel, or a lone slide
     return out
+
+
+async def _apply_caption(memo_id: str, resolved: dict) -> str:
+    """Fill in a real title/caption on a memo whose media is already here.
+
+    Touches nothing else: the file, gallery, type and thumbnail are already
+    correct, and only the placeholder title is replaced — never a title the
+    user may have written."""
+    title = (resolved.get("title") or "").strip()
+    if not title or title in _PLACEHOLDER_TITLES:
+        return "no caption available"
+    async with AsyncSessionLocal() as db:
+        memo = await db.get(Memo, memo_id)
+        if not memo:
+            return "gone"
+        memo.resolve_tier = resolved.get("resolve_tier") or memo.resolve_tier
+        if (memo.title or "") not in _PLACEHOLDER_TITLES:
+            await db.commit()
+            return "title already set"
+        memo.title = title
+        memo.description = resolved.get("description") or memo.description
+        memo.content_text = resolved.get("content_text") or memo.content_text
+        if (memo.type or "").lower() == "video":
+            memo.video_description = (
+                resolved.get("video_description")
+                or resolved.get("content_text")
+                or memo.video_description
+            )
+        memo.updated_at = datetime.utcnow()
+        await db.commit()
+    return f"caption: {title[:44]!r}"
 
 
 async def _apply(memo_id: str, resolved: dict) -> str:
@@ -93,6 +135,10 @@ async def _apply(memo_id: str, resolved: dict) -> str:
         memo = await db.get(Memo, memo_id)
         if not memo:
             return "gone"
+
+        # Record which tier answered, same as a live save would — otherwise a
+        # repaired memo carries no evidence of how well it resolved.
+        memo.resolve_tier = resolved.get("resolve_tier") or memo.resolve_tier
 
         # A real caption beats the placeholder — but never overwrite a title
         # the user may have written themselves.
@@ -179,12 +225,18 @@ async def _run() -> None:
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("--apply", action="store_true", help="write changes (default: dry run)")
     ap.add_argument("--limit", type=int, default=0, help="stop after N memos (0 = all)")
+    ap.add_argument(
+        "--captions",
+        action="store_true",
+        help="instead: fill real captions on memos whose media is already here",
+    )
     args = ap.parse_args()
 
-    memos = await _candidates()
+    memos = await _candidates(captions_only=args.captions)
     if args.limit:
         memos = memos[: args.limit]
-    print(f"Instagram memos missing media: {len(memos)}")
+    label = "still titled 'Instagram post'" if args.captions else "missing media"
+    print(f"Instagram memos {label}: {len(memos)}")
     print(f"mode: {'APPLY' if args.apply else 'DRY RUN'}\n")
 
     changed = failed = 0
@@ -198,13 +250,16 @@ async def _run() -> None:
             failed += 1
             continue
 
-        verdict = _verdict(memo, resolved)
+        verdict = "caption" if args.captions else _verdict(memo, resolved)
         line = f"  [{verdict:14}] {memo.id[:8]}  {url[:52]}"
         # "blocked" is the needs-login bookmark — there is nothing to write.
         # Everything else gets applied: even a plain photo can now trade its
         # "Instagram post" placeholder for the real caption.
         if args.apply and verdict != "blocked":
-            status = await _apply(memo.id, resolved)
+            if args.captions:
+                status = await _apply_caption(memo.id, resolved)
+            else:
+                status = await _apply(memo.id, resolved)
             print(f"{line}  -> {status}")
             if "FAILED" in status:
                 failed += 1

@@ -603,7 +603,10 @@ export function MemoCard({ memo, dragHandleProps, lightboxGroup }: CardProps) {
               <div
                 className="om-gallery-badge"
                 aria-label={`${memo.gallery.length} images`}
-                style={{ position: 'absolute', top: 8, right: 8, display: 'flex', alignItems: 'center', gap: 4, background: 'rgba(0,0,0,0.6)', color: '#fff', fontSize: 11, fontWeight: 500, padding: '3px 7px', borderRadius: 999, pointerEvents: 'none' }}
+                /* Top LEFT, not right: the card's hover tools occupy the top
+                   right corner and covered the slide count the moment you
+                   moved the mouse onto the card. */
+                style={{ position: 'absolute', top: 8, left: 8, display: 'flex', alignItems: 'center', gap: 4, background: 'rgba(0,0,0,0.6)', color: '#fff', fontSize: 11, fontWeight: 500, padding: '3px 7px', borderRadius: 999, pointerEvents: 'none' }}
               >
                 <Icon name="layers" size={12} />
                 <span>{memo.gallery.length}</span>

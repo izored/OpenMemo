@@ -144,6 +144,11 @@ CORE_FILES_TOUCHING_MESH = {
     # devices polling one token lose memos. The relay must ask whether it is the
     # primary. One import, one call, and it returns True whenever Mesh is off.
     "backend/services/telegram_relay.py",
+    # Added 2026-08-03, also caught by this test rather than slipping in. The
+    # Instagram canary is outbound traffic to Instagram on a weekly timer; two
+    # paired devices asking the same question is twice the noise for one
+    # answer. One import, one call, True whenever Mesh is off.
+    "backend/core/canary.py",
 }
 
 

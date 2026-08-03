@@ -96,6 +96,11 @@ class Memo(Base):
     # = the FIRST item so the dashboard/card render one cover; MemoDetail + Lightbox
     # page through the whole gallery when len > 1. NULL/empty = single-media memo.
     gallery = Column(JSON, nullable=True)
+    # Which resolver tier produced this memo, e.g. "instagram:api-cookie" or
+    # "instagram:browser-render". A tier ladder degrades silently — every tier
+    # "succeeds", just with less — so this is the only record of HOW well a
+    # save went, and what Settings watches to warn about a lapsed session.
+    resolve_tier = Column(String, nullable=True)
     ai_summary = Column(Text, nullable=True)
     embedding_ids = Column(JSON, nullable=True)  # list of chunk IDs in ChromaDB
     notes = Column(Text, nullable=True)
