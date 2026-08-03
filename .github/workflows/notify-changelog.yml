@@ -4,6 +4,11 @@ on:
   release:
     types: [published]
   workflow_dispatch:
+    inputs:
+      tag:
+        description: "Tag to announce (blank = the latest release)"
+        required: false
+        default: ""
 
 jobs:
   notify:
@@ -14,10 +19,30 @@ jobs:
         with:
           github-token: ${{ secrets.CHANGELOG_TOKEN }}
           script: |
-            const release = context.payload.release;
             const repoName = context.repo.repo;
             const owner = context.repo.owner;
-            const version = release ? release.tag_name : 'v1.7.43';
+
+            // The `release: published` event does NOT fire when the release is
+            // created by a workflow using GITHUB_TOKEN — which is exactly how
+            // release.yml creates ours. So this workflow never ran for v3.2.0,
+            // v3.3.0 or v3.4.0, and manual runs used to dispatch a hardcoded
+            // v1.7.43 with the body "v1.7.43 released" because there is no
+            // release in the payload. Fetch the real release instead: the one
+            // named by the `tag` input, else the latest.
+            let release = context.payload.release;
+            if (!release) {
+              const tag = (context.payload.inputs && context.payload.inputs.tag || '').trim();
+              const res = tag
+                ? await github.rest.repos.getReleaseByTag({ owner, repo: repoName, tag })
+                : await github.rest.repos.getLatestRelease({ owner, repo: repoName });
+              release = res.data;
+              core.info(`Announcing ${release.tag_name} (fetched, not from the event payload)`);
+            }
+            if (!release) {
+              core.setFailed('No release to announce.');
+              return;
+            }
+            const version = release.tag_name;
             // repository_dispatch caps client_payload around 64KB — v3.0.0's
             // 108KB milestone body was rejected outright ("client_payload is
             // too large") and the profile entry silently never happened.
@@ -25,7 +50,7 @@ jobs:
             // release page for the rest; the GitHub Release itself always
             // carries the full body (its limit is 125K chars).
             const MAX_DESC = 55000;
-            let description = release?.body ? release.body.trim() : `${version} released`;
+            let description = release.body ? release.body.trim() : `${version} released`;
             if (description.length > MAX_DESC) {
               const cut = description.lastIndexOf('\n', MAX_DESC);
               description = description.slice(0, cut > 0 ? cut : MAX_DESC)
@@ -38,9 +63,9 @@ jobs:
               client_payload: {
                 repo: repoName,
                 version,
-                title: release ? (release.name || version) : version,
+                title: release.name || version,
                 description,
-                date: release ? release.published_at.split('T')[0] : new Date().toISOString().split('T')[0],
+                date: (release.published_at || new Date().toISOString()).split('T')[0],
                 type: 'launch',
                 emoji: '🚀',
                 projectUrl: `https://github.com/${owner}/${repoName}`,
