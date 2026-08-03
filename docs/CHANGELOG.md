@@ -20,6 +20,9 @@ All notable changes to OpenMemo are documented here.
 - 🎠 **The carousel counter and arrows are where they should be.** On a dashboard card the "12 photos" badge sat in the top right corner, exactly where the hover tools appear, so it vanished under them the moment you moved the mouse onto the card. It is now top left. And opening a carousel from a card gave you the single first photo with no way to page: the lightbox only knew how to step between memos, so the other eleven were unreachable. It now pages the slides, with the arrows and the counter sitting ON the picture the way the memo page has them, rather than out at the edges of the screen where the next-memo arrows live.
 - 🔗 **Connecting Instagram in Settings is worth doing.** Signed out, openMemo has to look at the page like a visitor would, which is slower and can only see what the page shows. With a session it asks Instagram directly and gets everything in one request: every slide at full resolution, the real caption and author instead of a placeholder title, and the video URL without watching for it. Settings → Instagram login → Import session takes a pasted cookies.txt; no password involved.
 
+---
+## [3.3.0] - 2026-08-03
+
 ### Added
 
 - 🕸️ **Mesh — your computers hold one library, with no server in the middle.** Your Mac and your PC can each keep the whole library, and both can add, edit and delete. Changes travel in both directions, so it stops mattering which machine you happen to be sitting at. No account, no cloud, no sign-up: you pair them once with a **12-word code** (or by scanning a QR) and they take it from there. Off by default, behind a single toggle in Settings → Mesh, and while it's off it costs your install nothing at all — no background work, no open port, nothing recorded.
