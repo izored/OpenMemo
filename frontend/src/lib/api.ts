@@ -426,6 +426,15 @@ export interface MeshBatch {
 
 export type MeshChoice = 'local' | 'remote' | 'both';
 
+export interface MeshDevice {
+  device_id: string;
+  name: string;
+  last_seen: string | null;
+  is_primary: boolean;
+  revoked: boolean;
+  is_this_device: boolean;
+}
+
 export const meshApi = {
   status: () => fetchJSON<{ enabled: boolean; paired: boolean; peers: unknown[] }>('/mesh/status'),
   conflicts: () => fetchJSON<{ conflicts: MeshConflict[]; count: number }>('/mesh/conflicts'),
@@ -437,6 +446,25 @@ export const meshApi = {
   history: (limit = 50) => fetchJSON<{ batches: MeshBatch[] }>(`/mesh/history?limit=${limit}`),
   undo: (batchId: string) =>
     fetchJSON<{ reverted: number }>(`/mesh/history/${batchId}/undo`, { method: 'POST' }),
+
+  // Pairing. Every one of these 404s while Mesh is off, so callers treat a
+  // failure as the disabled state rather than something to show the user.
+  pairStart: () =>
+    fetchJSON<{ code: string; words: string[]; in_keychain: boolean; uri: string }>(
+      '/mesh/pair/start', { method: 'POST' },
+    ),
+  pairJoin: (code: string) =>
+    fetchJSON<{ ok: boolean }>('/mesh/pair/join', {
+      method: 'POST', body: JSON.stringify({ code }),
+    }),
+  pairCode: () =>
+    fetchJSON<{ available: boolean; code: string | null; words: string[] }>('/mesh/pair/code'),
+  devices: () =>
+    fetchJSON<{ devices: MeshDevice[]; this_device: string }>('/mesh/devices'),
+  revokeDevice: (id: string) =>
+    fetchJSON<{ ok: boolean }>(`/mesh/devices/${id}/revoke`, { method: 'POST' }),
+  makePrimary: (id: string) =>
+    fetchJSON<{ ok: boolean }>(`/mesh/devices/${id}/primary`, { method: 'POST' }),
 };
 
 export const settingsApi = {
