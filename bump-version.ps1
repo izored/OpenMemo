@@ -89,6 +89,15 @@ function Get-CurrentVersion {
     return @{ Major = [int]$Matches[1]; Minor = [int]$Matches[2]; Patch = [int]$Matches[3] }
 }
 
+# npm writes the root version TWICE in the lockfile: at the top level, and
+# again under packages[""]. That empty-string key is why the lockfile cannot go
+# through ConvertFrom-Json here ("a property whose name is an empty string...
+# only supported using -AsHashTable"), and -AsHashtable would lose key order
+# and rewrite the whole file on the way back out. So both are matched by
+# anchored regex instead: precise, and it cannot reformat anything.
+$LockTopRx = [regex]'(?s)(\A\{\s*"name":\s*"[^"]*",\s*"version":\s*")(\d+\.\d+\.\d+)(")'
+$LockRootRx = [regex]'(?s)("packages":\s*\{\s*"":\s*\{\s*"name":\s*"[^"]*",\s*"version":\s*")(\d+\.\d+\.\d+)(")'
+
 function Get-StatedVersions {
     # Every version this repo currently claims, keyed by where it says it.
     $stated = [ordered]@{}
@@ -99,9 +108,13 @@ function Get-StatedVersions {
         $stated[$f] = (Get-Content $f -Raw | ConvertFrom-Json).version
     }
 
-    $lock = Get-Content "macOS/package-lock.json" -Raw | ConvertFrom-Json
-    $stated["macOS/package-lock.json"] = $lock.version
-    $stated["macOS/package-lock.json (root pkg)"] = $lock.packages."".version
+    $lockRaw = Get-Content "macOS/package-lock.json" -Raw
+    $m = $LockTopRx.Match($lockRaw)
+    if (-not $m.Success) { Die "Could not read the top-level version from macOS/package-lock.json" }
+    $stated["macOS/package-lock.json"] = $m.Groups[2].Value
+    $m2 = $LockRootRx.Match($lockRaw)
+    if (-not $m2.Success) { Die "Could not read packages[''].version from macOS/package-lock.json" }
+    $stated["macOS/package-lock.json (root pkg)"] = $m2.Groups[2].Value
 
     $readme = Get-Content "README.md" -Raw
     if ($readme -match 'version-(\d+\.\d+\.\d+)') { $stated["README.md badge"] = $Matches[1] }
@@ -280,13 +293,15 @@ try {
         Step "bumped: $($f.Path)"
     }
 
-    # 3. The npm lockfile keeps the root version TWICE, and a blanket replace
-    #    would rewrite nested dependency versions. Edit it as JSON instead.
+    # 3. The npm lockfile keeps the root version TWICE, and a blanket
+    #    "version" replace would rewrite every nested dependency version too.
+    #    Both root occurrences are anchored precisely (see $LockTopRx).
     $lockPath = "macOS/package-lock.json"
-    $lock = Get-Content $lockPath -Raw | ConvertFrom-Json
-    $lock.version = $new
-    $lock.packages."".version = $new
-    ($lock | ConvertTo-Json -Depth 100) + "`n" | Set-Content $lockPath -NoNewline
+    $lockRaw = Get-Content $lockPath -Raw
+    $lockNew = $LockTopRx.Replace($lockRaw, { param($m) "$($m.Groups[1].Value)$new$($m.Groups[3].Value)" }, 1)
+    $lockNew = $LockRootRx.Replace($lockNew, { param($m) "$($m.Groups[1].Value)$new$($m.Groups[3].Value)" }, 1)
+    if ($lockNew -eq $lockRaw) { Die "Version pattern did not match in $lockPath" }
+    Set-Content $lockPath $lockNew -NoNewline
     Step "bumped: $lockPath (root + packages[''])"
 
     # 4. Post-conditions: the files agree, and the promoted section is real.
