@@ -841,11 +841,12 @@ async def _instagram_resolve(url: str, domain: str) -> dict:
     # so this is the tier that keeps a reel a VIDEO. It used to grab the largest
     # image and hardcode type=image — which turned every reel into a memo of its
     # poster frame that no download path would ever touch (that was the bug).
+    sniff_image = ""
     try:
         from backend.core.sniff_media import sniff_media
 
         probe = await sniff_media(url, want_image=True) or {}
-        poster = probe.get("thumbnail_url") or probe.get("main_image") or ""
+        sniff_image = probe.get("thumbnail_url") or probe.get("main_image") or ""
         if probe.get("media_url"):
             return {
                 "title": "Instagram post",
@@ -854,34 +855,31 @@ async def _instagram_resolve(url: str, domain: str) -> dict:
                 "source_url": canonical_source_url(url),
                 "source_domain": domain,
                 "source_favicon": fav,
-                "thumbnail_path": poster,
+                "thumbnail_path": sniff_image,
                 "type": "video",
-            }
-        if probe.get("main_image"):
-            return {
-                "title": "Instagram post",
-                "description": "",
-                "content_text": "",
-                "source_url": canonical_source_url(url),
-                "source_domain": domain,
-                "source_favicon": fav,
-                "thumbnail_path": probe["main_image"],
-                "type": "image",
             }
     except Exception:
         pass
 
-    # Tier 4b — plain render, largest visible image. Only runs when the sniff
-    # pass came back empty-handed (browser missing in the dev venv, or a page
-    # that rendered nothing). The URL path is the last video signal available:
-    # a /reel|/tv permalink is a video whatever the render found.
+    # Tier 4b — a photo post: page the carousel. The media-info API is the only
+    # tier that hands over a sidecar's slide list, so without a session a
+    # multi-photo post used to arrive as whichever single image the render
+    # happened to grab. Walking the stage recovers the whole set, which is what
+    # the gallery viewer (memo page + lightbox) has been waiting for. A
+    # single-image post pages nowhere and costs nothing extra. The URL path is
+    # the last video signal left: a /reel|/tv permalink is a video whatever the
+    # render found.
     try:
         from backend.core.headless import render_page
 
-        rendered = await render_page(url, want_main_image=True)
-        main_img = (rendered or {}).get("main_image")
+        rendered = await render_page(url, want_main_image=True, want_gallery=True) or {}
+        # The sniff pass already saw a still on this page; keep it as the floor
+        # so a flaky second render can never downgrade a resolved post to the
+        # needs-login bookmark below.
+        main_img = rendered.get("main_image") or sniff_image
+        slides = rendered.get("slides") or []
         if main_img:
-            return {
+            base = {
                 "title": "Instagram post",
                 "description": "",
                 "content_text": "",
@@ -891,6 +889,10 @@ async def _instagram_resolve(url: str, domain: str) -> dict:
                 "thumbnail_path": main_img,
                 "type": "video" if _is_instagram_video_path(url) else "image",
             }
+            if len(slides) > 1 and base["type"] == "image":
+                base["gallery"] = [{"url": u, "type": "image"} for u in slides]
+                base["thumbnail_path"] = slides[0]
+            return base
     except Exception:
         pass
 

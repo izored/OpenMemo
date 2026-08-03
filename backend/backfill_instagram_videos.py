@@ -1,26 +1,32 @@
-"""Backfill: rescue Instagram videos that were saved as poster-frame images.
+"""Backfill: repair Instagram memos that never got their real media.
 
-Before the tier-4 fix (plan 025), every Instagram post resolved through the
-headless tier came back `type="image"` — so a reel became a memo of its poster
-frame and no download path ever touched it (auto-localize only fires for
-`type == "video"`). This walks the stuck memos, works out what each post really
-is, and pulls the video.
+Two things went wrong for posts saved without an Instagram session:
 
-Two candidate buckets:
-  A. IG memos typed image/link with no local file — the misfiled ones. Each is
-     probed: a /reel|/reels|/tv permalink is a video by its URL alone; anything
-     else (/p/ can be either) gets one browser pass via the network sniffer.
-  B. IG memos already typed video with no local file — nothing to reclassify,
-     they just never got their download (or it errored). Retried as-is.
+  • A reel arrived as a still. Every tier that can tell a video from a photo
+    needs a login, so saves fell through to a browser that took the largest
+    picture on the page and filed the memo as an image — and auto-download
+    only fires for a video, so the file was never pulled (plan 025).
+  • A carousel arrived as one photo. Only the media-info API hands over a
+    sidecar's slide list, so without a session the memo got a single image
+    and the gallery viewer had nothing to show.
 
-Dry run by default: it probes, reports, and changes nothing.
+This walks the affected memos, resolves each post through the SAME resolver
+the app uses (`_instagram_resolve`), and applies whatever it finds: pulls the
+video, attaches the full gallery, and fills in a real title/caption where the
+memo still carries the "Instagram post" placeholder. Nothing else is touched —
+a title you edited yourself is left alone.
+
+Dry run by default: it resolves, reports, and changes nothing.
 
     docker exec openmemo-openmemo-api-1 python -m backend.backfill_instagram_videos
     docker exec openmemo-openmemo-api-1 python -m backend.backfill_instagram_videos --apply
 
-Run it inside the container — the sniffer needs patchright, which is installed
-in the image and not in the dev venv. Safe to re-run: a memo that now has a
-file is no longer a candidate.
+Run it inside the container — the browser fallback needs patchright, which is
+installed in the image and not in the dev venv. Worth re-running after
+connecting Instagram in Settings: with a session the resolver returns full
+carousels and real captions in one request, so posts this could only partly
+recover the first time come back complete. Safe to re-run either way — a memo
+that already has its media is no longer a candidate.
 """
 from __future__ import annotations
 
@@ -28,20 +34,24 @@ import argparse
 import asyncio
 import random
 from datetime import datetime
+from urllib.parse import urlparse
 
 from sqlalchemy import select
 
-from backend.core.extractor import _is_instagram_video_path
+from backend.core.extractor import _instagram_resolve
 from backend.db.database import AsyncSessionLocal
 from backend.db.models import Memo
 
-# Space out the probes/downloads so a backlog drain never looks like a scraper
-# burst — the same courtesy the Telegram relay applies to a batch of links.
+# Space out the resolves so a backlog drain never looks like a scraper burst —
+# the same courtesy the Telegram relay applies to a batch of links.
 _DELAY_S = (8, 20)
 
+_PLACEHOLDER_TITLES = {"Instagram post", "Instagram"}
 
-async def _candidates() -> tuple[list[Memo], list[Memo]]:
-    """(misfiled, never_downloaded) — IG memos with no local media file."""
+
+async def _candidates() -> list[Memo]:
+    """Instagram memos that are missing media: no local file, or a single
+    image that may really be a carousel."""
     async with AsyncSessionLocal() as db:
         rows = (
             await db.execute(
@@ -56,74 +66,91 @@ async def _candidates() -> tuple[list[Memo], list[Memo]]:
             )
         ).scalars().all()
 
-    misfiled, undownloaded = [], []
+    out = []
     for m in rows:
-        if m.file_path:
-            continue
         kind = (m.type or "").lower()
-        if kind == "video":
-            undownloaded.append(m)
+        if kind == "video" and not m.file_path:
+            out.append(m)          # a video whose download never happened
         elif kind == "image" and not m.gallery:
-            # A carousel is a real gallery, not a misfiled video — leave it.
-            # `link` memos are skipped on purpose: those are the needs-login
-            # bookmarks, and re-sharing the URL upgrades them in place with a
-            # fresh title and caption (the stale-IG-link path in api/ingest).
-            misfiled.append(m)
-    return misfiled, undownloaded
+            out.append(m)           # may be a misfiled reel, or a lone slide
+    return out
 
 
-async def _probe(url: str) -> tuple[str, str]:
-    """(verdict, why) for one post: "video" | "image" | "unknown"."""
-    if _is_instagram_video_path(url):
-        return "video", "url-path"
-    try:
-        from backend.core.sniff_media import sniff_media
+async def _apply(memo_id: str, resolved: dict) -> str:
+    """Write what the resolver found onto the memo. Returns a status word.
 
-        probe = await sniff_media(url, want_image=True)
-    except Exception as e:
-        return "unknown", f"probe failed: {e!r}"[:80]
-    if not probe:
-        return "unknown", "nothing rendered"
-    if probe.get("media_url"):
-        return "video", "video on the wire"
-    return "image", "no video on the wire"
+    The type is deliberately NOT flipped up front for a video: `localize_memo_task`
+    sets `type=video` itself once the file is on disk, so a download that fails
+    leaves the memo as it was (retryable, still a candidate) instead of a video
+    card with nothing behind it."""
+    from backend.api.ingest import cache_gallery, localize_memo_task
 
-
-async def _promote_and_download(memo_id: str) -> str:
-    """Pull the video for one memo. Returns the end status.
-
-    The type is deliberately NOT flipped up front: `localize_memo_task` sets
-    `type=video` itself once the file is actually on disk. So a download that
-    fails leaves an image memo (retryable, still a candidate next run) instead
-    of a video card with nothing behind it."""
-    from backend.api.ingest import localize_memo_task
+    gallery = resolved.get("gallery") or []
+    is_video = resolved.get("type") == "video"
+    notes = []
 
     async with AsyncSessionLocal() as db:
         memo = await db.get(Memo, memo_id)
         if not memo:
             return "gone"
-        memo.localize_status = "pending"
-        memo.localize_error = None
+
+        # A real caption beats the placeholder — but never overwrite a title
+        # the user may have written themselves.
+        title = (resolved.get("title") or "").strip()
+        if title and title not in _PLACEHOLDER_TITLES and (memo.title or "") in _PLACEHOLDER_TITLES:
+            memo.title = title
+            memo.description = resolved.get("description") or memo.description
+            memo.content_text = resolved.get("content_text") or memo.content_text
+            notes.append("caption")
+
+        if len(gallery) > 1:
+            memo.gallery = gallery
+            memo.thumbnail_path = gallery[0]["url"]
+            notes.append(f"gallery x{len(gallery)}")
+
+        if is_video:
+            memo.localize_status = "pending"
+            memo.localize_error = None
+
         memo.updated_at = datetime.utcnow()
         await db.commit()
 
-    await localize_memo_task(memo_id, "video")
+    # Slides are signed CDN URLs that expire — pull them local right away.
+    if len(gallery) > 1:
+        await cache_gallery(memo_id)
 
-    async with AsyncSessionLocal() as db:
-        memo = await db.get(Memo, memo_id)
-        if not memo:
-            return "gone"
-        if memo.file_path:
-            return "downloaded"
-        return f"failed: {(memo.localize_error or 'unknown')[:80]}"
+    if is_video:
+        await localize_memo_task(memo_id, "video")
+        async with AsyncSessionLocal() as db:
+            memo = await db.get(Memo, memo_id)
+            if memo and memo.file_path:
+                notes.append("video")
+            else:
+                err = (memo.localize_error if memo else "") or "unknown"
+                notes.append(f"video FAILED: {err[:70]}")
+
+    return ", ".join(notes) if notes else "nothing to change"
+
+
+def _verdict(memo: Memo, resolved: dict) -> str:
+    """One-line summary of what the resolver says this post really is."""
+    kind = resolved.get("type")
+    slides = len(resolved.get("gallery") or [])
+    if kind == "video":
+        return "video" if (memo.type or "").lower() != "video" else "video (retry)"
+    if slides > 1:
+        return f"carousel x{slides}"
+    if kind == "link":
+        return "blocked"
+    return "single photo"
 
 
 async def main() -> None:
     try:
         await _run()
     finally:
-        # The probe leaves a warm Chromium behind; without this the dry-run
-        # path exits with it still running and Python's GC screams about a
+        # The resolver leaves a warm Chromium behind; without this the dry-run
+        # path exits with it still running and Python's GC complains about a
         # closed event loop on the way out.
         try:
             from backend.core.headless import close_browser
@@ -139,45 +166,43 @@ async def _run() -> None:
     ap.add_argument("--limit", type=int, default=0, help="stop after N memos (0 = all)")
     args = ap.parse_args()
 
-    misfiled, undownloaded = await _candidates()
-    print(f"Instagram memos with no local file: {len(misfiled)} misfiled, {len(undownloaded)} never downloaded")
+    memos = await _candidates()
+    if args.limit:
+        memos = memos[: args.limit]
+    print(f"Instagram memos missing media: {len(memos)}")
     print(f"mode: {'APPLY' if args.apply else 'DRY RUN'}\n")
 
-    work: list[Memo] = []
-    for i, memo in enumerate(misfiled):
-        if args.limit and len(work) >= args.limit:
-            break
-        verdict, why = await _probe(memo.source_url or "")
-        print(f"  [{verdict:7}] {memo.id[:8]}  {(memo.source_url or '')[:58]}  ({why})")
-        if verdict == "video":
-            work.append(memo)
-        # Only sleep between real browser probes, and never after the last one.
-        if why != "url-path" and i < len(misfiled) - 1:
-            await asyncio.sleep(random.uniform(*_DELAY_S))
-
-    for memo in undownloaded:
-        if args.limit and len(work) >= args.limit:
-            break
-        print(f"  [retry  ] {memo.id[:8]}  {(memo.source_url or '')[:58]}  (already typed video)")
-        work.append(memo)
-
-    print(f"\n{len(work)} memo(s) to download.")
-    if not args.apply:
-        print("Dry run — nothing changed. Re-run with --apply to download.")
-        return
-
-    done = failed = 0
-    for i, memo in enumerate(work):
-        status = await _promote_and_download(memo.id)
-        print(f"  {memo.id[:8]}  {status}")
-        if status == "downloaded":
-            done += 1
-        else:
+    changed = failed = 0
+    for i, memo in enumerate(memos):
+        url = memo.source_url or ""
+        domain = urlparse(url).netloc.lstrip("www.") or "instagram.com"
+        try:
+            resolved = await _instagram_resolve(url, domain)
+        except Exception as e:
+            print(f"  [error   ] {memo.id[:8]}  {url[:52]}  ({e!r})"[:120])
             failed += 1
-        if i < len(work) - 1:
+            continue
+
+        verdict = _verdict(memo, resolved)
+        line = f"  [{verdict:14}] {memo.id[:8]}  {url[:52]}"
+        if args.apply and verdict not in ("single photo", "blocked"):
+            status = await _apply(memo.id, resolved)
+            print(f"{line}  -> {status}")
+            if "FAILED" in status:
+                failed += 1
+            else:
+                changed += 1
+        else:
+            print(line)
+
+        if i < len(memos) - 1:
             await asyncio.sleep(random.uniform(*_DELAY_S))
 
-    print(f"\nDone: {done} downloaded, {failed} failed.")
+    print()
+    if args.apply:
+        print(f"Done: {changed} repaired, {failed} failed.")
+    else:
+        print("Dry run — nothing changed. Re-run with --apply.")
 
 
 if __name__ == "__main__":

@@ -97,9 +97,14 @@ def _patch_sniff(monkeypatch, result):
     monkeypatch.setattr("backend.core.sniff_media.sniff_media", _sniff)
 
 
-def _patch_render(monkeypatch, main_image):
+def _patch_render(monkeypatch, main_image, slides=()):
     async def _render(url, **kw):
-        return {"html": "", "screenshot": None, "main_image": main_image}
+        return {
+            "html": "",
+            "screenshot": None,
+            "main_image": main_image,
+            "slides": list(slides),
+        }
 
     monkeypatch.setattr("backend.core.headless.render_page", _render)
 
@@ -137,11 +142,48 @@ class TestResolveBrowserTiers:
             "media_url": None,
             "kind": None,
             "thumbnail_url": "https://cdn/og.jpg",
-            "main_image": "https://cdn/photo.jpg",
+            "main_image": "https://cdn/ignored.jpg",
         })
+        _patch_render(monkeypatch, "https://cdn/photo.jpg")
         r = await _instagram_resolve(PHOTO, "instagram.com")
         assert r["type"] == "image"
         assert r["thumbnail_path"] == "https://cdn/photo.jpg"
+        assert not r.get("gallery")
+
+    async def test_paged_carousel_becomes_a_gallery(self, monkeypatch, blocked_api):
+        # Without a session the media-info API is the only tier that knows a
+        # sidecar has more than one slide, so paging the page is what feeds the
+        # gallery viewer at all.
+        _patch_sniff(monkeypatch, {"media_url": None, "main_image": "https://cdn/a.jpg"})
+        _patch_render(
+            monkeypatch, "https://cdn/a.jpg",
+            slides=["https://cdn/a.jpg", "https://cdn/b.jpg", "https://cdn/c.jpg"],
+        )
+        r = await _instagram_resolve(PHOTO, "instagram.com")
+        assert r["type"] == "image"
+        assert [s["url"] for s in r["gallery"]] == [
+            "https://cdn/a.jpg", "https://cdn/b.jpg", "https://cdn/c.jpg",
+        ]
+        # The cover is slide 1, not whatever else the page rendered largest.
+        assert r["thumbnail_path"] == "https://cdn/a.jpg"
+
+    async def test_a_reel_is_never_turned_into_a_gallery(self, monkeypatch, blocked_api):
+        # If the sniff misses the video, the /reel/ path still says video — and
+        # a video memo must not carry a gallery of stray page images.
+        _patch_sniff(monkeypatch, None)
+        _patch_render(monkeypatch, "https://cdn/a.jpg", slides=["https://cdn/a.jpg", "https://cdn/b.jpg"])
+        r = await _instagram_resolve(REEL, "instagram.com")
+        assert r["type"] == "video"
+        assert not r.get("gallery")
+
+    async def test_sniff_still_covers_a_flaky_render(self, monkeypatch, blocked_api):
+        # The sniff pass saw a still; a failed second render must not downgrade
+        # the post to the needs-login bookmark.
+        _patch_sniff(monkeypatch, {"media_url": None, "main_image": "https://cdn/seen.jpg"})
+        _patch_render(monkeypatch, None)
+        r = await _instagram_resolve(PHOTO, "instagram.com")
+        assert r["type"] == "image"
+        assert r["thumbnail_path"] == "https://cdn/seen.jpg"
 
     async def test_sniff_unavailable_falls_back_to_url_path(self, monkeypatch, blocked_api):
         # No browser sniff (dev venv without patchright): the /reel/ permalink
