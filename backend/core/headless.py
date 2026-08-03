@@ -64,6 +64,47 @@ _LARGEST_IMAGE_JS = """() => {
   return best;
 }"""
 
+# The slide currently ON STAGE: largest image by VISIBLE area. A carousel keeps
+# every slide mounted at full size and just slides them out of view, so scoring
+# by element size (as _LARGEST_IMAGE_JS does) returns slide 1 forever no matter
+# how many times you press Next. Clipping the score to the viewport is what
+# makes paging observable at all.
+_STAGE_IMAGE_JS = """() => {
+  let best = null, bestArea = 0;
+  const W = window.innerWidth, H = window.innerHeight;
+  for (const img of document.images) {
+    const r = img.getBoundingClientRect();
+    const src = img.currentSrc || img.src;
+    if (!src || src.startsWith('data:')) continue;
+    if (r.width < 150 || r.height < 150) continue;
+    const vw = Math.min(r.right, W) - Math.max(r.left, 0);
+    const vh = Math.min(r.bottom, H) - Math.max(r.top, 0);
+    if (vw <= 0 || vh <= 0) continue;      // mounted, but off stage
+    const area = vw * vh;
+    if (area > bestArea) { bestArea = area; best = src; }
+  }
+  return best;
+}"""
+
+# Slideshow paging: click the control the page labels "Next". Scraping every
+# image on the page instead would not work — Instagram surrounds a post with a
+# grid of OTHER posts at the same resolution, and nothing in a slide's URL says
+# which post it belongs to. Advancing the stage is what distinguishes them.
+# Label-driven, not class-driven: obfuscated class names change weekly, the
+# accessibility label does not.
+_NEXT_SLIDE_JS = """() => {
+  const sels = [
+    'button[aria-label="Next"]',
+    'div[role="button"][aria-label="Next"]',
+    '[aria-label="Next"]',
+  ];
+  for (const s of sels) {
+    const el = document.querySelector(s);
+    if (el) { el.click(); return true; }
+  }
+  return false;
+}"""
+
 # IIFE injected via add_init_script — runs before any page JS so Cloudflare's
 # synchronous fingerprint check sees patched values.
 _STEALTH_JS = """(function () {
@@ -158,6 +199,38 @@ _CF_MARKERS = [
 ]
 
 
+async def _walk_slides(page, max_slides: int) -> list:
+    """Page a slideshow and return each stage image in order.
+
+    Reads the STAGE (largest rendered image) once per click rather than
+    scraping every image on the page: a post's own slides and the unrelated
+    grid of other posts around it are indistinguishable by URL, but only one
+    of them is what you are looking at. Returns [] when there is nothing to
+    page through, so a single-image page costs one evaluate."""
+    slides: list = []
+    try:
+        first = await page.evaluate(_STAGE_IMAGE_JS)
+    except Exception:
+        return slides
+    if not first:
+        return slides
+    slides.append(first)
+    for _ in range(max_slides - 1):
+        try:
+            if not await page.evaluate(_NEXT_SLIDE_JS):
+                break  # no Next control: nothing to page through
+            await page.wait_for_timeout(900)
+            nxt = await page.evaluate(_STAGE_IMAGE_JS)
+        except Exception:
+            break
+        # A carousel wraps back to slide 1, and a stage mid-transition repeats
+        # the current slide. Either way, a URL already held means we are done.
+        if not nxt or nxt in slides:
+            break
+        slides.append(nxt)
+    return slides
+
+
 def _cookie_path(domain: str) -> Path:
     safe = domain.replace(":", "_").replace("/", "_")
     return _COOKIE_DIR / f"{safe}.json"
@@ -220,12 +293,21 @@ async def render_page(
     timeout_ms: int = 45000,
     want_screenshot: bool = False,
     want_main_image: bool = False,
+    want_gallery: bool = False,
+    max_slides: int = 20,
 ) -> Optional[dict]:
     """Render `url` in a stealth browser, passing Cloudflare/JS challenges.
 
-    Returns {"html": str, "screenshot": bytes|None, "main_image": str|None}
-    or None on failure. `main_image` is the largest rendered image — preferred
-    on photo pages where og:image is a scraper placeholder.
+    Returns {"html": str, "screenshot": bytes|None, "main_image": str|None,
+    "slides": list[str]} or None on failure. `main_image` is the largest
+    rendered image — preferred on photo pages where og:image is a scraper
+    placeholder.
+
+    `want_gallery` pages a slideshow: read the stage, click Next, repeat.
+    `slides` comes back empty on a page with nothing to page through, so a
+    single-image page costs nothing extra. Reading the STAGE each step rather
+    than scraping every image on the page is what keeps a post's own slides
+    apart from the unrelated large images around it.
     """
     domain = urlparse(url).netloc.lstrip("www.")
 
@@ -272,6 +354,15 @@ async def render_page(
         page = await ctx.new_page()
         await page.goto(url, wait_until="domcontentloaded", timeout=timeout_ms)
 
+        # Page the slideshow FIRST, while the page is still interactive. Sites
+        # that gate content (Instagram's login dialog) throw up a modal a few
+        # seconds in that covers the slides and swallows the clicks, so the
+        # settle-and-scroll sequence below has to happen after this, not before.
+        slides: list = []
+        if want_gallery:
+            await page.wait_for_timeout(2500)
+            slides = await _walk_slides(page, max_slides)
+
         # Wait for OG meta to appear (fast path when challenge already passed).
         try:
             await page.wait_for_selector(
@@ -311,18 +402,28 @@ async def render_page(
             pass
 
         main_image = None
-        if want_main_image:
+        if want_main_image or want_gallery:
             try:
                 main_image = await page.evaluate(_LARGEST_IMAGE_JS)
             except Exception:
                 main_image = None
+        # The walk ran on the live, unobscured page — trust its first slide over
+        # whatever the largest image is once the page has settled (a login modal
+        # or a suggested-posts rail can easily be bigger than the post itself).
+        if slides:
+            main_image = slides[0]
 
         shot = (
             await page.screenshot(type="jpeg", quality=70, full_page=False)
             if want_screenshot
             else None
         )
-        return {"html": html, "screenshot": shot, "main_image": main_image}
+        return {
+            "html": html,
+            "screenshot": shot,
+            "main_image": main_image,
+            "slides": slides,
+        }
 
     except Exception as e:
         print(f"[headless] render failed for {url}: {e}")

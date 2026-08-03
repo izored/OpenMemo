@@ -662,6 +662,19 @@ def _is_instagram_video_path(url: str) -> bool:
     return any(seg in path for seg in ("/reel/", "/reels/", "/tv/"))
 
 
+_VIDEO_MEDIA_EXT_RE = re.compile(r"\.(?:mp4|m4v|mov|webm)(?:[?#]|$)", re.I)
+
+
+def _is_video_media_url(url: str) -> bool:
+    """True when a CDN media URL points at a video container rather than a still.
+    Used to type gallery-dl's per-entry URLs — it returns the post's real files,
+    so a reel arrives as an .mp4 and must not be filed as a picture."""
+    try:
+        return bool(_VIDEO_MEDIA_EXT_RE.search(urlparse(url or "").path))
+    except Exception:
+        return False
+
+
 def _parse_gallery_dl_dump(text: str) -> tuple[list[str], str] | None:
     """ALL full-size image URLs + caption out of `gallery-dl -j` output.
 
@@ -791,7 +804,20 @@ async def _instagram_resolve(url: str, domain: str) -> dict:
     full = await _instagram_gallery_dl(url)
     if full and full[0]:
         urls, caption = full
-        slides = [{"url": u, "type": "image"} for u in urls]
+        # gallery-dl hands back whatever the post holds — an mp4 for a reel, a
+        # jpg for a photo. Typing every entry "image" made a reel's mp4 the
+        # memo's thumbnail_path, which cache_thumbnail then refused (not an
+        # image content-type), leaving a remote, expiring URL behind.
+        slides = [
+            {"url": u, "type": "video" if _is_video_media_url(u) else "image"}
+            for u in urls
+        ]
+        stills = [s["url"] for s in slides if s["type"] == "image"]
+        # No still anywhere = a video post (a lone reel, or an all-clip
+        # carousel). It becomes a VIDEO memo — one playable, downloaded file —
+        # instead of a "gallery" of mp4 URLs that nothing can render and that
+        # expire in place. A mixed post keeps its gallery: the stills carry it.
+        all_video = bool(slides) and not stills
         return {
             "title": (caption.splitlines()[0].strip() if caption else "") or "Instagram post",
             "description": caption[:500],
@@ -799,19 +825,29 @@ async def _instagram_resolve(url: str, domain: str) -> dict:
             "source_url": canonical_source_url(url),
             "source_domain": domain,
             "source_favicon": fav,
-            "thumbnail_path": urls[0],
-            "gallery": slides if len(slides) > 1 else None,
-            "type": "image",
+            # An all-video post has no still to show — localize_memo_task
+            # extracts an ffmpeg frame once the file lands, so leave it empty
+            # rather than parking an mp4 URL in the thumbnail slot (cache_thumbnail
+            # rejects non-images, so that URL would just rot there).
+            "thumbnail_path": stills[0] if stills else "",
+            "gallery": None if all_video else (slides if len(slides) > 1 else None),
+            "video_description": caption if all_video else None,
+            "type": "video" if all_video else "image",
         }
 
-    # Tier 4 — headless render, largest visible image (needs a logged-in context;
-    # unavailable in dev where patchright isn't installed → skipped gracefully).
+    # Tier 4 — one stealth-browser pass that answers BOTH questions at once:
+    # is there a video on the wire, and what is the largest still? Instagram
+    # plays a reel for logged-out visitors even while the guest API refuses us,
+    # so this is the tier that keeps a reel a VIDEO. It used to grab the largest
+    # image and hardcode type=image — which turned every reel into a memo of its
+    # poster frame that no download path would ever touch (that was the bug).
+    sniff_image = ""
     try:
-        from backend.core.headless import render_page
+        from backend.core.sniff_media import sniff_media
 
-        rendered = await render_page(url, want_main_image=True)
-        main_img = (rendered or {}).get("main_image")
-        if main_img:
+        probe = await sniff_media(url, want_image=True) or {}
+        sniff_image = probe.get("thumbnail_url") or probe.get("main_image") or ""
+        if probe.get("media_url"):
             return {
                 "title": "Instagram post",
                 "description": "",
@@ -819,9 +855,44 @@ async def _instagram_resolve(url: str, domain: str) -> dict:
                 "source_url": canonical_source_url(url),
                 "source_domain": domain,
                 "source_favicon": fav,
-                "thumbnail_path": main_img,
-                "type": "image",
+                "thumbnail_path": sniff_image,
+                "type": "video",
             }
+    except Exception:
+        pass
+
+    # Tier 4b — a photo post: page the carousel. The media-info API is the only
+    # tier that hands over a sidecar's slide list, so without a session a
+    # multi-photo post used to arrive as whichever single image the render
+    # happened to grab. Walking the stage recovers the whole set, which is what
+    # the gallery viewer (memo page + lightbox) has been waiting for. A
+    # single-image post pages nowhere and costs nothing extra. The URL path is
+    # the last video signal left: a /reel|/tv permalink is a video whatever the
+    # render found.
+    try:
+        from backend.core.headless import render_page
+
+        rendered = await render_page(url, want_main_image=True, want_gallery=True) or {}
+        # The sniff pass already saw a still on this page; keep it as the floor
+        # so a flaky second render can never downgrade a resolved post to the
+        # needs-login bookmark below.
+        main_img = rendered.get("main_image") or sniff_image
+        slides = rendered.get("slides") or []
+        if main_img:
+            base = {
+                "title": "Instagram post",
+                "description": "",
+                "content_text": "",
+                "source_url": canonical_source_url(url),
+                "source_domain": domain,
+                "source_favicon": fav,
+                "thumbnail_path": main_img,
+                "type": "video" if _is_instagram_video_path(url) else "image",
+            }
+            if len(slides) > 1 and base["type"] == "image":
+                base["gallery"] = [{"url": u, "type": "image"} for u in slides]
+                base["thumbnail_path"] = slides[0]
+            return base
     except Exception:
         pass
 

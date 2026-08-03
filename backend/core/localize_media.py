@@ -33,9 +33,13 @@ VALID_MODES = {"video", "audio"}
 # Hosts where the network sniffer (core/sniff_media) beats yt-dlp and is tried
 # FIRST for video. Threads has no yt-dlp extractor, and even handed the raw CDN
 # URL yt-dlp's downloader crawls (~74 s vs <1 s for a direct ranged GET with the
-# right Referer). This is just a tuning list — the sniffer itself is host-blind
-# and also runs as a universal fallback whenever yt-dlp fails on ANY host.
-SNIFF_FIRST_HOSTS = ("threads.com", "threads.net")
+# right Referer). Instagram login-walls yt-dlp on every post now, so without a
+# cookie jar that attempt can only fail — while the sniffer pulls the same reel
+# logged-out (verified 2026-08-03). yt-dlp stays the fallback, so a cookie user
+# keeps the tier that handles what the browser cannot reach. This is just a
+# tuning list — the sniffer itself is host-blind and also runs as a universal
+# fallback whenever yt-dlp fails on ANY host.
+SNIFF_FIRST_HOSTS = ("threads.com", "threads.net", "instagram.com")
 
 # A real download is at least this big; smaller means we grabbed a poster/sprite
 # or an error body, not the video.
