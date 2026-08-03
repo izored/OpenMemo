@@ -82,6 +82,52 @@ calls `video_url` a future inline-play upgrade), so today this is cosmetic.
    real videos to `type=video`, download them. `--dry-run` by default.
 6. Tests in `backend/tests/test_instagram.py`.
 
+## Carousels (added mid-task, same root cause)
+
+Reported alongside: multi-photo posts do not appear as carousels. The gallery
+viewer is NOT missing — `GalleryCarousel` (MemoDetail), the lightbox's gallery
+mode, and MemoCard's count badge all shipped in 3.2.0 and are wired correctly.
+The problem is that **no memo in a 751-memo library had ever held a gallery**:
+only the media-info API (tiers 1–2) and gallery-dl (tier 3) build one, and all
+three were dead without a session, so the browser tier stored a single image.
+
+Two things had to be true to page a carousel in the browser:
+
+1. **Score images by VISIBLE area, not element size.** Instagram keeps every
+   slide mounted at full size just outside the viewport, so the existing
+   largest-image rule returns slide 1 no matter how many times Next is pressed.
+   This one detail is why paging looked impossible. → `_STAGE_IMAGE_JS`
+2. **Walk before the page settles.** Instagram raises a login dialog a few
+   seconds in that covers the slides and swallows the clicks, so the walk runs
+   right after load, ahead of the CF/networkidle/scroll sequence.
+
+Scraping every large image on the page is not an option: Instagram surrounds a
+post with a grid of OTHER posts at the same resolution, and nothing in a slide's
+URL identifies which post it belongs to.
+
+## Results (live library, 2026-08-03)
+
+| Outcome | Count |
+|---------|-------|
+| Stuck videos downloaded (36 → 50 with real files) | 14 |
+| Carousels rebuilt (4, 5, 6, 7, 2, 12 slides) | 6 |
+| Carousel slides downloaded locally | 36 |
+| Memos left with a localize error | 0 |
+| Genuine single photos, correctly left alone | 4 |
+
+One memo (`b612b06a`) had been typed `video` by the old URL-path guess and was
+in fact a 5-slide carousel; the backfill retypes a memo whose resolution
+disagrees with it, but only when no file was ever downloaded.
+
+Accuracy note: the no-login walk matched the API exactly on a 12-slide post,
+but returned 2 of 6 slides on another. It is best-effort; a connected session
+is exact and one request.
+
 ## Review
 
-Two-pass bug review after implementation (see PR / CHANGELOG).
+Two-pass review during implementation, then a ten-pass review at the user's
+request. Findings fixed: all-video carousel became a dead gallery of mp4 URLs;
+`is_deleted` filter skipped legacy NULL rows; the backfill pre-flipped a memo
+to `video` before knowing the download would succeed; a mistyped video was not
+retyped; `_walk_slides` had no unit coverage (now stubbed, 6 cases); a comment
+contradicted the very finding that made paging work.

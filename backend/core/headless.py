@@ -86,10 +86,10 @@ _STAGE_IMAGE_JS = """() => {
   return best;
 }"""
 
-# Slideshow paging: click the control the page labels "Next". A carousel post
-# only holds its first slide in the DOM — the rest arrive as you advance — and
-# the surrounding page (Instagram's "more posts from this profile" grid) is full
-# of other large images, so slides can only be collected one stage at a time.
+# Slideshow paging: click the control the page labels "Next". Scraping every
+# image on the page instead would not work — Instagram surrounds a post with a
+# grid of OTHER posts at the same resolution, and nothing in a slide's URL says
+# which post it belongs to. Advancing the stage is what distinguishes them.
 # Label-driven, not class-driven: obfuscated class names change weekly, the
 # accessibility label does not.
 _NEXT_SLIDE_JS = """() => {

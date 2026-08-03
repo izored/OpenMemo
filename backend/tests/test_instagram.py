@@ -74,6 +74,78 @@ REEL = "https://www.instagram.com/reel/DbV_pTDAByT/"
 PHOTO = "https://www.instagram.com/p/DbTf7RzDBt9/"
 
 
+class FakePage:
+    """The two calls _walk_slides makes on a page, backed by a script.
+
+    `stage` is what the viewport shows after each click, so a test can hand it
+    a wrap-around, a stuck stage, or a missing Next control and assert the walk
+    stops for the right reason — without a browser."""
+
+    def __init__(self, stage: list, next_clicks: int | None = None):
+        self.stage = stage
+        self.i = 0
+        # None = a Next control exists forever (the stage list decides the end)
+        self.next_clicks = len(stage) - 1 if next_clicks is None else next_clicks
+        self.clicks = 0
+
+    async def evaluate(self, js, *args):
+        from backend.core.headless import _NEXT_SLIDE_JS, _STAGE_IMAGE_JS
+
+        if js is _STAGE_IMAGE_JS:
+            return self.stage[min(self.i, len(self.stage) - 1)]
+        if js is _NEXT_SLIDE_JS:
+            if self.clicks >= self.next_clicks:
+                return False
+            self.clicks += 1
+            self.i += 1
+            return True
+        raise AssertionError("unexpected script")
+
+    async def wait_for_timeout(self, _ms):
+        return None
+
+
+class TestWalkSlides:
+    async def test_collects_every_slide_in_order(self):
+        from backend.core.headless import _walk_slides
+
+        page = FakePage(["a", "b", "c"])
+        assert await _walk_slides(page, 20) == ["a", "b", "c"]
+
+    async def test_single_image_page_pages_nowhere(self):
+        from backend.core.headless import _walk_slides
+
+        page = FakePage(["only"], next_clicks=0)
+        assert await _walk_slides(page, 20) == ["only"]
+        assert page.clicks == 0
+
+    async def test_wrap_around_ends_the_walk(self):
+        from backend.core.headless import _walk_slides
+
+        # A carousel loops back to slide 1 rather than disabling Next.
+        page = FakePage(["a", "b", "a", "b"], next_clicks=3)
+        assert await _walk_slides(page, 20) == ["a", "b"]
+
+    async def test_stuck_stage_ends_the_walk(self):
+        from backend.core.headless import _walk_slides
+
+        # A Next control that changes nothing (mid-transition, or an unrelated
+        # element that happens to be labelled "Next") must not spin.
+        page = FakePage(["a", "a", "a"], next_clicks=2)
+        assert await _walk_slides(page, 20) == ["a"]
+
+    async def test_respects_the_cap(self):
+        from backend.core.headless import _walk_slides
+
+        page = FakePage([str(i) for i in range(30)])
+        assert len(await _walk_slides(page, 20)) == 20
+
+    async def test_blank_stage_yields_nothing(self):
+        from backend.core.headless import _walk_slides
+
+        assert await _walk_slides(FakePage([None]), 20) == []
+
+
 @pytest.fixture
 def blocked_api(monkeypatch):
     """Every install without a cookie jar lands here: the guest media-info API

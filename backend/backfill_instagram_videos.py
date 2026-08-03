@@ -111,6 +111,21 @@ async def _apply(memo_id: str, resolved: dict) -> str:
         if is_video:
             memo.localize_status = "pending"
             memo.localize_error = None
+        elif (
+            (memo.type or "").lower() == "video"
+            and not memo.file_path
+            and resolved.get("type") == "image"
+        ):
+            # A post typed video that resolves to photos was never a video:
+            # the old fallback guessed from the URL, and a failed download left
+            # the guess in place. Trust the resolver and drop the dead status
+            # chip with it, or the memo renders as a video card with a gallery.
+            # Only an "image" verdict may retype: a "link" is the needs-login
+            # bookmark, which says nothing about what the post holds.
+            memo.type = "image"
+            memo.localize_status = None
+            memo.localize_error = None
+            notes.append("retyped image")
 
         memo.updated_at = datetime.utcnow()
         await db.commit()
@@ -185,7 +200,10 @@ async def _run() -> None:
 
         verdict = _verdict(memo, resolved)
         line = f"  [{verdict:14}] {memo.id[:8]}  {url[:52]}"
-        if args.apply and verdict not in ("single photo", "blocked"):
+        # "blocked" is the needs-login bookmark — there is nothing to write.
+        # Everything else gets applied: even a plain photo can now trade its
+        # "Instagram post" placeholder for the real caption.
+        if args.apply and verdict != "blocked":
             status = await _apply(memo.id, resolved)
             print(f"{line}  -> {status}")
             if "FAILED" in status:
