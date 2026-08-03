@@ -20,9 +20,17 @@ sync protocol rather than the application:
    (§2 tier 2) it is load-bearing, so it exists from the start rather than being
    retrofitted under pressure.
 
-Frames are `nonce | seq | ciphertext | tag`. The payload is encrypted so that
-anything carrying the connection — including an overlay relay — is a dumb pipe
-that cannot read the library.
+Frames are `nonce | seq | ciphertext+tag`, sealed with **AES-256-GCM**. The
+header is passed as associated data, so the sequence number is authenticated
+without being encrypted — a replayed or renumbered frame fails the tag rather
+than merely failing a comparison afterwards.
+
+Phase 5 shipped a hand-rolled SHA256 counter-mode keystream with a separate
+HMAC, to avoid a crypto dependency before anything faced a network. Phase 9
+replaces it, because "the authenticator is real so tampering is caught" is a
+fine argument on a LAN and a bad one once the laptop syncs from a café. AES-GCM
+gives confidentiality and integrity in one reviewed primitive, and removes the
+chance of a mistake in code I wrote myself.
 """
 from __future__ import annotations
 
@@ -43,6 +51,7 @@ MAX_FRAME_BYTES = 8 * 1024 * 1024
 
 _NONCE_LEN = 16
 _TAG_LEN = 32
+_GCM_TAG_LEN = 16
 _SEQ_LEN = 8
 _HEADER_LEN = _NONCE_LEN + _SEQ_LEN
 
@@ -75,25 +84,22 @@ class Frame:
     payload: dict[str, Any]
 
 
-def _keystream(key: bytes, nonce: bytes, length: int) -> bytes:
-    """SHA256 counter-mode keystream.
+def _gcm_nonce(header_nonce: bytes) -> bytes:
+    """Derive GCM's 12-byte nonce from the 16 random bytes on the wire."""
+    return hashlib.sha256(header_nonce).digest()[:12]
 
-    Deliberately hand-rolled from hashlib rather than adding a crypto
-    dependency for phase 5: it keeps the transport testable now, and phase 9
-    (which is where this actually faces a hostile network) swaps in AES-GCM
-    from `cryptography` behind this same seam. The authenticator is a real
-    HMAC either way, so a tampered frame is rejected regardless.
+
+def _aead(content_key: bytes):
+    """AES-256-GCM over the content key.
+
+    GCM's tag covers both the ciphertext and the associated data, so binding the
+    header (nonce + sequence) as AAD means a renumbered frame fails
+    authentication outright rather than being caught by a later check that
+    someone could forget to perform.
     """
-    out = b""
-    counter = 0
-    while len(out) < length:
-        out += hashlib.sha256(key + nonce + struct.pack(">I", counter)).digest()
-        counter += 1
-    return out[:length]
+    from cryptography.hazmat.primitives.ciphers.aead import AESGCM
 
-
-def _xor(data: bytes, pad: bytes) -> bytes:
-    return bytes(a ^ b for a, b in zip(data, pad))
+    return AESGCM(content_key[:32])
 
 
 def encode(frame: Frame, *, psk: bytes, content_key: bytes) -> bytes:
@@ -106,11 +112,14 @@ def encode(frame: Frame, *, psk: bytes, content_key: bytes) -> bytes:
     ).encode("utf-8")
 
     nonce = os.urandom(_NONCE_LEN)
-    seq_bytes = struct.pack(">Q", frame.seq)
-    ciphertext = _xor(body, _keystream(content_key, nonce, len(body)))
-    header = nonce + seq_bytes
-    tag = hmac.new(psk, header + ciphertext, hashlib.sha256).digest()
-    return header + ciphertext + tag
+    header = nonce + struct.pack(">Q", frame.seq)
+    # GCM wants a 12-byte nonce; the 16-byte header nonce is hashed down so the
+    # wire format is unchanged and the value stays unique per frame.
+    sealed = _aead(content_key).encrypt(_gcm_nonce(nonce), body, header)
+    # The PSK tag stays on top of GCM: it proves the peer holds the pairing
+    # secret before we spend a single AES operation on attacker-chosen bytes.
+    tag = hmac.new(psk, header + sealed, hashlib.sha256).digest()
+    return header + sealed + tag
 
 
 def decode(raw: bytes, *, psk: bytes, content_key: bytes, last_seq: int = -1) -> Frame:
@@ -144,7 +153,13 @@ def decode(raw: bytes, *, psk: bytes, content_key: bytes, last_seq: int = -1) ->
 
     nonce = header[:_NONCE_LEN]
     try:
-        body = json.loads(_xor(ciphertext, _keystream(content_key, nonce, len(ciphertext))))
+        plain = _aead(content_key).decrypt(_gcm_nonce(nonce), ciphertext, header)
+    except Exception:
+        # InvalidTag and friends. Deliberately not echoed: the reason a frame
+        # failed to decrypt is information an attacker would like.
+        raise ProtocolError("frame failed authenticated decryption") from None
+    try:
+        body = json.loads(plain)
     except (ValueError, UnicodeDecodeError) as exc:
         raise ProtocolError(f"unreadable payload: {exc}") from None
 

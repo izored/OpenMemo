@@ -338,12 +338,20 @@ its worker set in module globals — right for one long-lived process, wrong for
 suite building ~90 event loops. **So no test covers the real startup path with
 workers live.** The clean fix is instance scope, not removing the gate.
 
-### 7.4 Encryption is a placeholder
+### 7.4 ~~Encryption is a placeholder~~ — CLOSED in phase 9
 
-`protocol._keystream` is SHA256 counter-mode, hand-rolled from `hashlib` to
-avoid a crypto dependency in phase 5. The authenticator is a real HMAC, so
-tampering is caught — but **this should become AES-GCM from `cryptography`
-before facing a hostile network** (phase 9).
+Now **AES-256-GCM** from `cryptography`. The frame header (nonce + sequence) is
+passed as associated data, so a renumbered frame fails authenticated decryption
+rather than relying on a later comparison a refactor could drop.
+
+The PSK HMAC is retained *on top* of GCM, deliberately: it proves the peer holds
+the pairing secret before a single AES operation is spent on attacker-chosen
+bytes. Decryption failures do not report why.
+
+Still worth a reviewer's attention: the 12-byte GCM nonce is derived by hashing
+the 16 random bytes on the wire. Nonce uniqueness is therefore only as good as
+the randomness, which is `os.urandom`. A test asserts 200 frames produce 200
+distinct nonces, but that is a smoke test rather than a proof.
 
 ### 7.5 Windows has no keychain path
 
@@ -396,8 +404,8 @@ grep -rn "mesh" backend/ --include=*.py | grep -v core/mesh | grep -v tests
 | 5 | Isolated port, protocol, row exchange | merged |
 | 6 | Conflict dialogue, history, undo | merged |
 | 7 | Magnets, covers, fetch policy | merged |
-| 8 | Mesh code, QR, devices, primary role | in progress |
-| 9 | Cross-network reachability + security hardening | not started |
+| 8 | Mesh code, QR, devices, primary role | done |
+| 9 | AES-GCM, revocation enforcement, handshake throttling | done |
 | 10 | Ten-pass cleanup | not started |
 
 **Phase 0 shipped first and is deliberately not gated.** There were 25

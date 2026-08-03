@@ -197,3 +197,35 @@ async def test_with_mesh_off_the_relay_runs_regardless_of_roles():
         )
     finally:
         update_settings({"mesh_enabled": before})
+
+
+# -- phase 9 hardening -------------------------------------------------------
+
+def test_repeated_handshake_failures_are_throttled():
+    """Off the LAN, anyone who can reach the port can grind at the shared
+    secret. Slowing it is enough against 128 bits — the point is to make a
+    sustained attempt obvious and expensive."""
+    from backend.core.mesh import session
+
+    session._failures.clear()
+    peer = "10.0.0.9"
+    assert session.handshake_allowed(peer)
+
+    for _ in range(session._MAX_FAILURES):
+        session.note_handshake_failure(peer)
+
+    assert not session.handshake_allowed(peer), "a grinder must be locked out"
+    assert session.handshake_allowed("10.0.0.10"), "and only that peer, not everyone"
+    session._failures.clear()
+
+
+async def test_a_revoked_device_is_refused_at_the_handshake():
+    """Revocation cannot reach out and delete the code from a removed laptop, so
+    it has to be enforced on every connection rather than in the UI alone."""
+    await pairing.register_device("badlaptop", "Lost laptop")
+    await pairing.revoke("badlaptop")
+    assert await pairing.is_revoked("badlaptop")
+
+    # and a device that was never revoked is unaffected
+    await pairing.register_device("goodlaptop", "Current laptop")
+    assert not await pairing.is_revoked("goodlaptop")

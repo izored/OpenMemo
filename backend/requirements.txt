@@ -52,3 +52,7 @@ httpx==0.27.2
 #   qrcode   - SVG output only, so no Pillow and no binary dependency.
 mnemonic>=0.20
 qrcode>=7.4
+#   cryptography - AES-256-GCM for the sync channel. Replaces a hand-rolled
+#              keystream that was acceptable on a LAN and is not once the
+#              laptop syncs from a cafe.
+cryptography>=42.0

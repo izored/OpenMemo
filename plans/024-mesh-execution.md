@@ -38,8 +38,8 @@ Legend: `TODO` · `WIP` · `REVIEW` (code done, passes pending) · `DONE`
 | 5 | Transport + protocol (manual address) | Yes | **DONE** | ADR §2, §5, §14 |
 | 6 | Verification dialogue | Yes | **DONE** | ADR §7 · verified in the browser |
 | 7 | Magnets, covers, fetch policy | Yes | **DONE** | ADR §1, §8 · backfill verified on the real library |
-| 8 | Mesh code, QR, devices, primary role | Yes | **WIP** | backend done; pairing UI next |
-| 9 | Cross-network reachability (overlay) | Yes | TODO | ADR §2 Reachability · **new 2026-08-02** |
+| 8 | Mesh code, QR, devices, primary role | Yes | **DONE** | ADR §2, §3 |
+| 9 | AES-GCM + security hardening | Yes | **DONE** | ADR §2 security |
 
 **Shippable checkpoints.** Phase 0 ships alone (bug fix). Phase 5 is a complete
 product on its own — library, transcripts and summaries sync end to end, paired
@@ -228,6 +228,43 @@ a kind string becomes a 500 on an ingest route. Cover each kind with a test.
 ## Phase log
 
 Newest entry at the top. One entry per working turn.
+
+### 2026-08-03 — Phases 8 and 9 complete
+
+**Phase 8 UI.** Empty state is two buttons, no third option. The code is blurred
+until revealed, with copy stating that anyone holding it can read everything and
+that this is the only place it is shown — which is true, because a joined device
+stores the one-way seed. The API returns `available: false` for that case and
+the UI treats it as normal rather than offering a "show again" that quietly
+fails. Removing a device warns that it still holds the code and only stops on
+reconnect: the honest description of what revocation can do between machines
+that may never meet again.
+
+**Phase 9 — the placeholder cipher is gone.** AES-256-GCM from `cryptography`
+replaces the hand-rolled SHA256 keystream. "The authenticator is real so
+tampering is caught" was a fine argument on a LAN and a bad one once the laptop
+syncs from a café.
+
+The header is GCM associated data, so **renumbering a captured frame fails
+decryption outright** rather than relying on a later comparison a refactor could
+drop. A test proves it by re-signing a renumbered frame with a valid PSK tag —
+it still fails. Decryption errors do not say why; that is information an
+attacker would like.
+
+The PSK HMAC is kept *on top* of GCM on purpose: it proves the peer holds the
+pairing secret before a single AES operation is spent on attacker-chosen bytes.
+
+**Revocation is now enforced where it has to be.** A removed device still holds
+the code — revocation cannot reach out and delete it — so the check runs at
+every handshake, not just in the UI. Plus handshake throttling: five failures
+per peer locks that peer out for a minute, and only that peer.
+
+**Two tests had to be rewritten, and that was the point.** They hand-built
+frames from the old internals, so swapping the cipher broke them. They now go
+through the real encoder, which means the next primitive change will not break
+them.
+
+Suite: **291 passed** (was 286).
 
 ### 2026-08-02 — Phase 8 backend + the Mesh handbook
 
