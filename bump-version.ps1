@@ -237,8 +237,17 @@ if (-not $SkipTests) {
     $py = "backend/.venv/Scripts/python.exe"
     if (Test-Path $py) {
         Step "running backend tests..."
-        & $py -m pytest backend/tests -q --no-header -p no:cacheprovider 2>&1 | Select-Object -Last 3 | ForEach-Object { Write-Host "       $_" }
-        if ($LASTEXITCODE -ne 0) { Die "Backend tests failed. Fix them, or re-run with -SkipTests if CI is already green on this commit." }
+        # Only the verdict line. pytest's tail is full of asyncio teardown
+        # noise ("Task was destroyed but it is pending!") that says nothing
+        # about whether the release is safe to cut.
+        $testOut = & $py -m pytest backend/tests -q --no-header -p no:cacheprovider 2>&1
+        $verdict = $testOut | Select-String -Pattern '\d+ (passed|failed)' | Select-Object -Last 1
+        if ($verdict) { Write-Host "       $($verdict.Line.Trim())" }
+        if ($LASTEXITCODE -ne 0) {
+            $testOut | Select-String -Pattern '^(FAILED|ERROR)' | Select-Object -First 10 |
+                ForEach-Object { Write-Host "       $($_.Line)" -ForegroundColor Red }
+            Die "Backend tests failed. Fix them, or re-run with -SkipTests if CI is already green on this commit."
+        }
         Ok "backend tests pass"
     }
     else {
@@ -269,6 +278,12 @@ try {
     #    RELEASED heading by accident (that happened on 2026-08-03 and merged
     #    3.3.0's notes into Unreleased).
     $cl = Get-Content $ChangelogPath -Raw
+    # Drop the scaffold hint first. It belongs to the EMPTY Unreleased section
+    # as a prompt for whoever writes the next entry — carrying it into a
+    # published release (and into the tag body, and into the profile changelog)
+    # would be leaking a note-to-self to every reader.
+    $cl = [regex]::Replace($cl, '(?m)^<!-- Add entries here[^\n]*-->\r?\n(\r?\n)?', '', 1)
+
     $unreleasedRx = [regex]'(?m)^##\s*\[Unreleased\].*$'
     $scaffold = @"
 ## [Unreleased]
