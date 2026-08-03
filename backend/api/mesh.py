@@ -90,3 +90,110 @@ async def undo(batch_id: str) -> dict:
     from backend.core.mesh.journal import undo_batch
 
     return {"reverted": await undo_batch(batch_id)}
+
+
+# ── pairing (§2) ─────────────────────────────────────────────────────────────
+
+class JoinBody(BaseModel):
+    code: str
+
+
+@router.post("/pair/start", dependencies=[Depends(require_enabled)])
+async def start_pairing() -> dict:
+    """Mint a Mesh code for this device and adopt it.
+
+    Returns the words ONCE. They are not retrievable afterwards on a platform
+    without a keychain, which the UI must say plainly rather than offering a
+    "show again" that quietly fails.
+    """
+    from backend.core.mesh import clock, pairing
+
+    code = pairing.generate_code()
+    result = pairing.store_code(code)
+    await pairing.register_device(await clock.device_id(), "This device", is_primary=True)
+    await pairing.set_primary(await clock.device_id())
+    return {
+        "code": code,
+        "words": code.split(),
+        "in_keychain": result["in_keychain"],
+        "uri": pairing.pairing_uri(code),
+    }
+
+
+@router.post("/pair/join", dependencies=[Depends(require_enabled)])
+async def join_mesh(body: JoinBody) -> dict:
+    """Adopt someone else's code. A bad code fails here, loudly."""
+    from backend.core.mesh import clock, pairing
+
+    try:
+        pairing.store_code(body.code)
+    except pairing.PairingError as exc:
+        # 400 with the real reason: "a word is mistyped" is actionable in a way
+        # that "pairing failed" never is.
+        raise HTTPException(status_code=400, detail=str(exc))
+
+    await pairing.register_device(await clock.device_id(), "This device")
+    return {"ok": True}
+
+
+@router.get("/pair/qr", dependencies=[Depends(require_enabled)])
+async def pairing_qr(host: str | None = None, port: int | None = None):
+    """The QR for the CURRENT code. 404 when this device has no words to show —
+    a joined device stores the seed, and seeds are one-way."""
+    from fastapi.responses import Response
+
+    from backend.core.mesh import pairing
+
+    code = pairing.reveal_code()
+    if not code:
+        raise HTTPException(status_code=404, detail="No code to show on this device")
+    svg = pairing.qr_svg(pairing.pairing_uri(code, host=host, port=port))
+    return Response(content=svg, media_type="image/svg+xml")
+
+
+@router.get("/pair/code", dependencies=[Depends(require_enabled)])
+async def reveal() -> dict:
+    """The words, for the reveal panel. `available: false` is normal, not an
+    error — a device that joined a Mesh never had them."""
+    from backend.core.mesh import pairing
+
+    code = pairing.reveal_code()
+    return {"available": bool(code), "code": code, "words": code.split() if code else []}
+
+
+@router.get("/devices", dependencies=[Depends(require_enabled)])
+async def list_devices() -> dict:
+    from backend.core.mesh import clock, pairing
+
+    mine = await clock.device_id()
+    return {
+        "devices": [
+            {**vars(d), "is_this_device": d.device_id == mine}
+            for d in await pairing.devices()
+        ],
+        "this_device": mine,
+    }
+
+
+@router.post("/devices/{device_id}/revoke", dependencies=[Depends(require_enabled)])
+async def revoke_device(device_id: str) -> dict:
+    """Stop syncing with a device.
+
+    Best-effort by nature, and the UI says so: a device that never reconnects
+    never learns it was removed and still holds the code. Truly cutting it off
+    means a new code and re-pairing (§3).
+    """
+    from backend.core.mesh import pairing
+
+    if not await pairing.revoke(device_id):
+        raise HTTPException(status_code=404, detail="Unknown device")
+    return {"ok": True, "note": "This device stops syncing once it reconnects."}
+
+
+@router.post("/devices/{device_id}/primary", dependencies=[Depends(require_enabled)])
+async def make_primary(device_id: str) -> dict:
+    """Hand over the primary role — one write, no migration (§3)."""
+    from backend.core.mesh import pairing
+
+    await pairing.set_primary(device_id)
+    return {"ok": True, "primary": device_id}

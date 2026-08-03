@@ -24,7 +24,7 @@ from typing import Any
 from sqlalchemy import text
 
 from backend.core.mesh import clock, journal, merge, rowstore
-from backend.core.mesh.changelog import LINK_TABLES, SYNCED_TABLES
+from backend.core.mesh.changelog import LINK_TABLES
 from backend.db.database import AsyncSessionLocal
 
 logger = logging.getLogger(__name__)
