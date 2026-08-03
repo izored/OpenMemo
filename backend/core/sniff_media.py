@@ -27,6 +27,7 @@ from backend.core.headless import (
     _ensure_browser,
     _STEALTH_JS,
     _BROWSER_UA,
+    _LARGEST_IMAGE_JS,
     _load_cookies,
     _save_cookies,
 )
@@ -102,22 +103,31 @@ async def sniff_media(
     *,
     timeout_ms: int = 45000,
     settle_ms: int = 10000,
+    want_image: bool = False,
 ) -> Optional[dict]:
     """Load `url` in the stealth browser and return the best media it saw, or None.
 
     Result: {
-      "media_url":   str,            # direct, fetchable URL
-      "kind":        "progressive"|"manifest",
+      "media_url":   str|None,       # direct, fetchable URL (None = no video)
+      "kind":        "progressive"|"manifest"|None,
       "referer":     str,            # exactly what the browser sent for it
       "user_agent":  str,
       "content_type": str,
       "thumbnail_url": str|None,     # og:image / <video> poster, for the card
+      "main_image":  str|None,       # largest rendered still (want_image only)
     }
 
     Picks the largest progressive container seen on the network (the actual
     video file), falling back to a captured manifest, then to og:video — all
     host-agnostic. Returns None when the browser is unavailable or no media
     surfaced, so the caller can degrade to yt-dlp.
+
+    `want_image=True` also reads the largest rendered still, and makes the call
+    answer with `media_url=None` instead of None when the page turned out to
+    carry no video at all. That is what lets ONE page load answer both "is this
+    a video?" and "if not, what is the picture?" — the Instagram resolver needs
+    exactly that, and paying for two browser passes to learn it is wasteful.
+    Callers that only want a download keep guarding on `media_url`.
     """
     domain = urlparse(url).netloc.lstrip("www.")
     page_origin = f"{urlparse(url).scheme}://{urlparse(url).netloc}/"
@@ -204,6 +214,13 @@ async def sniff_media(
         except Exception:
             og = {}
 
+        main_image = None
+        if want_image:
+            try:
+                main_image = await page.evaluate(_LARGEST_IMAGE_JS)
+            except Exception:
+                main_image = None
+
         try:
             cookies = await ctx.cookies()
             if cookies:
@@ -226,6 +243,7 @@ async def sniff_media(
                 "user_agent": _BROWSER_UA,
                 "content_type": best["content_type"],
                 "thumbnail_url": thumbnail_url,
+                "main_image": main_image,
             }
 
         # 2) A manifest (HLS/DASH) — hand back so caller can mux it.
@@ -239,6 +257,7 @@ async def sniff_media(
                 "user_agent": _BROWSER_UA,
                 "content_type": best["content_type"],
                 "thumbnail_url": thumbnail_url,
+                "main_image": main_image,
             }
 
         # 3) og:video as a last resort (some hosts expose the mp4 in meta only).
@@ -251,6 +270,21 @@ async def sniff_media(
                 "user_agent": _BROWSER_UA,
                 "content_type": "",
                 "thumbnail_url": thumbnail_url,
+                "main_image": main_image,
+            }
+
+        # 4) No video anywhere. A download caller gets None (nothing to fetch);
+        # a want_image caller gets the verdict it asked for — "not a video, and
+        # here is the still" — which is a real answer, not a failure.
+        if want_image and (main_image or thumbnail_url):
+            return {
+                "media_url": None,
+                "kind": None,
+                "referer": page_origin,
+                "user_agent": _BROWSER_UA,
+                "content_type": "",
+                "thumbnail_url": thumbnail_url,
+                "main_image": main_image,
             }
 
         return None

@@ -3,7 +3,13 @@
 All notable changes to OpenMemo are documented here.
 
 ---
-## [3.3.0] - 2026-08-03
+## [Unreleased]
+
+### Fixed
+
+- 🎬 **Instagram reels save the video again, not a picture of it.** Sharing a reel to your Telegram bot had been landing a still of the cover frame with nothing behind it: no file, no player, and nothing you could keep once the post went away. Instagram now only hands its post data to a logged-in caller, so every save was falling through to the last resort tier, a browser that looked at the page and took the biggest picture on it. A reel came out labelled a photo, and a photo is something openMemo never tries to download. It now watches what the page actually loads: if a video plays, the memo is a video and the file is pulled straight from Instagram's own CDN at full speed, poster frame included. This works with no Instagram login at all, which is exactly the state most installs are in. Every reel already sitting in your library as a still can be rescued in place with `python -m backend.backfill_instagram_videos` (add `--apply` to pull them; it checks each post first and leaves real photos alone).
+- ⏱️ **Instagram downloads stop waiting on a tool that cannot work.** Every Instagram video pull began with a yt-dlp attempt that Instagram's login wall rejects by design, burning the wait before the method that does work even started. The download helper now goes first for Instagram, the same way it already did for Threads, with yt-dlp kept as the fallback for anyone who has connected a session. A reel now lands in about three seconds.
+- 🖼️ **A video pulled through gallery-dl no longer parks an MP4 in the thumbnail slot.** Each file the tool returns is now read for what it is, so a clip becomes a video memo with a real frame lifted from it, and a mixed post keeps a genuine photo as its cover instead of a video file that can never render.
 
 ### Added
 
