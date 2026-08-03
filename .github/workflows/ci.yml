@@ -65,5 +65,9 @@ jobs:
       - name: Smoke test — app imports cleanly
         run: python -c "from backend.main import app; print('OK')"
 
+      # `python -m pytest`, not bare `pytest`: the -m form puts the current
+      # directory on sys.path, which is what makes `import backend` resolve.
+      # Bare pytest does not, and every test module fails to collect — the
+      # same "No module named 'backend'" in a second disguise.
       - name: Run tests
-        run: pytest backend/tests -q
+        run: python -m pytest backend/tests -q
