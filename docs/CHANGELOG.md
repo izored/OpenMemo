@@ -3,12 +3,27 @@
 All notable changes to OpenMemo are documented here.
 
 ---
-## [Unreleased]
+## [3.3.0] - 2026-08-03
 
 ### Added
 
-- 🕸️ **Mesh: the design for keeping two computers on one library.** A MacBook and a Windows box can each hold the whole library, both able to write, with no account, no cloud, and no server in the middle — you pair them once with a 12-word code (or a QR) and forget about it. The design is settled and documented in `docs/ADR-024-MESH.md`; the code lands in phases tracked in `plans/024-mesh-execution.md`. Two measurements shaped it: the library's metadata is 7 MB while its media is 25 GB, and 94% of that media is re-downloadable from where it came from. So Mesh syncs the *recipe*, not the payload — the other device refetches what it needs, on demand, and only asks its peer for the 6% that exists nowhere else. Transcripts and AI summaries travel as plain data, so joining a Mesh never re-runs Whisper or Ollama. Nothing overwrites your work silently: a real conflict opens one dialogue that shows both versions and keeps both by default, and every change a sync makes is logged and reversible. Off by default, behind a single toggle in Settings.
-- 🔍 **`scripts/blob-split.py`** — measures how much of the library is re-downloadable versus how much only exists on this machine. Run it any time to re-check the split as the library grows.
+- 🕸️ **Mesh — your computers hold one library, with no server in the middle.** Your Mac and your PC can each keep the whole library, and both can add, edit and delete. Changes travel in both directions, so it stops mattering which machine you happen to be sitting at. No account, no cloud, no sign-up: you pair them once with a **12-word code** (or by scanning a QR) and they take it from there. Off by default, behind a single toggle in Settings → Mesh, and while it's off it costs your install nothing at all — no background work, no open port, nothing recorded.
+- 🚀 **It doesn't copy 25 GB around.** Your library's *text* is 7 MB while its media is 25 GB, and 94% of that media can be fetched again from where it originally came from. So Mesh sends the recipe rather than the file: the other computer downloads what it actually needs, on demand, and only asks your PC directly for the small slice that exists nowhere else. Your MacBook is usable in seconds — every memo, note, tag, transcript and cover — instead of watching a two-hour progress bar. It grabs the media for your 20 most recent memos straight away, then quietly fills in the rest.
+- 🧠 **Transcripts and AI summaries travel as text, and are never re-made.** Joining a Mesh doesn't re-run Whisper or Ollama on the other machine. Hours of work arrive in seconds, and a memo is searchable and readable long before its audio finishes downloading.
+- 🗂️ **Your structure arrives first.** Spaces, collections, playlists, albums, hidden memos, pinning and ordering all sync — and Space and playlist cover images are sent *ahead* of any music or video, because a Space without its artwork looks broken in a way a track without audio doesn't.
+- 🤝 **Nothing is overwritten silently.** If you edit the same thing on both computers, openMemo shows you both versions side by side with the original above them, says which device each came from, and **keeps both by default** — the losing version is saved as a copy labelled with where it came from. Forty conflicts from a big import is one decision, not forty popups. Edits to *different* fields merge on their own and never interrupt you.
+- ⏪ **Every sync is written down and reversible.** Settings → Mesh shows recent syncs with an Undo button, and each entry records not just what changed but *which rule decided it* and which device it came from. A snapshot of your database is taken before every sync, and 20 are kept.
+- 🔒 **openMemo itself never goes online.** Mesh runs on its own separate port that serves exactly one thing — the sync channel. Your app, your memos page, your settings API: none of it is reachable from there, because none of it was ever put there. Everything on the wire is encrypted with AES-256, so anything carrying the connection is a dumb pipe that can't read your library.
+- 📱 **Your phone captures keep working.** With two machines paired, only one polls your Telegram bot. Without that, both would race for each message and some would simply be lost.
+
+### Changed
+
+- ⚙️ **Background work is now a proper queue.** Importing 40 memos used to start 40 downloads at once and lose all of them if you restarted mid-import. There's now a real queue: a few downloads at a time, saved to disk so a restart resumes them, automatic retries, and anything you click jumps to the front. This is a fix in its own right and works whether or not you use Mesh.
+- 🧹 **Settings is better sorted.** The bento grid used to leave a large empty gap beside the tall Files card. Cards are now grouped by meaning — you and your engine and your storage on one side, how memos arrive and what protects them on the other — and the columns end within a few pixels of each other. Both capture cards sit together for the first time, and the credits moved to the bottom where they belong.
+
+### Fixed
+
+- 🔁 **Deleted collections and tags no longer come back.** Nothing recorded deletions, so anything removed on one machine would have been sent straight back by the other. openMemo now keeps a proper record of removals.
 
 ---
 ## [3.2.0] - 2026-07-31

@@ -314,17 +314,46 @@ diff. A review that only reads changed files misses this entire class.
 
 Be sceptical here. These are the gaps a reviewer should probe hardest.
 
-### 7.1 Two real machines have never synced
+### 7.1 ~~Two real machines have never synced~~ — CLOSED 2026-08-03
 
-Every test runs both "devices" against **one database in one process**. That
-proves the pipeline, the protocol and the merge logic. It does **not** prove two
-independent libraries converge.
+`scripts/mesh-convergence-check.py` starts **two separate uvicorn processes**
+with **two separate databases and data directories**, pairs them with one
+twelve-word code, writes a different memo on each side, and syncs them over a
+**real WebSocket**. Nothing is shared but the code.
 
-An early test asserted a journal entry after a memo "crossed" and failed —
-correctly, because the peer already held an identical row and rightly wrote
-nothing. The test was rewritten to claim only what it proves.
+```
+alpha has 1, beta has 1
+syncing over a real socket…
+  {'ok': True, rows_applied: 1, conflicts: 0, skipped: []}
+alpha now has 2: ['written on beta', 'written on alpha']
+beta  now has 2: ['written on beta', 'written on alpha']
+CONVERGED
+```
 
-**This is the single biggest untested area.**
+Repeatable across runs. Exit code 0 means converged; anything else prints which
+rows disagree.
+
+**Building this immediately exposed two real gaps that every unit test had
+missed:**
+
+1. **There was no dialer.** Phase 5 built a listener and nothing that connects
+   out, so two instances could never have started a sync. `client.py` and
+   `POST /api/mesh/sync` exist because this harness demanded them.
+2. **The Mesh port was hardcoded**, so two instances on one machine collided.
+   Now `OPENMEMO_MESH_PORT`.
+
+That is the argument for end-to-end harnesses in one paragraph: 291 unit tests
+were green while the feature could not physically have worked between two
+machines.
+
+The harness now also exercises **discovery**, and that immediately found a third
+bug: advertising started when Mesh was *enabled*, but the broadcast fingerprint
+derives from the code, which changes when you *pair*. Both machines were
+shouting stale identities that could never match. No unit test could have caught
+this — it needs two processes that pair and then look for each other.
+
+**Still not covered:** a *conflicting* edit converging (both sides editing the
+same field), and a real network rather than loopback.
 
 ### 7.2 The concurrency cap is unproven under real load
 
@@ -481,11 +510,19 @@ Be explicit about this, because it shapes how much the tests are worth:
   through in-memory channels and Starlette's test client.
 - **The concurrency cap was never observed under load.** 40 downloads becoming 3
   is asserted by a unit test with a fake handler, not by watching yt-dlp.
-- **mDNS discovery is designed, not built.** Tier 1 in the ADR is a plan.
+- ~~**mDNS discovery is designed, not built.**~~ **Built and proven 2026-08-03.**
+  Two instances find each other by broadcast with no address typed. The TXT
+  record carries `hash(chain_id)`, never the chain id or the code, so a sniffer
+  learns a machine runs openMemo and nothing else. Peers whose fingerprint does
+  not match are never dialed.
 - **The overlay tier is designed, not built.** Tier 2 assumes the user installs
   Tailscale; nothing in the code helps them do it or verifies it works.
-- **The suite has a flake I could not reproduce.** One failure in six runs, test
-  unidentified.
+- **A single unexplained test failure, most likely my own fault.** One run
+  failed during the phase 9 work; **fourteen consecutive runs since have passed**.
+  The failure happened while I was actively rewriting `protocol.py` between
+  runs, so the most likely explanation is a test run importing a half-written
+  module rather than a real flake. Recorded because I cannot prove that, but a
+  reviewer should weight it accordingly rather than hunting a ghost.
 
 ---
 
