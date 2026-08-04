@@ -229,6 +229,13 @@ async def lifespan(app: FastAPI):
 
     asyncio.create_task(run_canary_loop())
 
+    # Automatic database snapshots (core/autobackup.py). Media can usually be
+    # fetched from its source again; notes, captions, tags and transcripts
+    # cannot. Daily, gzipped, last 7 kept, a few MB each.
+    from backend.core.autobackup import run_backup_loop
+
+    asyncio.create_task(run_backup_loop())
+
     # Persistent job queue (ADR-024 §9). Spawns the bounded worker pool; it does
     # no database I/O itself, and is a no-op until job kinds are registered.
     # Requeuing work interrupted by a restart is the janitor's job, a moment

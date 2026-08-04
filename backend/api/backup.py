@@ -16,6 +16,8 @@ from fastapi.responses import StreamingResponse
 
 from backend.config import settings
 
+log = logging.getLogger(__name__)
+
 router = APIRouter(prefix="/api/backup", tags=["backup"])
 
 _META = "backup_meta.json"
@@ -76,6 +78,55 @@ async def create_backup(scope: Literal["structure", "full"] = Query("structure")
         media_type="application/zip",
         headers={"Content-Disposition": f'attachment; filename="{filename}"'},
     )
+
+
+@router.post("/inspect")
+async def inspect_backup(file: UploadFile = File(...)):
+    """Say what restoring this archive would do, without doing any of it.
+
+    A restore replaces the database outright. The UI should be able to tell the
+    user what they are about to trade — how old the archive is, how many media
+    files it carries, and how many of theirs would be moved aside — BEFORE the
+    irreversible part, not after.
+    """
+    raw = await file.read()
+    try:
+        zf = zipfile.ZipFile(io.BytesIO(raw))
+    except zipfile.BadZipFile:
+        raise HTTPException(status_code=400, detail="Not a valid zip file")
+
+    names = zf.namelist()
+    if _META not in names:
+        raise HTTPException(status_code=400, detail="Missing backup_meta.json — not an OpenMemo backup")
+
+    try:
+        meta = json.loads(zf.read(_META))
+    except Exception:
+        raise HTTPException(status_code=400, detail="Backup metadata is unreadable")
+
+    scope = meta.get("scope", "structure")
+    archive_files = [n for n in names if n.startswith(_FILES_PREFIX) and not n.endswith("/")]
+
+    files_dir = Path(settings.FILES_DIR)
+    current = 0
+    if files_dir.exists():
+        current = sum(
+            1
+            for p in files_dir.rglob("*")
+            if p.is_file() and "thumbs" not in p.relative_to(files_dir).parts
+        )
+
+    return {
+        "scope": scope,
+        "created_at": meta.get("created_at"),
+        "app_version": meta.get("app_version"),
+        "has_database": _DB in names,
+        "media_in_archive": len(archive_files),
+        "media_currently_stored": current,
+        # The honest headline for a confirmation dialog.
+        "will_replace_database": _DB in names,
+        "will_move_aside": current if (scope == "full" and archive_files) else 0,
+    }
 
 
 @router.post("/restore")
@@ -185,15 +236,37 @@ async def restore_backup(file: UploadFile = File(...)):
 
         shutil.copy2(tmp_db, db_path)
 
+    quarantine: str | None = None
     if scope == "full":
         files_dir.mkdir(parents=True, exist_ok=True)
-        # Remove existing files but keep the thumbs cache directory structure.
-        for item in files_dir.iterdir():
-            if item.name != "thumbs":
-                if item.is_dir():
-                    shutil.rmtree(item, ignore_errors=True)
-                else:
-                    item.unlink(missing_ok=True)
+
+        # An archive that carries no media cannot be a reason to delete media.
+        # This used to wipe unconditionally on scope="full", so a metadata-only
+        # archive that merely CLAIMED to be full destroyed every file in the
+        # library — and running the test suite against a real checkout did
+        # exactly that on 2026-08-04 (435 files).
+        if not safe_entries:
+            log.warning(
+                "restore: scope=full archive contains no files/ entries — "
+                "keeping the existing media instead of clearing it"
+            )
+        else:
+            # Move aside rather than delete. A restore is supposed to be a
+            # recovery tool; it should not be the most destructive button in
+            # the app. Everything replaced stays on disk under data/, so a
+            # restore of the wrong archive is undoable.
+            existing = [p for p in files_dir.iterdir() if p.name != "thumbs"]
+            if existing:
+                stamp = datetime.utcnow().strftime("%Y%m%d-%H%M%S")
+                qdir = Path(settings.DATA_DIR) / "pre-restore" / stamp
+                qdir.mkdir(parents=True, exist_ok=True)
+                for item in existing:
+                    try:
+                        shutil.move(str(item), str(qdir / item.name))
+                    except Exception as e:
+                        log.warning("restore: could not move %s aside: %r", item, e)
+                quarantine = str(qdir)
+                log.warning("restore: previous files moved to %s", qdir)
 
         for name, dest in safe_entries:
             dest.parent.mkdir(parents=True, exist_ok=True)
@@ -212,4 +285,34 @@ async def restore_backup(file: UploadFile = File(...)):
             "Could not re-apply Mesh trigger state after restore", exc_info=True
         )
 
-    return {"ok": True, "scope": scope, "version": meta.get("app_version")}
+    return {
+        "ok": True,
+        "scope": scope,
+        "version": meta.get("app_version"),
+        # Where the replaced media went, so the UI can say it and a wrong
+        # restore can be walked back.
+        "quarantine": quarantine,
+    }
+
+
+@router.get("/auto")
+async def list_auto_backups():
+    """The automatic database snapshots on this machine (core/autobackup.py)."""
+    from backend.core.autobackup import KEEP, list_snapshots
+
+    snaps = list_snapshots()
+    return {
+        "snapshots": snaps,
+        "keep": KEEP,
+        "total_bytes": sum(s["bytes"] for s in snaps),
+    }
+
+
+@router.post("/auto")
+async def run_auto_backup_now():
+    """Take a database snapshot immediately, instead of waiting for the timer."""
+    from backend.core.autobackup import run_once
+
+    import asyncio
+
+    return await asyncio.to_thread(run_once)
