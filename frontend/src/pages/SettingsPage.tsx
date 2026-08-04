@@ -296,7 +296,11 @@ function ScheduledArchiveRows({ dest, onDestSaved }: { dest: string; onDestSaved
 
   const refresh = () => { backupApi.listArchives().then(setListing).catch(() => setListing(null)); };
   useEffect(() => { refresh(); }, []);
-  useEffect(() => { setDraft(dest); }, [dest]);
+  // `dest` arrives after the settings fetch resolves. Adjusting the draft
+  // during render is React's own answer to props-derived state — an effect
+  // here would cascade a second render every time Settings reloads.
+  const [lastDest, setLastDest] = useState(dest);
+  if (dest !== lastDest) { setLastDest(dest); setDraft(dest); }
 
   const runNow = async (scope: 'database' | 'essential' | 'full') => {
     setBusy(scope);
@@ -876,7 +880,7 @@ export function SettingsPage() {
   const [stats, setStats] = useState<Stats | null>(null);
   const [changelogOpen, setChangelogOpen] = useState(false);
   const [updateAvailable, setUpdateAvailable] = useState(false);
-  const [backing, setBacking] = useState<'structure' | 'full' | null>(null);
+  const [backing, setBacking] = useState<'structure' | 'essential' | 'full' | null>(null);
   const [restoring, setRestoring] = useState(false);
   const [maxUploadMb, setMaxUploadMb] = useState<number | null>(null);
   const [maxUploadSaved, setMaxUploadSaved] = useState(false);
@@ -914,7 +918,7 @@ export function SettingsPage() {
       })
       .catch(() => {
         setMaxUploadMb(5120);
-        setProfile({ max_upload_mb: 5120, display_name: '', email: '', avatar_data_url: '', mailing_list_consent: false, auto_download_audio: true, auto_download_video: true, music_quality: '16', music_provider: 'qobuz', chat_model: '', num_ctx: 0, yt_cookies_present: false, bg_image_ext: '', hidden_passcode_set: false, telegram_enabled: false, telegram_poll_minutes: 15, telegram_default_collection: 'IG Inbox', telegram_force_localize: true, telegram_token_present: false, telegram_user_locked: false, mesh_enabled: false });
+        setProfile({ max_upload_mb: 5120, display_name: '', email: '', avatar_data_url: '', mailing_list_consent: false, auto_download_audio: true, auto_download_video: true, music_quality: '16', music_provider: 'qobuz', chat_model: '', num_ctx: 0, yt_cookies_present: false, bg_image_ext: '', hidden_passcode_set: false, telegram_enabled: false, telegram_poll_minutes: 15, telegram_default_collection: 'IG Inbox', telegram_force_localize: true, telegram_token_present: false, telegram_user_locked: false, mesh_enabled: false, backup_dest: '' });
       });
   }, []);
 
