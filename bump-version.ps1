@@ -404,12 +404,23 @@ Ok "tag pushed"
 # ── Verify what actually got published ───────────────────────────────────────
 
 Write-Host ""
-Step "waiting for the release workflow..."
+# The workflow queues, verifies the tag against every version file, creates the
+# release and then announces it — comfortably more than a couple of minutes on
+# a cold runner. Waiting too briefly and printing a warning about a release
+# that is simply still building is worse than waiting.
+$deadline = (Get-Date).AddMinutes(10)
+Step "waiting for the release workflow (up to 10 min)..."
 $release = $null
-for ($i = 0; $i -lt 40; $i++) {
-    Start-Sleep -Seconds 6
+while ((Get-Date) -lt $deadline) {
+    Start-Sleep -Seconds 10
     $json = & $gh release view $tag --json tagName, name, body, isDraft, url 2>$null
     if ($LASTEXITCODE -eq 0 -and $json) { $release = $json | ConvertFrom-Json; break }
+    # Surface a failed run immediately instead of waiting out the clock.
+    $runState = & $gh run list --workflow=release.yml --limit 1 --json conclusion -q '.[0].conclusion' 2>$null
+    if ($runState -eq "failure") {
+        Warn2 "the release workflow FAILED — see: gh run list --workflow=release.yml --limit 1"
+        break
+    }
 }
 
 if (-not $release) {
