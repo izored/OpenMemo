@@ -39,6 +39,7 @@ import random
 import sys
 import time
 from collections import Counter
+from pathlib import Path
 from urllib.parse import urlparse
 
 from sqlalchemy import select
@@ -163,8 +164,10 @@ async def main() -> None:
     print("=" * 78)
     print("  refetch missing media")
     print("=" * 78)
-    print(f"  database : {settings.DATABASE_URL.split('///')[-1]}")
-    print(f"  files    : {settings.FILES_DIR}")
+    # Absolute, always: inside the container both of these are relative, and a
+    # banner that says "files" tells you nothing about which files.
+    print(f"  database : {Path(settings.DATABASE_URL.split('///')[-1]).resolve()}")
+    print(f"  files    : {Path(settings.FILES_DIR).resolve()}")
     print(f"  mode     : {'APPLY — downloads will be written' if args.apply else 'DRY RUN'}")
     print("=" * 78)
     print()

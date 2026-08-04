@@ -126,10 +126,19 @@ named-volume migration needed.
 
 ---
 
-## Phase 4 — The alarm that was missing
+## Phase 4 — The alarm that was missing  *(shipped)*
 
-A library integrity check on a timer, like the Instagram canary
-(`backend/core/canary.py`):
+`backend/core/integrity.py`, on an hourly timer from the lifespan, surfaced in
+Settings → Backup & Restore via `GET /api/settings/library/integrity` and a
+"Check now" button. Every paired device runs its own, unlike the Instagram
+canary: it is a question about the local disk.
+
+Any increase since the last run is an `incident`, shown in red. A gap that has
+not grown is `missing`, shown in amber. The first run on an existing install
+never reports an incident, or every library with old gaps would open to a red
+alert about a loss from months ago. Covered by `test_library_integrity.py`.
+
+The original shape of the requirement, kept for the record:
 
 - Resolve every `file_path` in the database. Count what is missing.
 - Compare with the previous run. A jump from 0 to 435 is an incident, not drift.

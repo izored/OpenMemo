@@ -131,6 +131,7 @@ def get_settings() -> dict[str, Any]:
     data.pop(_TG_TOKEN_KEY, None)
     data.pop(_TG_USER_KEY, None)
     data.pop(_CANARY_KEY, None)
+    data.pop(_INTEGRITY_KEY, None)
     return {
         **data,
         "yt_cookies_present": cookies_present(),
@@ -269,6 +270,26 @@ def set_instagram_canary(result: dict) -> None:
     with _LOCK:
         current = _read()
         current[_CANARY_KEY] = result
+        _write_raw(current)
+
+
+# Last library integrity check (core/integrity.py). Same reasoning as the canary
+# above: a health record, not a preference, so it is stripped from the settings
+# API and surfaced by /library/integrity instead. It is also what the NEXT run
+# compares against, which is the whole point — without a stored previous count
+# there is no way to tell a known gap from one that just appeared.
+_INTEGRITY_KEY = "library_integrity"
+
+
+def get_library_integrity() -> dict | None:
+    value = _read().get(_INTEGRITY_KEY)
+    return value if isinstance(value, dict) else None
+
+
+def set_library_integrity(result: dict) -> None:
+    with _LOCK:
+        current = _read()
+        current[_INTEGRITY_KEY] = result
         _write_raw(current)
 
 

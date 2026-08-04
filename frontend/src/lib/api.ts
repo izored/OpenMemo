@@ -553,7 +553,27 @@ export const settingsApi = {
       method: 'POST',
       body: JSON.stringify({ passcode }),
     }),
+  // Do the files the database references still exist? Checked hourly in the
+  // background; `status: 'incident'` means MORE are missing than at the last
+  // check, which is the case worth acting on immediately.
+  libraryIntegrity: () => fetchJSON<LibraryIntegrity>('/settings/library/integrity'),
+  libraryIntegrityCheck: () =>
+    fetchJSON<LibraryIntegrity>('/settings/library/integrity/check', { method: 'POST' }),
 };
+
+export interface LibraryIntegrity {
+  status: 'ok' | 'missing' | 'incident';
+  memos: number;
+  with_media: number;
+  missing_media: number;
+  recoverable: number;
+  unrecoverable: number;
+  with_thumb: number;
+  missing_thumbs: number;
+  delta: number;
+  checked_at: string;
+  previous_checked_at: string | null;
+}
 
 export const maintenanceApi = {
   clearCache: () => fetchJSON<{ ok: boolean; freed_bytes: number }>('/maintenance/clear-cache', { method: 'POST' }),

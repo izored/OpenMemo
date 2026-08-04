@@ -13,7 +13,7 @@ import { ONBOARDING_KEY } from '@/lib/onboarding';
 import { useAppStore } from '@/stores/appStore';
 import { useIsMobile } from '@/lib/useBreakpoint';
 import { CookiesUpload } from '@/components/CookiesUpload';
-import { systemApi, maintenanceApi, backupApi, settingsApi, memoApi, type AppSettings, type TelegramRelayStatus } from '@/lib/api';
+import { systemApi, maintenanceApi, backupApi, settingsApi, memoApi, type AppSettings, type LibraryIntegrity, type TelegramRelayStatus } from '@/lib/api';
 import type { OllamaModel } from '@/types';
 
 type BuiltWithEntry = { name: string; url: string; desc: string };
@@ -204,6 +204,82 @@ function TrashRow() {
       </div>
       <button className="om-btn-secondary" onClick={() => setOpen(true)}>Open trash</button>
       {open && <RecentlyDeletedModal onClose={() => setOpen(false)} />}
+    </>
+  );
+}
+
+/** Library integrity: do the files the database references still exist?
+ *
+ *  On 2026-08-04 a test run deleted 435 media files and openMemo served pages
+ *  normally for ninety minutes, because nothing ever asked. It asks hourly now,
+ *  and this is where the answer shows up. */
+function LibraryIntegrityRows() {
+  const [state, setState] = useState<LibraryIntegrity | null>(null);
+  const [busy, setBusy] = useState(false);
+
+  useEffect(() => {
+    settingsApi.libraryIntegrity().then(setState).catch(() => setState(null));
+  }, []);
+
+  const checkNow = async () => {
+    setBusy(true);
+    try { setState(await settingsApi.libraryIntegrityCheck()); }
+    catch { /* leave the last known result on screen */ }
+    finally { setBusy(false); }
+  };
+
+  const missing = state ? state.missing_media + state.missing_thumbs : 0;
+  const incident = state?.status === 'incident';
+
+  return (
+    <>
+      <div className="om-setting-row">
+        <div className="om-setting-row-text">
+          <p>Library integrity</p>
+          <span className="mono">
+            {!state
+              ? 'Checking…'
+              : missing === 0
+                ? `All ${state.with_media} media files and ${state.with_thumb} thumbnails are on disk`
+                : `${state.missing_media} media file${state.missing_media === 1 ? '' : 's'} and ${state.missing_thumbs} thumbnail${state.missing_thumbs === 1 ? '' : 's'} missing of ${state.with_media + state.with_thumb}`}
+          </span>
+        </div>
+        <button className="om-btn-secondary" onClick={checkNow} disabled={busy}>
+          {busy ? 'Checking…' : 'Check now'}
+        </button>
+      </div>
+
+      {/* Loud only when it is news. A library that has been missing the same
+          59 uploads for a month is a known state; more missing than at the
+          last check is an incident, and saying so early is the entire point. */}
+      {state && missing > 0 && (
+        <div
+          role="status"
+          style={{
+            border: `1px solid var(${incident ? '--border-danger, #D65C5C' : '--border-warning, #E5C07B'})`,
+            background: `var(${incident ? '--bg-danger, rgba(198,40,40,0.08)' : '--bg-warning, rgba(186,117,23,0.08)'})`,
+            borderRadius: 10, padding: '10px 12px', margin: '4px 0 8px',
+          }}
+        >
+          <p style={{ margin: 0, fontWeight: 500, color: `var(${incident ? '--text-danger, #C62828' : '--text-warning, #BA7517'})` }}>
+            {incident
+              ? `${state.delta} more file${state.delta === 1 ? '' : 's'} went missing since the last check`
+              : `${missing} file${missing === 1 ? '' : 's'} referenced by your library are missing from disk`}
+          </p>
+          <span className="mono" style={{ display: 'block', marginTop: 4 }}>
+            {state.recoverable > 0 && (
+              <>{state.recoverable} can be re-downloaded from their source. </>
+            )}
+            {state.unrecoverable > 0 && (
+              <>{state.unrecoverable} were uploads with no source and exist nowhere else. </>
+            )}
+            {state.missing_thumbs > 0 && (
+              <>{state.missing_thumbs} missing thumbnail{state.missing_thumbs === 1 ? '' : 's'} can be regenerated. </>
+            )}
+            {incident && 'Stop writing to the disk before investigating — see docs/DISASTER-RECOVERY.md.'}
+          </span>
+        </div>
+      )}
     </>
   );
 }
@@ -1265,6 +1341,7 @@ export function SettingsPage() {
 
 
           <SettingCard title="Backup & Restore" eyebrow="Data safety">
+            <LibraryIntegrityRows />
             <div className="om-setting-row">
               <div className="om-setting-row-text">
                 <p>Structure backup</p>

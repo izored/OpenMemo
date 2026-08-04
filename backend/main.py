@@ -236,6 +236,13 @@ async def lifespan(app: FastAPI):
 
     asyncio.create_task(run_backup_loop())
 
+    # Library integrity (plan 027) — hourly, does every file the database
+    # references still exist. The 2026-08-04 wipe served pages normally for
+    # ninety minutes because nothing ever asked. Pure stat calls, off-loop.
+    from backend.core.integrity import run_integrity_loop
+
+    asyncio.create_task(run_integrity_loop())
+
     # Persistent job queue (ADR-024 §9). Spawns the bounded worker pool; it does
     # no database I/O itself, and is a no-op until job kinds are registered.
     # Requeuing work interrupted by a restart is the janitor's job, a moment
