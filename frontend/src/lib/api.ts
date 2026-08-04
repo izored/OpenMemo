@@ -320,7 +320,7 @@ export const chatApi = {
 
 // Backup & Restore
 export const backupApi = {
-  download: async (scope: 'structure' | 'full'): Promise<void> => {
+  download: async (scope: 'structure' | 'essential' | 'full'): Promise<void> => {
     const resp = await fetch(`${API_BASE}/backup?scope=${scope}`, { method: 'POST' });
     if (!resp.ok) {
       const err = await resp.json().catch(() => ({ detail: resp.statusText }));
@@ -346,7 +346,32 @@ export const backupApi = {
     }
     return resp.json();
   },
+  // Scheduled archives written to disk (core/archive.py), as opposed to the
+  // browser downloads above. Each one is verified after writing.
+  listArchives: () => fetchJSON<ArchiveListing>('/backup/archives'),
+  runArchive: (scope: 'database' | 'essential' | 'full') =>
+    fetchJSON<ArchiveRun>(`/backup/archives?scope=${scope}`, { method: 'POST' }),
 };
+
+export interface ArchiveRun {
+  ok: boolean;
+  scope: string;
+  name?: string;
+  bytes?: number;
+  memos?: number;
+  media_files?: number;
+  verified?: boolean;
+  created_at?: string;
+  reason?: string;
+}
+
+export interface ArchiveListing {
+  destination: string;
+  schedule: Record<string, { every_s: number; keep: number }>;
+  runs: Record<string, ArchiveRun>;
+  archives: { name: string; scope: string; bytes: number; created_at: string }[];
+  total_bytes: number;
+}
 
 // Runtime user-configurable settings (persisted as JSON server-side).
 export interface AppSettings {
@@ -387,6 +412,9 @@ export interface AppSettings {
   telegram_force_localize: boolean;
   /** Mesh (ADR-024): two-way device sync. Gates the whole feature. */
   mesh_enabled: boolean;
+  /** Where scheduled archives are written. '' = data/backups. Worth pointing
+   *  outside the app directory, so wiping the app cannot wipe its backups. */
+  backup_dest: string;
   telegram_token_present: boolean;
   telegram_user_locked: boolean;
 }

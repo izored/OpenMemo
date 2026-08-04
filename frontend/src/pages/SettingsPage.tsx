@@ -13,7 +13,7 @@ import { ONBOARDING_KEY } from '@/lib/onboarding';
 import { useAppStore } from '@/stores/appStore';
 import { useIsMobile } from '@/lib/useBreakpoint';
 import { CookiesUpload } from '@/components/CookiesUpload';
-import { systemApi, maintenanceApi, backupApi, settingsApi, memoApi, type AppSettings, type LibraryIntegrity, type TelegramRelayStatus } from '@/lib/api';
+import { systemApi, maintenanceApi, backupApi, settingsApi, memoApi, type AppSettings, type ArchiveListing, type LibraryIntegrity, type TelegramRelayStatus } from '@/lib/api';
 import type { OllamaModel } from '@/types';
 
 type BuiltWithEntry = { name: string; url: string; desc: string };
@@ -280,6 +280,90 @@ function LibraryIntegrityRows() {
           </span>
         </div>
       )}
+    </>
+  );
+}
+
+/** Scheduled archives: one verified file per run, written to a folder you pick.
+ *
+ *  openMemo could always build a backup zip, but only as a browser download —
+ *  so a backup existed only if someone remembered to click, and on 2026-08-04
+ *  nobody had. */
+function ScheduledArchiveRows({ dest, onDestSaved }: { dest: string; onDestSaved: (v: string) => void }) {
+  const [listing, setListing] = useState<ArchiveListing | null>(null);
+  const [draft, setDraft] = useState(dest);
+  const [busy, setBusy] = useState<string>('');
+
+  const refresh = () => { backupApi.listArchives().then(setListing).catch(() => setListing(null)); };
+  useEffect(() => { refresh(); }, []);
+  useEffect(() => { setDraft(dest); }, [dest]);
+
+  const runNow = async (scope: 'database' | 'essential' | 'full') => {
+    setBusy(scope);
+    try { await backupApi.runArchive(scope); refresh(); }
+    catch { /* the listing below shows the recorded failure */ }
+    finally { setBusy(''); }
+  };
+
+  const runs = listing?.runs ?? {};
+  const order: ('database' | 'essential' | 'full')[] = ['database', 'essential', 'full'];
+  const cadence: Record<string, string> = { database: 'daily', essential: 'weekly', full: 'monthly' };
+
+  return (
+    <>
+      <div className="om-setting-row" style={{ flexDirection: 'column', alignItems: 'stretch', gap: 10 }}>
+        <div className="om-setting-row-text">
+          <p>Scheduled archives</p>
+          <span className="mono">
+            One verified zip per run, opened again after writing to prove the database inside is real.
+            Database {cadence.database}, essential {cadence.essential}, full {cadence.full}.
+          </span>
+        </div>
+
+        <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+          <input
+            className="om-input"
+            value={draft}
+            placeholder={listing?.destination || 'data/backups'}
+            onChange={(e) => setDraft(e.target.value)}
+            style={{ flex: '1 1 260px', minWidth: 0 }}
+            aria-label="Archive destination folder"
+          />
+          <button className="om-btn-secondary" onClick={() => onDestSaved(draft.trim())} disabled={draft.trim() === dest}>
+            Save folder
+          </button>
+        </div>
+        <span className="mono" style={{ fontSize: 11 }}>
+          Point this outside the app directory. Whatever wipes openMemo should not be able to wipe its backups on the way past.
+        </span>
+
+        <div style={{ display: 'grid', gap: 6 }}>
+          {order.map((scope) => {
+            const r = runs[scope];
+            return (
+              <div key={scope} style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                <span style={{ minWidth: 78, fontSize: 13 }}>{scope}</span>
+                <span className="mono" style={{ flex: 1, minWidth: 0, fontSize: 11 }}>
+                  {!r
+                    ? `${cadence[scope]} — not run yet`
+                    : r.ok
+                      ? `${fmtBytes(r.bytes || 0)} · ${r.memos} memos · ${r.media_files} files · verified ✓`
+                      : `failed: ${r.reason}`}
+                </span>
+                <button className="om-btn-secondary" onClick={() => runNow(scope)} disabled={!!busy}>
+                  {busy === scope ? 'Writing…' : 'Run now'}
+                </button>
+              </div>
+            );
+          })}
+        </div>
+
+        {listing && listing.archives.length > 0 && (
+          <span className="mono" style={{ fontSize: 11 }}>
+            {listing.archives.length} archive{listing.archives.length === 1 ? '' : 's'} kept, {fmtBytes(listing.total_bytes)} in {listing.destination}
+          </span>
+        )}
+      </div>
     </>
   );
 }
@@ -905,7 +989,7 @@ export function SettingsPage() {
     }
   };
 
-  const handleBackup = async (scope: 'structure' | 'full') => {
+  const handleBackup = async (scope: 'structure' | 'essential' | 'full') => {
     setBacking(scope);
     try {
       await backupApi.download(scope);
@@ -1353,6 +1437,15 @@ export function SettingsPage() {
             </div>
             <div className="om-setting-row">
               <div className="om-setting-row-text">
+                <p>Essential backup</p>
+                <span className="mono">DB + every file with no source — the part that exists nowhere else</span>
+              </div>
+              <button className="om-btn-secondary" onClick={() => handleBackup('essential')} disabled={!!backing || restoring}>
+                {backing === 'essential' ? 'Preparing…' : 'Download'}
+              </button>
+            </div>
+            <div className="om-setting-row">
+              <div className="om-setting-row-text">
                 <p>Full backup</p>
                 <span className="mono">DB + all uploaded files</span>
               </div>
@@ -1370,6 +1463,10 @@ export function SettingsPage() {
               </button>
               <input type="file" ref={fileInputRef} accept=".zip" style={{ display: 'none' }} onChange={handleFileSelected} />
             </div>
+            <ScheduledArchiveRows
+              dest={profile?.backup_dest ?? ''}
+              onDestSaved={(v) => saveProfile({ backup_dest: v })}
+            />
           </SettingCard>
 
           <SettingCard title="Danger zone" eyebrow="Careful">

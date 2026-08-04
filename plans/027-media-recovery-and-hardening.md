@@ -70,6 +70,31 @@ is connected, and the tail will have real losses from deleted posts.
 **Done when:** the missing count drops from 435 to ~59 plus whatever genuinely
 no longer exists at its source.
 
+**Run on 2026-08-04: 182 recovered, 194 still missing.**
+
+| Host | Recovered | Left | Why |
+|---|---|---|---|
+| YouTube | 109 | 4 | the four are deleted at source |
+| Instagram | 51 | 1 | post gone |
+| x.com, Threads, Facebook, SoundCloud, Vimeo, Dribbble | 21 | 0 | |
+| suno.com | 0 | 1 | yt-dlp cannot read it |
+| **Apple Music** | 0 | **177** | **blocked, see below** |
+| **Spotify** | 0 | **11** | **blocked, see below** |
+
+**The 188 tracks are blocked, not failed.** Both resolvers end at the SpotiFLAC
+community endpoint, and all three of its hosts are NXDOMAIN as of 2026-08-04:
+
+```
+qbz-foss.spotbye.qzz.io   tdl-foss.spotbye.qzz.io   amz-foss.spotbye.qzz.io
+```
+
+Confirmed from inside the container and from the host, so it is the service and
+not the network. `backend/core/spotiflac.py:47` inlines those hostnames from the
+upstream binary. Recovering the 188 needs a current endpoint from
+[spotbye/SpotiFLAC](https://github.com/spotbye/SpotiFLAC), or a different
+provider. Until then every Apple Music and Spotify pull in openMemo is down —
+this is not specific to recovery.
+
 ---
 
 ## Phase 2 — The 59, by hand  *(tool shipped)*
@@ -88,7 +113,19 @@ collection points at.
 
 ---
 
-## Phase 3 — Backups that produce ONE file
+## Phase 3 — Backups that produce ONE file  *(shipped)*
+
+`backend/core/archive.py`, hourly tick running whatever scope is due, surfaced
+in Settings → Backup & Restore with a destination field and per-scope "Run now".
+`GET/POST /api/backup/archives`. Retention is per scope, so fourteen daily
+database archives cannot age out the monthly full one. Covered by
+`test_archive.py`.
+
+`essential` is also a download scope on `POST /api/backup?scope=essential`. Its
+metadata declares `scope: full` so restore treats its media as media, with
+`archive_scope` recording what it really is.
+
+The original shape of the requirement, kept for the record:
 
 openMemo already builds a single zip (`POST /api/backup?scope=full`), but it
 only streams to a browser download — so a backup exists only if someone
