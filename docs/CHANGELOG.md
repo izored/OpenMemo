@@ -7,6 +7,9 @@ All notable changes to OpenMemo are documented here.
 
 <!-- Add entries here as work lands: ### Added / ### Changed / ### Fixed -->
 
+---
+## [3.5.0] - 2026-08-04
+
 ### Added
 
 - 🎵 **Apple Music and Spotify downloads work again, after a one-off verification.** Both go through a shared community relay for the lossless file, and in August it stopped accepting everyone and started requiring a verified session. Every Apple Music and Spotify pull had been failing since, with nothing in the app explaining why. Settings → Files → Music relay → Verify opens a challenge page, you complete it yourself, and openMemo stores the session it gets back. The secret stays on your machine and never crosses openMemo's own API. If the session lapses, downloads say so and point at the button instead of leaving an error code on the memo. Nothing else was affected: YouTube, SoundCloud, Instagram and uploads never went through this.
