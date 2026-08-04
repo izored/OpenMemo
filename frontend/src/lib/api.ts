@@ -58,6 +58,11 @@ export const memoApi = {
   related: (id: string) => fetchJSON<any[]>(`/memos/${id}/related`),
   transcribe: (id: string) =>
     fetchJSON<{ id: string; status: string }>(`/memos/${id}/transcribe`, { method: 'POST' }),
+  // Fetch the source again and apply everything that comes back: media, and on
+  // hosts where it matters the caption and gallery too. For a memo that is
+  // wrong rather than merely remote.
+  repull: (id: string) =>
+    fetchJSON<{ id: string; status: string; mode: string }>(`/memos/${id}/repull`, { method: 'POST' }),
   localize: (id: string, mode: 'video' | 'audio', quality: number = 1080) =>
     fetchJSON<{ id: string; status: string; mode: string }>(`/memos/${id}/localize`, {
       method: 'POST',

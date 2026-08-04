@@ -62,7 +62,7 @@ def resolve_thumbnail_path(stored: str | None) -> Path | None:
         if name:
             candidate = Path(settings.FILES_DIR) / "thumbs" / name
             if candidate.exists():
-                return candidate
+                return candidate.resolve()
             return None
 
     return resolve_memo_path(value)
@@ -76,7 +76,14 @@ def resolve_memo_path(stored: str | None) -> Path | None:
     p = Path(stored)
     try:
         if p.exists():
-            return p
+            # Always absolute. In Docker `FILES_DIR=./files`, so a memo saved
+            # there stores `files/default/x.mp4` — relative, and it resolves
+            # fine because the working directory is /app. But callers COMPARE
+            # this against an absolute path (serve_file does, to decide whether
+            # a file belongs to a memo), and `files/default/x.mp4` never equals
+            # `/app/files/default/x.mp4`. Every Instagram video recovered on
+            # 2026-08-04 was on disk and 404ing for exactly that reason.
+            return p.resolve()
     except OSError:
         pass
 
@@ -84,6 +91,6 @@ def resolve_memo_path(stored: str | None) -> Path | None:
     if tail:
         candidate = Path(settings.FILES_DIR).joinpath(*tail)
         if candidate.exists():
-            return candidate
+            return candidate.resolve()
 
     return None

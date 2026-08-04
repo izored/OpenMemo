@@ -2223,3 +2223,105 @@ async def ingest_from_extension(
         queue_task(localize_memo_task, memo.id, "video")
 
     return {"id": memo.id, "title": memo.title, "status": "saved"}
+
+
+async def repull_memo_task(memo_id: str, mode: str):
+    """Fetch a memo's source again and apply everything that comes back.
+
+    `localize_memo_task` downloads and nothing else, which is the right job for
+    "Make it local" and the wrong one when a memo is simply wrong: a reel that
+    saved as a still, a carousel that arrived as one photo, a title still
+    reading "Instagram post", a cover pointing at a file that is gone.
+
+    So this does the three things a fresh save would, in the order that lets
+    each one benefit from the last:
+
+      1. re-resolve the post, for hosts where resolving yields more than a file
+      2. download the media
+      3. rebuild the cover, now that step 2 may have put a real video on disk
+         to lift a frame from
+
+    Never raises: it runs detached from the request, and a failure belongs on
+    the memo as `localize_error`, not in a log nobody reads.
+    """
+    from urllib.parse import urlparse
+
+    async with AsyncSessionLocal() as db:
+        memo = await db.get(Memo, memo_id)
+        if not memo or not memo.source_url:
+            return
+        url = memo.source_url
+        was_type = (memo.type or "").lower()
+
+    # 1. Instagram is the one host where re-resolving is worth more than the
+    # download: only the resolver knows a post is a carousel, or what its
+    # caption says. Everything else gets what yt-dlp gives it.
+    if "instagram.com" in urlparse(url).netloc:
+        try:
+            from backend.core.extractor import _instagram_resolve
+
+            resolved = await _instagram_resolve(url, "instagram.com")
+            gallery = resolved.get("gallery") or []
+            async with AsyncSessionLocal() as db:
+                memo = await db.get(Memo, memo_id)
+                if memo:
+                    memo.resolve_tier = resolved.get("resolve_tier") or memo.resolve_tier
+                    title = (resolved.get("title") or "").strip()
+                    # Never overwrite a title the user may have written.
+                    if title and (memo.title or "") in ("Instagram post", "Instagram"):
+                        memo.title = title
+                        memo.description = resolved.get("description") or memo.description
+                        memo.content_text = resolved.get("content_text") or memo.content_text
+                    if len(gallery) > 1:
+                        memo.gallery = gallery
+                        memo.thumbnail_path = gallery[0]["url"]
+                    memo.updated_at = datetime.utcnow()
+                    await db.commit()
+            if len(gallery) > 1:
+                await cache_gallery(memo_id)
+        except Exception as e:
+            log.info("repull: instagram re-resolve failed for %s: %r", memo_id, e)
+
+    # 2. The download. Sets localize_status itself, done | error.
+    try:
+        await localize_memo_task(memo_id, mode)
+    except Exception as e:
+        log.warning("repull: localize crashed for %s: %r", memo_id, e)
+        async with AsyncSessionLocal() as db:
+            memo = await db.get(Memo, memo_id)
+            if memo:
+                memo.localize_status = "error"
+                memo.localize_error = str(e)[:300]
+                await db.commit()
+
+    # 3. The cover, last, so a freshly downloaded video can supply a frame.
+    try:
+        from backend.core.file_paths import resolve_thumbnail_path
+        from backend.repair_thumbnails import _repair, local_path_for
+
+        async with AsyncSessionLocal() as db:
+            memo = await db.get(Memo, memo_id)
+            if not memo:
+                return
+            stored = memo.thumbnail_path or ""
+            broken = bool(local_path_for(stored)) and resolve_thumbnail_path(stored) is None
+            needs_cover = not stored or broken
+
+        if needs_cover:
+            async with AsyncSessionLocal() as db:
+                memo = await db.get(Memo, memo_id)
+                outcome, detail = await _repair(memo)
+                memo.thumbnail_path = detail or None
+                memo.updated_at = datetime.utcnow()
+                await db.commit()
+                log.info("repull: %s cover %s", memo_id, outcome)
+    except Exception as e:
+        log.info("repull: cover rebuild failed for %s: %r", memo_id, e)
+
+    async with AsyncSessionLocal() as db:
+        memo = await db.get(Memo, memo_id)
+        if memo:
+            log.info(
+                "repull: %s finished (%s -> %s, status=%s)",
+                memo_id, was_type, memo.type, memo.localize_status,
+            )
