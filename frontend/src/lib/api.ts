@@ -585,6 +585,17 @@ export const settingsApi = {
       method: 'POST',
       body: JSON.stringify({ passcode }),
     }),
+  // Lossless music relay (Apple Music + Spotify). The relay now issues sessions
+  // only after a challenge a person completes in a browser, so verification is
+  // a link the user opens, not something the app can do on their behalf.
+  musicRelayStatus: () => fetchJSON<MusicRelayStatus>('/settings/music-relay/status'),
+  musicRelayVerifyStart: (callbackBase: string) =>
+    fetchJSON<{ challenge_url: string; state: string }>('/settings/music-relay/verify/start', {
+      method: 'POST',
+      body: JSON.stringify({ callback_base: callbackBase }),
+    }),
+  musicRelayDisconnect: () =>
+    fetchJSON<MusicRelayStatus>('/settings/music-relay/session', { method: 'DELETE' }),
   // Do the files the database references still exist? Checked hourly in the
   // background; `status: 'incident'` means MORE are missing than at the last
   // check, which is the case worth acting on immediately.
@@ -592,6 +603,15 @@ export const settingsApi = {
   libraryIntegrityCheck: () =>
     fetchJSON<LibraryIntegrity>('/settings/library/integrity/check', { method: 'POST' }),
 };
+
+export interface MusicRelayStatus {
+  verified: boolean;
+  expires_at: string | null;
+  /** A session was set up at some point — tells "never verified" from "lapsed". */
+  was_verified: boolean;
+  expired: boolean;
+  expires_in_days: number | null;
+}
 
 export interface LibraryIntegrity {
   status: 'ok' | 'missing' | 'incident';

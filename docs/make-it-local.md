@@ -150,3 +150,32 @@ see the panel.  They have their own appropriate actions:
 - **document / code / file** — DocReportCard + "Download original" button.
 
 No memo type is a dead end.
+
+## The music relay (Apple Music and Spotify)
+
+Those two are not yt-dlp jobs. A link resolves to a track, the track resolves to
+an ISRC, and the lossless FLAC comes from a shared community relay ported from
+[spotbye/SpotiFLAC](https://github.com/spotbye/SpotiFLAC) in
+`backend/core/spotiflac.py`. No account, no Spotify token.
+
+Since August 2026 the relay only answers **verified** clients. A verification is
+a challenge you complete in a browser: Settings → Files → Music relay → Verify
+opens it, you finish it, the relay sends your browser back to openMemo, and
+openMemo trades the grant for a session it stores locally. After that every
+request is signed with the session secret, which never leaves the machine and is
+never returned by openMemo's own API.
+
+Without a session, Apple Music and Spotify pulls fail with a message saying to
+verify. Nothing else is affected.
+
+### When it breaks again
+
+The relay's hostnames and its verification endpoint are AES-256-GCM encrypted in
+upstream's binary, and they rotate. In August 2026 they moved from `-foss` to
+`-oss`, which surfaced as a DNS error on every music download.
+
+To re-derive them, take `backend/community_endpoints.go` from upstream: the key
+is SHA-256 over the concatenated `communityURLSeedParts`, the AAD is
+`communityURLAAD`, and each endpoint is a nonce / ciphertext / tag triple.
+`backend/community_session.go` carries the bootstrap, exchange and signing
+scheme, which `backend/core/music_relay.py` mirrors.
