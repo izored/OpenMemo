@@ -61,12 +61,16 @@ def _host(url: str | None) -> str:
         return "?"
 
 
-async def _candidates(host_filter: str = "") -> list[Memo]:
+async def _candidates(host_filter: str = "", unplayable: bool = False) -> list[Memo]:
     """Memos whose media file is gone but whose source can still be fetched.
 
     `resolve_memo_path` is the app's own tolerant lookup, so a memo saved under
     Docker's `/app/files/...` and checked from Windows still counts as present.
-    Only a file that resolves nowhere is treated as missing."""
+    Only a file that resolves nowhere is treated as missing.
+
+    `unplayable` widens that to files that are present and cannot be opened. On
+    2026-08-04 fifty-one recovered reels were bare stream fragments: right size,
+    right type, undecodable. Present on disk is not the same as recovered."""
     async with AsyncSessionLocal() as db:
         rows = (
             await db.execute(
@@ -84,10 +88,14 @@ async def _candidates(host_filter: str = "") -> list[Memo]:
             )
         ).scalars().all()
 
+    from backend.core.localize_media import _playable_container
+
     out = []
     for m in rows:
-        if resolve_memo_path(m.file_path) is not None:
-            continue
+        on_disk = resolve_memo_path(m.file_path)
+        if on_disk is not None:
+            if not unplayable or _playable_container(on_disk):
+                continue
         if host_filter and host_filter.lower() not in _host(m.source_url).lower():
             continue
         out.append(m)
@@ -120,7 +128,12 @@ async def _refetch(memo: Memo) -> tuple[bool, str]:
         row = await db.get(Memo, memo.id)
         if not row:
             return False, "memo gone"
-        if resolve_memo_path(row.file_path) is not None:
+        landed = resolve_memo_path(row.file_path)
+        if landed is not None:
+            from backend.core.localize_media import _playable_container
+
+            if not _playable_container(landed):
+                return False, "downloaded, but still not a playable container"
             same = " (same path)" if row.file_path == before else ""
             return True, f"{(row.file_path or '').split('/')[-1][:52]}{same}"
         return False, (row.localize_error or "no file after localize")[:90]
@@ -159,6 +172,11 @@ async def main() -> None:
     ap.add_argument("--limit", type=int, default=0, help="stop after N memos (0 = all)")
     ap.add_argument("--host", default="", help="only this host, e.g. music.apple.com")
     ap.add_argument("--delay", type=float, default=_DELAY_S, help=f"seconds between fetches (default {_DELAY_S})")
+    ap.add_argument(
+        "--unplayable",
+        action="store_true",
+        help="also re-fetch files that ARE on disk but cannot be opened",
+    )
     args = ap.parse_args()
 
     print("=" * 78)
@@ -172,7 +190,7 @@ async def main() -> None:
     print("=" * 78)
     print()
 
-    memos = await _candidates(args.host)
+    memos = await _candidates(args.host, args.unplayable)
     if not memos:
         print("Nothing missing. Every memo's media resolves on disk.")
         return
