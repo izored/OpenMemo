@@ -13,6 +13,7 @@ All notable changes to OpenMemo are documented here.
 
 ### Fixed
 
+- 🎬 **Instagram videos actually play, instead of just existing.** Every reel recovered on 4 August landed at the right size with the right file type and could not be opened by any player: each was a bare fragment of the stream with no header in front of it, because Instagram serves reels in pieces and the byte window was being carried along in the link. openMemo now asks for the whole file, and — the part that matters more — it checks that what arrived is something a player can open before calling the download a success. One that is not gets deleted and falls through to the next method, so a broken pull fails loudly instead of sitting in your library looking fine. `refetch_missing_media --unplayable` re-fetches any that already landed this way.
 - 🎬 **Videos recovered from a link play again.** Every Instagram video pulled back on 4 August sat on disk, complete and correct, and refused to play. Inside Docker openMemo stores those files with a relative path, which opens perfectly well from the app's own working directory — but the route that serves a file compares that path against an absolute one to check the file really belongs to the memo, and the two never matched. The comparison now happens between two absolute paths.
 
 ---
