@@ -81,19 +81,41 @@ no longer exists at its source.
 | **Apple Music** | 0 | **177** | **blocked, see below** |
 | **Spotify** | 0 | **11** | **blocked, see below** |
 
-**The 188 tracks are blocked, not failed.** Both resolvers end at the SpotiFLAC
-community endpoint, and all three of its hosts are NXDOMAIN as of 2026-08-04:
+**The 188 tracks are blocked, not failed**, and the block is upstream. Both
+resolvers end at the SpotiFLAC community relay, and the hostnames
+`backend/core/spotiflac.py:47` inlines are NXDOMAIN as of 2026-08-04, from
+inside the container and from the host alike:
 
 ```
 qbz-foss.spotbye.qzz.io   tdl-foss.spotbye.qzz.io   amz-foss.spotbye.qzz.io
 ```
 
-Confirmed from inside the container and from the host, so it is the service and
-not the network. `backend/core/spotiflac.py:47` inlines those hostnames from the
-upstream binary. Recovering the 188 needs a current endpoint from
-[spotbye/SpotiFLAC](https://github.com/spotbye/SpotiFLAC), or a different
-provider. Until then every Apple Music and Spotify pull in openMemo is down —
-this is not specific to recovery.
+Upstream rotated them. Re-deriving the current values from
+[spotbye/SpotiFLAC](https://github.com/spotbye/SpotiFLAC)
+`backend/community_endpoints.go` — SHA-256 over the seed parts as the AES-256-GCM
+key, with the AAD alongside, exactly as the docstring in `spotiflac.py`
+describes — gives `qbz-oss` / `tdl-oss` / `amz-oss` on the same domain. Those
+resolve, and `/health` answers 200.
+
+**But swapping the host is not enough.** The relay now answers a download
+request with:
+
+```
+HTTP 428  {"success": false, "error": "Verification session required."}
+```
+
+`backend/community_session.go` upstream shows what that means: bootstrap a
+challenge URL, **open it in a browser for a human to complete**, catch a grant
+on a localhost callback, exchange it for a session id and secret, and sign
+subsequent requests with them. It is an anti-automation gate, and completing it
+without a person is precisely what it exists to prevent.
+
+So this is implementable only the way upstream implements it — as an
+interactive, one-time "Verify with the music relay" flow in Settings, where the
+user completes the challenge themselves and openMemo stores the resulting
+session. That is a feature decision and its own piece of work, not part of this
+plan. **Until it exists, every Apple Music and Spotify pull is down**, not only
+the recovery ones.
 
 ---
 

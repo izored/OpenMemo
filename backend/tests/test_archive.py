@@ -152,3 +152,28 @@ def test_a_failed_run_is_recorded_rather_than_silently_skipped(client, monkeypat
 def test_the_run_record_is_not_writable_through_the_settings_api(client):
     archive.create("database")
     assert "backup_runs" not in client.get("/api/settings").json()
+
+
+def test_an_already_empty_scope_writes_a_degraded_archive_rather_than_failing(client):
+    """When the files were gone BEFORE this feature existed, refusing forever
+    would fail the scope every week and teach the user to ignore it. The
+    database inside is still worth having, so it is written and flagged."""
+    from backend.core.app_settings import set_backup_runs
+
+    set_backup_runs({})                       # no run has ever carried media
+    path = _make_upload()
+    path.unlink()                             # referenced, missing
+
+    result = archive.create("essential")
+    assert result["ok"] is True
+    assert result["degraded"] is True
+    assert result["media_files"] == 0
+    assert Path(result["path"]).is_file()
+
+
+def test_a_run_records_itself_so_the_next_one_can_compare(client):
+    """The stored record is what decides "lost" from "already gone"."""
+    from backend.core.app_settings import get_backup_runs
+
+    archive.create("database")
+    assert (get_backup_runs() or {})["database"]["ok"] is True

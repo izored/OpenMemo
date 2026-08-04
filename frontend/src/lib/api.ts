@@ -360,6 +360,10 @@ export interface ArchiveRun {
   bytes?: number;
   memos?: number;
   media_files?: number;
+  /** Written, verified and restorable, but the media it should carry is not on
+   *  disk to include. Not a failure: refusing forever would fail the scope
+   *  every week once files are already lost. */
+  degraded?: boolean;
   verified?: boolean;
   created_at?: string;
   reason?: string;

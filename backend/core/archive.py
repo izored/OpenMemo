@@ -186,7 +186,26 @@ def prune(scope: str, keep: int | None = None) -> int:
 
 
 def create(scope: str) -> dict:
-    """Write one archive, verify it, prune the old ones. Never raises.
+    """Write one archive, verify it, prune the old ones, record the outcome.
+
+    Recording is part of the operation, not bookkeeping around it: the stored
+    record is what the NEXT run reads to decide whether an empty media set means
+    "something was lost" or "it was already gone". A create that did not store
+    would make that judgement on stale information."""
+    result = _create(scope)
+    try:
+        from backend.core.app_settings import get_backup_runs, set_backup_runs
+
+        runs = get_backup_runs() or {}
+        runs[scope] = result
+        set_backup_runs(runs)
+    except Exception as e:
+        log.info("archive: could not record the %s run: %r", scope, e)
+    return result
+
+
+def _create(scope: str) -> dict:
+    """Write one archive and verify it. Never raises.
 
     The order matters: verification happens before pruning, so a run that
     produces a broken archive cannot delete a good one on its way out."""
@@ -208,18 +227,38 @@ def create(scope: str) -> dict:
     else:
         media, expected = [], 0
 
-    # Refuse to archive nothing. An empty media set where the database expects
-    # files is the shape of the incident this was written after, and writing it
-    # would quietly rotate the last good archive out of retention.
+    # Refuse to archive nothing — but only when there was something to lose.
+    #
+    # The rule exists so a wipe cannot rotate the last good archive out of
+    # retention: if the previous successful run of this scope carried media and
+    # this one finds none, something happened between them and the archives on
+    # disk are worth more than a new one.
+    #
+    # When no previous run ever carried media, the files were already gone
+    # before this feature existed. Refusing there would fail the scope forever
+    # and teach the user to ignore it, so the archive is written and marked
+    # degraded instead — the database inside is still worth having.
+    previous = (last_runs().get(scope) or {})
+    had_media = bool(previous.get("ok")) and (previous.get("media_files") or 0) > 0
+    degraded = False
     if expected > 0 and not media:
-        log.error(
-            "archive: %s scope found 0 of %d expected media files — refusing to "
-            "write. Previous archives are untouched.", scope, expected,
+        if had_media:
+            log.error(
+                "archive: %s scope found 0 of %d expected media files, and the "
+                "last run carried %d — refusing to write. Previous archives are "
+                "untouched.", scope, expected, previous.get("media_files") or 0,
+            )
+            return {
+                "ok": False, "scope": scope, "expected_media": expected,
+                "media_files": 0,
+                "reason": f"expected {expected} media files, found none on disk",
+            }
+        degraded = True
+        log.warning(
+            "archive: %s scope expects %d media files and none are on disk — "
+            "writing the database anyway, since none were there last time either.",
+            scope, expected,
         )
-        return {
-            "ok": False, "scope": scope, "expected_media": expected, "media_files": 0,
-            "reason": f"expected {expected} media files, found none on disk",
-        }
 
     stamp = datetime.utcnow().strftime("%Y%m%d-%H%M%S")
     out = dest_dir / f"openmemo-{scope}-{stamp}.zip"
@@ -274,6 +313,10 @@ def create(scope: str) -> dict:
         "memos": checked["memos"],
         "media_files": checked["media_files"],
         "expected_media": expected,
+        # True when the database references media that is not on disk to
+        # archive. The archive is real and restorable; it just cannot contain
+        # what no longer exists.
+        "degraded": degraded,
         "verified": True,
         "created_at": datetime.utcnow().isoformat() + "Z",
         "pruned": pruned,
@@ -314,19 +357,12 @@ def run_due() -> list[dict]:
 
     A failed run is recorded too, so it is visible in Settings and so a broken
     destination does not look like a schedule that simply has not fired yet."""
-    from backend.core.app_settings import get_backup_runs, set_backup_runs
+    from backend.core.app_settings import get_backup_runs
 
     runs = get_backup_runs() or {}
-    done = []
-    for scope in SCOPES:
-        if not _due(scope, runs):
-            continue
-        result = create(scope)
-        runs[scope] = result
-        done.append(result)
-    if done:
-        set_backup_runs(runs)
-    return done
+    # `create` records each run itself, which is also what makes a scope stop
+    # being due.
+    return [create(scope) for scope in SCOPES if _due(scope, runs)]
 
 
 def last_runs() -> dict:

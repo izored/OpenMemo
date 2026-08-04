@@ -347,7 +347,7 @@ function ScheduledArchiveRows({ dest, onDestSaved }: { dest: string; onDestSaved
                   {!r
                     ? `${cadence[scope]} — not run yet`
                     : r.ok
-                      ? `${fmtBytes(r.bytes || 0)} · ${r.memos} memos · ${r.media_files} files · verified ✓`
+                      ? `${fmtBytes(r.bytes || 0)} · ${r.memos} memos · ${r.media_files} files · verified ✓${r.degraded ? ' · no media on disk to include' : ''}`
                       : `failed: ${r.reason}`}
                 </span>
                 <button className="om-btn-secondary" onClick={() => runNow(scope)} disabled={!!busy}>

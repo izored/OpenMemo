@@ -122,3 +122,39 @@ def test_the_result_is_not_writable_through_the_settings_api(client):
     """It is a health record, not a preference. A settings PUT must not forge it."""
     client.post("/api/settings/library/integrity/check")
     assert "library_integrity" not in client.get("/api/settings").json()
+
+
+def test_thumbnails_resolve_through_their_own_url_shape(client):
+    """`/api/files/thumb/x` lives at `files/thumbs/x` — singular in the route,
+    plural on disk. Resolving it like a media path finds nothing, which reported
+    every thumbnail in a real 693-memo library as missing."""
+    from backend.core.file_paths import resolve_thumbnail_path
+
+    thumbs = Path(settings.FILES_DIR) / "thumbs"
+    thumbs.mkdir(parents=True, exist_ok=True)
+    name = f"{uuid.uuid4()}.jpg"
+    (thumbs / name).write_bytes(b"jpeg-ish")
+
+    assert resolve_thumbnail_path(f"/api/files/thumb/{name}") is not None
+    assert resolve_thumbnail_path("/api/files/thumb/does-not-exist.jpg") is None
+
+
+def test_a_memo_thumbnail_that_exists_is_not_counted_missing(client):
+    thumbs = Path(settings.FILES_DIR) / "thumbs"
+    thumbs.mkdir(parents=True, exist_ok=True)
+    memo_id = str(uuid.uuid4())
+    (thumbs / f"{memo_id}.jpg").write_bytes(b"jpeg-ish")
+
+    con = sqlite3.connect(str(Path(settings.DATA_DIR) / "openmemo.db"))
+    with con:
+        con.execute(
+            "insert into memos (id, type, title, thumbnail_path, is_deleted) "
+            "values (?, 'link', 'thumb test', ?, 0)",
+            (memo_id, f"/api/files/thumb/{memo_id}.jpg"),
+        )
+    con.close()
+
+    before = _check(client)
+    after = _check(client)
+    assert after["with_thumb"] >= 1
+    assert after["missing_thumbs"] == before["missing_thumbs"]

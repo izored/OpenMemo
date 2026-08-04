@@ -50,7 +50,7 @@ def _scan_sync() -> dict:
     from sqlalchemy import create_engine, text
 
     from backend.config import settings
-    from backend.core.file_paths import resolve_memo_path
+    from backend.core.file_paths import resolve_memo_path, resolve_thumbnail_path
 
     # A plain synchronous connection: this runs in a worker thread, and the
     # async session/engine belongs to the event loop that is not in it.
@@ -81,9 +81,11 @@ def _scan_sync() -> dict:
                 else:
                     unrecoverable += 1
         # A remote thumbnail URL is not ours to lose, so only local ones count.
+        # These resolve differently from media: the column holds the URL the app
+        # serves the image at, and `/api/files/thumb/x` lives at `files/thumbs/x`.
         if thumbnail_path and not str(thumbnail_path).startswith("http"):
             with_thumb += 1
-            if resolve_memo_path(thumbnail_path) is None:
+            if resolve_thumbnail_path(thumbnail_path) is None:
                 missing_thumbs += 1
 
     return {
