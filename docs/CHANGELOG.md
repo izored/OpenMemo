@@ -7,6 +7,12 @@ All notable changes to OpenMemo are documented here.
 
 <!-- Add entries here as work lands: ### Added / ### Changed / ### Fixed -->
 
+### Added
+
+- 🔁 **A library missing its media can pull most of it back.** If files disappear from disk, the database still knows what every memo was and where it came from. `python -m backend.refetch_missing_media` finds every memo whose file is gone but whose source link still works, and re-downloads it through the same pipeline a normal "make it local" uses, so Apple Music and Spotify go to their track resolvers and everything else to yt-dlp. It is a dry run by default, prints the database and files folder it is about to touch, and can be narrowed with `--host` and `--limit`. Stop it any time and re-run later: a memo whose file is back is no longer a candidate.
+- 📋 **The files that cannot be re-downloaded get a search list.** Uploads have no source to fetch from, so `python -m backend.list_lost_uploads` writes a CSV of exactly those, each row carrying the title you gave it, the date you added it, its collections and your own notes. openMemo names files by UUID, which is useless for searching, so the list is built to be searched by type and date on your other drives. It reads the database in read-only mode and touches nothing else.
+- 🧯 **A recovery procedure, written down before it is needed.** `docs/DISASTER-RECOVERY.md` covers what to do in the first five minutes when data goes missing: stop every write first, never install recovery tools onto the affected drive, recover to a different one, and check the recovered bytes are real before trusting a file count. It leads with the rule that prompted it: never write to or delete from live data, read-only always, and test suites never point at production paths.
+
 ---
 ## [3.4.1] - 2026-08-04
 
