@@ -13,7 +13,7 @@ import { ONBOARDING_KEY } from '@/lib/onboarding';
 import { useAppStore } from '@/stores/appStore';
 import { useIsMobile } from '@/lib/useBreakpoint';
 import { CookiesUpload } from '@/components/CookiesUpload';
-import { systemApi, maintenanceApi, backupApi, settingsApi, memoApi, type AppSettings, type TelegramRelayStatus } from '@/lib/api';
+import { systemApi, maintenanceApi, backupApi, settingsApi, memoApi, type AppSettings, type ArchiveListing, type LibraryIntegrity, type TelegramRelayStatus } from '@/lib/api';
 import type { OllamaModel } from '@/types';
 
 type BuiltWithEntry = { name: string; url: string; desc: string };
@@ -204,6 +204,170 @@ function TrashRow() {
       </div>
       <button className="om-btn-secondary" onClick={() => setOpen(true)}>Open trash</button>
       {open && <RecentlyDeletedModal onClose={() => setOpen(false)} />}
+    </>
+  );
+}
+
+/** Library integrity: do the files the database references still exist?
+ *
+ *  On 2026-08-04 a test run deleted 435 media files and openMemo served pages
+ *  normally for ninety minutes, because nothing ever asked. It asks hourly now,
+ *  and this is where the answer shows up. */
+function LibraryIntegrityRows() {
+  const [state, setState] = useState<LibraryIntegrity | null>(null);
+  const [busy, setBusy] = useState(false);
+
+  useEffect(() => {
+    settingsApi.libraryIntegrity().then(setState).catch(() => setState(null));
+  }, []);
+
+  const checkNow = async () => {
+    setBusy(true);
+    try { setState(await settingsApi.libraryIntegrityCheck()); }
+    catch { /* leave the last known result on screen */ }
+    finally { setBusy(false); }
+  };
+
+  const missing = state ? state.missing_media + state.missing_thumbs : 0;
+  const incident = state?.status === 'incident';
+
+  return (
+    <>
+      <div className="om-setting-row">
+        <div className="om-setting-row-text">
+          <p>Library integrity</p>
+          <span className="mono">
+            {!state
+              ? 'Checking…'
+              : missing === 0
+                ? `All ${state.with_media} media files and ${state.with_thumb} thumbnails are on disk`
+                : `${state.missing_media} media file${state.missing_media === 1 ? '' : 's'} and ${state.missing_thumbs} thumbnail${state.missing_thumbs === 1 ? '' : 's'} missing of ${state.with_media + state.with_thumb}`}
+          </span>
+        </div>
+        <button className="om-btn-secondary" onClick={checkNow} disabled={busy}>
+          {busy ? 'Checking…' : 'Check now'}
+        </button>
+      </div>
+
+      {/* Loud only when it is news. A library that has been missing the same
+          59 uploads for a month is a known state; more missing than at the
+          last check is an incident, and saying so early is the entire point. */}
+      {state && missing > 0 && (
+        <div
+          role="status"
+          style={{
+            border: `1px solid var(${incident ? '--border-danger, #D65C5C' : '--border-warning, #E5C07B'})`,
+            background: `var(${incident ? '--bg-danger, rgba(198,40,40,0.08)' : '--bg-warning, rgba(186,117,23,0.08)'})`,
+            borderRadius: 10, padding: '10px 12px', margin: '4px 0 8px',
+          }}
+        >
+          <p style={{ margin: 0, fontWeight: 500, color: `var(${incident ? '--text-danger, #C62828' : '--text-warning, #BA7517'})` }}>
+            {incident
+              ? `${state.delta} more file${state.delta === 1 ? '' : 's'} went missing since the last check`
+              : `${missing} file${missing === 1 ? '' : 's'} referenced by your library are missing from disk`}
+          </p>
+          <span className="mono" style={{ display: 'block', marginTop: 4 }}>
+            {state.recoverable > 0 && (
+              <>{state.recoverable} can be re-downloaded from their source. </>
+            )}
+            {state.unrecoverable > 0 && (
+              <>{state.unrecoverable} were uploads with no source and exist nowhere else. </>
+            )}
+            {state.missing_thumbs > 0 && (
+              <>{state.missing_thumbs} missing thumbnail{state.missing_thumbs === 1 ? '' : 's'} can be regenerated. </>
+            )}
+            {incident && 'Stop writing to the disk before investigating — see docs/DISASTER-RECOVERY.md.'}
+          </span>
+        </div>
+      )}
+    </>
+  );
+}
+
+/** Scheduled archives: one verified file per run, written to a folder you pick.
+ *
+ *  openMemo could always build a backup zip, but only as a browser download —
+ *  so a backup existed only if someone remembered to click, and on 2026-08-04
+ *  nobody had. */
+function ScheduledArchiveRows({ dest, onDestSaved }: { dest: string; onDestSaved: (v: string) => void }) {
+  const [listing, setListing] = useState<ArchiveListing | null>(null);
+  const [draft, setDraft] = useState(dest);
+  const [busy, setBusy] = useState<string>('');
+
+  const refresh = () => { backupApi.listArchives().then(setListing).catch(() => setListing(null)); };
+  useEffect(() => { refresh(); }, []);
+  // `dest` arrives after the settings fetch resolves. Adjusting the draft
+  // during render is React's own answer to props-derived state — an effect
+  // here would cascade a second render every time Settings reloads.
+  const [lastDest, setLastDest] = useState(dest);
+  if (dest !== lastDest) { setLastDest(dest); setDraft(dest); }
+
+  const runNow = async (scope: 'database' | 'essential' | 'full') => {
+    setBusy(scope);
+    try { await backupApi.runArchive(scope); refresh(); }
+    catch { /* the listing below shows the recorded failure */ }
+    finally { setBusy(''); }
+  };
+
+  const runs = listing?.runs ?? {};
+  const order: ('database' | 'essential' | 'full')[] = ['database', 'essential', 'full'];
+  const cadence: Record<string, string> = { database: 'daily', essential: 'weekly', full: 'monthly' };
+
+  return (
+    <>
+      <div className="om-setting-row" style={{ flexDirection: 'column', alignItems: 'stretch', gap: 10 }}>
+        <div className="om-setting-row-text">
+          <p>Scheduled archives</p>
+          <span className="mono">
+            One verified zip per run, opened again after writing to prove the database inside is real.
+            Database {cadence.database}, essential {cadence.essential}, full {cadence.full}.
+          </span>
+        </div>
+
+        <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+          <input
+            className="om-input"
+            value={draft}
+            placeholder={listing?.destination || 'data/backups'}
+            onChange={(e) => setDraft(e.target.value)}
+            style={{ flex: '1 1 260px', minWidth: 0 }}
+            aria-label="Archive destination folder"
+          />
+          <button className="om-btn-secondary" onClick={() => onDestSaved(draft.trim())} disabled={draft.trim() === dest}>
+            Save folder
+          </button>
+        </div>
+        <span className="mono" style={{ fontSize: 11 }}>
+          Point this outside the app directory. Whatever wipes openMemo should not be able to wipe its backups on the way past.
+        </span>
+
+        <div style={{ display: 'grid', gap: 6 }}>
+          {order.map((scope) => {
+            const r = runs[scope];
+            return (
+              <div key={scope} style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                <span style={{ minWidth: 78, fontSize: 13 }}>{scope}</span>
+                <span className="mono" style={{ flex: 1, minWidth: 0, fontSize: 11 }}>
+                  {!r
+                    ? `${cadence[scope]} — not run yet`
+                    : r.ok
+                      ? `${fmtBytes(r.bytes || 0)} · ${r.memos} memos · ${r.media_files} files · verified ✓${r.degraded ? ' · no media on disk to include' : ''}`
+                      : `failed: ${r.reason}`}
+                </span>
+                <button className="om-btn-secondary" onClick={() => runNow(scope)} disabled={!!busy}>
+                  {busy === scope ? 'Writing…' : 'Run now'}
+                </button>
+              </div>
+            );
+          })}
+        </div>
+
+        {listing && listing.archives.length > 0 && (
+          <span className="mono" style={{ fontSize: 11 }}>
+            {listing.archives.length} archive{listing.archives.length === 1 ? '' : 's'} kept, {fmtBytes(listing.total_bytes)} in {listing.destination}
+          </span>
+        )}
+      </div>
     </>
   );
 }
@@ -716,7 +880,7 @@ export function SettingsPage() {
   const [stats, setStats] = useState<Stats | null>(null);
   const [changelogOpen, setChangelogOpen] = useState(false);
   const [updateAvailable, setUpdateAvailable] = useState(false);
-  const [backing, setBacking] = useState<'structure' | 'full' | null>(null);
+  const [backing, setBacking] = useState<'structure' | 'essential' | 'full' | null>(null);
   const [restoring, setRestoring] = useState(false);
   const [maxUploadMb, setMaxUploadMb] = useState<number | null>(null);
   const [maxUploadSaved, setMaxUploadSaved] = useState(false);
@@ -754,7 +918,7 @@ export function SettingsPage() {
       })
       .catch(() => {
         setMaxUploadMb(5120);
-        setProfile({ max_upload_mb: 5120, display_name: '', email: '', avatar_data_url: '', mailing_list_consent: false, auto_download_audio: true, auto_download_video: true, music_quality: '16', music_provider: 'qobuz', chat_model: '', num_ctx: 0, yt_cookies_present: false, bg_image_ext: '', hidden_passcode_set: false, telegram_enabled: false, telegram_poll_minutes: 15, telegram_default_collection: 'IG Inbox', telegram_force_localize: true, telegram_token_present: false, telegram_user_locked: false, mesh_enabled: false });
+        setProfile({ max_upload_mb: 5120, display_name: '', email: '', avatar_data_url: '', mailing_list_consent: false, auto_download_audio: true, auto_download_video: true, music_quality: '16', music_provider: 'qobuz', chat_model: '', num_ctx: 0, yt_cookies_present: false, bg_image_ext: '', hidden_passcode_set: false, telegram_enabled: false, telegram_poll_minutes: 15, telegram_default_collection: 'IG Inbox', telegram_force_localize: true, telegram_token_present: false, telegram_user_locked: false, mesh_enabled: false, backup_dest: '' });
       });
   }, []);
 
@@ -829,7 +993,7 @@ export function SettingsPage() {
     }
   };
 
-  const handleBackup = async (scope: 'structure' | 'full') => {
+  const handleBackup = async (scope: 'structure' | 'essential' | 'full') => {
     setBacking(scope);
     try {
       await backupApi.download(scope);
@@ -1265,6 +1429,7 @@ export function SettingsPage() {
 
 
           <SettingCard title="Backup & Restore" eyebrow="Data safety">
+            <LibraryIntegrityRows />
             <div className="om-setting-row">
               <div className="om-setting-row-text">
                 <p>Structure backup</p>
@@ -1272,6 +1437,15 @@ export function SettingsPage() {
               </div>
               <button className="om-btn-secondary" onClick={() => handleBackup('structure')} disabled={!!backing || restoring}>
                 {backing === 'structure' ? 'Preparing…' : 'Download'}
+              </button>
+            </div>
+            <div className="om-setting-row">
+              <div className="om-setting-row-text">
+                <p>Essential backup</p>
+                <span className="mono">DB + every file with no source — the part that exists nowhere else</span>
+              </div>
+              <button className="om-btn-secondary" onClick={() => handleBackup('essential')} disabled={!!backing || restoring}>
+                {backing === 'essential' ? 'Preparing…' : 'Download'}
               </button>
             </div>
             <div className="om-setting-row">
@@ -1293,6 +1467,10 @@ export function SettingsPage() {
               </button>
               <input type="file" ref={fileInputRef} accept=".zip" style={{ display: 'none' }} onChange={handleFileSelected} />
             </div>
+            <ScheduledArchiveRows
+              dest={profile?.backup_dest ?? ''}
+              onDestSaved={(v) => saveProfile({ backup_dest: v })}
+            />
           </SettingCard>
 
           <SettingCard title="Danger zone" eyebrow="Careful">

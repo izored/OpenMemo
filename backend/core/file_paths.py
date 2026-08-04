@@ -40,6 +40,34 @@ def _split_after_files(stored: str) -> tuple[str, ...] | None:
     return None
 
 
+def resolve_thumbnail_path(stored: str | None) -> Path | None:
+    """Resolve a stored `thumbnail_path` to an on-disk Path, or None.
+
+    A thumbnail is not stored the way a file is. It holds the URL the app serves
+    it at, and the two do not line up: `/api/files/thumb/<name>` is served from
+    `files/thumbs/<name>` — singular in the route, plural on disk. Handing that
+    to `resolve_memo_path` looks for `files/thumb/<name>`, finds nothing, and
+    reports every thumbnail in the library as missing.
+
+    Remote thumbnails (`http…`) are not ours to lose and resolve to None here;
+    callers that count missing files must skip those rather than count them.
+    """
+    if not stored:
+        return None
+
+    value = str(stored)
+    marker = "/api/files/thumb/"
+    if marker in value:
+        name = value.split(marker, 1)[1].lstrip("/")
+        if name:
+            candidate = Path(settings.FILES_DIR) / "thumbs" / name
+            if candidate.exists():
+                return candidate
+            return None
+
+    return resolve_memo_path(value)
+
+
 def resolve_memo_path(stored: str | None) -> Path | None:
     """Resolve a stored file_path to an on-disk Path, or None."""
     if not stored:

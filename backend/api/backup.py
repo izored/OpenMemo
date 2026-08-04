@@ -36,10 +36,19 @@ def _sqlite_backup(src_path: Path, dst_path: Path) -> None:
 
 
 @router.post("")
-async def create_backup(scope: Literal["structure", "full"] = Query("structure")):
+async def create_backup(
+    scope: Literal["structure", "essential", "full"] = Query("structure"),
+):
     """Create a downloadable backup zip.
     scope=structure → DB only (memos, collections, tags, chats).
+    scope=essential → DB + files with no source_url — the irreplaceable set.
     scope=full → DB + all uploaded files (excludes thumbnail cache).
+
+    `essential` exists because the two halves of a library are not equally
+    replaceable. Media with a `source_url` can be fetched again; an upload
+    exists nowhere else. On the library this was written for that is ~2 GB
+    against 25 GB, which is the difference between a backup you keep several
+    copies of and one you keep meaning to.
     """
     db_path = Path(settings.DATA_DIR) / "openmemo.db"
     files_dir = Path(settings.FILES_DIR)
@@ -56,7 +65,11 @@ async def create_backup(scope: Literal["structure", "full"] = Query("structure")
 
         with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED, compresslevel=6) as zf:
             meta = {
-                "scope": scope,
+                # Restore understands "structure" and "full". An essential
+                # archive carries real media, so it has to restore like a full
+                # one or its files would be unpacked and then ignored.
+                "scope": "full" if scope in ("essential", "full") else "structure",
+                "archive_scope": scope,
                 "created_at": datetime.utcnow().isoformat() + "Z",
                 "app_version": settings.VERSION,
             }
@@ -65,7 +78,16 @@ async def create_backup(scope: Literal["structure", "full"] = Query("structure")
             if tmp_db.exists():
                 zf.write(tmp_db, _DB)
 
-            if scope == "full" and files_dir.exists():
+            if scope == "essential":
+                from backend.core.archive import _upload_paths
+
+                for f in _upload_paths()[0]:
+                    try:
+                        rel = f.relative_to(files_dir).as_posix()
+                    except ValueError:
+                        rel = f.name
+                    zf.write(f, _FILES_PREFIX + rel)
+            elif scope == "full" and files_dir.exists():
                 thumbs_str = str(thumbs_dir)
                 for f in files_dir.rglob("*"):
                     if f.is_file() and not str(f).startswith(thumbs_str):
@@ -316,3 +338,42 @@ async def run_auto_backup_now():
     import asyncio
 
     return await asyncio.to_thread(run_once)
+
+
+@router.get("/archives")
+async def list_archives():
+    """Scheduled archives on this machine (core/archive.py).
+
+    `runs` carries the last attempt per scope INCLUDING failures, so a broken
+    destination reads as a failure rather than as a schedule that has simply
+    not fired yet."""
+    from backend.core.archive import SCHEDULE, destination, last_runs, list_archives as _list
+
+    archives = _list()
+    return {
+        "destination": str(destination()),
+        "schedule": SCHEDULE,
+        "runs": last_runs(),
+        "archives": archives,
+        "total_bytes": sum(a["bytes"] for a in archives),
+    }
+
+
+@router.post("/archives")
+async def run_archive_now(
+    scope: Literal["database", "essential", "full"] = Query("essential"),
+):
+    """Write one archive now, verified, instead of waiting for the schedule.
+
+    Returns the same record the scheduler stores, so a failure comes back with
+    its reason rather than as a bare error."""
+    import asyncio
+
+    from backend.core.archive import create
+    from backend.core.app_settings import get_backup_runs, set_backup_runs
+
+    result = await asyncio.to_thread(create, scope)
+    runs = get_backup_runs() or {}
+    runs[scope] = result
+    set_backup_runs(runs)
+    return result
