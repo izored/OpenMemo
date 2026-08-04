@@ -7,6 +7,9 @@ All notable changes to OpenMemo are documented here.
 
 <!-- Add entries here as work lands: ### Added / ### Changed / ### Fixed -->
 
+---
+## [3.4.1] - 2026-08-04
+
 ### Changed
 
 - 🧱 **Cutting a release is now one command that refuses to half-finish.** `bump-version.ps1` checks everything it can before touching a file: you are on main, main is exactly what is on GitHub, the tag is not already taken, every file that names a version already agrees, the changelog actually has entries to release, and the tests pass. It rolls back if a write fails, pushes the branch and confirms it landed *before* the tag goes out, then waits for the release and checks the published notes are really the changelog. A dry run prints the whole thing and changes nothing. The release process is written down in `docs/RELEASING.md`.
