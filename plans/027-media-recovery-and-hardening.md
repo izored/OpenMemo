@@ -70,16 +70,30 @@ is connected, and the tail will have real losses from deleted posts.
 **Done when:** the missing count drops from 435 to ~59 plus whatever genuinely
 no longer exists at its source.
 
-**Run on 2026-08-04: 182 recovered, 194 still missing.**
+**Run on 2026-08-04: 206 back on disk, 229 still missing.**
 
 | Host | Recovered | Left | Why |
 |---|---|---|---|
 | YouTube | 109 | 4 | the four are deleted at source |
 | Instagram | 51 | 1 | post gone |
-| x.com, Threads, Facebook, SoundCloud, Vimeo, Dribbble | 21 | 0 | |
-| suno.com | 0 | 1 | yt-dlp cannot read it |
+| x.com, Threads, Facebook, SoundCloud, Dribbble | 20 | 0 | |
+| Vimeo | 0 | 1 | needs an OAuth token yt-dlp cannot get |
+| suno.com | 0 | 1 | yt-dlp has no extractor |
+| Uploads found by hand | 24 | 35 | see Phase 2 |
 | **Apple Music** | 0 | **177** | **blocked, see below** |
 | **Spotify** | 0 | **11** | **blocked, see below** |
+
+**The first count was wrong, and that is the lesson.** The 51 Instagram reels
+were reported recovered because a file of the right size with the right
+content-type had landed. Every one was a bare DASH `moof` fragment with no
+header, undecodable by any player, and nothing found out until a video was
+clicked days later. `_playable_container` now checks what arrived before a
+download counts as done, and `refetch_missing_media --unplayable` re-fetches
+anything that got through. 87 of 88 video memos play; the last one is the Vimeo
+post above.
+
+Present on disk is not the same as recovered. Neither is "the request
+succeeded".
 
 **The 188 tracks are blocked, not failed**, and the block is upstream. Both
 resolvers end at the SpotiFLAC community relay, and the hostnames
