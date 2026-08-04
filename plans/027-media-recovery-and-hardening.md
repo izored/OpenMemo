@@ -70,6 +70,53 @@ is connected, and the tail will have real losses from deleted posts.
 **Done when:** the missing count drops from 435 to ~59 plus whatever genuinely
 no longer exists at its source.
 
+**Run on 2026-08-04: 182 recovered, 194 still missing.**
+
+| Host | Recovered | Left | Why |
+|---|---|---|---|
+| YouTube | 109 | 4 | the four are deleted at source |
+| Instagram | 51 | 1 | post gone |
+| x.com, Threads, Facebook, SoundCloud, Vimeo, Dribbble | 21 | 0 | |
+| suno.com | 0 | 1 | yt-dlp cannot read it |
+| **Apple Music** | 0 | **177** | **blocked, see below** |
+| **Spotify** | 0 | **11** | **blocked, see below** |
+
+**The 188 tracks are blocked, not failed**, and the block is upstream. Both
+resolvers end at the SpotiFLAC community relay, and the hostnames
+`backend/core/spotiflac.py:47` inlines are NXDOMAIN as of 2026-08-04, from
+inside the container and from the host alike:
+
+```
+qbz-foss.spotbye.qzz.io   tdl-foss.spotbye.qzz.io   amz-foss.spotbye.qzz.io
+```
+
+Upstream rotated them. Re-deriving the current values from
+[spotbye/SpotiFLAC](https://github.com/spotbye/SpotiFLAC)
+`backend/community_endpoints.go` — SHA-256 over the seed parts as the AES-256-GCM
+key, with the AAD alongside, exactly as the docstring in `spotiflac.py`
+describes — gives `qbz-oss` / `tdl-oss` / `amz-oss` on the same domain. Those
+resolve, and `/health` answers 200.
+
+**But swapping the host is not enough.** The relay now answers a download
+request with:
+
+```
+HTTP 428  {"success": false, "error": "Verification session required."}
+```
+
+`backend/community_session.go` upstream shows what that means: bootstrap a
+challenge URL, **open it in a browser for a human to complete**, catch a grant
+on a localhost callback, exchange it for a session id and secret, and sign
+subsequent requests with them. It is an anti-automation gate, and completing it
+without a person is precisely what it exists to prevent.
+
+So this is implementable only the way upstream implements it — as an
+interactive, one-time "Verify with the music relay" flow in Settings, where the
+user completes the challenge themselves and openMemo stores the resulting
+session. That is a feature decision and its own piece of work, not part of this
+plan. **Until it exists, every Apple Music and Spotify pull is down**, not only
+the recovery ones.
+
 ---
 
 ## Phase 2 — The 59, by hand  *(tool shipped)*
@@ -88,7 +135,19 @@ collection points at.
 
 ---
 
-## Phase 3 — Backups that produce ONE file
+## Phase 3 — Backups that produce ONE file  *(shipped)*
+
+`backend/core/archive.py`, hourly tick running whatever scope is due, surfaced
+in Settings → Backup & Restore with a destination field and per-scope "Run now".
+`GET/POST /api/backup/archives`. Retention is per scope, so fourteen daily
+database archives cannot age out the monthly full one. Covered by
+`test_archive.py`.
+
+`essential` is also a download scope on `POST /api/backup?scope=essential`. Its
+metadata declares `scope: full` so restore treats its media as media, with
+`archive_scope` recording what it really is.
+
+The original shape of the requirement, kept for the record:
 
 openMemo already builds a single zip (`POST /api/backup?scope=full`), but it
 only streams to a browser download — so a backup exists only if someone
@@ -126,10 +185,19 @@ named-volume migration needed.
 
 ---
 
-## Phase 4 — The alarm that was missing
+## Phase 4 — The alarm that was missing  *(shipped)*
 
-A library integrity check on a timer, like the Instagram canary
-(`backend/core/canary.py`):
+`backend/core/integrity.py`, on an hourly timer from the lifespan, surfaced in
+Settings → Backup & Restore via `GET /api/settings/library/integrity` and a
+"Check now" button. Every paired device runs its own, unlike the Instagram
+canary: it is a question about the local disk.
+
+Any increase since the last run is an `incident`, shown in red. A gap that has
+not grown is `missing`, shown in amber. The first run on an existing install
+never reports an incident, or every library with old gaps would open to a red
+alert about a loss from months ago. Covered by `test_library_integrity.py`.
+
+The original shape of the requirement, kept for the record:
 
 - Resolve every `file_path` in the database. Count what is missing.
 - Compare with the previous run. A jump from 0 to 435 is an incident, not drift.

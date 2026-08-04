@@ -53,6 +53,12 @@ class SettingsPatch(BaseModel):
     # PUT still returns 200, so a Settings toggle would appear to work and do
     # nothing.
     mesh_enabled: Optional[bool] = None
+    # Where scheduled archives are written (core/archive.py). A path, or empty
+    # for the default. Not validated for existence here — the directory is
+    # created on the next run, and a destination that turns out to be unusable
+    # is recorded as a failed run rather than rejected at save time, which is
+    # what makes a disconnected external drive visible instead of silent.
+    backup_dest: Optional[str] = None
 
 
 @router.get("")
@@ -403,3 +409,33 @@ async def read_background():
 async def remove_background():
     delete_background()
     return {"bg_image_present": background_present()}
+
+
+@router.get("/library/integrity")
+async def library_integrity():
+    """What the last integrity check found (core/integrity.py).
+
+    Runs one on demand if none has been stored yet, so a fresh install answers
+    with a real number instead of a null the UI has to explain. Cheap enough
+    that this is not worth a background wait."""
+    from backend.core.integrity import last_result, run_integrity_check, store
+
+    result = last_result()
+    if result is None:
+        result = await run_integrity_check()
+        await store(result)
+    return result
+
+
+@router.post("/library/integrity/check")
+async def library_integrity_check():
+    """Run the check now and store the result.
+
+    Storing matters: the stored count is what the NEXT run compares against, so
+    an on-demand check after a known-good restore is also how you clear a stale
+    "incident" without waiting an hour."""
+    from backend.core.integrity import run_integrity_check, store
+
+    result = await run_integrity_check()
+    await store(result)
+    return result
