@@ -439,3 +439,68 @@ async def library_integrity_check():
     result = await run_integrity_check()
     await store(result)
     return result
+
+
+@router.get("/music-relay/status")
+async def music_relay_status():
+    """Whether the lossless music relay session is usable. Never the secret."""
+    from backend.core.music_relay import status
+
+    return status()
+
+
+class MusicRelayStart(BaseModel):
+    # openMemo's origin AS THE BROWSER SEES IT. The browser is what gets
+    # redirected back after the challenge, and behind nginx or in Docker that
+    # address is not the one the server sees, so the client supplies it.
+    callback_base: str
+
+
+@router.post("/music-relay/verify/start")
+async def music_relay_verify_start(data: MusicRelayStart):
+    """Get the challenge link for the user to open and complete themselves."""
+    from backend.core.music_relay import RelayNotVerified, start_verification
+
+    try:
+        return start_verification(data.callback_base)
+    except RelayNotVerified as e:
+        raise HTTPException(status_code=502, detail=str(e))
+
+
+@router.get("/music-relay/verify/callback")
+async def music_relay_verify_callback(state: str = "", grant: str = ""):
+    """Where the relay sends the user's browser once the challenge is done.
+
+    This is a page a person lands on, not an API call the app makes, so it
+    answers in HTML and closes itself."""
+    from fastapi.responses import HTMLResponse
+
+    from backend.core.music_relay import RelayNotVerified, complete_verification
+
+    try:
+        complete_verification(state, grant)
+        headline, detail, ok = "Verified", "Returning to openMemo…", True
+    except RelayNotVerified as e:
+        headline, detail, ok = "Verification failed", str(e), False
+
+    return HTMLResponse(
+        "<!doctype html><meta charset=utf-8>"
+        "<meta name=viewport content='width=device-width,initial-scale=1'>"
+        f"<title>{headline}</title>"
+        "<style>body{margin:0;min-height:100vh;display:grid;place-items:center;"
+        "font:15px/1.6 system-ui,sans-serif;background:#0b0b0c;color:#f5f5f5;padding:24px}"
+        "main{text-align:center;max-width:34rem}h1{font-size:22px;margin:0 0 8px;font-weight:500}"
+        "p{margin:0;color:#8a8a8a}</style>"
+        f"<main><h1>{headline}</h1><p>{detail}</p></main>"
+        + ("<script>setTimeout(()=>window.close(),1200)</script>" if ok else ""),
+        status_code=200 if ok else 400,
+    )
+
+
+@router.delete("/music-relay/session")
+async def music_relay_disconnect():
+    """Forget the stored session. The install id stays, so re-verifying is the
+    same client rather than a new one."""
+    from backend.core.music_relay import disconnect
+
+    return disconnect()

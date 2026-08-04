@@ -121,7 +121,8 @@ def _upload_paths() -> tuple[list[Path], int]:
 
 
 def _all_media_paths() -> tuple[list[Path], int]:
-    """Everything under FILES_DIR except the regenerable thumbnail cache."""
+    """Everything under FILES_DIR except the thumbnail cache, which rides along
+    separately — see `_thumbnail_paths`."""
     files_dir = Path(settings.FILES_DIR)
     if not files_dir.exists():
         return [], 0
@@ -131,6 +132,25 @@ def _all_media_paths() -> tuple[list[Path], int]:
         if f.is_file() and thumbs not in f.parents and f.parent != thumbs
     ]
     return out, len(out)
+
+
+def _thumbnail_paths() -> list[Path]:
+    """The card covers. Technically regenerable, and included anyway.
+
+    Restoring a full archive into an empty install and finding 693 broken cards
+    is what proved this: regenerating them means re-resolving posts over the
+    network, one memo at a time, and every card is broken until it finishes. At
+    86 MB against a 4.5 GB archive the cost of carrying them is a rounding
+    error, and it is the difference between restoring a library and restoring a
+    library-shaped hole.
+
+    They are NOT counted toward the "refuse to archive nothing" check: that
+    check is about media that exists nowhere else, and a thumbnail is not it.
+    """
+    thumbs = Path(settings.FILES_DIR) / "thumbs"
+    if not thumbs.is_dir():
+        return []
+    return [f for f in thumbs.rglob("*") if f.is_file()]
 
 
 def verify(archive: Path) -> dict:
@@ -162,8 +182,16 @@ def verify(archive: Path) -> dict:
                     memos = con.execute("select count(*) from memos").fetchone()[0]
                 finally:
                     con.close()
-            media = sum(1 for n in names if n.startswith(_FILES_PREFIX))
-        return {"ok": True, "memos": memos, "media_files": media}
+            # Covers are counted apart from media. `media_files` feeds the
+            # "did this run carry anything irreplaceable" question on the NEXT
+            # run, and thumbnails would answer it yes forever.
+            thumb_prefix = _FILES_PREFIX + "thumbs/"
+            media = sum(
+                1 for n in names
+                if n.startswith(_FILES_PREFIX) and not n.startswith(thumb_prefix)
+            )
+            thumbs = sum(1 for n in names if n.startswith(thumb_prefix))
+        return {"ok": True, "memos": memos, "media_files": media, "thumbnails": thumbs}
     except (zipfile.BadZipFile, OSError, sqlite3.Error) as e:
         return {"ok": False, "reason": f"{type(e).__name__}: {e}"[:200]}
 
@@ -280,7 +308,9 @@ def _create(scope: str) -> dict:
                     "app_version": settings.VERSION,
                 }, indent=2))
                 zf.write(staged, _DB)
-                for f in media:
+                # Covers ride along with anything that carries media at all, so
+                # a restore lands on a library that looks like one.
+                for f in (media + (_thumbnail_paths() if scope != "database" else [])):
                     try:
                         rel = f.relative_to(files_dir).as_posix()
                     except ValueError:
@@ -312,6 +342,7 @@ def _create(scope: str) -> dict:
         "bytes": size,
         "memos": checked["memos"],
         "media_files": checked["media_files"],
+        "thumbnails": checked.get("thumbnails", 0),
         "expected_media": expected,
         # True when the database references media that is not on disk to
         # archive. The archive is real and restorable; it just cannot contain

@@ -177,3 +177,54 @@ def test_a_run_records_itself_so_the_next_one_can_compare(client):
 
     archive.create("database")
     assert (get_backup_runs() or {})["database"]["ok"] is True
+
+
+def test_archives_carry_the_card_covers(client):
+    """Restoring a full archive into an empty install left 693 broken cards,
+    because thumbnails were excluded as "regenerable". Regenerating them means
+    re-resolving posts over the network, one at a time, with every card broken
+    until it finishes. 86 MB against a 4.5 GB archive buys a library that looks
+    like one on arrival."""
+    thumbs = Path(settings.FILES_DIR) / "thumbs"
+    thumbs.mkdir(parents=True, exist_ok=True)
+    (thumbs / f"{uuid.uuid4()}.jpg").write_bytes(b"cover")
+    _make_upload()
+
+    result = archive.create("essential")
+    assert result["ok"] is True
+    assert result["thumbnails"] >= 1
+    with zipfile.ZipFile(result["path"]) as zf:
+        assert any(n.startswith("files/thumbs/") for n in zf.namelist())
+
+
+def test_covers_do_not_count_as_media_carried(client):
+    """`media_files` answers "did this run carry anything irreplaceable", which
+    is what the next run reads to tell a wipe from an old gap. Counting covers
+    there would answer yes forever."""
+    from backend.core.app_settings import set_backup_runs
+
+    thumbs = Path(settings.FILES_DIR) / "thumbs"
+    thumbs.mkdir(parents=True, exist_ok=True)
+    (thumbs / f"{uuid.uuid4()}.jpg").write_bytes(b"cover")
+
+    set_backup_runs({})
+    _make_upload()
+    # Earlier tests in this module leave their own uploads behind, and the
+    # scope is library-wide: clear the media but keep the covers.
+    for stray in Path(settings.FILES_DIR).rglob("*"):
+        if stray.is_file() and thumbs not in stray.parents:
+            stray.unlink()
+
+    result = archive.create("essential")
+    assert result["media_files"] == 0
+    assert result["thumbnails"] >= 1
+    assert result["degraded"] is True
+
+
+def test_a_database_archive_stays_database_only(client):
+    thumbs = Path(settings.FILES_DIR) / "thumbs"
+    thumbs.mkdir(parents=True, exist_ok=True)
+    (thumbs / f"{uuid.uuid4()}.jpg").write_bytes(b"cover")
+
+    result = archive.create("database")
+    assert result["thumbnails"] == 0
