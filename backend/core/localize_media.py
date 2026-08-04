@@ -45,6 +45,53 @@ SNIFF_FIRST_HOSTS = ("threads.com", "threads.net", "instagram.com")
 # or an error body, not the video.
 _MIN_VALID_BYTES = 50_000
 
+# Instagram serves reels as DASH, and its segment URLs carry the byte window in
+# the query string. Fetch one and the CDN honours ITS range, not ours: the file
+# lands full-size, right content-type, and starts mid-stream. Dropping these
+# asks for the whole representation instead.
+_BYTE_RANGE_PARAMS = ("bytestart", "byteend")
+
+
+def _strip_byte_range(url: str) -> str:
+    """Remove a DASH segment's byte-window params, if it has any."""
+    from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
+
+    parts = urlsplit(url)
+    if not parts.query:
+        return url
+    kept = [(k, v) for k, v in parse_qsl(parts.query, keep_blank_values=True)
+            if k.lower() not in _BYTE_RANGE_PARAMS]
+    if len(kept) == len(parse_qsl(parts.query, keep_blank_values=True)):
+        return url
+    return urlunsplit(parts._replace(query=urlencode(kept)))
+
+
+def _playable_container(path: Path) -> bool:
+    """Does this file begin like a media container a player can open?
+
+    The check that was missing on 2026-08-04: 51 recovered Instagram reels were
+    the right size, the right content-type and completely unplayable, because
+    each one was a bare `moof` fragment with no `ftyp`/`moov` header in front of
+    it. Nothing noticed until a video was clicked. A download that cannot be
+    decoded is a failed download, and it should fall through to the next tier
+    rather than be filed as a success.
+    """
+    try:
+        with open(path, "rb") as fh:
+            head = fh.read(16)
+    except OSError:
+        return False
+    if len(head) < 12:
+        return False
+    return (
+        head[4:8] in (b"ftyp", b"moov", b"mdat")      # MP4 / MOV family
+        or head[:4] == b"\x1a\x45\xdf\xa3"            # Matroska / WebM
+        or head[:4] == b"RIFF"                        # AVI / WAV
+        or head[:4] == b"OggS"                        # Ogg
+        or head[:3] == b"ID3" or head[:2] == b"\xff\xfb"  # MP3
+        or head[:4] == b"fLaC"
+    )
+
 _DEFAULT_UA = (
     "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
     "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"
@@ -189,6 +236,7 @@ async def _download_direct(
     }
     if referer:
         headers["Referer"] = referer
+    media_url = _strip_byte_range(media_url)
     try:
         async with httpx.AsyncClient(
             timeout=httpx.Timeout(180.0, connect=30.0), follow_redirects=True
@@ -210,6 +258,19 @@ async def _download_direct(
         except Exception:
             pass
         raise LocalizeError("Downloaded media was empty or too small")
+
+    if not _playable_container(dest):
+        # Right size, right content-type, and no player can open it. Delete it
+        # and fail, so the caller falls through to yt-dlp instead of filing a
+        # corrupt file as a success.
+        try:
+            dest.unlink()
+        except Exception:
+            pass
+        raise LocalizeError(
+            "Downloaded media is not a playable container (a stream fragment, "
+            "not the whole file)"
+        )
 
 
 async def _download_hls(
