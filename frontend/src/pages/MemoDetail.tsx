@@ -33,6 +33,7 @@ import {
   Captions,
   KeyRound,
   Image as ImageIcon,
+  RefreshCw,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { BackButton } from '@/components/BackButton';
@@ -1432,6 +1433,7 @@ export function MemoDetail() {
   const [confirmDelete, setConfirmDelete] = useState(false);
   // "Add to playlist" popover (music memos only).
   const [plMenuOpen, setPlMenuOpen] = useState(false);
+  const [repulling, setRepulling] = useState(false);
   // Theater is lifted so the page grid reflows: video full-width, rail drops
   // below it beside the notes (OPNMMO-0042).
   const [theater, setTheater] = useState(false);
@@ -1719,6 +1721,42 @@ export function MemoDetail() {
                   </div>
                 )}
               </div>
+            )}
+            {/* Re-pull: fetch the source again and apply what comes back.
+                For a memo that is wrong rather than merely remote — a video
+                that will not play, a caption still reading "Instagram post",
+                a carousel that arrived as one photo. Uploads have no source,
+                so they do not get the button. */}
+            {!isEditing && memo.source_url && (
+              <button
+                className="om-icon-btn"
+                disabled={repulling || memo.localize_status === 'pending' || memo.localize_status === 'processing'}
+                onClick={async () => {
+                  setRepulling(true);
+                  try {
+                    await memoApi.repull(memo.id);
+                    // The work runs detached, so poll the memo until it settles
+                    // rather than leaving the button spinning on a guess.
+                    const started = Date.now();
+                    const tick = setInterval(async () => {
+                      const fresh = await memoApi.get(memo.id).catch(() => null);
+                      queryClient.invalidateQueries({ queryKey: ['memo', memo.id] });
+                      const settled = fresh && fresh.localize_status !== 'pending' && fresh.localize_status !== 'processing';
+                      if (settled || Date.now() - started > 5 * 60_000) {
+                        clearInterval(tick);
+                        setRepulling(false);
+                      }
+                    }, 2500);
+                  } catch (e) {
+                    setRepulling(false);
+                    alert((e as Error).message || 'Could not start the re-pull');
+                  }
+                }}
+                title="Pull this memo's source again — media, caption and cover"
+                aria-label="Pull this memo's source again"
+              >
+                <RefreshCw size={15} className={repulling ? 'om-spin' : undefined} />
+              </button>
             )}
             {/* Pin + Export as header icon buttons (tooltip via title), next to
                 delete — moved out of the meta row so tags flow free below. */}

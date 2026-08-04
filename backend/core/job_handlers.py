@@ -44,6 +44,10 @@ KIND_LOCALIZE = "localize"
 # dedupe keys on (kind, memo_id) — one shared kind would silently drop the
 # explicit job and quietly break "make it local".
 KIND_LOCALIZE_AUTO = "localize_auto"
+# Re-pull is its own kind for the same reason auto-localize is: it can be asked
+# for while a localize is already queued for the same memo, and dedupe keys on
+# (kind, memo_id) — sharing a kind would silently swallow one of them.
+KIND_REPULL = "repull"
 KIND_TRANSCRIBE = "transcribe"
 KIND_TRANSCRIPT = "transcript"
 KIND_PLAYLIST_DOWNLOAD = "playlist_download"
@@ -79,6 +83,14 @@ async def _localize(payload: dict[str, Any]) -> None:
     await localize_memo_task(
         payload["memo_id"], payload["mode"], payload.get("quality", 1080)
     )
+
+
+@register(KIND_REPULL, concurrency=2)
+async def _repull(payload: dict[str, Any]) -> None:
+    """Re-pull: resolve the source again, download it, rebuild the cover."""
+    from backend.api.ingest import repull_memo_task
+
+    await repull_memo_task(payload["memo_id"], payload["mode"])
 
 
 @register(KIND_LOCALIZE_AUTO, concurrency=3)
@@ -164,6 +176,7 @@ _ROUTING: dict[str, tuple[str, Callable[[tuple], tuple[str | None, dict[str, Any
     "process_file_memo": (KIND_PROCESS_FILE, _p_process_file),
     "cache_thumbnail": (KIND_THUMBNAIL, _p_memo),
     "localize_memo_task": (KIND_LOCALIZE, _p_localize),
+    "repull_memo_task": (KIND_REPULL, _p_localize),
     "_localize_memo_task": (KIND_LOCALIZE_AUTO, _p_localize_auto),
     "transcribe_memo_task": (KIND_TRANSCRIBE, _p_memo),
     "transcript_memo_task": (KIND_TRANSCRIPT, _p_memo),
