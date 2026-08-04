@@ -139,6 +139,7 @@ def get_settings() -> dict[str, Any]:
     data.pop(_CANARY_KEY, None)
     data.pop(_INTEGRITY_KEY, None)
     data.pop(_BACKUP_RUNS_KEY, None)
+    data.pop(_MUSIC_RELAY_KEY, None)
     return {
         **data,
         "yt_cookies_present": cookies_present(),
@@ -309,6 +310,25 @@ def get_backup_dest() -> str:
 # the timestamp stored here, so a machine that is off for a week runs the
 # missed archive when it comes back rather than silently skipping it.
 _BACKUP_RUNS_KEY = "backup_runs"
+
+
+# Verified session for the lossless music relay (core/music_relay.py). Holds a
+# SECRET, so it is kept out of _DEFAULTS and stripped from get_settings() the
+# same way the hidden-section passcode and the Telegram token are: the API only
+# ever exposes whether a session exists and when it expires.
+_MUSIC_RELAY_KEY = "music_relay"
+
+
+def get_music_relay() -> dict | None:
+    value = _read().get(_MUSIC_RELAY_KEY)
+    return value if isinstance(value, dict) else None
+
+
+def set_music_relay(record: dict) -> None:
+    with _LOCK:
+        current = _read()
+        current[_MUSIC_RELAY_KEY] = record
+        _write_raw(current)
 
 
 def get_backup_runs() -> dict | None:

@@ -52,7 +52,6 @@ async def create_backup(
     """
     db_path = Path(settings.DATA_DIR) / "openmemo.db"
     files_dir = Path(settings.FILES_DIR)
-    thumbs_dir = files_dir / "thumbs"
 
     ts = datetime.utcnow().strftime("%Y%m%d-%H%M%S")
     filename = f"openmemo-backup-{ts}-{scope}.zip"
@@ -78,19 +77,23 @@ async def create_backup(
             if tmp_db.exists():
                 zf.write(tmp_db, _DB)
 
+            # Card covers ride along with any scope that carries media. They
+            # are regenerable in principle, but regenerating means re-resolving
+            # posts over the network one memo at a time, and every card is
+            # broken until that finishes — which is what restoring a full
+            # archive into an empty install actually looked like.
             if scope == "essential":
-                from backend.core.archive import _upload_paths
+                from backend.core.archive import _thumbnail_paths, _upload_paths
 
-                for f in _upload_paths()[0]:
+                for f in _upload_paths()[0] + _thumbnail_paths():
                     try:
                         rel = f.relative_to(files_dir).as_posix()
                     except ValueError:
                         rel = f.name
                     zf.write(f, _FILES_PREFIX + rel)
             elif scope == "full" and files_dir.exists():
-                thumbs_str = str(thumbs_dir)
                 for f in files_dir.rglob("*"):
-                    if f.is_file() and not str(f).startswith(thumbs_str):
+                    if f.is_file():
                         rel = f.relative_to(files_dir).as_posix()
                         zf.write(f, _FILES_PREFIX + rel)
 

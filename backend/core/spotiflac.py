@@ -44,10 +44,13 @@ log = logging.getLogger("openmemo.music")
 # --- SpotiFLAC community provider (decrypted from the upstream binary) ---
 # Source: spotbye/SpotiFLAC backend/community_endpoints.go + community_apikey.go.
 _COMMUNITY_API_KEY = "explore-obscure-chivalry-travesty-blinks"
-_QOBUZ_COMMUNITY_URL = "https://qbz-foss.spotbye.qzz.io/api/dl"
+# Rotated 2026-08 from `-foss` to `-oss`, which is why every Apple Music and
+# Spotify pull started failing with a DNS error. Re-derive from upstream's
+# community_endpoints.go if it happens again — the scheme is in the docstring.
+_QOBUZ_COMMUNITY_URL = "https://qbz-oss.spotbye.qzz.io/api/dl"
 # Direct-FLAC provider only for now. Tidal/Amazon return encrypted streams.
-#   "https://tdl-foss.spotbye.qzz.io/api/dl"  (Tidal — DASH/CENC)
-#   "https://amz-foss.spotbye.qzz.io/api/dl"  (Amazon — encrypted MP4)
+#   "https://tdl-oss.spotbye.qzz.io/api/dl"  (Tidal — DASH/CENC)
+#   "https://amz-oss.spotbye.qzz.io/api/dl"  (Amazon — encrypted MP4)
 
 # --- Qobuz public API (embedded default app credentials, like SpotiFLAC) ---
 _QOBUZ_API_BASE = "https://www.qobuz.com/api.json/0.2"
@@ -344,18 +347,41 @@ def _community_flac_url(client: httpx.Client, qobuz_id: str, quality: str) -> st
     non-200 (including 503) wrongly burned the downgrade and then gave up, which
     is why a transient overload looked like a permanent failure.
     """
+    import json as _json
+
+    from backend.core import music_relay
+
     quality = quality if quality in VALID_QUALITIES else DEFAULT_QUALITY
-    headers = {
-        "Content-Type": "application/json",
-        "Accept": "application/json",
-        "x-api-key": _COMMUNITY_API_KEY,
-        "User-Agent": "SpotiFLAC",
-    }
     payload = {"id": str(qobuz_id), "quality": quality}
     downgraded = False
     for attempt in range(_COMMUNITY_MAX_RETRIES + 1):
-        resp = client.post(_QOBUZ_COMMUNITY_URL, json=payload, headers=headers, timeout=60)
+        # Signed per request: the body hash and a nonce are inside the
+        # signature, so it has to be rebuilt whenever the payload changes (the
+        # hi-res → CD downgrade below changes it) and cannot be hoisted.
+        body = _json.dumps(payload).encode()
+        try:
+            signature = music_relay.sign("POST", _QOBUZ_COMMUNITY_URL, body)
+        except music_relay.RelayNotVerified as e:
+            # Its message is already written for the user; keep the type the
+            # localize path knows how to record.
+            raise SpotiFlacError(str(e)) from e
+        headers = {
+            "Content-Type": "application/json",
+            "Accept": "application/json",
+            "x-api-key": _COMMUNITY_API_KEY,
+            "User-Agent": "SpotiFLAC",
+            **signature,
+        }
+        resp = client.post(_QOBUZ_COMMUNITY_URL, content=body, headers=headers, timeout=60)
         status = resp.status_code
+
+        # The relay wants a session and openMemo's has lapsed or was never set
+        # up. Say what to do instead of leaving an HTTP code in the memo.
+        if status == 428:
+            raise SpotiFlacError(
+                "The lossless music service needs openMemo to be verified again. "
+                "Settings → Files → Music relay → Verify."
+            )
 
         if status == 200:
             url = _extract_stream_url(resp.json())

@@ -13,7 +13,7 @@ import { ONBOARDING_KEY } from '@/lib/onboarding';
 import { useAppStore } from '@/stores/appStore';
 import { useIsMobile } from '@/lib/useBreakpoint';
 import { CookiesUpload } from '@/components/CookiesUpload';
-import { systemApi, maintenanceApi, backupApi, settingsApi, memoApi, type AppSettings, type ArchiveListing, type LibraryIntegrity, type TelegramRelayStatus } from '@/lib/api';
+import { systemApi, maintenanceApi, backupApi, settingsApi, memoApi, type AppSettings, type ArchiveListing, type LibraryIntegrity, type MusicRelayStatus, type TelegramRelayStatus } from '@/lib/api';
 import type { OllamaModel } from '@/types';
 
 type BuiltWithEntry = { name: string; url: string; desc: string };
@@ -369,6 +369,106 @@ function ScheduledArchiveRows({ dest, onDestSaved }: { dest: string; onDestSaved
         )}
       </div>
     </>
+  );
+}
+
+/** Music relay: the lossless source behind Apple Music and Spotify pulls.
+ *
+ *  It stopped accepting a shared key in August 2026 and now issues sessions
+ *  only after a challenge a person completes in a browser. That is the point of
+ *  the challenge, so openMemo hands you the link and waits rather than trying
+ *  to answer it for you. */
+function MusicRelayRows() {
+  const [state, setState] = useState<MusicRelayStatus | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [msg, setMsg] = useState('');
+  const pollRef = useRef<number | null>(null);
+
+  const refresh = () => { settingsApi.musicRelayStatus().then(setState).catch(() => setState(null)); };
+  useEffect(() => {
+    refresh();
+    return () => { if (pollRef.current) window.clearInterval(pollRef.current); };
+  }, []);
+
+  const verify = async () => {
+    setBusy(true); setMsg('');
+    try {
+      const { challenge_url } = await settingsApi.musicRelayVerifyStart(window.location.origin);
+      window.open(challenge_url, '_blank', 'noopener');
+      setMsg('Complete the challenge in the tab that opened. This will update when it lands.');
+      // The relay redirects the browser straight back to openMemo, so nothing
+      // notifies this component — poll until the session shows up, and give up
+      // after five minutes rather than spinning forever.
+      const started = Date.now();
+      pollRef.current = window.setInterval(async () => {
+        try {
+          const next = await settingsApi.musicRelayStatus();
+          setState(next);
+          if (next.verified || Date.now() - started > 5 * 60_000) {
+            if (pollRef.current) window.clearInterval(pollRef.current);
+            pollRef.current = null;
+            setBusy(false);
+            setMsg(next.verified ? 'Verified ✓' : 'Gave up waiting. Try again when you have a minute.');
+          }
+        } catch { /* keep waiting */ }
+      }, 3000);
+    } catch (e) {
+      setBusy(false);
+      setMsg(e instanceof Error ? e.message : 'Could not start verification');
+    }
+  };
+
+  const disconnect = async () => {
+    try { setState(await settingsApi.musicRelayDisconnect()); setMsg(''); }
+    catch (e) { setMsg(e instanceof Error ? e.message : 'Failed'); }
+  };
+
+  return (
+    <div className="om-setting-row" style={{ flexDirection: 'column', alignItems: 'stretch', gap: 10 }}>
+      <div className="om-setting-row-text" style={{ maxWidth: 560 }}>
+        <p>Music relay</p>
+        <span className="mono">
+          Apple Music and Spotify links are pulled as lossless FLAC through a shared community
+          relay. It only answers verified clients now, so it needs a one-off challenge that you
+          complete in your browser. Nothing is signed up for and no account is involved.
+        </span>
+      </div>
+
+      {state && !state.verified && (
+        <div
+          role="status"
+          style={{
+            border: '1px solid var(--border-warning, #E5C07B)',
+            background: 'var(--bg-warning, rgba(186,117,23,0.08))',
+            borderRadius: 10, padding: '10px 12px', maxWidth: 560,
+          }}
+        >
+          <p style={{ margin: 0, fontWeight: 500, color: 'var(--text-warning, #BA7517)' }}>
+            {state.expired ? 'The music relay session has expired' : 'Apple Music and Spotify pulls are not working'}
+          </p>
+          <span className="mono" style={{ display: 'block', marginTop: 4 }}>
+            Every Apple Music and Spotify download fails until this is verified. Everything else
+            (YouTube, SoundCloud, Instagram, uploads) is unaffected.
+          </span>
+        </div>
+      )}
+
+      <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
+        {state?.verified ? (
+          <>
+            <span style={{ color: 'var(--text-success, #1D9E75)', fontWeight: 500 }}>
+              Verified ✓{state.expires_in_days !== null ? ` · ${state.expires_in_days} days left` : ''}
+            </span>
+            <button className="om-btn-secondary" onClick={disconnect}>Disconnect</button>
+          </>
+        ) : (
+          <button className="om-btn-secondary" onClick={verify} disabled={busy}>
+            {busy ? 'Waiting for you…' : 'Verify'}
+          </button>
+        )}
+      </div>
+      {msg && <span className="mono" style={{ fontSize: 11 }}>{msg}</span>}
+    </div>
   );
 }
 
@@ -1372,6 +1472,7 @@ export function SettingsPage() {
             </div>
             <div className="om-setting-row" style={{ borderTop: '1px solid var(--border)', marginTop: 8, paddingTop: 8, flexDirection: 'column', alignItems: 'stretch' }}>
               <InstagramConnectRows />
+              <MusicRelayRows />
             </div>
             <div className="om-setting-row" style={{ borderTop: '1px solid var(--border)', marginTop: 8, paddingTop: 8 }}>
               <TrashRow />
