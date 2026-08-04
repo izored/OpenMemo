@@ -7,6 +7,14 @@ All notable changes to OpenMemo are documented here.
 
 <!-- Add entries here as work lands: ### Added / ### Changed / ### Fixed -->
 
+### Added
+
+- 🔄 **A re-pull button on every memo that came from a link.** Top right of the memo page, next to pin and export. "Make it local" only downloads; this is the button for a memo that is *wrong* rather than merely remote — a video that will not play, a caption still reading "Instagram post", a carousel that arrived as a single photo, a cover pointing at a file that is gone. It resolves the source the way a fresh save would, downloads the media, and rebuilds the cover last so a freshly downloaded video can supply a frame. It never overwrites a title you wrote yourself. Uploads have no source to pull from, so they do not get the button.
+
+### Fixed
+
+- 🎬 **Videos recovered from a link play again.** Every Instagram video pulled back on 4 August sat on disk, complete and correct, and refused to play. Inside Docker openMemo stores those files with a relative path, which opens perfectly well from the app's own working directory — but the route that serves a file compares that path against an absolute one to check the file really belongs to the memo, and the two never matched. The comparison now happens between two absolute paths.
+
 ---
 ## [3.5.0] - 2026-08-04
 

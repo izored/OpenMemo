@@ -158,3 +158,30 @@ def test_a_memo_thumbnail_that_exists_is_not_counted_missing(client):
     after = _check(client)
     assert after["with_thumb"] >= 1
     assert after["missing_thumbs"] == before["missing_thumbs"]
+
+
+def test_a_relative_stored_path_resolves_to_an_absolute_one(client):
+    """In Docker `FILES_DIR=./files`, so a memo saved there stores
+    `files/default/x.mp4`. It opens fine — the working directory is /app — but
+    callers COMPARE the result against an absolute path, and the two never
+    match. Every Instagram video recovered on 2026-08-04 was on disk and 404ing
+    from the file route for exactly that reason."""
+    import os
+
+    from backend.core.file_paths import resolve_memo_path
+
+    files = Path(settings.FILES_DIR)
+    name = f"{uuid.uuid4()}.mp4"
+    (files / name).write_bytes(b"video-ish")
+
+    cwd = os.getcwd()
+    os.chdir(files.parent)
+    try:
+        relative = Path(files.name) / name
+        resolved = resolve_memo_path(str(relative))
+    finally:
+        os.chdir(cwd)
+
+    assert resolved is not None
+    assert resolved.is_absolute()
+    assert resolved == (files / name).resolve()

@@ -513,6 +513,45 @@ async def localize_memo(
     return {"id": memo_id, "status": "pending", "mode": body.mode, "quality": body.quality}
 
 
+@router.post("/{memo_id}/repull")
+async def repull_memo(
+    memo_id: str,
+    db: AsyncSession = Depends(get_db),
+):
+    """Fetch this memo's source again — media, and the details that came with it.
+
+    "Make it local" only downloads. This is the button for when a memo is wrong
+    rather than merely remote: the file is missing or will not play, the title
+    is still a placeholder, a carousel arrived as one photo. It re-runs the
+    resolver the way a fresh save would and applies whatever comes back, without
+    touching anything you wrote yourself.
+
+    Runs in the background; the client polls the memo until localize_status
+    leaves `pending`.
+    """
+    memo = await db.get(Memo, memo_id)
+    if not memo:
+        raise HTTPException(status_code=404, detail="Memo not found")
+    if not memo.source_url:
+        raise HTTPException(
+            status_code=400,
+            detail="This memo was uploaded, so there is no source to pull from.",
+        )
+
+    # An audio memo asks for audio: that is what the original save produced, and
+    # for a video host it is the same conversion the user chose at the time.
+    mode = "audio" if (memo.type or "").lower() == "audio" else "video"
+    memo.localize_status = "pending"
+    memo.localize_error = None
+    memo.updated_at = datetime.utcnow()
+    await db.commit()
+
+    from backend.api.ingest import repull_memo_task
+
+    queue_task(repull_memo_task, memo_id, mode)
+    return {"id": memo_id, "status": "pending", "mode": mode}
+
+
 def _sniff_thumb_ext(raw: bytes) -> Optional[str]:
     """Magic-byte image sniff -> canonical extension (trust content, not name)."""
     if raw.startswith(b"\xff\xd8\xff"):
