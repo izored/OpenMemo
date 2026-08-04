@@ -27,6 +27,23 @@ _db_path = Path(_tmpdir, "openmemo.db").as_posix()
 os.environ.setdefault("DATA_DIR", _tmpdir)
 os.environ.setdefault("DATABASE_URL", f"sqlite+aiosqlite:///{_db_path}")
 
+# FILES_DIR must be a throwaway too, and this line is not optional bookkeeping.
+# It was missing, and on 2026-08-04 running the suite from a real checkout
+# DESTROYED A LIVE MEDIA LIBRARY: 435 files, every video, song and upload.
+#
+# The mechanism: settings.FILES_DIR defaulted to the repo's own `files/`, and
+# test_backup_restore_safety.py posts a scope="full" archive to
+# /api/backup/restore. A full restore deletes everything in the files directory
+# except `thumbs` before unpacking — so the suite faithfully wiped the real one.
+# The DB survived only because DATA_DIR above was already isolated, which is
+# exactly why the damage looked mysterious instead of obvious.
+#
+# Any test that writes through settings.FILES_DIR now writes here. Never point
+# this at the repo. test_test_isolation.py fails the suite if it ever drifts.
+_files_dir = Path(_tmpdir, "files")
+_files_dir.mkdir(parents=True, exist_ok=True)
+os.environ.setdefault("FILES_DIR", str(_files_dir))
+
 # The job-queue worker pool keeps its worker set and shutdown Event in module
 # globals — fine for the app (one event loop for its whole life), wrong for a
 # suite that builds a TestClient per test, each with its own loop. Workers
