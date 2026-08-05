@@ -99,14 +99,34 @@ class JoinBody(BaseModel):
 
 
 @router.post("/pair/start", dependencies=[Depends(require_enabled)])
-async def start_pairing() -> dict:
+async def start_pairing(replace: bool = False) -> dict:
     """Mint a Mesh code for this device and adopt it.
 
-    Returns the words ONCE. They are not retrievable afterwards on a platform
-    without a keychain, which the UI must say plainly rather than offering a
-    "show again" that quietly fails.
+    Refuses when this Mesh already has another device, unless `replace=true`.
+    Starting again mints a NEW root, and every other device is still holding the
+    old one — they stop recognising each other on the spot, with no error on
+    either side, because to each of them the other has simply become a stranger.
+    That is not something to discover by pressing a button labelled "Start".
     """
     from backend.core.mesh import clock, pairing
+
+    mine = await clock.device_id()
+    others = [
+        d for d in await pairing.devices()
+        if d.device_id != mine and not d.revoked
+    ]
+    if others and not replace:
+        names = ", ".join(d.name or d.device_id for d in others[:3])
+        raise HTTPException(
+            status_code=409,
+            detail=(
+                f"This Mesh already has another device ({names}). Starting again "
+                "makes a new code and cuts it loose — it would keep the old one "
+                "and the two would stop recognising each other. To add a third "
+                "device, use this Mesh's existing code. To start over anyway, "
+                "confirm the replacement."
+            ),
+        )
 
     code = pairing.generate_code()
     result = pairing.store_code(code)
@@ -247,13 +267,36 @@ async def discover() -> dict:
 
     from backend.core.mesh import server as mesh_server
 
-    peers = await discovery.browse(secret.chain_id(), own_port=mesh_server.DEFAULT_PORT)
+    peers, strangers = await discovery.scan(
+        secret.chain_id(), own_port=mesh_server.DEFAULT_PORT
+    )
+
+    # The single most likely pairing mistake: "Start a Mesh" pressed on both
+    # computers. Each mints its own root, so they filter each other out and both
+    # report nothing, forever, with no hint as to why. If we can see an openMemo
+    # that is not in this Mesh, say so — it is very probably the other one.
+    if not peers and strangers:
+        note = (
+            f"Found {strangers} other openMemo on this network, but in a different "
+            "Mesh. If that is your other computer, it started its own Mesh instead "
+            "of joining this one — press Join a Mesh there and enter this code."
+        ) if strangers == 1 else (
+            f"Found {strangers} other openMemos on this network, none in this Mesh. "
+            "If one of them is your other computer, press Join a Mesh there and "
+            "enter this code."
+        )
+    elif not peers:
+        # Normal on Docker, where multicast does not cross the bridge. Offer the
+        # address field rather than implying a failure.
+        note = "No devices found. You can still pair by address."
+    else:
+        note = None
+
     return {
         "peers": [vars(p) for p in peers],
         "count": len(peers),
-        # An empty list is normal on Docker, where multicast does not work.
-        # The UI should offer the address field rather than implying a failure.
-        "note": None if peers else "No devices found. You can still pair by address.",
+        "others_on_network": strangers,
+        "note": note,
     }
 
 
