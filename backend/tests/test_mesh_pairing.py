@@ -36,11 +36,29 @@ def test_two_codes_are_never_the_same():
 
 def test_a_typo_fails_immediately_rather_than_pairing_badly():
     """The checksum is the point. Without it a mistyped word becomes a pairing
-    that silently never connects, which is far harder to diagnose."""
+    that silently never connects, which is far harder to diagnose.
+
+    It catches MOST typos, not all: a 12-word code carries a 4-bit checksum, so
+    a single wrong word still validates about one time in sixteen. Swapping one
+    word and asserting it raises is therefore a ~6%-flaky test, which is what it
+    was — it failed CI on an unrelated pull request. Walk candidate words until
+    one trips the checksum and assert THAT is the error, which tests the same
+    behaviour and cannot flake: twenty candidates all passing has probability
+    16 ** -20.
+    """
     words = pairing.generate_code().split()
-    words[3] = "zebra" if words[3] != "zebra" else "zoo"
-    with pytest.raises(pairing.PairingError):
-        pairing.validate(" ".join(words))
+    wordlist = pairing._mnemonic().wordlist
+    candidates = [w for w in wordlist[:40] if w != words[3]][:20]
+
+    for candidate in candidates:
+        attempt = list(words)
+        attempt[3] = candidate
+        try:
+            pairing.validate(" ".join(attempt))
+        except pairing.PairingError as e:
+            assert "not quite right" in str(e)
+            return
+    pytest.fail("no single-word change tripped the checksum in 20 tries")
 
 
 def test_a_word_that_is_not_in_the_list_is_named_in_the_error():
