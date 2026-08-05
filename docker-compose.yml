@@ -16,6 +16,13 @@ services:
       dockerfile: Dockerfile
     expose:
       - "8000"
+    ports:
+      # Mesh sync. Publishing it is necessary but not sufficient: the listener
+      # binds loopback until you turn on Settings -> Mesh -> "Reachable on my
+      # network", so with that off this forwards to a socket nothing outside the
+      # container can talk to anyway. Both switches have to be on, which is the
+      # point — nothing is exposed by installing.
+      - "8770:8770"
     volumes:
       - ./data:/app/data
       - ./files:/app/files

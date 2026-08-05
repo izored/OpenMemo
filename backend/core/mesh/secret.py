@@ -13,7 +13,12 @@ from __future__ import annotations
 
 import hashlib
 import hmac
+import logging
 import os
+
+from backend.core.mesh import keystore
+
+logger = logging.getLogger(__name__)
 
 _INFO_CHAIN = b"openmemo/mesh/chain"
 _INFO_PSK = b"openmemo/mesh/psk"
@@ -36,21 +41,38 @@ def _hkdf(root: bytes, info: bytes, length: int = 32) -> bytes:
     return out[:length]
 
 
-def get_or_create_root() -> bytes:
-    """The root secret for this library's Mesh. Created on first use.
+def _migrate_out_of_settings() -> str | None:
+    """Move a plaintext root out of app_settings.json, once.
 
-    Phase 8 replaces this body with a BIP39 seed the user can write down; every
-    caller below stays identical because they only ever see derived keys.
+    Installs from before the keystore have their root sitting in that file as
+    plain hex. Read it, put it where it belongs, and delete the original — a
+    migration that copies without deleting leaves the exposure it was written
+    to remove.
     """
-    from backend.core.app_settings import _read, _write_raw, _LOCK
+    from backend.core.app_settings import _LOCK, _read, _write_raw
 
     with _LOCK:
         current = _read()
-        stored = current.get(SECRET_KEY)
-        if not stored:
-            stored = os.urandom(32).hex()
-            current[SECRET_KEY] = stored
+        legacy = current.get(SECRET_KEY)
+        if not legacy:
+            return None
+        if keystore.put(SECRET_KEY, legacy):
+            current.pop(SECRET_KEY, None)
             _write_raw(current)
+            logger.info("mesh: root secret moved into %s", keystore.describe())
+        return legacy
+
+
+def get_or_create_root() -> bytes:
+    """The root secret for this library's Mesh. Created on first use.
+
+    Lives in the OS store (core/mesh/keystore.py), not in app_settings.json:
+    every Mesh key derives from this, so a copy of it is a copy of the Mesh.
+    """
+    stored = keystore.get(SECRET_KEY) or _migrate_out_of_settings()
+    if not stored:
+        stored = os.urandom(32).hex()
+        keystore.put(SECRET_KEY, stored)
     return bytes.fromhex(stored)
 
 
@@ -63,10 +85,14 @@ def set_root(seed: bytes) -> None:
     """
     from backend.core.app_settings import _LOCK, _read, _write_raw
 
+    keystore.put(SECRET_KEY, seed.hex())
+    # Clear any pre-keystore copy in the settings file, so joining a Mesh on an
+    # install that predates the keystore does not leave the OLD root behind in
+    # plaintext next to the new one.
     with _LOCK:
         current = _read()
-        current[SECRET_KEY] = seed.hex()
-        _write_raw(current)
+        if current.pop(SECRET_KEY, None) is not None:
+            _write_raw(current)
 
 
 def reset_root() -> None:
