@@ -6810,9 +6810,15 @@ button.om-add-link { background: none; border: 0; padding: 0; cursor: pointer; f
 .om-mesh-batch-main span { display: block; font-size: 11.5px; color: var(--text-4); }
 
 /* ─ Mesh pairing (ADR-024 §2) ──────────────────────────────────────────── */
-.om-mesh-start { display: flex; gap: 10px; flex-wrap: wrap; }
-.om-mesh-start button { display: flex; flex-direction: column; align-items: flex-start; gap: 2px; padding: 10px 14px; }
-.om-mesh-start .mono { font-size: 11px; opacity: .75; font-weight: 400; }
+/* The helper line is a caption UNDER each button, never a second row inside it.
+   Stacking label + hint in a column inside .om-btn-* pushed ~56px of content
+   into a fixed 36px (primary) / 30px (secondary) box, so the hint spilled over
+   the button edge. Buttons stay untouched shared components; the column lives
+   on the wrapper. */
+.om-mesh-start { display: flex; flex-wrap: wrap; gap: 12px 16px; }
+.om-mesh-start-choice { display: flex; flex-direction: column; align-items: flex-start; gap: 5px; }
+.om-mesh-start-choice .mono { font-size: 11.5px; color: var(--text-4); line-height: 1.4; padding-left: 1px; }
+.om-mesh-start button:disabled { opacity: 0.5; cursor: default; }
 
 .om-mesh-code { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 12px; }
 .om-mesh-words { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px 10px; transition: filter var(--transition-fast); }
