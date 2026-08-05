@@ -9,6 +9,11 @@ All notable changes to OpenMemo are documented here.
 
 ### Fixed
 
+- 🔑 **Your Mesh code can be read again, and Settings stops contradicting itself.** Starting a Mesh on Windows minted a 12-word code, showed it once, and lost it — the "show it again" path only ever read the macOS keychain, so the panel came back blank and there was no way to pair the second device short of starting over. openMemo now keeps the words, right beside the key they derive. That is not a new exposure: the derived key was already sitting in the same file in plain text on every platform, so withholding the words protected nothing and only cost you the code. Settings also said "pairing and syncing arrive in a later update" directly above two working pairing buttons — Mesh has been listening and announcing itself since the day you switch it on, and it now says so.
+- 🔒 **The Mesh key stopped being readable through the settings API.** `GET /api/settings` was returning `mesh_secret` in full: the 32-byte root that every Mesh key is derived from, enough for anything that can reach the local API to join your Mesh and read what crosses it. The code has always said it "must never be readable through the settings API" — nothing actually enforced that until now. It is stripped like the Telegram token and the passcode hash, with a test that fails if it ever comes back.
+
+### Fixed
+
 - 🎵 **The music relay Verify button opens a real challenge page.** Clicking it showed a blank card, because the relay only issues a challenge when openMemo asks it to send your browser back to a path called `/session-grant` — and openMemo was pointing at its own `/api/…` address, which the relay refuses with an error before drawing anything. The callback now lives where the relay insists, so the challenge appears and finishing it hands the session straight back.
 
 ### Added

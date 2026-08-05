@@ -657,10 +657,14 @@ function MeshRows({ profile, save }: { profile: AppSettings | null; save: (p: Pa
       </div>
       <div className="om-setting-row" style={{ borderTop: '1px solid var(--border)', marginTop: 8, paddingTop: 8 }}>
         <div className="om-setting-row-text">
-          <p>{enabled ? 'Not ready to pair yet' : 'How Mesh works'}</p>
+          <p>{enabled ? 'Ready to pair' : 'How Mesh works'}</p>
           <span className="mono">
+            {/* This used to say pairing "arrives in a later update" while the
+                working Start/Join buttons sat directly underneath it. Enabling
+                Mesh turns on the change triggers, opens the listener on 8770
+                and starts advertising — it is on, and the copy now says so. */}
             {enabled
-              ? 'Mesh is switched on, which wakes up its groundwork, but pairing and syncing arrive in a later update. Nothing is being sent anywhere and no other device can reach this one. Leave it on if you want it ready, or switch it back off — either is fine. '
+              ? 'Mesh is on: this computer is listening for the other one and announcing itself on your network. Pair them below with a 12-word code, once. Nothing leaves your network and no account is involved. '
               : 'One library across both computers, paired once with a 12-word code, with nothing in the middle. '}
             <button type="button" onClick={() => setIntroOpen(true)} style={{ color: 'var(--accent)', fontWeight: 500 }}>
               {enabled ? 'Read the walkthrough again' : 'What is Mesh?'}

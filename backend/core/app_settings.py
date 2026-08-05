@@ -140,6 +140,14 @@ def get_settings() -> dict[str, Any]:
     data.pop(_INTEGRITY_KEY, None)
     data.pop(_BACKUP_RUNS_KEY, None)
     data.pop(_MUSIC_RELAY_KEY, None)
+    # Mesh key material. `mesh_secret` is the 32-byte root every Mesh key is
+    # derived from, and `mesh_code_words` is the same secret in the form a
+    # person can type — either one is enough to join the Mesh and decrypt what
+    # crosses it. core/mesh/secret.py always said it "must never be readable
+    # through the settings API"; until now nothing actually stopped it, and
+    # GET /api/settings returned all 64 hex characters.
+    data.pop("mesh_secret", None)
+    data.pop("mesh_code_words", None)
     return {
         **data,
         "yt_cookies_present": cookies_present(),

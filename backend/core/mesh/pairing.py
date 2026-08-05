@@ -142,30 +142,84 @@ def _keychain_get() -> str | None:
         return None
 
 
+# The words, for platforms with no scriptable keychain. The file store the
+# comment in `_keychain_set` promised and nobody wrote — which is why a Mesh
+# started on Windows could never show its code again, and the panel simply
+# rendered nothing.
+_WORDS_KEY = "mesh_code_words"
+
+
+def _local_set(words: str) -> bool:
+    """Keep the words next to the seed they derive.
+
+    Withholding them protects nothing. `secret.set_root` already writes the
+    32-byte root into the SAME file, in plain hex, on every platform — anyone
+    who can read `mesh_code_words` could read `mesh_secret` beside it and has
+    the Mesh either way. All the omission bought was a code you get one look at
+    and a second device you can never pair.
+    """
+    from backend.core.app_settings import _LOCK, _read, _write_raw
+
+    try:
+        with _LOCK:
+            current = _read()
+            current[_WORDS_KEY] = words
+            _write_raw(current)
+        return True
+    except OSError as exc:
+        logger.warning("mesh: could not store the code locally (%s)", exc)
+        return False
+
+
+def _local_get() -> str | None:
+    from backend.core.app_settings import _read
+
+    value = _read().get(_WORDS_KEY)
+    return value if isinstance(value, str) and value.strip() else None
+
+
+def _local_clear() -> None:
+    from backend.core.app_settings import _LOCK, _read, _write_raw
+
+    with _LOCK:
+        current = _read()
+        if current.pop(_WORDS_KEY, None) is not None:
+            _write_raw(current)
+
+
 def store_code(code: str) -> dict[str, Any]:
     """Adopt a code as this device's Mesh identity.
 
-    Writes the derived seed, not the words: the words only need to exist on the
-    user's paper and in whichever store held them. Everything Mesh does works
-    from the seed.
+    Stores the derived seed — everything Mesh does works from that — and the
+    words themselves, so the code can be read again when the second device is
+    in front of you rather than only in the moment it was minted.
     """
     words = validate(code)
     joined = " ".join(words)
     seed = seed_from_code(joined)
 
     in_keychain = _keychain_set(joined)
+    stored_locally = False if in_keychain else _local_set(joined)
     secret.set_root(seed)
-    return {"ok": True, "in_keychain": in_keychain, "words": WORD_COUNT}
+    return {
+        "ok": True,
+        "in_keychain": in_keychain,
+        # Where the words actually are, so the UI can say it instead of
+        # guessing. "nowhere" means write them down now or lose them.
+        "stored": "keychain" if in_keychain else ("file" if stored_locally else "nowhere"),
+        "words": WORD_COUNT,
+    }
 
 
 def reveal_code() -> str | None:
-    """The words, for the reveal-once panel. None when they are not recoverable.
+    """The words, for the reveal panel. None when they are not recoverable.
 
-    A device that joined a Mesh stores the seed, not necessarily the words —
-    seeds are one-way. The UI must therefore treat "no words to show" as normal
-    on a joined device rather than an error.
+    A device that JOINED a Mesh was handed a code rather than minting one, and
+    only keeps the seed — seeds are one-way. "No words to show" is therefore
+    normal on a joined device rather than an error, and the UI has to say which
+    of the two it is looking at.
     """
-    return _keychain_get()
+    return _keychain_get() or _local_get()
 
 
 # ── the QR ───────────────────────────────────────────────────────────────────
