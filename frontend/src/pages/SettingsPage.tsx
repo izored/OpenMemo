@@ -657,14 +657,16 @@ function MeshRows({ profile, save }: { profile: AppSettings | null; save: (p: Pa
       </div>
       <div className="om-setting-row" style={{ borderTop: '1px solid var(--border)', marginTop: 8, paddingTop: 8 }}>
         <div className="om-setting-row-text">
-          <p>{enabled ? 'Ready to pair' : 'How Mesh works'}</p>
+          <p>{enabled ? (profile?.mesh_reachable ? 'Ready to pair' : 'Pairing only') : 'How Mesh works'}</p>
           <span className="mono">
-            {/* This used to say pairing "arrives in a later update" while the
-                working Start/Join buttons sat directly underneath it. Enabling
-                Mesh turns on the change triggers, opens the listener on 8770
-                and starts advertising — it is on, and the copy now says so. */}
+            {/* The copy has to track the LISTENER, not just the flag. Bound to
+                loopback — the default — pairing works and sync can never
+                connect, which is exactly the silent half-working state this
+                page used to describe as if it were fine. */}
             {enabled
-              ? 'Mesh is on: this computer is listening for the other one and announcing itself on your network. Pair them below with a 12-word code, once. Nothing leaves your network and no account is involved. '
+              ? (profile?.mesh_reachable
+                  ? 'Mesh is on and this computer accepts connections from your other one. Pair them below with a 12-word code, once. Nothing leaves your network and no account is involved. '
+                  : 'Mesh is on, but this computer only listens to itself, so pairing works and syncing cannot connect yet. Turn on "Reachable from your other computer" below when you are ready. ')
               : 'One library across both computers, paired once with a 12-word code, with nothing in the middle. '}
             <button type="button" onClick={() => setIntroOpen(true)} style={{ color: 'var(--accent)', fontWeight: 500 }}>
               {enabled ? 'Read the walkthrough again' : 'What is Mesh?'}
@@ -672,6 +674,31 @@ function MeshRows({ profile, save }: { profile: AppSettings | null; save: (p: Pa
           </span>
         </div>
       </div>
+      {enabled && (
+        <div className="om-setting-row">
+          <div className="om-setting-row-text" style={{ maxWidth: 560 }}>
+            <p>Reachable from your other computer</p>
+            <span className="mono">
+              Opens port 8770 so the other machine can actually sync with this one. Off, openMemo
+              listens only to itself: you can still pair, but nothing will ever connect. The port
+              speaks a protocol that refuses anyone without your 12-word code, and five bad tries
+              earns a lockout — but it is still a port, so it is your call. This also covers
+              Tailscale and the like: they appear as ordinary network interfaces, which is how two
+              computers on different networks find each other.
+            </span>
+          </div>
+          <button
+            type="button"
+            className="om-add-toggle"
+            onClick={() => profile && save({ mesh_reachable: !profile.mesh_reachable })}
+            aria-pressed={!!profile?.mesh_reachable}
+          >
+            <span className={'om-add-toggle-switch' + (profile?.mesh_reachable ? ' on' : '')}>
+              <span className="om-add-toggle-knob" />
+            </span>
+          </button>
+        </div>
+      )}
       {enabled && <MeshPairingPanel />}
       {enabled && conflictCount > 0 && (
         <div className="om-setting-row" style={{ borderTop: '1px solid var(--border)', marginTop: 8, paddingTop: 8 }}>
@@ -1022,7 +1049,7 @@ export function SettingsPage() {
       })
       .catch(() => {
         setMaxUploadMb(5120);
-        setProfile({ max_upload_mb: 5120, display_name: '', email: '', avatar_data_url: '', mailing_list_consent: false, auto_download_audio: true, auto_download_video: true, music_quality: '16', music_provider: 'qobuz', chat_model: '', num_ctx: 0, yt_cookies_present: false, bg_image_ext: '', hidden_passcode_set: false, telegram_enabled: false, telegram_poll_minutes: 15, telegram_default_collection: 'IG Inbox', telegram_force_localize: true, telegram_token_present: false, telegram_user_locked: false, mesh_enabled: false, backup_dest: '' });
+        setProfile({ max_upload_mb: 5120, display_name: '', email: '', avatar_data_url: '', mailing_list_consent: false, auto_download_audio: true, auto_download_video: true, music_quality: '16', music_provider: 'qobuz', chat_model: '', num_ctx: 0, yt_cookies_present: false, bg_image_ext: '', hidden_passcode_set: false, telegram_enabled: false, telegram_poll_minutes: 15, telegram_default_collection: 'IG Inbox', telegram_force_localize: true, telegram_token_present: false, telegram_user_locked: false, mesh_enabled: false, mesh_reachable: false, backup_dest: '' });
       });
   }, []);
 

@@ -89,6 +89,14 @@ _DEFAULTS: dict[str, Any] = {
     # that never turns it on pays nothing. Read through backend/core/mesh.py,
     # never directly, so there is one switch to reason about.
     "mesh_enabled": False,
+    # Whether the Mesh listener accepts connections from OTHER machines.
+    # Off: it binds loopback, so pairing works and nothing on your network can
+    # reach it — which is also why device-to-device sync cannot connect. On: it
+    # binds every interface, which is what makes both a LAN peer and a Tailscale
+    # peer reachable, since Tailscale is just another interface. The port speaks
+    # a protocol that rejects anyone without the 12-word root, but opening it is
+    # still the user's decision to make knowingly.
+    "mesh_reachable": False,
     # Where scheduled archives are written (core/archive.py). Empty = the
     # default, DATA_DIR/backups. Worth pointing OUTSIDE the app directory:
     # whatever wipes the app should not be able to wipe its backups on the way

@@ -123,3 +123,21 @@ def test_mesh_key_material_never_crosses_the_settings_api():
             current.pop("mesh_secret", None)
             current.pop("mesh_code_words", None)
             _write_raw(current)
+
+
+def test_the_listener_is_loopback_until_the_user_opens_it():
+    """The default is why pairing works while syncing cannot connect. Opening
+    the port is a decision, so it must never happen by upgrade."""
+    from backend.core.app_settings import _DEFAULTS, update_settings
+    from backend.core.mesh import server
+    from backend.core.mesh.sync_state import listener_host
+
+    assert _DEFAULTS["mesh_reachable"] is False
+
+    update_settings({"mesh_reachable": False})
+    assert listener_host() == server.DEFAULT_HOST == "127.0.0.1"
+
+    update_settings({"mesh_reachable": True})
+    assert listener_host() == "0.0.0.0"
+
+    update_settings({"mesh_reachable": False})

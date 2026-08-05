@@ -53,6 +53,7 @@ class SettingsPatch(BaseModel):
     # PUT still returns 200, so a Settings toggle would appear to work and do
     # nothing.
     mesh_enabled: Optional[bool] = None
+    mesh_reachable: Optional[bool] = None
     # Where scheduled archives are written (core/archive.py). A path, or empty
     # for the default. Not validated for existence here — the directory is
     # created on the next run, and a destination that turns out to be unusable
@@ -77,6 +78,13 @@ async def write_settings(patch: SettingsPatch):
         from backend.core.mesh import apply_enabled_state
 
         await apply_enabled_state(bool(data["mesh_enabled"]))
+    # Reachability decides which address the listener binds, so changing it has
+    # to re-bind. `server.start` returns early when one is already running, so
+    # without this the app keeps serving on the address just changed away from.
+    if "mesh_reachable" in data and "mesh_enabled" not in data:
+        from backend.core.mesh.sync_state import rebind_listener
+
+        await rebind_listener()
     return result
 
 
