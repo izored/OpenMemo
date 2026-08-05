@@ -7,6 +7,9 @@ All notable changes to OpenMemo are documented here.
 
 <!-- Add entries here as work lands: ### Added / ### Changed / ### Fixed -->
 
+---
+## [3.6.0] - 2026-08-05
+
 ### Added
 
 - 🛡️ **Mesh keys live in your operating system's vault now, not in a settings file.** The secret every Mesh key is built from used to sit in `app_settings.json` as plain text on every platform, beside your theme and your upload limit. It now goes where each system keeps secrets: the login keychain on macOS, account-level encryption on Windows, and on Linux a file only your user can read, described as exactly that rather than dressed up as more. Your 12 words move with it, because the words and the key are the same secret written two ways. Existing installs move across the first time openMemo reads them, and the plaintext original is deleted rather than copied. `docs/MESH-SECURITY.md` is the full audit of what Mesh does before, during and after you switch it on.
