@@ -473,6 +473,9 @@ export interface MeshDevice {
   is_primary: boolean;
   revoked: boolean;
   is_this_device: boolean;
+  /** Windows / Darwin / Linux, recorded at pairing. Two laptops both called
+   *  "This device" are otherwise indistinguishable. */
+  platform: string | null;
 }
 
 export const meshApi = {
@@ -512,6 +515,9 @@ export const meshApi = {
     fetchJSON<{ available: boolean; code: string | null; words: string[] }>('/mesh/pair/code'),
   devices: () =>
     fetchJSON<{ devices: MeshDevice[]; this_device: string }>('/mesh/devices'),
+  // Forget this Mesh on this device: root, words and device list. Memos are
+  // untouched. The other device is not notified — it cannot be.
+  leave: () => fetchJSON<{ ok: boolean; left: boolean }>('/mesh/leave', { method: 'POST' }),
   revokeDevice: (id: string) =>
     fetchJSON<{ ok: boolean }>(`/mesh/devices/${id}/revoke`, { method: 'POST' }),
   makePrimary: (id: string) =>

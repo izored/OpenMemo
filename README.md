@@ -62,7 +62,11 @@ Spaces, collections, playlists and covers come across first. A Space showing up 
 
 Nothing gets overwritten behind your back. Edit the same note on both machines and openMemo shows you both versions, says which device each came from, and keeps both by default. Every sync is written down with the reason it decided what it did, and any of them can be undone.
 
-openMemo itself never goes online. Mesh runs on its own separate port that serves exactly one thing, the sync channel, and everything on the wire is encrypted with AES-256. Off by default, behind one toggle in Settings. While it is off it costs your install nothing at all. Design in [ADR-024](docs/ADR-024-MESH.md), full write-up in [the handbook](docs/MESH-HANDBOOK.md).
+openMemo itself never goes online. Mesh runs on its own separate port that serves exactly one thing, the sync channel, and everything on the wire is encrypted with AES-256 and signed with a key only your two computers hold. Off by default, behind one toggle in Settings. While it is off it costs your install nothing at all.
+
+Two switches, not one. Turning Mesh on lets you pair. A second switch, **Reachable from your other computer**, is what actually opens the port. Off, openMemo listens only to itself. That is deliberate: opening a port is a decision you make, not something an update does to you. Your 12 word code lives in your operating system's own vault, the keychain on a Mac and account level encryption on Windows.
+
+Design in [ADR-024](docs/ADR-024-MESH.md), full write-up in [the handbook](docs/MESH-HANDBOOK.md), and what it does before, during and after you switch it on in [the security audit](docs/MESH-SECURITY.md).
 
 ### 🗂️ Spaces
 Group whole areas of your life. A Space bundles Memos and collections under one cover, one color, one name. Client work, home projects, research topics. Each Space gets its own page.

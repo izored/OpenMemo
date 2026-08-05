@@ -262,6 +262,9 @@ class Device:
     last_seen: str | None
     is_primary: bool
     revoked: bool
+    # Written since the table existed and never surfaced. Two laptops called
+    # "This device" are indistinguishable without it.
+    platform: str | None = None
 
 
 async def create_table() -> None:
@@ -297,10 +300,10 @@ async def register_device(device_id: str, name: str, *, is_primary: bool = False
 async def devices() -> list[Device]:
     async with AsyncSessionLocal() as db:
         rows = (await db.execute(text(
-            "SELECT device_id, name, last_seen, is_primary, revoked "
+            "SELECT device_id, name, last_seen, is_primary, revoked, platform "
             "FROM mesh_devices ORDER BY is_primary DESC, last_seen DESC"
         ))).fetchall()
-    return [Device(r[0], r[1], r[2], bool(r[3]), bool(r[4])) for r in rows]
+    return [Device(r[0], r[1], r[2], bool(r[3]), bool(r[4]), r[5]) for r in rows]
 
 
 async def revoke(device_id: str) -> bool:
@@ -379,3 +382,36 @@ async def may_run_singleton(job: str) -> bool:
     if not allowed:
         logger.info("mesh: skipping %s — this device is not the primary", job)
     return allowed
+
+
+async def leave_mesh() -> dict:
+    """Forget this Mesh entirely, on this device only.
+
+    What it does: deletes the root and the words from the OS store, and empties
+    this device's list of known devices. The next thing that needs a root mints
+    a fresh random one, so this install becomes an unpaired openMemo again,
+    ready to Start or Join.
+
+    What it deliberately does NOT do: touch a single memo. Leaving a Mesh is a
+    statement about which devices talk to each other, not about your library.
+    Both copies keep everything they already have.
+
+    The other device is not notified, because it cannot be — there is no server
+    to tell and it may be asleep. It keeps its own root and will simply stop
+    finding this one. That is the honest shape of leaving a peer-to-peer group:
+    you can leave, you cannot make someone else forget you.
+    """
+    from sqlalchemy import text as _text
+
+    from backend.core.mesh import keystore, secret
+
+    keystore.delete(secret.SECRET_KEY)
+    keystore.delete(_WORDS_KEY)
+    _local_clear()
+
+    async with AsyncSessionLocal() as db:
+        await db.execute(_text("DELETE FROM mesh_devices"))
+        await db.commit()
+
+    logger.info("mesh: left the Mesh — root forgotten, device list cleared")
+    return {"ok": True, "left": True}
