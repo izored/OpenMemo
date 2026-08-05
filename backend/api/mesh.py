@@ -202,6 +202,27 @@ async def list_devices() -> dict:
     }
 
 
+@router.post("/leave", dependencies=[Depends(require_enabled)])
+async def leave() -> dict:
+    """Leave this Mesh — the named version of starting over.
+
+    Starting over used to be a `replace` flag you only met by hitting an error,
+    which reads as an override rather than a decision. This is the decision.
+
+    Forgets the root and the words, empties the device list, and re-announces
+    under the fresh identity the next root produces. Your memos are untouched:
+    leaving is about which devices talk to each other, not about the library.
+    """
+    from backend.core.mesh import pairing
+    from backend.core.mesh.sync_state import readvertise
+
+    result = await pairing.leave_mesh()
+    # The fingerprint is derived from the root, which just changed — announce
+    # the new one or keep shouting an identity that no longer exists.
+    await readvertise()
+    return result
+
+
 @router.post("/devices/{device_id}/revoke", dependencies=[Depends(require_enabled)])
 async def revoke_device(device_id: str) -> dict:
     """Stop syncing with a device.

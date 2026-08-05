@@ -42,6 +42,12 @@ function Words({ words }: { words: string[] }) {
   );
 }
 
+/** Windows / Darwin / Linux as a person would say it. */
+function osLabel(platform: string | null): string {
+  if (!platform) return '';
+  return { Darwin: 'macOS', Windows: 'Windows', Linux: 'Linux' }[platform] || platform;
+}
+
 export function MeshPairingPanel() {
   const [words, setWords] = useState<string[]>([]);
   const [devices, setDevices] = useState<MeshDevice[]>([]);
@@ -255,6 +261,11 @@ export function MeshPairingPanel() {
                   {d.is_primary ? ' · primary' : ''}
                 </b>
                 <span>
+                  {/* The OS has been recorded since the table existed and was
+                      never shown. Two laptops both called "This device" are
+                      otherwise impossible to tell apart in this list. */}
+                  {osLabel(d.platform)}
+                  {osLabel(d.platform) ? ' · ' : ''}
                   {d.revoked
                     ? 'Removed — it stops syncing once it reconnects'
                     : d.last_seen
@@ -293,6 +304,46 @@ export function MeshPairingPanel() {
               )}
             </div>
           ))}
+
+          {/* Starting over, as a named choice. It used to be a `replace` flag
+              you only met by hitting an error, which reads as an override
+              rather than a decision. */}
+          <div className="om-setting-row" style={{ borderTop: '1px solid var(--border)', marginTop: 10, paddingTop: 10 }}>
+            <div className="om-setting-row-text">
+              <p>Leave this Mesh</p>
+              <span className="mono">
+                Forgets the code and the device list on this computer. Your memos stay exactly
+                where they are — leaving is about which devices talk to each other, not about
+                your library.
+              </span>
+            </div>
+            <button
+              type="button"
+              className="om-btn-secondary danger"
+              disabled={busy}
+              onClick={async () => {
+                if (!confirm(
+                  'Leave this Mesh?\n\nThis computer forgets the code and starts fresh, ready ' +
+                  'to Start or Join again. Your memos are not touched.\n\nThe other computer ' +
+                  'keeps its own copy and its own code — it will simply stop finding this one. ' +
+                  'There is no server to tell it, so you cannot make it forget you.',
+                )) return;
+                setBusy(true);
+                try {
+                  await meshApi.leave();
+                  setWords([]);
+                  setConfirmReplace('');
+                  refresh();
+                } catch (e) {
+                  setError(e instanceof Error ? e.message : 'Could not leave');
+                } finally {
+                  setBusy(false);
+                }
+              }}
+            >
+              Leave
+            </button>
+          </div>
         </div>
       )}
 

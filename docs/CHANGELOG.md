@@ -7,6 +7,11 @@ All notable changes to OpenMemo are documented here.
 
 <!-- Add entries here as work lands: ### Added / ### Changed / ### Fixed -->
 
+### Added
+
+- 🚪 **Leave this Mesh.** Starting over used to be a hidden flag you only met by walking into an error, which reads as an override rather than a choice. It is now its own button in the device list: this computer forgets the code and the device list and becomes an unpaired openMemo again, ready to Start or Join. **Your memos are not touched** — leaving is about which devices talk to each other, not about your library. It is also honest about the one thing it cannot do: there is no server to notify, so the other computer keeps its own copy and its own code and will simply stop finding this one.
+- 💻 **Each device says which computer it is.** The device list showed a name, when it was last seen, and which one is primary — which is no help at all when both are called "This device". It now shows macOS, Windows or Linux beside each. openMemo has been recording it since the table existed and never once displayed it.
+
 ---
 ## [3.6.0] - 2026-08-05
 
