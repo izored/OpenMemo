@@ -475,4 +475,7 @@ internet for a service that has had a security fix this month. Use an overlay.
 Override the port with `OPENMEMO_MESH_PORT` if 8770 is taken, or if you run two
 instances on one machine.
 
-Full detail in [ADR-024](ADR-024-MESH.md) and [the handbook](MESH-HANDBOOK.md).
+Pairing two machines step by step, home network or Tailscale:
+[MESH-PAIRING-WALKTHROUGH.md](MESH-PAIRING-WALKTHROUGH.md). Full detail in
+[ADR-024](ADR-024-MESH.md) and [the handbook](MESH-HANDBOOK.md); what it exposes
+and what it encrypts in [MESH-SECURITY.md](MESH-SECURITY.md).

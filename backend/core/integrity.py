@@ -60,26 +60,36 @@ def _scan_sync() -> dict:
         with engine.connect() as con:
             rows = con.execute(
                 text(
-                    "select file_path, thumbnail_path, source_url from memos "
+                    "select file_path, thumbnail_path, source_url, type from memos "
                     "where is_deleted = 0 or is_deleted is null"
                 )
             ).fetchall()
     finally:
         engine.dispose()
 
+    from backend.core.localize_media import _has_audio_stream
+
     memos = len(rows)
     with_media = missing_media = recoverable = unrecoverable = 0
-    with_thumb = missing_thumbs = 0
+    with_thumb = missing_thumbs = silent_videos = 0
 
-    for file_path, thumbnail_path, source_url in rows:
+    for file_path, thumbnail_path, source_url, memo_type in rows:
         if file_path:
             with_media += 1
-            if resolve_memo_path(file_path) is None:
+            resolved = resolve_memo_path(file_path)
+            if resolved is None:
                 missing_media += 1
                 if (source_url or "").strip():
                     recoverable += 1
                 else:
                     unrecoverable += 1
+            elif (memo_type or "").lower() == "video":
+                # A video with no audio track. Present, playable, and wrong —
+                # which is exactly the class of failure that went unnoticed for
+                # days because every other check said the file was fine.
+                # `is False` only: None means ffprobe could not tell.
+                if _has_audio_stream(resolved) is False:
+                    silent_videos += 1
         # A remote thumbnail URL is not ours to lose, so only local ones count.
         # These resolve differently from media: the column holds the URL the app
         # serves the image at, and `/api/files/thumb/x` lives at `files/thumbs/x`.
@@ -96,6 +106,7 @@ def _scan_sync() -> dict:
         "unrecoverable": unrecoverable,
         "with_thumb": with_thumb,
         "missing_thumbs": missing_thumbs,
+        "silent_videos": silent_videos,
     }
 
 
