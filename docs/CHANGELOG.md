@@ -7,6 +7,9 @@ All notable changes to OpenMemo are documented here.
 
 <!-- Add entries here as work lands: ### Added / ### Changed / ### Fixed -->
 
+---
+## [3.7.0] - 2026-08-05
+
 ### Fixed
 
 - 🔊 **Videos pulled from the web come with their sound.** Instagram reels arrived silent, and the reason applies to any site that streams: video and audio travel as two separate streams, and openMemo's download helper was taking the video one and stopping there. The file played, so nothing looked wrong. openMemo now **checks every video it downloads for an audio track, whatever site it came from**, and if the sound is missing it tries the other method that knows how to join the two streams. A clip that genuinely has no sound is kept as it is rather than thrown away. Settings → Backup & Restore also counts silent videos in your library now, so this cannot go unnoticed again, and `refetch_missing_media --silent` re-pulls the ones you already have.
