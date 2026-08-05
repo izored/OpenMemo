@@ -133,13 +133,29 @@ async def stop_advertising() -> None:
 async def browse(
     chain_id: str, *, seconds: float = BROWSE_SECONDS, own_port: int | None = None
 ) -> list[Peer]:
-    """Look for machines in the same Mesh. Returns only matching peers.
+    """Look for machines in the same Mesh. Returns only matching peers."""
+    peers, _strangers = await scan(chain_id, seconds=seconds, own_port=own_port)
+    return peers
 
-    Filtering on the fingerprint here, rather than connecting and finding out,
-    means a stranger's openMemo on the same café Wi-Fi is never even dialed.
+
+async def scan(
+    chain_id: str, *, seconds: float = BROWSE_SECONDS, own_port: int | None = None
+) -> tuple[list[Peer], int]:
+    """Browse, and also COUNT the openMemos that are not in this Mesh.
+
+    Filtering on the fingerprint means a stranger's openMemo on the same café
+    Wi-Fi is never dialed — right, and the reason the worst pairing mistake is
+    invisible. Press "Start a Mesh" on both computers and each mints its own
+    root: they sit on one network, advertising, filtering each other out, and
+    report "no devices found" forever with nothing to suggest why.
+
+    The count is what turns that silence into a sentence. It is a count and not
+    a peer list on purpose: openMemos that are not in this Mesh are none of this
+    machine's business beyond "there is one, and it might be yours".
     """
     wanted = chain_fingerprint(chain_id)
     found: dict[str, Peer] = {}
+    strangers: set[str] = set()
 
     try:
         from zeroconf import ServiceBrowser, ServiceStateChange
@@ -165,7 +181,14 @@ async def browse(
                 if k and v
             }
             if props.get("chain") != wanted:
-                return           # a different library — never dialed
+                # A different library — never dialed, only counted. Skip our own
+                # endpoint first: mid-rekey this machine can still be answering
+                # on its old fingerprint and would otherwise count itself as the
+                # stranger it is warning about.
+                host_addr = socket.inet_ntoa(info.addresses[0])
+                if not (host_addr == _local_ip() and (own_port is None or info.port == own_port)):
+                    strangers.add(f"{host_addr}:{info.port or 0}")
+                return
             host = socket.inet_ntoa(info.addresses[0])
             # Exclude ourselves by ENDPOINT, not by address. Filtering on IP
             # alone hides a second instance running on the same machine from the
@@ -192,4 +215,4 @@ async def browse(
         except Exception:
             pass
 
-    return list(found.values())
+    return list(found.values()), len(strangers)
