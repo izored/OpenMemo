@@ -57,6 +57,8 @@ export function MeshPairingPanel() {
   const [busy, setBusy] = useState(false);
   const [discovery, setDiscovery] = useState<Awaited<ReturnType<typeof meshApi.discover>> | null>(null);
   const [confirmReplace, setConfirmReplace] = useState('');
+  const [peerAddress, setPeerAddress] = useState('');
+  const [syncNote, setSyncNote] = useState('');
   const [qrOpen, setQrOpen] = useState(false);
 
   const refresh = () => {
@@ -304,6 +306,55 @@ export function MeshPairingPanel() {
               )}
             </div>
           ))}
+
+          {/* Discovery is mDNS, which does not leave your subnet. A peer on
+              Tailscale or any overlay has an ordinary address as far as
+              openMemo is concerned — it just has to be typed, because nothing
+              is going to announce it here. */}
+          <div className="om-setting-row" style={{ borderTop: '1px solid var(--border)', marginTop: 10, paddingTop: 10, flexDirection: 'column', alignItems: 'stretch', gap: 8 }}>
+            <div className="om-setting-row-text">
+              <p>Sync with an address</p>
+              <span className="mono">
+                For a computer openMemo cannot see by itself — one on Tailscale, or on another
+                network. Paste its address; both machines need the same Mesh code first.
+              </span>
+            </div>
+            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+              <input
+                className="om-input"
+                value={peerAddress}
+                placeholder="100.101.102.103"
+                onChange={(e) => setPeerAddress(e.target.value)}
+                style={{ flex: '1 1 220px', minWidth: 0 }}
+                aria-label="Address of the other computer"
+              />
+              <button
+                type="button"
+                className="om-btn-secondary"
+                disabled={busy || !peerAddress.trim()}
+                onClick={async () => {
+                  setBusy(true);
+                  setSyncNote('');
+                  setError('');
+                  try {
+                    // Accept "host" or "host:port" — people paste both.
+                    const raw = peerAddress.trim();
+                    const [host, port] = raw.includes(':') ? raw.split(':') : [raw, '8770'];
+                    const r = await meshApi.syncWith(host, Number(port) || 8770);
+                    setSyncNote(`Synced. Sent ${r.sent ?? 0}, received ${r.received ?? 0}.`);
+                    refresh();
+                  } catch (e) {
+                    setError(e instanceof Error ? e.message : 'Could not reach that device');
+                  } finally {
+                    setBusy(false);
+                  }
+                }}
+              >
+                {busy ? 'Syncing…' : 'Sync now'}
+              </button>
+            </div>
+            {syncNote && <span className="mono" style={{ fontSize: 11 }}>{syncNote}</span>}
+          </div>
 
           {/* Starting over, as a named choice. It used to be a `replace` flag
               you only met by hitting an error, which reads as an override

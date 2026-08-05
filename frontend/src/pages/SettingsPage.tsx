@@ -252,7 +252,7 @@ function LibraryIntegrityRows() {
       {/* Loud only when it is news. A library that has been missing the same
           59 uploads for a month is a known state; more missing than at the
           last check is an incident, and saying so early is the entire point. */}
-      {state && missing > 0 && (
+      {state && (missing > 0 || state.silent_videos > 0) && (
         <div
           role="status"
           style={{
@@ -275,6 +275,9 @@ function LibraryIntegrityRows() {
             )}
             {state.missing_thumbs > 0 && (
               <>{state.missing_thumbs} missing thumbnail{state.missing_thumbs === 1 ? '' : 's'} can be regenerated. </>
+            )}
+            {state.silent_videos > 0 && (
+              <>{state.silent_videos} video{state.silent_videos === 1 ? ' plays' : 's play'} with no sound — re-pull {state.silent_videos === 1 ? 'it' : 'them'} to get the audio track. </>
             )}
             {incident && 'Stop writing to the disk before investigating — see docs/DISASTER-RECOVERY.md.'}
           </span>

@@ -110,3 +110,46 @@ async def test_an_unplayable_download_fails_and_leaves_nothing_behind(tmp_path, 
 
     assert "playable" in str(e.value)
     assert not dest.exists()
+
+
+def test_a_silent_video_is_detected_not_shipped(tmp_path, monkeypatch):
+    """Instagram serves DASH: video and audio are separate streams, and the
+    sniffer picks the largest video/mp4 on the wire — the video-only one. Every
+    reel recovered on 2026-08-04 came back mute and nothing noticed."""
+    import subprocess as sp
+
+    from backend.core import localize_media
+
+    class _Out:
+        returncode = 0
+        stdout = b""            # ffprobe found no audio streams
+
+    monkeypatch.setattr(sp, "run", lambda *a, **k: _Out())
+    assert localize_media._has_audio_stream(tmp_path / "x.mp4") is False
+
+
+def test_audio_present_is_reported(tmp_path, monkeypatch):
+    import subprocess as sp
+
+    from backend.core import localize_media
+
+    class _Out:
+        returncode = 0
+        stdout = b"audio\n"
+
+    monkeypatch.setattr(sp, "run", lambda *a, **k: _Out())
+    assert localize_media._has_audio_stream(tmp_path / "x.mp4") is True
+
+
+def test_no_ffprobe_means_unknown_not_silent(tmp_path, monkeypatch):
+    """"I cannot tell" must never read as "no audio", or a box without ffprobe
+    would reject every download it makes."""
+    import subprocess as sp
+
+    from backend.core import localize_media
+
+    def _boom(*_a, **_k):
+        raise OSError("ffprobe not found")
+
+    monkeypatch.setattr(sp, "run", _boom)
+    assert localize_media._has_audio_stream(tmp_path / "x.mp4") is None

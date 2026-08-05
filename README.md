@@ -66,7 +66,7 @@ openMemo itself never goes online. Mesh runs on its own separate port that serve
 
 Two switches, not one. Turning Mesh on lets you pair. A second switch, **Reachable from your other computer**, is what actually opens the port. Off, openMemo listens only to itself. That is deliberate: opening a port is a decision you make, not something an update does to you. Your 12 word code lives in your operating system's own vault, the keychain on a Mac and account level encryption on Windows.
 
-Design in [ADR-024](docs/ADR-024-MESH.md), full write-up in [the handbook](docs/MESH-HANDBOOK.md), and what it does before, during and after you switch it on in [the security audit](docs/MESH-SECURITY.md).
+Step by step for two machines, including from different networks: [the pairing walkthrough](docs/MESH-PAIRING-WALKTHROUGH.md). Design in [ADR-024](docs/ADR-024-MESH.md), full write-up in [the handbook](docs/MESH-HANDBOOK.md), and what it does before, during and after you switch it on in [the security audit](docs/MESH-SECURITY.md).
 
 ### 🗂️ Spaces
 Group whole areas of your life. A Space bundles Memos and collections under one cover, one color, one name. Client work, home projects, research topics. Each Space gets its own page.

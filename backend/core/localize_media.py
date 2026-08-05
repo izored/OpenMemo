@@ -17,6 +17,7 @@ Everything runs in a worker thread (yt-dlp is blocking). yt-dlp + ffmpeg are
 already required by the extractor / video-thumbnail paths.
 """
 import asyncio
+import logging
 import shutil
 import subprocess
 import uuid
@@ -27,6 +28,8 @@ import httpx
 
 from backend.config import settings
 from backend.core.app_settings import cookies_present, get_cookies_path
+
+log = logging.getLogger(__name__)
 
 VALID_MODES = {"video", "audio"}
 
@@ -64,6 +67,31 @@ def _strip_byte_range(url: str) -> str:
     if len(kept) == len(parse_qsl(parts.query, keep_blank_values=True)):
         return url
     return urlunsplit(parts._replace(query=urlencode(kept)))
+
+
+def _has_audio_stream(path: Path) -> bool | None:
+    """Does this file carry sound? None when ffprobe cannot answer.
+
+    Instagram serves DASH, where the video and the audio are SEPARATE streams.
+    The sniffer picks the largest `video/mp4` response on the network, which is
+    the video-only representation — so the download succeeds, the file plays,
+    and it is silent. Every reel recovered on 2026-08-04 came back mute.
+
+    None rather than False when ffprobe is missing: "I cannot tell" must not be
+    treated as "no audio", or a box without ffprobe would reject every download.
+    """
+    probe = str(settings.FFMPEG_BIN).replace("ffmpeg", "ffprobe")
+    try:
+        out = subprocess.run(
+            [probe, "-v", "quiet", "-select_streams", "a", "-show_entries",
+             "stream=codec_type", "-of", "csv=p=0", str(path)],
+            capture_output=True, timeout=30,
+        )
+    except (OSError, subprocess.SubprocessError):
+        return None
+    if out.returncode != 0:
+        return None
+    return b"audio" in out.stdout
 
 
 def _playable_container(path: Path) -> bool:
@@ -213,7 +241,14 @@ def _localize_sync(url: str, workspace_id: str, mode: str, quality: int) -> dict
     path = _run_ytdlp(url, out_template, mode, quality)
     memo_type = "audio" if mode == "audio" else "video"
     thumbnail_url = _get_thumbnail_url(url) if memo_type == "video" else None
-    return {"path": str(path), "type": memo_type, "filename": path.name, "thumbnail_url": thumbnail_url}
+    return {
+        "path": str(path), "type": memo_type, "filename": path.name,
+        "thumbnail_url": thumbnail_url,
+        # Reported by EVERY tier, not just the sniffer. A silent video is a
+        # host-agnostic failure mode: any DASH source can hand over the
+        # video-only representation, and the download looks perfect either way.
+        "has_audio": _has_audio_stream(path) if memo_type == "video" else None,
+    }
 
 
 async def _download_direct(
@@ -370,6 +405,9 @@ async def _localize_via_sniff(url: str, workspace_id: str) -> dict:
         "type": "video",
         "filename": dest.name,
         "thumbnail_url": info.get("thumbnail_url"),
+        # False only when ffprobe positively found no audio track. None means it
+        # could not tell, which the caller must not read as silence.
+        "has_audio": _has_audio_stream(dest),
     }
 
 
@@ -384,20 +422,39 @@ async def localize_media(url: str, workspace_id: str, mode: str, quality: int = 
         raise LocalizeError(f"Invalid mode: {mode}")
 
     sniff_first = mode == "video" and _is_sniff_first(url)
+    mute_fallback: dict | None = None
     if sniff_first:
         try:
-            return await _localize_via_sniff(url, workspace_id)
+            sniffed = await _localize_via_sniff(url, workspace_id)
+            if sniffed.get("has_audio") is False:
+                # A DASH host handed us the video-only representation. yt-dlp
+                # muxes the two streams, so it is worth the second attempt —
+                # but KEEP this file, because some clips are genuinely silent
+                # and a failed yt-dlp must not cost us a working video.
+                mute_fallback = sniffed
+                print(f"[localize] sniffed video for {url} has no audio; trying yt-dlp for sound")
+            else:
+                return sniffed
         except LocalizeError as e:
             print(f"[localize] sniff-first failed for {url} ({e}); trying yt-dlp")
 
     try:
         return await asyncio.to_thread(_localize_sync, url, workspace_id, mode, quality)
     except LocalizeError as ytdlp_err:
+        # A silent video beats no video. The clip may simply have no sound.
+        if mute_fallback is not None:
+            print(f"[localize] yt-dlp also failed for {url}; keeping the silent copy")
+            return mute_fallback
         # Universal fallback: yt-dlp can't pull it (no extractor / blocked) and we
         # didn't already sniff — try the network sniffer once before giving up.
         if mode == "video" and not sniff_first:
             try:
-                return await _localize_via_sniff(url, workspace_id)
+                sniffed = await _localize_via_sniff(url, workspace_id)
+                if sniffed.get("has_audio") is False:
+                    log.warning(
+                        "localize: %s produced a video with no audio track", url
+                    )
+                return sniffed
             except LocalizeError as sniff_err:
                 print(f"[localize] sniff fallback failed for {url}: {sniff_err}")
                 # The download helper was the LAST attempt, so surface BOTH

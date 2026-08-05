@@ -518,6 +518,13 @@ export const meshApi = {
   // Forget this Mesh on this device: root, words and device list. Memos are
   // untouched. The other device is not notified — it cannot be.
   leave: () => fetchJSON<{ ok: boolean; left: boolean }>('/mesh/leave', { method: 'POST' }),
+  // Sync with a device at a known address. mDNS does not leave your subnet, so
+  // this is the path for a peer on Tailscale or any overlay: the address is an
+  // ordinary one as far as openMemo is concerned.
+  syncWith: (host: string, port = 8770) =>
+    fetchJSON<{ ok?: boolean; sent?: number; received?: number; applied?: number }>(
+      '/mesh/sync', { method: 'POST', body: JSON.stringify({ host, port }) },
+    ),
   revokeDevice: (id: string) =>
     fetchJSON<{ ok: boolean }>(`/mesh/devices/${id}/revoke`, { method: 'POST' }),
   makePrimary: (id: string) =>
@@ -647,6 +654,8 @@ export interface LibraryIntegrity {
   unrecoverable: number;
   with_thumb: number;
   missing_thumbs: number;
+  /** Videos that are present and playable and have no audio track. */
+  silent_videos: number;
   delta: number;
   checked_at: string;
   previous_checked_at: string | null;
