@@ -84,9 +84,15 @@ def _scan_sync() -> dict:
                 else:
                     unrecoverable += 1
             elif (memo_type or "").lower() == "video":
-                # A video with no audio track. Present, playable, and wrong —
-                # which is exactly the class of failure that went unnoticed for
-                # days because every other check said the file was fine.
+                # A video with no audio track. This caught 59 downloads that had
+                # silently lost their sound — but it CANNOT tell those from a
+                # clip that was posted muted, and plenty are: every one of the
+                # six left after the backfill turned out to offer no audio
+                # format at its source at all.
+                #
+                # So it is a number to look at, not an alarm, and the UI says so.
+                # Telling someone to re-pull a video that never had sound is a
+                # nag that can never be satisfied.
                 # `is False` only: None means ffprobe could not tell.
                 if _has_audio_stream(resolved) is False:
                     silent_videos += 1

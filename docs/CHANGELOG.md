@@ -7,6 +7,10 @@ All notable changes to OpenMemo are documented here.
 
 <!-- Add entries here as work lands: ### Added / ### Changed / ### Fixed -->
 
+### Changed
+
+- 🔇 **Silent videos are reported as something to look at, not something to fix.** After the audio backfill, six videos still had no sound — and checking each one at its source showed why: X and Instagram offer no audio track for them at all. They were posted muted. openMemo was telling you to re-pull them, which could never have worked. It now says plainly that the original often has no sound either.
+
 ---
 ## [3.7.0] - 2026-08-05
 
