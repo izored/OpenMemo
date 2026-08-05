@@ -85,12 +85,41 @@ async def _start_advertising() -> None:
         logger.warning("mesh: advertising unavailable", exc_info=True)
 
 
+def listener_host() -> str:
+    """Loopback unless the user has asked to be reachable.
+
+    The default is why pairing works while syncing cannot connect: bound to
+    127.0.0.1, the listener is unreachable from the other computer no matter
+    what discovery advertises. Opening it is a real decision — the port rejects
+    anyone without the root, but it is still a port — so it is a setting rather
+    than the default.
+    """
+    from backend.core.app_settings import get_settings
+
+    return "0.0.0.0" if get_settings().get("mesh_reachable") else server.DEFAULT_HOST
+
+
 async def _start_listener() -> None:
     """Open the isolated metadata port (§2). Never fatal: a port already in use
     must not stop the app booting, because the app itself does not need Mesh."""
     try:
         from .session import handle_connection
 
-        await server.start(handle_connection)
+        await server.start(handle_connection, host=listener_host())
     except Exception:
         logger.warning("mesh: could not start the listener", exc_info=True)
+
+
+async def rebind_listener() -> None:
+    """Apply a change to the reachability setting.
+
+    `server.start` is idempotent and returns early when a listener is already
+    running, so flipping the toggle has to stop the old one first or the app
+    keeps serving on the address the user just changed away from.
+    """
+    from backend.core.mesh._gate import is_enabled
+
+    if not is_enabled():
+        return
+    await server.stop()
+    await _start_listener()

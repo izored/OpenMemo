@@ -421,6 +421,9 @@ export interface AppSettings {
   telegram_force_localize: boolean;
   /** Mesh (ADR-024): two-way device sync. Gates the whole feature. */
   mesh_enabled: boolean;
+  /** Whether the Mesh listener accepts connections from other machines. Off =
+   *  loopback only: pairing works, syncing cannot connect. */
+  mesh_reachable: boolean;
   /** Where scheduled archives are written. '' = data/backups. Worth pointing
    *  outside the app directory, so wiping the app cannot wipe its backups. */
   backup_dest: string;
@@ -486,10 +489,21 @@ export const meshApi = {
 
   // Pairing. Every one of these 404s while Mesh is off, so callers treat a
   // failure as the disabled state rather than something to show the user.
-  pairStart: () =>
+  // `replace` is refused unless you mean it: starting again mints a new root and
+  // strands every device still holding the old one.
+  pairStart: (replace = false) =>
     fetchJSON<{ code: string; words: string[]; in_keychain: boolean; uri: string }>(
-      '/mesh/pair/start', { method: 'POST' },
+      `/mesh/pair/start${replace ? '?replace=true' : ''}`, { method: 'POST' },
     ),
+  // `others_on_network` is the openMemos out there that are NOT in this Mesh —
+  // almost always the other computer having pressed Start instead of Join.
+  discover: () =>
+    fetchJSON<{
+      peers: { name: string; host: string; port: number }[];
+      count: number;
+      others_on_network: number;
+      note: string | null;
+    }>('/mesh/discover'),
   pairJoin: (code: string) =>
     fetchJSON<{ ok: boolean }>('/mesh/pair/join', {
       method: 'POST', body: JSON.stringify({ code }),

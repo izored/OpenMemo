@@ -49,6 +49,8 @@ export function MeshPairingPanel() {
   const [joinCode, setJoinCode] = useState('');
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
+  const [discovery, setDiscovery] = useState<Awaited<ReturnType<typeof meshApi.discover>> | null>(null);
+  const [confirmReplace, setConfirmReplace] = useState('');
   const [qrOpen, setQrOpen] = useState(false);
 
   const refresh = () => {
@@ -58,17 +60,31 @@ export function MeshPairingPanel() {
 
   useEffect(refresh, []);
 
+  // Look for the other computer once the panel opens. The number that matters
+  // is `others_on_network`: openMemos that are HERE but in a different Mesh,
+  // which is what pressing "Start a Mesh" on both machines produces. Each
+  // filters the other out and both report nothing, forever, with no clue why.
+  useEffect(() => {
+    meshApi.discover().then(setDiscovery).catch(() => setDiscovery(null));
+  }, []);
+
   const paired = devices.length > 0;
 
-  const start = async () => {
+  const start = async (replace = false) => {
     setBusy(true);
     setError('');
     try {
-      const r = await meshApi.pairStart();
+      const r = await meshApi.pairStart(replace);
       setWords(r.words);
+      setConfirmReplace('');
       refresh();
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Could not start');
+      const message = e instanceof Error ? e.message : 'Could not start';
+      // A 409 is the guard, not a failure: this Mesh already has another
+      // device, and starting again would cut it loose. Offer that as a
+      // deliberate choice rather than an error to retry blindly.
+      if (message.includes('already has another device')) setConfirmReplace(message);
+      else setError(message);
     } finally {
       setBusy(false);
     }
@@ -105,7 +121,7 @@ export function MeshPairingPanel() {
             path. Equal buttons; the helper line is a caption under each. */}
         <div className="om-mesh-start">
           <div className="om-mesh-start-choice">
-            <button type="button" className="om-btn-secondary" onClick={start} disabled={busy}>
+            <button type="button" className="om-btn-secondary" onClick={() => start()} disabled={busy}>
               <Icon name="plus" size={13} /> Start a Mesh
             </button>
             <span className="mono">this is my first device</span>
@@ -117,6 +133,51 @@ export function MeshPairingPanel() {
             <span className="mono">I have a code</span>
           </div>
         </div>
+        {/* The mistake this catches: Start pressed on BOTH computers. Each
+            mints its own root, so they filter each other out and both sit here
+            reporting nothing. Seeing an openMemo that is not in this Mesh is
+            the only signal that distinguishes it from "not switched on yet". */}
+        {!!discovery?.others_on_network && discovery.count === 0 && (
+          <div
+            role="status"
+            style={{
+              border: '1px solid var(--border-warning, #E5C07B)',
+              background: 'var(--bg-warning, rgba(186,117,23,0.08))',
+              borderRadius: 10, padding: '10px 12px', marginTop: 10, maxWidth: 560,
+            }}
+          >
+            <p style={{ margin: 0, fontWeight: 500, color: 'var(--text-warning, #BA7517)' }}>
+              Another openMemo is here, but in a different Mesh
+            </p>
+            <span className="mono" style={{ display: 'block', marginTop: 4 }}>
+              {discovery.note}
+            </span>
+          </div>
+        )}
+        {confirmReplace && (
+          <div
+            role="alertdialog"
+            aria-label="Replace this Mesh"
+            style={{
+              border: '1px solid var(--border-danger, #D65C5C)',
+              background: 'var(--bg-danger, rgba(198,40,40,0.08))',
+              borderRadius: 10, padding: '10px 12px', marginTop: 10, maxWidth: 560,
+            }}
+          >
+            <p style={{ margin: 0, fontWeight: 500, color: 'var(--text-danger, #C62828)' }}>
+              Start over and cut the other device loose?
+            </p>
+            <span className="mono" style={{ display: 'block', margin: '4px 0 10px' }}>{confirmReplace}</span>
+            <div style={{ display: 'flex', gap: 8 }}>
+              <button type="button" className="om-btn-ghost om-btn-pill" onClick={() => setConfirmReplace('')}>
+                Keep this Mesh
+              </button>
+              <button type="button" className="om-btn-danger om-btn-pill" onClick={() => start(true)} disabled={busy}>
+                Start a new Mesh
+              </button>
+            </div>
+          </div>
+        )}
         {error && <p className="mono" style={{ color: '#EF5048', marginTop: 8 }}>{error}</p>}
       </div>
     );

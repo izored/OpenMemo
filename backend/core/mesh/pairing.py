@@ -31,7 +31,7 @@ from typing import Any
 
 from sqlalchemy import text
 
-from backend.core.mesh import secret
+from backend.core.mesh import keystore, secret
 from backend.db.database import AsyncSessionLocal
 
 logger = logging.getLogger(__name__)
@@ -150,35 +150,38 @@ _WORDS_KEY = "mesh_code_words"
 
 
 def _local_set(words: str) -> bool:
-    """Keep the words next to the seed they derive.
+    """Keep the words in the OS store, beside the seed they derive.
 
-    Withholding them protects nothing. `secret.set_root` already writes the
-    32-byte root into the SAME file, in plain hex, on every platform — anyone
-    who can read `mesh_code_words` could read `mesh_secret` beside it and has
-    the Mesh either way. All the omission bought was a code you get one look at
-    and a second device you can never pair.
+    The words and the seed are the same secret in two forms — either one
+    reconstructs the Mesh — so they get the same protection or the protection
+    means nothing. core/mesh/keystore.py decides what that is per platform.
     """
-    from backend.core.app_settings import _LOCK, _read, _write_raw
-
-    try:
-        with _LOCK:
-            current = _read()
-            current[_WORDS_KEY] = words
-            _write_raw(current)
-        return True
-    except OSError as exc:
-        logger.warning("mesh: could not store the code locally (%s)", exc)
-        return False
+    return keystore.put(_WORDS_KEY, words)
 
 
 def _local_get() -> str | None:
-    from backend.core.app_settings import _read
+    found = keystore.get(_WORDS_KEY)
+    if found and found.strip():
+        return found.strip()
 
-    value = _read().get(_WORDS_KEY)
-    return value if isinstance(value, str) and value.strip() else None
+    # Pre-keystore installs kept the words in app_settings.json. Move them, then
+    # drop the original: a migration that only copies leaves the plaintext it
+    # was written to remove.
+    from backend.core.app_settings import _LOCK, _read, _write_raw
+
+    with _LOCK:
+        current = _read()
+        legacy = current.get(_WORDS_KEY)
+        if not isinstance(legacy, str) or not legacy.strip():
+            return None
+        if keystore.put(_WORDS_KEY, legacy):
+            current.pop(_WORDS_KEY, None)
+            _write_raw(current)
+    return legacy.strip()
 
 
 def _local_clear() -> None:
+    keystore.delete(_WORDS_KEY)
     from backend.core.app_settings import _LOCK, _read, _write_raw
 
     with _LOCK:
