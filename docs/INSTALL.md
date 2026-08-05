@@ -446,14 +446,31 @@ The project uses forward slashes (`/`) in Python code and config, which work fin
 Two-way sync between your own computers. Off unless you turn it on in
 Settings, and it costs nothing while off.
 
-When enabled, openMemo opens **one extra port, 8770**, bound to localhost. It
-serves the sync channel and nothing else. The app's own port is never exposed by
-Mesh and should never be port forwarded, because the local API has no
-authentication by design.
+Mesh uses **one extra port, 8770**, serving the sync channel and nothing else.
+It takes **two switches**, on purpose:
 
-To sync from another network, put both machines on a private overlay you
-control (Tailscale or any WireGuard setup). Mesh dials the overlay address the
-same way it dials a local one, so nothing else changes.
+1. **Mesh** — lets you pair, and installs the change triggers.
+2. **Reachable from your other computer** — binds every interface instead of
+   loopback. Until this is on, openMemo listens only to itself: you can pair,
+   and no peer can connect.
+
+`docker-compose` publishes 8770, which on its own does nothing, because the
+listener stays on loopback until you turn switch 2 on. Nothing is exposed by
+installing.
+
+The app's own port is never exposed by Mesh and should never be port forwarded:
+the local API has no authentication by design.
+
+**Across networks.** Mesh finds peers by mDNS, which does not leave your subnet,
+and it has no relay or hole punching. So two computers on different networks
+cannot see each other on their own. Put them on a private overlay you control —
+Tailscale or any WireGuard setup — and Mesh needs no special handling: the
+overlay is an ordinary network interface, so switch 2 covers it and you pair by
+the overlay address.
+
+Port forwarding 8770 from your router is the other way, and the worse one. The
+sync port refuses anyone without your code, but it puts a listener on the public
+internet for a service that has had a security fix this month. Use an overlay.
 
 Override the port with `OPENMEMO_MESH_PORT` if 8770 is taken, or if you run two
 instances on one machine.

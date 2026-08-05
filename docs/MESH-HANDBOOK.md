@@ -399,10 +399,20 @@ the 16 random bytes on the wire. Nonce uniqueness is therefore only as good as
 the randomness, which is `os.urandom`. A test asserts 200 frames produce 200
 distinct nonces, but that is a smoke test rather than a proof.
 
-### 7.5 Windows has no keychain path
+### 7.5 Key material lives in an OS store  *(closed 2026-08-05)*
 
-`pairing._keychain_set` works on macOS via `security`. On Windows it returns
-False and the seed lives in `app_settings.json`. Recorded rather than pretended.
+Was: the seed sat in `app_settings.json` as plain hex on every platform, and for
+a while `GET /api/settings` returned it.
+
+Now `core/mesh/keystore.py` picks per platform — login keychain on macOS, DPAPI
+on Windows (via `ctypes`; DPAPI ships with the OS and three calls do not justify
+a dependency), and on Linux a `0600` file *described as* a `0600` file. There is
+no keyring guaranteed to exist on a headless box, and a dependency that fails at
+runtime is worse than an honest label. `backend()` reports which store answered.
+
+The 12 words move with the seed: either one reconstructs the Mesh, so protecting
+one and not the other would be theatre. Pre-keystore installs migrate on first
+read and the plaintext original is **deleted**, not copied.
 
 ### 7.6 Phases 9 and 10 are not built
 
@@ -628,8 +638,16 @@ not the same as a blocker.
 
 ## 9c. Operational notes
 
-**Ports.** App on its usual port; Mesh on **8770**, loopback by default. These
-must never be the same listener — see §4.4.
+**Ports.** App on its usual port; Mesh on **8770**. These must never be the same
+listener — see §4.4.
+
+The bind address follows Settings → Mesh → *Reachable from your other computer*,
+default **off**: loopback, so pairing works and no peer can connect. On, it binds
+every interface. `docker-compose` publishes 8770, which alone does nothing —
+both switches have to be on, so nothing is exposed by installing. Flipping the
+setting re-binds via `sync_state.rebind_listener()`, because `server.start()`
+returns early when a listener is already running and would otherwise keep
+serving the old address.
 
 **Enabling.** Settings → Mesh. The toggle physically installs 24 triggers and
 opens the port; disabling drops and closes them. `apply_enabled_state()` is
