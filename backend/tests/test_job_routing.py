@@ -28,12 +28,37 @@ async def _clean():
     yield
 
 
-async def _rows():
+async def _rows(memo_id: str | None = None):
+    """Queued jobs, optionally only this test's.
+
+    Scoping by memo matters: `queue_task` is fire-and-forget, so an enqueue
+    started by an earlier test can land AFTER this one has cleared the table.
+    Asserting on the whole table therefore fails only under full-suite ordering,
+    which is the least useful way for a test to fail."""
+    sql = "SELECT kind, memo_id, payload FROM job_queue"
+    if memo_id:
+        sql += " WHERE memo_id = :m"
+    sql += " ORDER BY created_at"
     async with AsyncSessionLocal() as db:
-        result = await db.execute(
-            text("SELECT kind, memo_id, payload FROM job_queue ORDER BY created_at")
-        )
+        result = await db.execute(text(sql), {"m": memo_id} if memo_id else {})
         return result.fetchall()
+
+
+async def _wait_for(memo_id: str, count: int, timeout: float = 5.0):
+    """Poll until `count` jobs exist for this memo, or give up.
+
+    `queue_task` schedules the insert with `asyncio.create_task` and returns, so
+    a test has to wait for it. A fixed `sleep(0.05)` is a bet on how loaded the
+    machine is — it held alone and lost inside the full suite. Polling waits
+    exactly as long as it needs to and fails with the rows it did find."""
+    deadline = asyncio.get_running_loop().time() + timeout
+    rows = []
+    while asyncio.get_running_loop().time() < deadline:
+        rows = await _rows(memo_id)
+        if len(rows) >= count:
+            return rows
+        await asyncio.sleep(0.02)
+    return rows
 
 
 def _fake(name):
@@ -71,9 +96,8 @@ async def test_routing_shapes(fn_name, args, expect_kind, expect_memo, expect_pa
     import json
 
     jh.queue_task(_fake(fn_name), *args)
-    await asyncio.sleep(0.05)  # queue_task schedules the insert
 
-    rows = await _rows()
+    rows = await _wait_for(expect_memo, 1)
     assert len(rows) == 1, f"expected exactly one job, got {rows}"
     kind, memo_id, payload = rows[0]
     assert kind == expect_kind
@@ -109,9 +133,8 @@ async def test_auto_and_explicit_localize_both_survive_dedupe():
     ever downloaded."""
     jh.queue_task(_fake("_localize_memo_task"), "same-memo")
     jh.queue_task(_fake("localize_memo_task"), "same-memo", "audio")
-    await asyncio.sleep(0.05)
 
-    rows = await _rows()
+    rows = await _wait_for("same-memo", 2)
     assert len(rows) == 2, f"one of the two localize jobs was deduped away: {rows}"
     assert {r[0] for r in rows} == {"localize", "localize_auto"}
 
