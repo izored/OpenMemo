@@ -506,6 +506,18 @@ app.include_router(spaces_router)
 app.include_router(mesh_router)
 
 
+# The one route openMemo does not get to name. The music relay hands the browser
+# back after its challenge, and it only issues a challenge for a callback at
+# exactly `/session-grant` — anything under `/api/` is refused with a 400 before
+# the page renders, which is what "I clicked Verify and nothing appeared" looked
+# like. Top-level, so nginx and the packaged single-process build agree.
+@app.get("/session-grant")
+async def session_grant(state: str = "", grant: str = ""):
+    from backend.api.settings import music_relay_verify_callback
+
+    return await music_relay_verify_callback(state=state, grant=grant)
+
+
 def _dir_size(path: Path) -> int:
     """Recursive byte size of a file or directory. Blocking — call via a thread."""
     if not path.exists():

@@ -125,3 +125,35 @@ def test_verification_start_refuses_a_nonsense_callback_base(client):
         json={"callback_base": "not-a-url"},
     )
     assert resp.status_code == 502
+
+
+def test_the_callback_lives_where_the_relay_insists(client):
+    """The relay only issues a challenge for a callback at exactly
+    `/session-grant`. Anything under `/api/` comes back as a 400 with an empty
+    page — verified against the live service on 2026-08-05, and the reason
+    clicking Verify showed a blank card."""
+    from backend.core import music_relay
+
+    assert music_relay.CALLBACK_PATH == "/session-grant"
+
+    # And openMemo answers there, not only under /api/.
+    resp = client.get("/session-grant?state=nope&grant=x")
+    assert resp.status_code == 400
+    assert "expired" in resp.text.lower()
+
+
+def test_the_challenge_link_points_the_relay_back_at_that_path(client, monkeypatch):
+    import httpx
+
+    class _Resp:
+        status_code = 200
+
+        @staticmethod
+        def json():
+            return {"challenge_url": "https://verify.example.com/challenge?id=abc"}
+
+    monkeypatch.setattr(httpx, "get", lambda *a, **k: _Resp())
+    out = music_relay.start_verification("http://localhost:8091")
+
+    assert "cb=http%3A%2F%2Flocalhost%3A8091%2Fsession-grant" in out["challenge_url"]
+    assert "%2Fapi%2F" not in out["challenge_url"]
