@@ -46,6 +46,10 @@ from backend.config import settings
 log = logging.getLogger("openmemo.music")
 
 VERIFY_BASE = "https://verify.spotbye.qzz.io"
+
+# Where the relay is willing to send the browser back to. Verified against the
+# live service on 2026-08-05: every other path answers 400 before rendering.
+CALLBACK_PATH = "/session-grant"
 PLATFORM = "desktop"
 
 # The challenge link is single-use and short-lived on their side; this is only
@@ -159,7 +163,11 @@ def start_verification(callback_base: str) -> dict:
     if not challenge_url.startswith("https://"):
         raise RelayNotVerified("The music relay returned an invalid challenge link.")
 
-    callback = f"{callback_base.rstrip('/')}/api/settings/music-relay/verify/callback?state={state}"
+    # The path is NOT ours to choose. The relay only issues a challenge for a
+    # callback at exactly /session-grant: anything under /api/ comes back as a
+    # 400 with an empty page, which is what "I clicked Verify and nothing
+    # appeared" looked like. Host and port are free; the path is fixed.
+    callback = f"{callback_base.rstrip('/')}{CALLBACK_PATH}?state={state}"
     joiner = "&" if "?" in challenge_url else "?"
     return {
         "challenge_url": f"{challenge_url}{joiner}{urlencode({'cb': callback})}",

@@ -7,6 +7,10 @@ All notable changes to OpenMemo are documented here.
 
 <!-- Add entries here as work lands: ### Added / ### Changed / ### Fixed -->
 
+### Fixed
+
+- 🎵 **The music relay Verify button opens a real challenge page.** Clicking it showed a blank card, because the relay only issues a challenge when openMemo asks it to send your browser back to a path called `/session-grant` — and openMemo was pointing at its own `/api/…` address, which the relay refuses with an error before drawing anything. The callback now lives where the relay insists, so the challenge appears and finishing it hands the session straight back.
+
 ### Added
 
 - 🔄 **A re-pull button on every memo that came from a link.** Top right of the memo page, next to pin and export. "Make it local" only downloads; this is the button for a memo that is *wrong* rather than merely remote — a video that will not play, a caption still reading "Instagram post", a carousel that arrived as a single photo, a cover pointing at a file that is gone. It resolves the source the way a fresh save would, downloads the media, and rebuilds the cover last so a freshly downloaded video can supply a frame. It never overwrites a title you wrote yourself. Uploads have no source to pull from, so they do not get the button.
