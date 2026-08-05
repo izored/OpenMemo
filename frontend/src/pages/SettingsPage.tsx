@@ -277,7 +277,7 @@ function LibraryIntegrityRows() {
               <>{state.missing_thumbs} missing thumbnail{state.missing_thumbs === 1 ? '' : 's'} can be regenerated. </>
             )}
             {state.silent_videos > 0 && (
-              <>{state.silent_videos} video{state.silent_videos === 1 ? ' plays' : 's play'} with no sound — re-pull {state.silent_videos === 1 ? 'it' : 'them'} to get the audio track. </>
+              <>{state.silent_videos} video{state.silent_videos === 1 ? ' has' : 's have'} no sound. Often the original has none either — plenty of clips are posted muted — so this is worth a look rather than an alarm. Re-pull one from its own page to try again. </>
             )}
             {incident && 'Stop writing to the disk before investigating — see docs/DISASTER-RECOVERY.md.'}
           </span>
