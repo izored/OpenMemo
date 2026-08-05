@@ -7,6 +7,10 @@ All notable changes to OpenMemo are documented here.
 
 <!-- Add entries here as work lands: ### Added / ### Changed / ### Fixed -->
 
+### Changed
+
+- 🛟 **The two ways Mesh pairing goes wrong now explain themselves.** Both were silent by design, which is what made them worth fixing. Press **Start a Mesh** on both computers and each one makes its own separate Mesh: they sit on the same network filtering each other out, and both report "no devices found" forever with nothing to suggest why. openMemo now notices when there is another openMemo on your network that is not in this Mesh, and says so — "if that is your other computer, press Join a Mesh there and enter this code". And pressing **Start** again once a device is already paired used to quietly cut it loose, because the new code replaces the key the other machine is still holding. It now stops and names the device it would strand, so starting over is something you choose rather than something you discover afterwards.
+
 ### Fixed
 
 - 🔑 **Your Mesh code can be read again, and Settings stops contradicting itself.** Starting a Mesh on Windows minted a 12-word code, showed it once, and lost it — the "show it again" path only ever read the macOS keychain, so the panel came back blank and there was no way to pair the second device short of starting over. openMemo now keeps the words, right beside the key they derive. That is not a new exposure: the derived key was already sitting in the same file in plain text on every platform, so withholding the words protected nothing and only cost you the code. Settings also said "pairing and syncing arrive in a later update" directly above two working pairing buttons — Mesh has been listening and announcing itself since the day you switch it on, and it now says so.
