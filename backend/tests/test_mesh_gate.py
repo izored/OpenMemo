@@ -89,3 +89,37 @@ def test_every_setting_default_is_writable_through_the_api():
         f"settings present in _DEFAULTS but not in SettingsPatch, so writes to "
         f"them are silently dropped: {missing}"
     )
+
+
+def test_mesh_key_material_never_crosses_the_settings_api():
+    """`mesh_secret` is the root every Mesh key is derived from, and
+    `mesh_code_words` is the same secret in typeable form. Either one lets a
+    caller join the Mesh and read what crosses it.
+
+    core/mesh/secret.py has always said this "must never be readable through
+    the settings API". Nothing enforced it: GET /api/settings returned the full
+    64 hex characters to anyone who could reach the local API.
+    """
+    from fastapi.testclient import TestClient
+
+    from backend.core.app_settings import _LOCK, _read, _write_raw
+    from backend.main import app
+
+    with _LOCK:
+        current = _read()
+        current["mesh_secret"] = "de" * 32
+        current["mesh_code_words"] = "abandon " * 11 + "about"
+        _write_raw(current)
+
+    try:
+        with TestClient(app) as client:
+            body = client.get("/api/settings").json()
+        assert "mesh_secret" not in body
+        assert "mesh_code_words" not in body
+        assert "de" * 32 not in str(body)
+    finally:
+        with _LOCK:
+            current = _read()
+            current.pop("mesh_secret", None)
+            current.pop("mesh_code_words", None)
+            _write_raw(current)
