@@ -47,9 +47,9 @@ const STEPS: Step[] = [
   },
   {
     eyebrow: 'One more thing',
-    title: 'Pairing is not ready yet',
-    body: 'Mesh is switched on, which wakes up the groundwork, but the pairing step arrives in a later update. Nothing is being sent anywhere and no other device can reach this one. Leaving it on is completely fine.',
-    icon: 'clock',
+    title: 'Write the code down',
+    body: 'The device that starts the Mesh mints a 12-word code and becomes the primary — it runs the Telegram bot and the heavy AI work. The other device joins with that code. openMemo keeps the words so you can read them again, next to the key they derive; if you would rather it did not, write them on paper and clear them from Settings.',
+    icon: 'link',
   },
 ];
 
