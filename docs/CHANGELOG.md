@@ -7,6 +7,14 @@ All notable changes to OpenMemo are documented here.
 
 <!-- Add entries here as work lands: ### Added / ### Changed / ### Fixed -->
 
+### Fixed
+
+- 🔊 **Videos pulled from the web come with their sound.** Instagram reels arrived silent, and the reason applies to any site that streams: video and audio travel as two separate streams, and openMemo's download helper was taking the video one and stopping there. The file played, so nothing looked wrong. openMemo now **checks every video it downloads for an audio track, whatever site it came from**, and if the sound is missing it tries the other method that knows how to join the two streams. A clip that genuinely has no sound is kept as it is rather than thrown away. Settings → Backup & Restore also counts silent videos in your library now, so this cannot go unnoticed again, and `refetch_missing_media --silent` re-pulls the ones you already have.
+
+### Added
+
+- 🔗 **Sync with a computer openMemo cannot see by itself.** Devices find each other by shouting on the local network, and that shout does not leave your subnet — so a machine on Tailscale, or on another network entirely, was invisible with no way to say where it was. There is now an address field under Settings → Mesh: paste the other computer's address and press Sync now. A Tailscale address is an ordinary address as far as openMemo is concerned, which is what makes syncing between two networks work without anything in the middle. [The pairing walkthrough](docs/MESH-PAIRING-WALKTHROUGH.md) covers both cases, click by click.
+
 ### Added
 
 - 🚪 **Leave this Mesh.** Starting over used to be a hidden flag you only met by walking into an error, which reads as an override rather than a choice. It is now its own button in the device list: this computer forgets the code and the device list and becomes an unpaired openMemo again, ready to Start or Join. **Your memos are not touched** — leaving is about which devices talk to each other, not about your library. It is also honest about the one thing it cannot do: there is no server to notify, so the other computer keeps its own copy and its own code and will simply stop finding this one.

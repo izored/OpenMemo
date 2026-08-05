@@ -61,7 +61,8 @@ def _host(url: str | None) -> str:
         return "?"
 
 
-async def _candidates(host_filter: str = "", unplayable: bool = False) -> list[Memo]:
+async def _candidates(host_filter: str = "", unplayable: bool = False,
+                      silent: bool = False) -> list[Memo]:
     """Memos whose media file is gone but whose source can still be fetched.
 
     `resolve_memo_path` is the app's own tolerant lookup, so a memo saved under
@@ -88,13 +89,21 @@ async def _candidates(host_filter: str = "", unplayable: bool = False) -> list[M
             )
         ).scalars().all()
 
-    from backend.core.localize_media import _playable_container
+    from backend.core.localize_media import _has_audio_stream, _playable_container
 
     out = []
     for m in rows:
         on_disk = resolve_memo_path(m.file_path)
         if on_disk is not None:
-            if not unplayable or _playable_container(on_disk):
+            broken = unplayable and not _playable_container(on_disk)
+            # `is False` on purpose: None means ffprobe could not tell, and a
+            # box without ffprobe must not decide every video is silent.
+            mute = (
+                silent
+                and (m.type or "").lower() == "video"
+                and _has_audio_stream(on_disk) is False
+            )
+            if not (broken or mute):
                 continue
         if host_filter and host_filter.lower() not in _host(m.source_url).lower():
             continue
@@ -177,6 +186,11 @@ async def main() -> None:
         action="store_true",
         help="also re-fetch files that ARE on disk but cannot be opened",
     )
+    ap.add_argument(
+        "--silent",
+        action="store_true",
+        help="also re-fetch videos that play but have no audio track",
+    )
     args = ap.parse_args()
 
     print("=" * 78)
@@ -190,7 +204,7 @@ async def main() -> None:
     print("=" * 78)
     print()
 
-    memos = await _candidates(args.host, args.unplayable)
+    memos = await _candidates(args.host, args.unplayable, args.silent)
     if not memos:
         print("Nothing missing. Every memo's media resolves on disk.")
         return
