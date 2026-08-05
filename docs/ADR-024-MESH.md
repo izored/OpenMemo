@@ -51,7 +51,7 @@ What "off" means, precisely:
 | Triggers on `memos`, `collections`, `tags`, … | **dropped** — zero write overhead |
 | Sync worker, WebSocket listener, mDNS advertiser | never started |
 | `/api/mesh/*` routes | return 404 |
-| Seed in the OS keychain | absent |
+| Seed in the OS store | absent |
 
 Triggers are created on enable and dropped on disable rather than gated with a
 `WHEN` clause, so a user who never touches Mesh pays no per-write cost at all.
@@ -363,7 +363,7 @@ Concretely, the Mesh listener is a separate service with a separate surface:
 |---|---|---|
 | Port | the existing one | **its own, different port** |
 | Auth | none, by design (local-first) | PSK handshake, every frame |
-| Binds to | loopback / LAN | loopback + the overlay interface |
+| Binds to | loopback by default; every interface once *Reachable from your other computer* is on — which is also what makes an overlay interface reachable | |
 | Speaks | the whole application | change rows, magnets, blob range requests |
 | Serves the UI | yes | **never** |
 | Serves `/api/*` | yes | **never** |
@@ -463,8 +463,13 @@ Anyone holding those 12 words has the whole library. So:
 - Show the code **once**, blurred until the user clicks reveal (exactly the
   screenshot's pattern), with copy and QR buttons.
 - Never write it to logs, never put it in a URL bar, never sync it.
-- Store it in the OS keychain — macOS Keychain, Windows Credential Manager — not
-  in `app_settings.json`.
+- Store it in the OS store, not in `app_settings.json`. **Shipped 2026-08-05**
+  as `core/mesh/keystore.py`: login keychain on macOS, DPAPI on Windows (via
+  `ctypes`, not Credential Manager — DPAPI is scriptable both ways and ships
+  with the OS), and on Linux a `0600` file described as exactly that, because no
+  keyring is guaranteed to exist on a headless box. The 12 words are stored
+  alongside the seed: either one reconstructs the Mesh, so protecting one and
+  not the other would be theatre. See `docs/MESH-SECURITY.md`.
 - Copy next to it: *anyone with this code can read your whole library.*
 
 ### More than two devices comes free

@@ -81,7 +81,14 @@ A Memo arrives complete, searchable and readable, long before its video does.
   (`backend/tests/test_mesh_contract.py`) fails the build if that grows.
 - **A separate listener on its own port.** Not a route on the app. The app has no
   authentication by design, so it must never face a network. The Mesh port
-  serves one WebSocket and nothing else.
+  serves one WebSocket and nothing else. It binds **loopback** until the user
+  turns on *Reachable from your other computer*, which is also what makes an
+  overlay address (Tailscale, WireGuard) reachable — mDNS does not leave the
+  subnet, so a peer on another network is dialled by address.
+- **Key material lives in the OS store**, not in `app_settings.json`: keychain on
+  macOS, DPAPI on Windows, a `0600` file on Linux described as exactly that
+  (`core/mesh/keystore.py`). The audit that prompted it is
+  [MESH-SECURITY.md](MESH-SECURITY.md).
 - **Change tracking is SQLite triggers**, created on enable and dropped on
   disable. They fire in the same transaction as the write they record, so the
   log cannot disagree with the data.
