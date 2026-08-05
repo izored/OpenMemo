@@ -100,15 +100,22 @@ export function MeshPairingPanel() {
             One of these, once. After that they find each other on their own.
           </span>
         </div>
+        {/* Start and Join are peers, not primary/secondary — one library has to
+            exist before another can join it, but neither is the recommended
+            path. Equal buttons; the helper line is a caption under each. */}
         <div className="om-mesh-start">
-          <button type="button" className="om-btn-primary" onClick={start} disabled={busy}>
-            Start a Mesh
+          <div className="om-mesh-start-choice">
+            <button type="button" className="om-btn-secondary" onClick={start} disabled={busy}>
+              <Icon name="plus" size={13} /> Start a Mesh
+            </button>
             <span className="mono">this is my first device</span>
-          </button>
-          <button type="button" className="om-btn-secondary" onClick={() => setJoining(true)}>
-            Join a Mesh
+          </div>
+          <div className="om-mesh-start-choice">
+            <button type="button" className="om-btn-secondary" onClick={() => setJoining(true)}>
+              <Icon name="link" size={13} /> Join a Mesh
+            </button>
             <span className="mono">I have a code</span>
-          </button>
+          </div>
         </div>
         {error && <p className="mono" style={{ color: '#EF5048', marginTop: 8 }}>{error}</p>}
       </div>
