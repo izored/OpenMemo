@@ -1622,13 +1622,15 @@ export function SettingsPage() {
           {/* ── Built with — full-width auto-scroll marquee ─────── */}
       </>
     ) },
-    { id: 'about', label: 'About', node: (
+    { id: 'built-with', label: 'Built with', node: (
       <>
           <SettingCard title="Built with ❤️" eyebrow="Open source">
             <BuiltWith entries={BUILT_WITH} />
           </SettingCard>
-          {/* Credits last — about-the-app cards belong after the functional
-              ones, not wedged between sync and data safety. */}
+      </>
+    ) },
+    { id: 'creator', label: 'Made by', node: (
+      <>
           <div className="om-setting-card om-creator-card">
             <div className="om-setting-head">
               <span className="mono om-setting-eyebrow">Made by</span>
