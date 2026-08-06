@@ -7,6 +7,9 @@ All notable changes to OpenMemo are documented here.
 
 <!-- Add entries here as work lands: ### Added / ### Changed / ### Fixed -->
 
+---
+## [3.8.0] - 2026-08-06
+
 ### Removed
 
 - 🗑️ **Scheduled archives are gone.** The feature asked you to type a folder into Settings, and that only ever worked if the folder happened to be reachable from inside the container openMemo runs in. Mine was not. `D:\APPS - 2026\Backups\OM - DB BACKUP` is not a path on Linux, it is a folder *name* with backslashes in it, so openMemo created it inside the container and wrote there: a 2.3 MB database archive and a 420 MB essential archive, both verified, both deleted with the container the next time it was rebuilt, while Settings showed them green for a day. The obvious patch was to bind-mount the folder, and that is a worse product than no feature: a text field you can only fill in correctly by editing `docker-compose.yml` first is not a setting, it is a trap. Backup is the download button, which has always let the browser ask where to put the file, and the daily database snapshot in `data/backups` that needs no configuration at all. Restore is unchanged.
