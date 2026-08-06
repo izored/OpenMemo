@@ -7,6 +7,10 @@ All notable changes to OpenMemo are documented here.
 
 <!-- Add entries here as work lands: ### Added / ### Changed / ### Fixed -->
 
+### Fixed
+
+- 🎵 **Verifying the music relay now actually unlocks downloads.** Completing the challenge stored a valid session, and every download still came back refused. openMemo was signing its requests with its own version number, while the relay had quietly filed the app as "unknown" when it issued the challenge and checked signatures against that — so the two were signing different things and nothing matched. It now signs with what the relay recorded.
+
 
 ### Changed
 
