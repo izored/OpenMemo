@@ -97,6 +97,11 @@ _DEFAULTS: dict[str, Any] = {
     # a protocol that rejects anyone without the 12-word root, but opening it is
     # still the user's decision to make knowingly.
     "mesh_reachable": False,
+    # The lossless music relay (Apple Music + Spotify → FLAC). Off by default
+    # and gating every route, background task and outbound call the feature
+    # makes, so an install that never turns it on never talks to the relay at
+    # all. Read through backend/core/music_relay.py, never directly.
+    "music_relay_enabled": False,
     # Settings card arrangement, chosen by dragging the cards on the page.
     # {"left": [id, ...], "right": [id, ...]}; {} means never rearranged, and
     # SettingsPage falls back to its own source order.

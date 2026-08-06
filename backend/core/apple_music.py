@@ -255,7 +255,9 @@ def download_apple_track(
             )
 
         isrc = _resolve_isrc(client, url)
-        match = _qobuz_track_match(client, isrc, title or "", artist)
+        # Apple's page gives us the album name, and Spotify's embed does not —
+        # so this path can feed the candidate scorer one more signal.
+        match = _qobuz_track_match(client, isrc, title or "", artist, album)
         if not match:
             raise SpotiFlacError("No matching lossless track found on Qobuz")
         qobuz_id, qobuz_album = match

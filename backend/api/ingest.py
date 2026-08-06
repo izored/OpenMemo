@@ -22,6 +22,9 @@ from sqlalchemy.orm.attributes import set_committed_value
 
 from backend.db.models import Memo, Collection, memo_collections
 from backend.core.security import sanitize_workspace_id, validate_url, FileUploadHandler
+# Apple Music and Spotify links exist only to be pulled through the music relay,
+# so the whole surface 404s while the relay is off (core/music_relay.py).
+from backend.core.music_relay import require_enabled as music_relay_enabled
 from backend.core.classify import derive_memo_type, derive_audio_kind
 
 router = APIRouter(prefix="/api/ingest", tags=["ingest"])
@@ -734,7 +737,7 @@ async def ingest_playlist(
 
 # --- Spotify ingestion (SpotiFLAC integration) ---
 
-@router.post("/spotify/probe")
+@router.post("/spotify/probe", dependencies=[Depends(music_relay_enabled)])
 async def probe_spotify_url(data: SpotifyProbe, db: AsyncSession = Depends(get_db)):
     """Preview a Spotify track / album / playlist link without downloading.
 
@@ -788,7 +791,7 @@ async def probe_spotify_url(data: SpotifyProbe, db: AsyncSession = Depends(get_d
     }
 
 
-@router.post("/spotify")
+@router.post("/spotify", dependencies=[Depends(music_relay_enabled)])
 async def ingest_spotify(
     data: SpotifyIngest,
     background_tasks: BackgroundTasks,
@@ -989,7 +992,7 @@ _APPLE_DOMAIN = "music.apple.com"
 _APPLE_FAVICON = "https://www.google.com/s2/favicons?domain=music.apple.com&sz=32"
 
 
-@router.post("/apple/probe")
+@router.post("/apple/probe", dependencies=[Depends(music_relay_enabled)])
 async def probe_apple_url(data: SpotifyProbe, db: AsyncSession = Depends(get_db)):
     """Preview an Apple Music track / album / playlist link without downloading.
 
@@ -1044,7 +1047,7 @@ async def probe_apple_url(data: SpotifyProbe, db: AsyncSession = Depends(get_db)
     }
 
 
-@router.post("/apple")
+@router.post("/apple", dependencies=[Depends(music_relay_enabled)])
 async def ingest_apple(
     data: SpotifyIngest,
     background_tasks: BackgroundTasks,
