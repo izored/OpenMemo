@@ -68,6 +68,38 @@ jobs:
             echo "::warning::No release for ${GITHUB_REF_NAME} yet — create it, then re-run this job or upload the artifact manually."
           fi
 
+      # One .dmg on the releases page, not ten. Each is ~400MB, and by v3.8.0
+      # there were nine older ones sitting there for ~3.7GB of nothing: nobody
+      # installs an old build of a local-first app they can rebuild from a tag.
+      #
+      # Runs AFTER the upload above and never before it, so a failed upload
+      # cannot leave the page with no .dmg at all. The current tag is excluded
+      # explicitly rather than by ordering, because "delete everything then
+      # upload" is one crashed runner away from deleting the only copy.
+      #
+      # Never fatal: the release is already published with its .dmg by this
+      # point, and a tidy-up is not worth failing a green build over.
+      - name: Delete .dmg from older releases
+        if: startsWith(github.ref, 'refs/tags/')
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          keep="${GITHUB_REF_NAME}"
+          echo "Keeping the .dmg on ${keep}; removing it from every other release."
+          for tag in $(gh release list --limit 100 --json tagName --jq '.[].tagName'); do
+            if [ "$tag" = "$keep" ]; then
+              continue
+            fi
+            assets=$(gh release view "$tag" --json assets --jq '.assets[] | select(.name | endswith(".dmg")) | .name' 2>/dev/null || true)
+            for asset in $assets; do
+              if gh release delete-asset "$tag" "$asset" --yes 2>/dev/null; then
+                echo "  deleted ${tag}/${asset}"
+              else
+                echo "::warning::could not delete ${tag}/${asset}"
+              fi
+            done
+          done
+
       # Actions storage is capped (0.5GB free tier); each .dmg is ~400MB, so
       # more than one live copy blows the quota. Delete prior runs' artifacts
       # of the same name before uploading this run's.
