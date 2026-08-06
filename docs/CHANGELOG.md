@@ -7,6 +7,9 @@ All notable changes to OpenMemo are documented here.
 
 <!-- Add entries here as work lands: ### Added / ### Changed / ### Fixed -->
 
+---
+## [3.9.0] - 2026-08-06
+
 ### Fixed
 
 - 🎯 **Covers and karaoke versions stop landing in your library as the real song.** When a track has no ISRC to look up, openMemo falls back to searching Qobuz for "title artist" — and it took whatever came back first. Search for a well-known song and the top hit is regularly a karaoke backing track or a tribute-band cover: same words, wrong recording, downloaded and then tagged with the original artist's name, so nothing about it looked wrong until you played it. Candidates are now scored on title, artist, album and master quality, with a heavy penalty for an artist that does not match at all and for the words karaoke, tribute, instrumental, "in the style of" and their friends when you did not ask for them. Nothing is rejected outright — the best match still wins, so a track that only has an odd pressing available is unaffected, and searching for a karaoke version still finds one. Apple Music links get an extra nudge, since Apple tells us the album name and Spotify does not.
