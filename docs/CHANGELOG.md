@@ -7,6 +7,9 @@ All notable changes to OpenMemo are documented here.
 
 <!-- Add entries here as work lands: ### Added / ### Changed / ### Fixed -->
 
+---
+## [3.9.1] - 2026-08-06
+
 ### Fixed
 
 - 🎬 **Videos stop stuttering when more than one thing is playing.** Play two memos at once and both would buffer at random, with no error anywhere: the player reported a full buffer and a healthy connection, because nothing had actually failed. Video always asks for byte ranges rather than the whole file, and the code serving those ranges read from disk synchronously. openMemo runs on a single event loop, so that read did not just pause one video, it stopped the entire backend for as long as the disk took to answer, including the other video's next chunk. The streams took turns freezing each other. One video alone was usually fast enough to hide it, which is why it looked random and got worse whenever the machine was busy with something else. Reads now happen on a worker thread, so the server keeps answering while the disk works, and they come in 256 KB pieces instead of 1 MB so several streams interleave instead of queueing. Ten viewers on ten different memos now stream together without either the loop or each other stalling.
