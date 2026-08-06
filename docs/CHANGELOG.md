@@ -7,6 +7,11 @@ All notable changes to OpenMemo are documented here.
 
 <!-- Add entries here as work lands: ### Added / ### Changed / ### Fixed -->
 
+
+### Changed
+
+- 🧹 **Only the newest macOS build stays on the releases page.** Every release kept its own .dmg, about 400 MB each, and by v3.8.0 there were ten of them sitting there for roughly 4 GB. Nobody installs an old build of an app they can rebuild from a tag. The macOS workflow now removes the .dmg from every older release right after it attaches the new one. It runs after the upload and skips the current tag by name, so a crashed runner cannot leave the page with no download at all, and it never fails the build: the release is already published by then, and tidying up is not worth turning a green build red.
+
 ---
 ## [3.8.0] - 2026-08-06
 
