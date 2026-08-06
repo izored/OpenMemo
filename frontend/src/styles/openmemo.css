@@ -5080,19 +5080,23 @@ body.om-has-bbar .om-fab { display: none !important; }
    ════════════════════════════════════════════════════════════════════════ */
 .om-bento-stack { display: flex; flex-direction: column; gap: 14px; }
 
-.om-settings-masonry { columns: 2; column-gap: 14px; }
-
-/* Deterministic column split. CSS multicol balances by HEIGHT, so one tall
-   unbreakable card (Files & limits carries cookies + Instagram + Trash) forced
-   an ugly gap beside it. Choosing the break point ourselves keeps the columns
-   grouped by meaning instead of by pixel height. */
-.om-col-break { break-before: column; -webkit-column-break-before: always; }
-.om-settings-masonry > * {
-  break-inside: avoid;
-  -webkit-column-break-inside: avoid;
-  margin: 0 0 14px;          /* vertical gap between stacked cards in a column */
-  display: block;            /* play nice inside multicol */
+/* Two real columns, not CSS multicol. Multicol reflows its own children, so a
+   card can never be dropped into a chosen position — and the manual break it
+   needed (`om-col-break`) was a constant in the source that went stale every
+   time a card changed height. The user drags the cards now; see
+   SettingsCardBoard. */
+.om-settings-board { display: flex; align-items: flex-start; gap: 14px; }
+.om-settings-board .om-settings-col {
+  flex: 1; min-width: 0;
+  display: flex; flex-direction: column; gap: 14px;
 }
+@media (max-width: 1100px) { .om-settings-board { flex-direction: column; } }
+
+/* The drag wrapper. `touch-action: none` is what lets a pointer drag start on
+   a touchscreen instead of scrolling the page. */
+.om-settings-slot { touch-action: none; }
+.om-settings-slot:active { cursor: grabbing; }
+.om-settings-slot.dragging { position: relative; z-index: 2; }
 
 /* .om-duo removed with the Settings bento rework: nesting a 2-col grid inside a
    masonry column fought the column split and forced a 3-card row. Every card is
@@ -5307,8 +5311,6 @@ body.om-has-bbar .om-fab { display: none !important; }
 
 /* ── Bento responsive ──────────────────────────────────────────────────── */
 @media (max-width: 900px) {
-  .om-settings-masonry { columns: 1; }
-  .om-col-break { break-before: auto; -webkit-column-break-before: auto; }
   .om-ap-hero { grid-template-columns: 1fr; }
   .om-ap-hero-vis { display: none; }
   .om-ap-hero-title { font-size: 25px; }

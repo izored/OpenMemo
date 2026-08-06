@@ -97,6 +97,18 @@ _DEFAULTS: dict[str, Any] = {
     # a protocol that rejects anyone without the 12-word root, but opening it is
     # still the user's decision to make knowingly.
     "mesh_reachable": False,
+    # Settings card arrangement, chosen by dragging the cards on the page.
+    # {"left": [id, ...], "right": [id, ...]}; {} means never rearranged, and
+    # SettingsPage falls back to its own source order.
+    #
+    # This replaced a hard-coded column break that had to be re-measured by hand
+    # every time a card changed height, and went stale twice in one session.
+    # Whoever is looking at the page can judge the balance better than a number
+    # committed weeks earlier.
+    #
+    # Unknown ids are ignored and cards missing from the layout are appended by
+    # the frontend, so shipping a new card cannot strand it off-screen.
+    "settings_card_layout": {},
 }
 
 _UNCAPPED_SENTINEL = 0
@@ -140,7 +152,6 @@ def get_settings() -> dict[str, Any]:
     data.pop(_TG_USER_KEY, None)
     data.pop(_CANARY_KEY, None)
     data.pop(_INTEGRITY_KEY, None)
-    data.pop(_BACKUP_RUNS_KEY, None)
     data.pop(_MUSIC_RELAY_KEY, None)
     # Mesh key material. `mesh_secret` is the 32-byte root every Mesh key is
     # derived from, and `mesh_code_words` is the same secret in the form a

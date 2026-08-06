@@ -396,6 +396,10 @@ export interface AppSettings {
   /** Whether the Mesh listener accepts connections from other machines. Off =
    *  loopback only: pairing works, syncing cannot connect. */
   mesh_reachable: boolean;
+  /** Which Settings cards sit in which column, and in what order — the user
+   *  drags them. `{}` means never rearranged, and SettingsPage falls back to
+   *  its own source order. */
+  settings_card_layout: { left: string[]; right: string[] } | Record<string, never>;
   telegram_token_present: boolean;
   telegram_user_locked: boolean;
 }

@@ -54,6 +54,10 @@ class SettingsPatch(BaseModel):
     # nothing.
     mesh_enabled: Optional[bool] = None
     mesh_reachable: Optional[bool] = None
+    # Settings card arrangement: {"left": [id...], "right": [id...]}. Free-form
+    # on purpose — the ids are frontend card names, and the backend has no
+    # opinion about which cards exist.
+    settings_card_layout: Optional[dict] = None
 
 
 @router.get("")
