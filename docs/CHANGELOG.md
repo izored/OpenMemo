@@ -15,6 +15,10 @@ All notable changes to OpenMemo are documented here.
 
 - 🔒 **The app and the vector store are bound to this machine only.** Docker publishes a port on `0.0.0.0` unless told otherwise, so `8091` and `8001` were listening on every network interface. openMemo has no login by design, which means anyone on the same wifi could open the entire library at `http://<your-machine>:8091`, and ChromaDB, holding an embedding of everything in it, answered on `8001` with no authentication at all. Both are now `127.0.0.1` only. The Mesh port is deliberately left alone: its listener already binds loopback until you turn on "Reachable on my network", so it takes two explicit switches rather than one default.
 
+### Fixed
+
+- 🧲 **“Built with” and the credits card drag apart.** When the Settings cards became draggable I sliced the page into cards and put those two in the same slice, so they moved as one welded block. They are two cards and they drag as two cards now.
+
 ### Changed
 
 - 🧲 **You arrange the Settings cards yourself now.** Drag any card where you want it, in either column, and openMemo remembers. It used to be a hard-coded split point in the source: one line saying "start the second column here", which had to be re-measured by hand every time a card changed height. It went stale twice in one afternoon, once when Mesh grew and once when the archive rows came out, leaving 2389px of cards beside 4185px of nothing. You are looking at the page, so you can see the balance better than a number I committed weeks ago. The arrangement is saved with your settings rather than in the browser, so it follows you to your other machines over Mesh. Whole cards are draggable with no mode to turn on, and the controls inside them keep working: a click still reads as a click, and a drag that starts in a text field selects text instead of picking the card up.
