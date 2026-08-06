@@ -70,7 +70,22 @@ class RelayNotVerified(Exception):
 
 
 def app_version() -> str:
-    return f"openMemo/{settings.VERSION}"
+    """The version string the relay expects to see in a signature.
+
+    NOT openMemo's version. The relay normalises an app version it does not
+    recognise to "unknown" when it mints the challenge — visible in the
+    challenge token — and then validates signatures against the value IT
+    stored. Sending our own version means signing a string the server never
+    reconstructs, which comes back as:
+
+        HTTP 401  {"success": false, "error": "Signed request validation failed."}
+
+    Verified against the live relay on 2026-08-06: the same request signed with
+    "openMemo/3.8.0" is refused and signed with "unknown" is accepted. Upstream
+    uses the identical fallback for a build with no version set, so this is
+    declining to claim a version rather than impersonating one.
+    """
+    return "unknown"
 
 
 def _record() -> dict:

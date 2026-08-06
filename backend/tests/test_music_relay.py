@@ -157,3 +157,23 @@ def test_the_challenge_link_points_the_relay_back_at_that_path(client, monkeypat
 
     assert "cb=http%3A%2F%2Flocalhost%3A8091%2Fsession-grant" in out["challenge_url"]
     assert "%2Fapi%2F" not in out["challenge_url"]
+
+
+def test_the_signed_app_version_is_the_one_the_relay_stored(client):
+    """Not openMemo's version. The relay normalises an app version it does not
+    recognise to "unknown" when it mints the challenge, then validates against
+    the value IT kept — so signing with ours produces a string the server never
+    rebuilds:
+
+        HTTP 401  {"error": "Signed request validation failed."}
+
+    Confirmed against the live relay on 2026-08-06: identical request, refused
+    with "openMemo/3.8.0" and accepted with "unknown"."""
+    from backend.config import settings
+
+    assert music_relay.app_version() == "unknown"
+    assert settings.VERSION not in music_relay.app_version()
+
+    _verified()
+    headers = music_relay.sign("POST", "https://qbz-oss.spotbye.qzz.io/api/dl", b"{}")
+    assert headers["X-Sig-App-Version"] == "unknown"
