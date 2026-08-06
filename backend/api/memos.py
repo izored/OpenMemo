@@ -1,4 +1,5 @@
 """Memo CRUD API endpoints."""
+import anyio
 import logging
 import mimetypes
 import uuid
@@ -345,17 +346,28 @@ def _parse_range(range_header: str, file_size: int) -> tuple[int, int] | None:
     return start, end
 
 
-async def _stream_file_range(path, start: int, end: int, chunk_size: int = 1024 * 1024):
-    """Yield a byte range of a file in chunks (keeps RSS flat for big files)."""
+async def _stream_file_range(path, start: int, end: int, chunk_size: int = 256 * 1024):
+    """Yield a byte range of a file in chunks (keeps RSS flat for big files).
+
+    Every disk touch goes through the threadpool. uvicorn runs a single event
+    loop, so a plain `f.read()` here blocks *every* other request for the length
+    of the read — with several media memos playing at once the streams starve
+    each other in turn and all of them stutter, though none ever errors. Chunks
+    are 256 KiB rather than 1 MiB for the same reason: smaller reads hand control
+    back to the loop more often, so concurrent streams interleave smoothly.
+    """
     remaining = end - start + 1
-    with open(path, "rb") as f:
-        f.seek(start)
+    f = await anyio.to_thread.run_sync(lambda: open(path, "rb"))
+    try:
+        await anyio.to_thread.run_sync(f.seek, start)
         while remaining > 0:
-            chunk = f.read(min(chunk_size, remaining))
+            chunk = await anyio.to_thread.run_sync(f.read, min(chunk_size, remaining))
             if not chunk:
                 break
             remaining -= len(chunk)
             yield chunk
+    finally:
+        await anyio.to_thread.run_sync(f.close)
 
 
 @router.get("/{memo_id}/file")
