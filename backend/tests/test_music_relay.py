@@ -28,11 +28,28 @@ def client():
 
 @pytest.fixture(autouse=True)
 def clean_session():
-    from backend.core.app_settings import set_music_relay
+    """Start every test with no session and the feature ON.
+
+    The relay ships OFF (`music_relay_enabled` defaults to False), so the tests
+    that exercise signing and the verify routes have to switch it on the way a
+    user would. The gate itself is covered separately below, with it off.
+    """
+    from backend.core.app_settings import set_music_relay, update_settings
 
     set_music_relay({})
+    update_settings({"music_relay_enabled": True})
     yield
     set_music_relay({})
+    update_settings({"music_relay_enabled": False})
+
+
+@pytest.fixture
+def relay_off():
+    from backend.core.app_settings import update_settings
+
+    update_settings({"music_relay_enabled": False})
+    yield
+    update_settings({"music_relay_enabled": True})
 
 
 def _verified(days: int = 30) -> dict:
@@ -157,6 +174,107 @@ def test_the_challenge_link_points_the_relay_back_at_that_path(client, monkeypat
 
     assert "cb=http%3A%2F%2Flocalhost%3A8091%2Fsession-grant" in out["challenge_url"]
     assert "%2Fapi%2F" not in out["challenge_url"]
+
+
+def test_it_ships_off(client):
+    """The default is off. A third-party service is not opt-out."""
+    from backend.core.app_settings import _DEFAULTS
+
+    assert _DEFAULTS["music_relay_enabled"] is False
+
+
+def test_every_relay_route_404s_while_it_is_off(client, relay_off):
+    """404 rather than 403, matching Mesh — a feature that is off should look
+    like one that was never built, not advertise itself on a LAN port."""
+    assert client.post(
+        "/api/settings/music-relay/verify/start", json={"callback_base": "http://localhost:8091"}
+    ).status_code == 404
+    assert client.get("/api/settings/music-relay/verify/callback?state=x&grant=y").status_code == 404
+    assert client.delete("/api/settings/music-relay/session").status_code == 404
+    assert client.get("/session-grant?state=x&grant=y").status_code == 404
+
+
+def test_the_music_link_routes_404_while_it_is_off(client, relay_off):
+    """Apple and Spotify links exist only to be pulled through the relay."""
+    for path in ("/api/ingest/spotify/probe", "/api/ingest/apple/probe"):
+        assert client.post(path, json={"url": "https://open.spotify.com/track/x"}).status_code == 404
+
+
+def test_status_still_answers_while_off_so_settings_can_render(client, relay_off):
+    body = client.get("/api/settings/music-relay/status").json()
+    assert body["enabled"] is False
+    assert "session_secret" not in str(body)
+
+
+def test_nothing_is_signed_while_off_even_with_a_valid_session(client, relay_off):
+    """The gate sits at the OUTBOUND boundary, not only on the routes — a
+    background localize task goes through `sign()` without touching a route."""
+    _verified()
+    with pytest.raises(music_relay.RelayNotVerified) as e:
+        music_relay.sign("POST", "https://qbz-oss.spotbye.qzz.io/api/dl", b"{}")
+    assert "off" in str(e.value).lower()
+
+
+def test_the_download_path_refuses_before_it_builds_a_request(client, relay_off, monkeypatch):
+    """A disabled install makes NO outbound call — not a refused one, none."""
+    import httpx
+
+    from backend.core.spotiflac import SpotiFlacError, _community_flac_url
+
+    def _explode(*a, **k):  # pragma: no cover - must never run
+        raise AssertionError("the relay was contacted while the feature was off")
+
+    monkeypatch.setattr(httpx.Client, "post", _explode)
+    _verified()
+    with pytest.raises(SpotiFlacError) as e:
+        _community_flac_url(httpx.Client(), "123", "24")
+    assert "off" in str(e.value).lower()
+
+
+def test_no_dead_api_key_is_sent(client):
+    """The relay dropped its shared api key; a search of spotbye/SpotiFLAC for
+    "x-api-key" now returns nothing, and the live relay answers a request with
+    no key at all with 428 rather than a missing-key error. Sending one anyway
+    is a fabricated credential going out on the wire."""
+    from backend.core import spotiflac
+
+    assert not hasattr(spotiflac, "_COMMUNITY_API_KEY")
+
+    # Code only — the comment above the constant explains why it went, and says
+    # the header's name to do it.
+    with open(spotiflac.__file__, encoding="utf-8") as fh:
+        code = [ln for ln in fh if not ln.lstrip().startswith("#")]
+    assert not [ln for ln in code if "x-api-key" in ln.lower()]
+
+
+def test_a_401_clears_the_session_so_settings_stops_claiming_verified(client, monkeypatch):
+    """428 = we sent no session; 401 = we sent one the relay would not accept.
+    Both mean "verify again", and on 401 the stored session has to go: leaving
+    it makes Settings show "Verified" while every download fails, which is the
+    exact failure that hid 188 broken tracks."""
+    import httpx
+
+    from backend.core.spotiflac import SpotiFlacError, _community_flac_url
+
+    _verified()
+    assert music_relay.status()["verified"] is True
+
+    class _Resp:
+        status_code = 401
+        headers: dict = {}
+
+        @staticmethod
+        def json():
+            return {"error": "Signed request validation failed."}
+
+    monkeypatch.setattr(httpx.Client, "post", lambda *a, **k: _Resp())
+    with pytest.raises(SpotiFlacError) as e:
+        _community_flac_url(httpx.Client(), "123", "24")
+
+    assert "Verify" in str(e.value)
+    assert music_relay.status()["verified"] is False
+    # The install id survives, so re-verifying is the same client.
+    assert music_relay.install_id()
 
 
 def test_the_signed_app_version_is_the_one_the_relay_stored(client):

@@ -23,6 +23,11 @@ Sessions expire. When one does, downloads fail with a message that says to
 verify again rather than a bare HTTP code — 188 tracks in one library were
 sitting behind exactly that error with nothing explaining it.
 
+**The whole feature is off by default** (`music_relay_enabled`). It is a
+third-party service, so an install that has not asked for it never calls the
+relay, never resolves its hostname and never stores a session. See the feature
+gate below; the flag is enforced at the outbound boundary, not just in the UI.
+
 Endpoint and protocol values are re-derived from spotbye/SpotiFLAC (MIT):
 `backend/community_endpoints.go` for the URLs (AES-256-GCM, key = SHA-256 over
 the seed parts, AAD alongside) and `backend/community_session.go` for the
@@ -67,6 +72,49 @@ _pending: dict[str, dict] = {}
 
 class RelayNotVerified(Exception):
     """No usable session. The message is written to be shown to the user."""
+
+
+# --------------------------------------------------------------------------- #
+#  Feature gate
+# --------------------------------------------------------------------------- #
+# The relay is a third-party service. An install that does not want it should
+# not merely hide the button — it should never resolve the hostname. So the flag
+# is checked at the *outbound* boundary (`sign`, and `_community_flac_url`
+# before it builds a request) as well as on every route, and the default is off.
+SETTING_KEY = "music_relay_enabled"
+
+
+def is_enabled() -> bool:
+    """True when the user has switched the music relay on in Settings.
+
+    Read fresh on every call rather than cached: the read is a small JSON file
+    behind a lock, the flag flips rarely, and a stale cache would mean requests
+    still going out to a third party after the user turned it off — the one
+    outcome worth spending a file read to avoid.
+    """
+    from backend.core.app_settings import get_settings
+
+    return bool(get_settings().get(SETTING_KEY, False))
+
+
+async def require_enabled() -> None:
+    """FastAPI dependency: 404 every relay route while the feature is off.
+
+    404 rather than 403 on purpose. A disabled feature should be
+    indistinguishable from one that was never built — a 403 advertises that the
+    endpoint exists and invites probing on a LAN-exposed port.
+    """
+    from fastapi import HTTPException
+
+    if not is_enabled():
+        raise HTTPException(status_code=404, detail="Not Found")
+
+
+#: Shown when something tries to pull lossless audio with the feature off.
+DISABLED_MESSAGE = (
+    "Lossless music downloads are off. Turn on the music relay in "
+    "Settings → Files if you want Apple Music and Spotify links pulled as FLAC."
+)
 
 
 def app_version() -> str:
@@ -135,6 +183,7 @@ def status() -> dict:
     record = _record()
     expires = _expires_at(record)
     return {
+        "enabled": is_enabled(),
         "verified": session_valid(record),
         "expires_at": record.get("expires_at") or None,
         # Distinguishes "never set this up" from "it lapsed", which need
@@ -154,6 +203,9 @@ def start_verification(callback_base: str) -> dict:
     browser is what gets redirected back. Behind nginx or in Docker that is not
     the same as what the server sees locally, which is why the caller supplies
     it rather than this guessing."""
+    if not is_enabled():
+        raise RelayNotVerified(DISABLED_MESSAGE)
+
     parsed = urlparse(callback_base)
     if parsed.scheme not in ("http", "https") or not parsed.netloc:
         raise RelayNotVerified("openMemo could not work out its own address for the callback.")
@@ -257,6 +309,11 @@ def sign(method: str, url: str, body: bytes) -> dict[str, str]:
     is why every one of those also travels as a header — the server rebuilds the
     same string from them.
     """
+    # The last gate before anything is signed for a third party. Routes are
+    # gated too, but this is the one a background task also passes through.
+    if not is_enabled():
+        raise RelayNotVerified(DISABLED_MESSAGE)
+
     record = _record()
     if not session_valid(record):
         raise RelayNotVerified(

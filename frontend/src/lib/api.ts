@@ -391,6 +391,10 @@ export interface AppSettings {
   // Pull media locally for every bot save (download on save regardless of the
   // embed-host rule) so on-the-go captures survive takedown.
   telegram_force_localize: boolean;
+  /** The lossless music relay (Apple Music + Spotify → FLAC). Off by default;
+   *  while off, every relay and music-link route 404s and nothing is sent to
+   *  the third-party relay at all. */
+  music_relay_enabled: boolean;
   /** Mesh (ADR-024): two-way device sync. Gates the whole feature. */
   mesh_enabled: boolean;
   /** Whether the Mesh listener accepts connections from other machines. Off =
@@ -610,6 +614,9 @@ export const settingsApi = {
 };
 
 export interface MusicRelayStatus {
+  /** Whether the feature is switched on at all. False = everything else here
+   *  is moot and the rest of the relay surface 404s. */
+  enabled: boolean;
   verified: boolean;
   expires_at: string | null;
   /** A session was set up at some point — tells "never verified" from "lapsed". */

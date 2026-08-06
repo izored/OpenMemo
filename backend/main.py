@@ -506,7 +506,10 @@ app.include_router(mesh_router)
 @app.get("/session-grant")
 async def session_grant(state: str = "", grant: str = ""):
     from backend.api.settings import music_relay_verify_callback
+    from backend.core.music_relay import require_enabled
 
+    # 404s with the rest of the relay surface while the feature is off.
+    await require_enabled()
     return await music_relay_verify_callback(state=state, grant=grant)
 
 

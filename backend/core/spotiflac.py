@@ -42,8 +42,14 @@ import httpx
 log = logging.getLogger("openmemo.music")
 
 # --- SpotiFLAC community provider (decrypted from the upstream binary) ---
-# Source: spotbye/SpotiFLAC backend/community_endpoints.go + community_apikey.go.
-_COMMUNITY_API_KEY = "explore-obscure-chivalry-travesty-blinks"
+# Source: spotbye/SpotiFLAC backend/community_endpoints.go.
+#
+# There used to be an `x-api-key` here as well. It is gone upstream — a search
+# of spotbye/SpotiFLAC for "x-api-key" returns nothing, and community_apikey.go
+# now holds only the user-agent and the signing helper. Verified against the
+# live relay on 2026-08-06: a request carrying no api key at all is answered
+# with `428 Verification session required`, not a missing-key error. The session
+# signature is the only credential, so openMemo no longer sends a dead header.
 # Rotated 2026-08 from `-foss` to `-oss`, which is why every Apple Music and
 # Spotify pull started failing with a DNS error. Re-derive from upstream's
 # community_endpoints.go if it happens again — the scheme is in the docstring.
@@ -282,12 +288,108 @@ def _qobuz_call(client: httpx.Client, path: str, params: dict[str, str]) -> dict
     return r.json()
 
 
-def _qobuz_track_match(client: httpx.Client, isrc: str | None, title: str, artist: str | None) -> tuple[str, str | None] | None:
+def _normalize_match_value(value: str | None) -> str:
+    """Fold a title/artist/album down to comparable words (upstream's
+    normalizeQobuzSearchValue): lowercase, '&' → 'and', feat./ft. and the
+    separators -_/ dropped, whitespace collapsed."""
+    text = (value or "").strip().lower()
+    for old, new in (("&", " and "), ("feat.", " "), ("ft.", " "),
+                     ("/", " "), ("-", " "), ("_", " ")):
+        text = text.replace(old, new)
+    return " ".join(text.split())
+
+
+def _overlaps(a: str, b: str) -> bool:
+    return bool(a) and bool(b) and (a in b or b in a)
+
+
+# A search for "title artist" happily returns karaoke backing tracks, tribute
+# covers and 8-bit renditions — they carry the same words. Upstream rejects them
+# by name; so does this. A candidate only loses points for a keyword the query
+# did not itself ask for, so searching *for* a karaoke version still finds one.
+_MATCH_BAD_KEYWORDS = (
+    "karaoke", "instrumental", "cover", "tribute", "as made famous by",
+    "in the style of", "lullaby", "8 bit", "8-bit", "16 bit", "16-bit", "chill",
+)
+
+
+def _score_qobuz_candidate(track: dict, title: str, artist: str | None, album: str | None) -> int:
+    """Port of SpotiFLAC's scoreQobuzSearchCandidate (backend/qobuz.go).
+
+    The weights are upstream's, deliberately. The one that does the real work is
+    **-2000 when the artist does not match at all**: without it a text-search
+    fallback returns whoever Qobuz ranked first, which is how a cover ends up in
+    the library wearing the original's name.
+    """
+    score = 0
+
+    title_needle = _normalize_match_value(title)
+    title_hay = _normalize_match_value(track.get("title"))
+    if title_needle and title_hay == title_needle:
+        score += 1000
+    elif title_needle and _overlaps(title_hay, title_needle):
+        score += 500
+
+    performer = (track.get("performer") or {}).get("name")
+    album_obj = track.get("album") or {}
+    artist_needle = _normalize_match_value(artist)
+    artist_hay = _normalize_match_value(performer or (album_obj.get("artist") or {}).get("name"))
+    artist_matched = False
+    if artist_needle and artist_hay == artist_needle:
+        score += 300
+        artist_matched = True
+    elif artist_needle and _overlaps(artist_hay, artist_needle):
+        score += 180
+        artist_matched = True
+
+    if artist_needle and not artist_matched:
+        # "A, B" vs "A" is still the right artist — one shared word is enough.
+        if set(artist_needle.split()) & set(artist_hay.split()):
+            score += 50
+        else:
+            score -= 2000
+
+    album_needle = _normalize_match_value(album)
+    album_hay = _normalize_match_value(album_obj.get("title"))
+    if album_needle and album_hay == album_needle:
+        score += 150
+    elif album_needle and _overlaps(album_hay, album_needle):
+        score += 90
+
+    # Prefer the better master when everything else ties.
+    try:
+        depth = int(track.get("maximum_bit_depth") or 0)
+        rate = float(track.get("maximum_sampling_rate") or 0)
+    except (TypeError, ValueError):
+        depth, rate = 0, 0.0
+    if track.get("hires") or track.get("hires_streamable") or depth >= 24 or rate > 48:
+        score += 40
+    elif depth >= 16:
+        score += 20
+
+    for kw in _MATCH_BAD_KEYWORDS:
+        if kw in title_hay and kw not in title_needle:
+            score -= 2000
+        if kw in artist_hay and kw not in artist_needle:
+            score -= 2000
+
+    return score
+
+
+def _qobuz_track_match(client: httpx.Client, isrc: str | None, title: str,
+                       artist: str | None, album: str | None = None) -> tuple[str, str | None] | None:
     """Find a Qobuz track by ISRC first, then by 'title artist' text search.
 
     Returns ``(track_id, album_title)`` — the album name rides along because
     the search result already carries it and nothing else in the chain does
     (the Spotify embed has no album field, the FLAC arrives untagged).
+
+    Candidates are **scored** rather than taken in Qobuz's own order. This used
+    to return ``items[0]``, which is correct for an ISRC hit and a coin flip for
+    the text fallback: search "title artist" and the top result is regularly a
+    karaoke or tribute version, downloaded and tagged as the real thing. The
+    best-scoring candidate always wins, so nothing is ever rejected outright —
+    a bad field only loses a race it would previously have won by default.
     """
     queries = []
     if isrc:
@@ -297,13 +399,21 @@ def _qobuz_track_match(client: httpx.Client, isrc: str | None, title: str, artis
         queries.append(text)
     for query in queries:
         try:
-            data = _qobuz_call(client, "track/search", {"query": query, "limit": "5"})
+            # 10, like upstream: scoring is only as good as the shortlist.
+            data = _qobuz_call(client, "track/search", {"query": query, "limit": "10"})
         except Exception:
             continue
         items = (data.get("tracks") or {}).get("items") or []
-        if items:
-            album = ((items[0].get("album") or {}).get("title") or "").strip() or None
-            return str(items[0]["id"]), album
+        if not items:
+            continue
+        best = max(items, key=lambda t: _score_qobuz_candidate(t, title, artist, album))
+        if best is not items[0]:
+            log.info(
+                "qobuz match: picked %r by %r over Qobuz's first result %r by %r",
+                best.get("title"), (best.get("performer") or {}).get("name"),
+                items[0].get("title"), (items[0].get("performer") or {}).get("name"),
+            )
+        return str(best["id"]), ((best.get("album") or {}).get("title") or "").strip() or None
     return None
 
 
@@ -351,6 +461,12 @@ def _community_flac_url(client: httpx.Client, qobuz_id: str, quality: str) -> st
 
     from backend.core import music_relay
 
+    # Off by default. Checked here, before the payload is built, so a disabled
+    # install makes no outbound request to the relay at all — not a refused one,
+    # none. `sign()` would also catch it; this keeps the network quiet.
+    if not music_relay.is_enabled():
+        raise SpotiFlacError(music_relay.DISABLED_MESSAGE)
+
     quality = quality if quality in VALID_QUALITIES else DEFAULT_QUALITY
     payload = {"id": str(qobuz_id), "quality": quality}
     downgraded = False
@@ -368,16 +484,26 @@ def _community_flac_url(client: httpx.Client, qobuz_id: str, quality: str) -> st
         headers = {
             "Content-Type": "application/json",
             "Accept": "application/json",
-            "x-api-key": _COMMUNITY_API_KEY,
             "User-Agent": "SpotiFLAC",
             **signature,
         }
         resp = client.post(_QOBUZ_COMMUNITY_URL, content=body, headers=headers, timeout=60)
         status = resp.status_code
 
-        # The relay wants a session and openMemo's has lapsed or was never set
-        # up. Say what to do instead of leaving an HTTP code in the memo.
-        if status == 428:
+        # The relay wants a session openMemo cannot present. 428 = none sent;
+        # 401 = one sent that it would not accept (a signature it could not
+        # rebuild, or a session it has since dropped). Upstream treats the two
+        # identically in doCommunityRequest — clear the stored credentials and
+        # start over — so openMemo does too.
+        #
+        # Clearing matters on 401 specifically. Without it Settings keeps
+        # showing "Verified ✓" while every single download fails, which is the
+        # exact shape of the bug that left 188 tracks failing with nothing on
+        # screen explaining why. Forget the session so the UI tells the truth.
+        if status in (401, 428):
+            if status == 401:
+                music_relay.disconnect()
+                log.warning("qobuz id=%s relay rejected the signature (401) — session cleared", qobuz_id)
             raise SpotiFlacError(
                 "The lossless music service needs openMemo to be verified again. "
                 "Settings → Files → Music relay → Verify."
