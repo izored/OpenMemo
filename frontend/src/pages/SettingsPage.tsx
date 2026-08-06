@@ -1467,15 +1467,17 @@ export function SettingsPage() {
           </SettingCard>
 
 
-          <SettingCard title="Phone capture" eyebrow="Telegram relay">
+          {/* Column break. Measured at 1280px after scheduled archives were
+              removed: the cards above total 2637px and the cards from here down
+              2527px, so the columns land 110px apart. Re-measure and move this
+              whenever a card is added, removed, or changes height — see
+              CLAUDE.md. Dropping the archive UI shrank Backup & Restore by
+              ~1100px and flipped the balance, which is exactly why. */}
+          <SettingCard title="Phone capture" eyebrow="Telegram relay" className="om-col-break">
             <TelegramRelayRows profile={profile} save={saveProfile} />
           </SettingCard>
 
-          {/* Column break. Measured at 1280px: the cards above total ~3260px and
-              the cards from here down ~3310px, so the two columns land within
-              ~50px of each other. Re-measure and move this whenever a card is
-              added, removed, or changes height — see CLAUDE.md. */}
-          <SettingCard title="Mesh" eyebrow="Two-way device sync" className="om-col-break">
+          <SettingCard title="Mesh" eyebrow="Two-way device sync">
             <MeshRows profile={profile} save={saveProfile} />
           </SettingCard>
 

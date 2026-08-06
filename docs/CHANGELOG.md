@@ -17,7 +17,7 @@ All notable changes to OpenMemo are documented here.
 
 ### Changed
 
-- ⚖️ **The Settings page's two columns are the same length again.** The split between them is chosen by hand, and it had not moved since Mesh, Backup and half a dozen other cards were added below it: the left column ran 2389px and the right ran 4185px, so the page ended in a long stretch of nothing beside a wall of cards. Measured every card and moved the break, which brings the two columns within 51px of each other.
+- ⚖️ **The Settings page's two columns are the same length again.** The split between them is chosen by hand, and it had not moved since Mesh, Backup and half a dozen other cards were added below it: the left column ran 2389px and the right ran 4185px, so the page ended in a long stretch of nothing beside a wall of cards. Measured every card and moved the break, which brings the two columns within 110px of each other.
 
 - 🔇 **Silent videos are reported as something to look at, not something to fix.** After the audio backfill, six videos still had no sound — and checking each one at its source showed why: X and Instagram offer no audio track for them at all. They were posted muted. openMemo was telling you to re-pull them, which could never have worked. It now says plainly that the original often has no sound either.
 
