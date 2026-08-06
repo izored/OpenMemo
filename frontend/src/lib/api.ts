@@ -351,36 +351,8 @@ export const backupApi = {
     }
     return resp.json();
   },
-  // Scheduled archives written to disk (core/archive.py), as opposed to the
-  // browser downloads above. Each one is verified after writing.
-  listArchives: () => fetchJSON<ArchiveListing>('/backup/archives'),
-  runArchive: (scope: 'database' | 'essential' | 'full') =>
-    fetchJSON<ArchiveRun>(`/backup/archives?scope=${scope}`, { method: 'POST' }),
 };
 
-export interface ArchiveRun {
-  ok: boolean;
-  scope: string;
-  name?: string;
-  bytes?: number;
-  memos?: number;
-  media_files?: number;
-  /** Written, verified and restorable, but the media it should carry is not on
-   *  disk to include. Not a failure: refusing forever would fail the scope
-   *  every week once files are already lost. */
-  degraded?: boolean;
-  verified?: boolean;
-  created_at?: string;
-  reason?: string;
-}
-
-export interface ArchiveListing {
-  destination: string;
-  schedule: Record<string, { every_s: number; keep: number }>;
-  runs: Record<string, ArchiveRun>;
-  archives: { name: string; scope: string; bytes: number; created_at: string }[];
-  total_bytes: number;
-}
 
 // Runtime user-configurable settings (persisted as JSON server-side).
 export interface AppSettings {
@@ -424,9 +396,6 @@ export interface AppSettings {
   /** Whether the Mesh listener accepts connections from other machines. Off =
    *  loopback only: pairing works, syncing cannot connect. */
   mesh_reachable: boolean;
-  /** Where scheduled archives are written. '' = data/backups. Worth pointing
-   *  outside the app directory, so wiping the app cannot wipe its backups. */
-  backup_dest: string;
   telegram_token_present: boolean;
   telegram_user_locked: boolean;
 }

@@ -7,7 +7,17 @@ All notable changes to OpenMemo are documented here.
 
 <!-- Add entries here as work lands: ### Added / ### Changed / ### Fixed -->
 
+### Removed
+
+- 🗑️ **Scheduled archives are gone.** The feature asked you to type a folder into Settings, and that only ever worked if the folder happened to be reachable from inside the container openMemo runs in. Mine was not. `D:\APPS - 2026\Backups\OM - DB BACKUP` is not a path on Linux, it is a folder *name* with backslashes in it, so openMemo created it inside the container and wrote there: a 2.3 MB database archive and a 420 MB essential archive, both verified, both deleted with the container the next time it was rebuilt, while Settings showed them green for a day. The obvious patch was to bind-mount the folder, and that is a worse product than no feature: a text field you can only fill in correctly by editing `docker-compose.yml` first is not a setting, it is a trap. Backup is the download button, which has always let the browser ask where to put the file, and the daily database snapshot in `data/backups` that needs no configuration at all. Restore is unchanged.
+
+### Security
+
+- 🔒 **The app and the vector store are bound to this machine only.** Docker publishes a port on `0.0.0.0` unless told otherwise, so `8091` and `8001` were listening on every network interface. openMemo has no login by design, which means anyone on the same wifi could open the entire library at `http://<your-machine>:8091`, and ChromaDB, holding an embedding of everything in it, answered on `8001` with no authentication at all. Both are now `127.0.0.1` only. The Mesh port is deliberately left alone: its listener already binds loopback until you turn on "Reachable on my network", so it takes two explicit switches rather than one default.
+
 ### Changed
+
+- ⚖️ **The Settings page's two columns are the same length again.** The split between them is chosen by hand, and it had not moved since Mesh, Backup and half a dozen other cards were added below it: the left column ran 2389px and the right ran 4185px, so the page ended in a long stretch of nothing beside a wall of cards. Measured every card and moved the break, which brings the two columns within 51px of each other.
 
 - 🔇 **Silent videos are reported as something to look at, not something to fix.** After the audio backfill, six videos still had no sound — and checking each one at its source showed why: X and Instagram offer no audio track for them at all. They were posted muted. openMemo was telling you to re-pull them, which could never have worked. It now says plainly that the original often has no sound either.
 

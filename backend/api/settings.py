@@ -54,12 +54,6 @@ class SettingsPatch(BaseModel):
     # nothing.
     mesh_enabled: Optional[bool] = None
     mesh_reachable: Optional[bool] = None
-    # Where scheduled archives are written (core/archive.py). A path, or empty
-    # for the default. Not validated for existence here — the directory is
-    # created on the next run, and a destination that turns out to be unusable
-    # is recorded as a failed run rather than rejected at save time, which is
-    # what makes a disconnected external drive visible instead of silent.
-    backup_dest: Optional[str] = None
 
 
 @router.get("")

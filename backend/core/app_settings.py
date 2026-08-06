@@ -97,12 +97,6 @@ _DEFAULTS: dict[str, Any] = {
     # a protocol that rejects anyone without the 12-word root, but opening it is
     # still the user's decision to make knowingly.
     "mesh_reachable": False,
-    # Where scheduled archives are written (core/archive.py). Empty = the
-    # default, DATA_DIR/backups. Worth pointing OUTSIDE the app directory:
-    # whatever wipes the app should not be able to wipe its backups on the way
-    # past. Not defaulted to an external path, because a default that points at
-    # someone else's disk layout is worse than one that stays put.
-    "backup_dest": "",
 }
 
 _UNCAPPED_SENTINEL = 0
@@ -317,17 +311,6 @@ def set_library_integrity(result: dict) -> None:
         _write_raw(current)
 
 
-def get_backup_dest() -> str:
-    return str(_read().get("backup_dest") or "")
-
-
-# Last scheduled archive per scope (core/archive.py). A record, not a
-# preference, and also the schedule itself: "is this scope due" is answered by
-# the timestamp stored here, so a machine that is off for a week runs the
-# missed archive when it comes back rather than silently skipping it.
-_BACKUP_RUNS_KEY = "backup_runs"
-
-
 # Verified session for the lossless music relay (core/music_relay.py). Holds a
 # SECRET, so it is kept out of _DEFAULTS and stripped from get_settings() the
 # same way the hidden-section passcode and the Telegram token are: the API only
@@ -347,16 +330,6 @@ def set_music_relay(record: dict) -> None:
         _write_raw(current)
 
 
-def get_backup_runs() -> dict | None:
-    value = _read().get(_BACKUP_RUNS_KEY)
-    return value if isinstance(value, dict) else None
-
-
-def set_backup_runs(runs: dict) -> None:
-    with _LOCK:
-        current = _read()
-        current[_BACKUP_RUNS_KEY] = runs
-        _write_raw(current)
 
 
 def telegram_token_present() -> bool:
