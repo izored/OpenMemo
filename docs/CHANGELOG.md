@@ -7,7 +7,17 @@ All notable changes to OpenMemo are documented here.
 
 <!-- Add entries here as work lands: ### Added / ### Changed / ### Fixed -->
 
+### Removed
+
+- 🗑️ **Scheduled archives are gone.** The feature asked you to type a folder into Settings, and that only ever worked if the folder happened to be reachable from inside the container openMemo runs in. Mine was not. `D:\APPS - 2026\Backups\OM - DB BACKUP` is not a path on Linux, it is a folder *name* with backslashes in it, so openMemo created it inside the container and wrote there: a 2.3 MB database archive and a 420 MB essential archive, both verified, both deleted with the container the next time it was rebuilt, while Settings showed them green for a day. The obvious patch was to bind-mount the folder, and that is a worse product than no feature: a text field you can only fill in correctly by editing `docker-compose.yml` first is not a setting, it is a trap. Backup is the download button, which has always let the browser ask where to put the file, and the daily database snapshot in `data/backups` that needs no configuration at all. Restore is unchanged.
+
+### Security
+
+- 🔒 **The app and the vector store are bound to this machine only.** Docker publishes a port on `0.0.0.0` unless told otherwise, so `8091` and `8001` were listening on every network interface. openMemo has no login by design, which means anyone on the same wifi could open the entire library at `http://<your-machine>:8091`, and ChromaDB, holding an embedding of everything in it, answered on `8001` with no authentication at all. Both are now `127.0.0.1` only. The Mesh port is deliberately left alone: its listener already binds loopback until you turn on "Reachable on my network", so it takes two explicit switches rather than one default.
+
 ### Changed
+
+- 🧲 **You arrange the Settings cards yourself now.** Drag any card where you want it, in either column, and openMemo remembers. It used to be a hard-coded split point in the source: one line saying "start the second column here", which had to be re-measured by hand every time a card changed height. It went stale twice in one afternoon, once when Mesh grew and once when the archive rows came out, leaving 2389px of cards beside 4185px of nothing. You are looking at the page, so you can see the balance better than a number I committed weeks ago. The arrangement is saved with your settings rather than in the browser, so it follows you to your other machines over Mesh. Whole cards are draggable with no mode to turn on, and the controls inside them keep working: a click still reads as a click, and a drag that starts in a text field selects text instead of picking the card up.
 
 - 🔇 **Silent videos are reported as something to look at, not something to fix.** After the audio backfill, six videos still had no sound — and checking each one at its source showed why: X and Instagram offer no audio track for them at all. They were posted muted. openMemo was telling you to re-pull them, which could never have worked. It now says plainly that the original often has no sound either.
 

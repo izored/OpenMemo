@@ -25,6 +25,51 @@ _DB = "openmemo.db"
 _FILES_PREFIX = "files/"
 
 
+def _upload_paths() -> tuple[list[Path], int]:
+    """Files belonging to memos with no source. Returns (found, expected).
+
+    `expected` is how many the database references, `found` is how many are
+    actually on disk. They differ when files have already been lost, which is
+    the case this exists for.
+    """
+    from backend.core.file_paths import resolve_memo_path
+
+    db = Path(settings.DATA_DIR) / "openmemo.db"
+    con = sqlite3.connect(f"file:{db}?mode=ro", uri=True)
+    try:
+        rows = con.execute(
+            "select file_path from memos "
+            "where (is_deleted = 0 or is_deleted is null) "
+            "  and file_path is not null and file_path <> '' "
+            "  and (source_url is null or source_url = '')"
+        ).fetchall()
+    finally:
+        con.close()
+
+    found = []
+    for (stored,) in rows:
+        resolved = resolve_memo_path(stored)
+        if resolved is not None:
+            found.append(resolved)
+    return found, len(rows)
+
+
+def _thumbnail_paths() -> list[Path]:
+    """The card covers. Technically regenerable, and included anyway.
+
+    Restoring a backup into an empty install and finding 693 broken cards is
+    what proved this: regenerating them means re-resolving posts over the
+    network, one memo at a time, and every card is broken until it finishes. At
+    86 MB against a 4.5 GB archive the cost of carrying them is a rounding
+    error, and it is the difference between restoring a library and restoring a
+    library-shaped hole.
+    """
+    thumbs = Path(settings.FILES_DIR) / "thumbs"
+    if not thumbs.is_dir():
+        return []
+    return [f for f in thumbs.rglob("*") if f.is_file()]
+
+
 def _sqlite_backup(src_path: Path, dst_path: Path) -> None:
     src = sqlite3.connect(str(src_path))
     dst = sqlite3.connect(str(dst_path))
@@ -83,8 +128,6 @@ async def create_backup(
             # broken until that finishes — which is what restoring a full
             # archive into an empty install actually looked like.
             if scope == "essential":
-                from backend.core.archive import _thumbnail_paths, _upload_paths
-
                 for f in _upload_paths()[0] + _thumbnail_paths():
                     try:
                         rel = f.relative_to(files_dir).as_posix()
@@ -341,42 +384,3 @@ async def run_auto_backup_now():
     import asyncio
 
     return await asyncio.to_thread(run_once)
-
-
-@router.get("/archives")
-async def list_archives():
-    """Scheduled archives on this machine (core/archive.py).
-
-    `runs` carries the last attempt per scope INCLUDING failures, so a broken
-    destination reads as a failure rather than as a schedule that has simply
-    not fired yet."""
-    from backend.core.archive import SCHEDULE, destination, last_runs, list_archives as _list
-
-    archives = _list()
-    return {
-        "destination": str(destination()),
-        "schedule": SCHEDULE,
-        "runs": last_runs(),
-        "archives": archives,
-        "total_bytes": sum(a["bytes"] for a in archives),
-    }
-
-
-@router.post("/archives")
-async def run_archive_now(
-    scope: Literal["database", "essential", "full"] = Query("essential"),
-):
-    """Write one archive now, verified, instead of waiting for the schedule.
-
-    Returns the same record the scheduler stores, so a failure comes back with
-    its reason rather than as a bare error."""
-    import asyncio
-
-    from backend.core.archive import create
-    from backend.core.app_settings import get_backup_runs, set_backup_runs
-
-    result = await asyncio.to_thread(create, scope)
-    runs = get_backup_runs() or {}
-    runs[scope] = result
-    set_backup_runs(runs)
-    return result
