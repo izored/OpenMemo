@@ -2,7 +2,13 @@ services:
   nginx:
     image: nginx:alpine
     ports:
-      - "8091:80"
+      # Loopback ONLY. openMemo has no login by design (single-user, local),
+      # so "published" and "readable by anyone on the wifi" are the same
+      # sentence. Docker's default 0.0.0.0 bind meant every device on the LAN
+      # could open the whole library at http://<this-machine>:8091. Never drop
+      # the 127.0.0.1 prefix to "make it work from my phone" — that is what
+      # Mesh is for.
+      - "127.0.0.1:8091:80"
     volumes:
       - ./nginx.conf:/etc/nginx/conf.d/default.conf:ro
     depends_on:
@@ -64,7 +70,9 @@ services:
   chromadb:
     image: chromadb/chroma:latest
     ports:
-      - "8001:8000"
+      # Loopback only: this is the vector store, unauthenticated, holding an
+      # embedding of everything in the library.
+      - "127.0.0.1:8001:8000"
     volumes:
       - ./data/chroma:/chroma/chroma
     environment:

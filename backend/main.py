@@ -243,14 +243,6 @@ async def lifespan(app: FastAPI):
 
     asyncio.create_task(run_integrity_loop())
 
-    # Scheduled archives (plan 027) — one verified zip per run, to a folder the
-    # user picks. Database daily, essential weekly, full monthly. The loop ticks
-    # hourly and runs whatever is due, so a machine that is off for a week
-    # catches up instead of skipping.
-    from backend.core.archive import run_archive_loop
-
-    asyncio.create_task(run_archive_loop())
-
     # Persistent job queue (ADR-024 §9). Spawns the bounded worker pool; it does
     # no database I/O itself, and is a no-op until job kinds are registered.
     # Requeuing work interrupted by a restart is the janitor's job, a moment
