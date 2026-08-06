@@ -2,10 +2,13 @@
 import re
 from typing import Optional
 
-from fastapi import APIRouter, File, HTTPException, UploadFile
+from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
 from fastapi.responses import FileResponse
 from pydantic import BaseModel
 
+# The music relay is off by default; every route that acts on it 404s until the
+# user turns it on (core/music_relay.py), the same way Mesh gates its surface.
+from backend.core.music_relay import require_enabled as music_relay_enabled
 from backend.core.app_settings import (
     background_present,
     cookies_present,
@@ -52,6 +55,7 @@ class SettingsPatch(BaseModel):
     # a second allowlist, and a key missing from it is dropped silently — the
     # PUT still returns 200, so a Settings toggle would appear to work and do
     # nothing.
+    music_relay_enabled: Optional[bool] = None
     mesh_enabled: Optional[bool] = None
     mesh_reachable: Optional[bool] = None
     # Settings card arrangement: {"left": [id...], "right": [id...]}. Free-form
@@ -449,7 +453,12 @@ async def library_integrity_check():
 
 @router.get("/music-relay/status")
 async def music_relay_status():
-    """Whether the lossless music relay session is usable. Never the secret."""
+    """Whether the lossless music relay session is usable. Never the secret.
+
+    Deliberately NOT behind `require_enabled`: Settings needs to render the
+    relay card while the feature is off, and this answers `enabled: false` with
+    no secret and no outbound call. Every route that *does* something is gated.
+    """
     from backend.core.music_relay import status
 
     return status()
@@ -462,7 +471,7 @@ class MusicRelayStart(BaseModel):
     callback_base: str
 
 
-@router.post("/music-relay/verify/start")
+@router.post("/music-relay/verify/start", dependencies=[Depends(music_relay_enabled)])
 async def music_relay_verify_start(data: MusicRelayStart):
     """Get the challenge link for the user to open and complete themselves."""
     from backend.core.music_relay import RelayNotVerified, start_verification
@@ -473,7 +482,7 @@ async def music_relay_verify_start(data: MusicRelayStart):
         raise HTTPException(status_code=502, detail=str(e))
 
 
-@router.get("/music-relay/verify/callback")
+@router.get("/music-relay/verify/callback", dependencies=[Depends(music_relay_enabled)])
 async def music_relay_verify_callback(state: str = "", grant: str = ""):
     """Where the relay sends the user's browser once the challenge is done.
 
@@ -503,7 +512,7 @@ async def music_relay_verify_callback(state: str = "", grant: str = ""):
     )
 
 
-@router.delete("/music-relay/session")
+@router.delete("/music-relay/session", dependencies=[Depends(music_relay_enabled)])
 async def music_relay_disconnect():
     """Forget the stored session. The install id stays, so re-verifying is the
     same client rather than a new one."""

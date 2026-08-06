@@ -293,21 +293,34 @@ function LibraryIntegrityRows() {
 
 /** Music relay: the lossless source behind Apple Music and Spotify pulls.
  *
- *  It stopped accepting a shared key in August 2026 and now issues sessions
- *  only after a challenge a person completes in a browser. That is the point of
- *  the challenge, so openMemo hands you the link and waits rather than trying
- *  to answer it for you. */
-function MusicRelayRows() {
+ *  Off by default, because it is a third-party service. While the toggle is off
+ *  every relay and music-link route 404s and nothing is sent to the relay at
+ *  all — the switch is enforced on the server, not just hidden here.
+ *
+ *  Switched on, it still needs a session, and the relay only issues one after a
+ *  challenge a person completes in a browser. That is the point of the
+ *  challenge, so openMemo hands you the link and waits rather than trying to
+ *  answer it for you. */
+function MusicRelayRows({ profile, save }: { profile: AppSettings | null; save: (p: Partial<AppSettings>) => void }) {
+  const enabled = profile?.music_relay_enabled ?? false;
   const [state, setState] = useState<MusicRelayStatus | null>(null);
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState('');
   const pollRef = useRef<number | null>(null);
 
   const refresh = () => { settingsApi.musicRelayStatus().then(setState).catch(() => setState(null)); };
+  // Status is readable while off (it answers `enabled: false` and nothing else),
+  // so re-read on the flip to pick up an existing session when switching on.
   useEffect(() => {
     refresh();
     return () => { if (pollRef.current) window.clearInterval(pollRef.current); };
-  }, []);
+  }, [enabled]);
+
+  const toggle = () => {
+    if (!profile) return;
+    setMsg('');
+    save({ music_relay_enabled: !profile.music_relay_enabled });
+  };
 
   const verify = async () => {
     setBusy(true); setMsg('');
@@ -344,16 +357,31 @@ function MusicRelayRows() {
 
   return (
     <div className="om-setting-row" style={{ flexDirection: 'column', alignItems: 'stretch', gap: 10 }}>
-      <div className="om-setting-row-text" style={{ maxWidth: 560 }}>
-        <p>Music relay</p>
-        <span className="mono">
-          Apple Music and Spotify links are pulled as lossless FLAC through a shared community
-          relay. It only answers verified clients now, so it needs a one-off challenge that you
-          complete in your browser. Nothing is signed up for and no account is involved.
-        </span>
+      <div style={{ display: 'flex', alignItems: 'flex-start', gap: 12 }}>
+        <div className="om-setting-row-text" style={{ maxWidth: 560, flex: 1 }}>
+          <p>Music relay</p>
+          <span className="mono">
+            Pull Apple Music and Spotify links as lossless FLAC, through a shared community relay
+            run by someone else. Off by default: while it is off, openMemo never contacts the relay
+            and Apple Music and Spotify links are not accepted. Everything else (YouTube,
+            SoundCloud, Instagram, and music files you add yourself) works either way.
+          </span>
+        </div>
+        <button type="button" className="om-add-toggle" onClick={toggle} aria-pressed={enabled}>
+          <span className={'om-add-toggle-switch' + (enabled ? ' on' : '')}>
+            <span className="om-add-toggle-knob" />
+          </span>
+        </button>
       </div>
 
-      {state && !state.verified && (
+      {enabled && (
+        <span className="mono" style={{ maxWidth: 560 }}>
+          The relay only answers verified clients, so it needs a one-off challenge you complete in
+          your browser. Nothing is signed up for and no account is involved.
+        </span>
+      )}
+
+      {enabled && state && !state.verified && (
         <div
           role="status"
           style={{
@@ -372,21 +400,23 @@ function MusicRelayRows() {
         </div>
       )}
 
-      <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
-        {state?.verified ? (
-          <>
-            <span style={{ color: 'var(--text-success, #1D9E75)', fontWeight: 500 }}>
-              Verified ✓{state.expires_in_days !== null ? ` · ${state.expires_in_days} days left` : ''}
-            </span>
-            <button className="om-btn-secondary" onClick={disconnect}>Disconnect</button>
-          </>
-        ) : (
-          <button className="om-btn-secondary" onClick={verify} disabled={busy}>
-            {busy ? 'Waiting for you…' : 'Verify'}
-          </button>
-        )}
-      </div>
-      {msg && <span className="mono" style={{ fontSize: 11 }}>{msg}</span>}
+      {enabled && (
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
+          {state?.verified ? (
+            <>
+              <span style={{ color: 'var(--text-success, #1D9E75)', fontWeight: 500 }}>
+                Verified ✓{state.expires_in_days !== null ? ` · ${state.expires_in_days} days left` : ''}
+              </span>
+              <button className="om-btn-secondary" onClick={disconnect}>Disconnect</button>
+            </>
+          ) : (
+            <button className="om-btn-secondary" onClick={verify} disabled={busy}>
+              {busy ? 'Waiting for you…' : 'Verify'}
+            </button>
+          )}
+        </div>
+      )}
+      {enabled && msg && <span className="mono" style={{ fontSize: 11 }}>{msg}</span>}
     </div>
   );
 }
@@ -1090,7 +1120,7 @@ export function SettingsPage() {
       })
       .catch(() => {
         setMaxUploadMb(5120);
-        setProfile({ max_upload_mb: 5120, display_name: '', email: '', avatar_data_url: '', mailing_list_consent: false, auto_download_audio: true, auto_download_video: true, music_quality: '16', music_provider: 'qobuz', chat_model: '', num_ctx: 0, yt_cookies_present: false, bg_image_ext: '', hidden_passcode_set: false, telegram_enabled: false, telegram_poll_minutes: 15, telegram_default_collection: 'IG Inbox', telegram_force_localize: true, telegram_token_present: false, telegram_user_locked: false, mesh_enabled: false, mesh_reachable: false, settings_card_layout: {} });
+        setProfile({ max_upload_mb: 5120, display_name: '', email: '', avatar_data_url: '', mailing_list_consent: false, auto_download_audio: true, auto_download_video: true, music_quality: '16', music_provider: 'qobuz', chat_model: '', num_ctx: 0, yt_cookies_present: false, bg_image_ext: '', hidden_passcode_set: false, telegram_enabled: false, telegram_poll_minutes: 15, telegram_default_collection: 'IG Inbox', telegram_force_localize: true, telegram_token_present: false, telegram_user_locked: false, music_relay_enabled: false, mesh_enabled: false, mesh_reachable: false, settings_card_layout: {} });
       });
   }, []);
 
@@ -1447,7 +1477,7 @@ export function SettingsPage() {
               </div>
               <div className="om-setting-row" style={{ borderTop: '1px solid var(--border)', marginTop: 8, paddingTop: 8, flexDirection: 'column', alignItems: 'stretch' }}>
                 <InstagramConnectRows />
-                <MusicRelayRows />
+                <MusicRelayRows profile={profile} save={saveProfile} />
               </div>
               <div className="om-setting-row" style={{ borderTop: '1px solid var(--border)', marginTop: 8, paddingTop: 8 }}>
                 <TrashRow />

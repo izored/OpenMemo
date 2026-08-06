@@ -158,7 +158,15 @@ an ISRC, and the lossless FLAC comes from a shared community relay ported from
 [spotbye/SpotiFLAC](https://github.com/spotbye/SpotiFLAC) in
 `backend/core/spotiflac.py`. No account, no Spotify token.
 
-Since August 2026 the relay only answers **verified** clients. A verification is
+**It is off by default.** The relay is run by someone else, so openMemo does not
+use it until you say so: Settings → Files → Music relay. While it is off, every
+relay route and both music-link routes answer 404 and the download path refuses
+before it builds a request, so nothing is sent to the relay at all — not even a
+request that gets turned away. The switch is enforced on the server, so a
+background job pulling a saved Spotify link hits the same gate. Music you add
+yourself, and every other source, work regardless.
+
+Once it is on: since August 2026 the relay only answers **verified** clients. A verification is
 a challenge you complete in a browser: Settings → Files → Music relay → Verify
 opens it, you finish it, the relay sends your browser back to openMemo, and
 openMemo trades the grant for a session it stores locally. After that every

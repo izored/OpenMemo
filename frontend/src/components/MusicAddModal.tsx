@@ -48,13 +48,23 @@ export function MusicAddModal({ embedded = false }: { embedded?: boolean } = {})
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
 
+  // Read before the link tab needs it: `music_relay_enabled` decides whether a
+  // Spotify / Apple link is even offered.
+  const { data: settings } = useQuery({ queryKey: ['settings'], queryFn: settingsApi.get });
+
   // Link tab
   const [url, setUrl] = useState('');
   const [download, setDownload] = useState(true);
   // A Spotify OR Apple Music link is a lossless (FLAC) source; both share the
   // same probe/ingest contract, only the provider differs.
+  //
+  // Both go through the music relay, which is off by default — and while it is
+  // off those routes 404 on the server. So treat the link as unrecognised
+  // rather than probing something that cannot answer, and say why below.
   const lossless = losslessLink(url);
-  const provider = lossless?.provider ?? null;
+  const relayOn = settings?.music_relay_enabled ?? false;
+  const losslessBlocked = !!lossless && !relayOn;
+  const provider = relayOn ? (lossless?.provider ?? null) : null;
   const losslessKind = lossless?.kind ?? null;
   const plShape = playlistShape(url);
   const [llProbe, setLlProbe] = useState<LosslessProbe | null>(null);
@@ -74,8 +84,8 @@ export function MusicAddModal({ embedded = false }: { embedded?: boolean } = {})
 
   // Settings drawer only toggles auto-download now. Lossless quality is no
   // longer a user choice: the backend always asks for hi-res and downgrades to
-  // CD on its own when a release has no hi-res master.
-  const { data: settings } = useQuery({ queryKey: ['settings'], queryFn: settingsApi.get });
+  // CD on its own when a release has no hi-res master. (`settings` is read
+  // above, where the link tab first needs it.)
 
   useEffect(() => {
     if (open) {
@@ -259,6 +269,9 @@ export function MusicAddModal({ embedded = false }: { embedded?: boolean } = {})
   };
   const footDisabled = busy
     || (tab === 'link' && !url.trim())
+    // Saving an Apple/Spotify link with the relay off would just 404. The pane
+    // says so; the button matches it rather than inviting a failed request.
+    || (tab === 'link' && losslessBlocked)
     || (tab === 'playlist' && !plName.trim());
 
   // The global corner instance steps aside on bottom-bar pages (ADR-021).
@@ -376,6 +389,17 @@ export function MusicAddModal({ embedded = false }: { embedded?: boolean } = {})
                   <input type="checkbox" checked={download} onChange={(e) => setDownload(e.target.checked)} />
                   <span>Download {losslessKind === 'track' ? 'now' : 'all now'}</span>
                 </label>
+              </div>
+            ) : losslessBlocked ? (
+              <div className="om-mm-spotify">
+                <p className="om-mm-hint mono" style={{ color: 'var(--text-warning, #BA7517)' }}>
+                  That’s {lossless?.provider === 'apple' ? 'an Apple Music' : 'a Spotify'} link, and
+                  the music relay is off — so openMemo won’t fetch it.
+                </p>
+                <p className="om-mm-hint mono">
+                  Add the file yourself on the Upload tab, or turn the relay on in
+                  Settings → Files → Music relay.
+                </p>
               </div>
             ) : plShape.isPlaylist ? (
               <>
