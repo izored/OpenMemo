@@ -118,8 +118,17 @@ export interface MusicPlaylist {
   covers: string[];
   /** Download progress derived from per-track localize_status. `pending`
    *  counts tracks actively queued/downloading; remote tracks saved without
-   *  downloading count in none of done/error/pending. */
-  progress: { total: number; done: number; error: number; pending: number; active?: boolean };
+   *  downloading count in none of done/error/pending/missing. `missing` counts
+   *  tracks that claim a local file which is no longer on disk — they look
+   *  downloaded in the track list but cannot play. */
+  progress: {
+    total: number;
+    done: number;
+    error: number;
+    pending: number;
+    missing?: number;
+    active?: boolean;
+  };
 }
 
 /** A Space (ADR-020): a Workspace with kind='space'. A separate, hidden area

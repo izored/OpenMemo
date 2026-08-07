@@ -834,12 +834,38 @@ export function MusicPage() {
     queryClient.invalidateQueries({ queryKey: ['music-playlists'] });
   };
 
-  const downloadAll = async (p: MusicPlaylist) => {
+  // Returns how many tracks were queued, or null if the call itself failed.
+  const downloadAll = async (p: MusicPlaylist, scope: 'missing' | 'all' = 'missing') => {
+    let queued: number | null = null;
     try {
-      await musicApi.downloadPlaylist(p.id);
+      queued = (await musicApi.downloadPlaylist(p.id, scope)).queued;
     } catch { /* surfaced by polling */ }
     queryClient.invalidateQueries({ queryKey: ['memos', 'playlist-tracks'] });
     queryClient.invalidateQueries({ queryKey: ['music-playlists'] });
+    return queued;
+  };
+
+  // Pull the whole thing down again, on-disk tracks included. The escape hatch
+  // for a library whose files went missing in a way the per-track state can't
+  // see (bad rip, half-written files, a restore that brought back the wrong
+  // ones). Confirmed because it re-downloads every track, not just the gaps.
+  const redownloadEverything = async (p: MusicPlaylist) => {
+    const ok = window.confirm(
+      `Re-download all ${p.track_count} track(s) of "${p.name}"?\n\n` +
+        'Every track is pulled from its source again, including the ones already ' +
+        'on this device. Each keeps playing off its current file until the new ' +
+        'one lands.',
+    );
+    if (!ok) return;
+    const queued = await downloadAll(p, 'all');
+    if (queued === null) return; // request failed; the polling refetch surfaces it
+    // A playlist of uploads has nothing to re-fetch (no source to fetch from).
+    // Silence would read as a dead button, so say it.
+    if (queued === 0) {
+      showNotice('Nothing to re-download. These tracks have no source link to fetch from.', 'error');
+    } else {
+      showNotice(`Re-downloading ${queued} track${queued > 1 ? 's' : ''}.`);
+    }
   };
 
   // Pause a running bulk pass. The in-flight track finishes; the rest reset to
@@ -1012,6 +1038,11 @@ export function MusicPage() {
     // Tracks not on this device (remote, queued, or failed). Any of them can be
     // (re)pulled, so the playlist keeps its re-download control.
     const notLocal = tracks.filter((t) => !isReady(t));
+    // Tracks that look local but whose file is gone from disk. Only the backend
+    // can tell (it stats the files), so this count comes off the playlist, not
+    // off the track rows — those still carry a file_path and read as ready.
+    const missingCount = playlist?.progress.missing ?? 0;
+    const offDevice = notLocal.length + missingCount;
     const failedTracks = notLocal.filter((t) => t.localize_status === 'error');
     const failedCount = failedTracks.length;
     // The most common failure reason across failed tracks — surfaced as the
@@ -1027,7 +1058,7 @@ export function MusicPage() {
     // The bulk control stays put whenever any track is still off-device. A
     // single-track download (one tile's cloud chip) must NOT steal the header
     // button. Only that one tile shows its own spinner. So no processing gate.
-    const canRedownload = notLocal.length > 0;
+    const canRedownload = offDevice > 0;
     return (
       <div className="om-music">
         <button className="om-music-back" onClick={() => navigate('/music')} title="Back to Music">
@@ -1139,14 +1170,30 @@ export function MusicPage() {
                 <button
                   className="om-btn-secondary"
                   onClick={() => downloadAll(playlist)}
-                  title={failedCount > 0
-                    ? 'Retry every track that is not on this device yet'
-                    : 'Download every remote track to this device'}
+                  title={missingCount > 0
+                    ? `${missingCount} track(s) lost their file. Pull every track that is not on this device back down.`
+                    : failedCount > 0
+                      ? 'Retry every track that is not on this device yet'
+                      : 'Download every remote track to this device'}
                 >
                   <Icon name="cloudDownload" size={13} />
-                  <span>{failedCount > 0 ? `Re-download (${notLocal.length})` : 'Download all'}</span>
+                  <span>
+                    {failedCount > 0 || missingCount > 0
+                      ? `Re-download (${offDevice})`
+                      : 'Download all'}
+                  </span>
                 </button>
               ) : null}
+              {playlist && !bulkActive && trackTotal > 0 && (
+                <button
+                  className="om-btn-secondary"
+                  onClick={() => redownloadEverything(playlist)}
+                  title="Pull every track from its source again, including the ones already on this device"
+                >
+                  <Icon name="refresh" size={13} />
+                  <span>Re-download all</span>
+                </button>
+              )}
               {failedCount > 0 && failReason && (
                 <button
                   className="om-btn-secondary"

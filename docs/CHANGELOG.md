@@ -7,6 +7,14 @@ All notable changes to OpenMemo are documented here.
 
 <!-- Add entries here as work lands: ### Added / ### Changed / ### Fixed -->
 
+### Fixed
+
+- 🎵 **A playlist whose files went missing can be pulled back down.** If the media files disappear from disk but the database survives, and that is exactly what a wiped or restored files folder looks like, every track still remembered where it had been saved. openMemo trusted that memory: it counted those tracks as downloaded, showed them as ready to play, and "Download all" only ever queued the tracks that had never been downloaded at all. On a 79 track playlist with 76 files gone, the button offered to fetch 2. Presence on disk is now checked rather than assumed. A track pointing at a file that is not there counts as missing, the header offers to re-download all of them, and the stale path is dropped when the fetch starts so the track reads as remote again instead of pretending to be playable.
+
+### Added
+
+- 🔁 **"Re-download all" on any album or playlist.** The existing button only fills gaps, which is the right default and useless when the files you already have are the problem: a bad rip, a half written download, a restore that brought back the wrong version. The new control pulls every track from its source again, on device ones included. Each track keeps playing off its current file until the replacement lands, and the superseded file is deleted only once the new one is really there, so a failed re-pull leaves you exactly where you started.
+
 ---
 ## [3.9.2] - 2026-08-07
 
