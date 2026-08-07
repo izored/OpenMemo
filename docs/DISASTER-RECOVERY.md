@@ -91,6 +91,15 @@ Dry run by default. Add `--apply` to download, `--host` to do one platform at a
 time, `--limit` to prove it works first. It reports the database and files
 directory it is about to use. Read that banner.
 
+**Music** can also be recovered from the app itself, one playlist at a time, with
+no shell. A playlist whose files are gone now says so: the page counts them as
+missing rather than downloaded, and the header offers to pull them back
+("Re-download (N)"). Beside it, **Re-download all** re-fetches every track
+including the ones still on disk, for when the files came back but came back
+wrong. Both are the same pipeline `refetch_missing_media` uses, so the choice is
+only about scope and comfort: the script for the whole library, the button for
+the album you actually want tonight.
+
 **Uploads with no source** exist nowhere else. This writes the hand search list:
 
 ```bash
