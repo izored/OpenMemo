@@ -7,6 +7,10 @@ All notable changes to OpenMemo are documented here.
 
 <!-- Add entries here as work lands: ### Added / ### Changed / ### Fixed -->
 
+### Fixed
+
+- 🏷️ **Release notes keep their own headings again.** Every release tag is supposed to carry its full changelog section, so the tag is a complete record on its own and the GitHub Release can be built straight from it. It was arriving with the headings missing: no version line, no "Fixed" or "Added" to group anything under, just a wall of bullets. The cause was git rather than the changelog — `git tag` cleans up its message by default, and cleaning up means deleting every line that starts with `#` as if it were a comment. The body here is markdown, where `#` starts a heading, so `## [3.9.0]` and `### Fixed` were being thrown away silently on every release since the pipeline was written. Tags are now written verbatim. Tags already published keep the stripped bodies, since a tag that people may have fetched is not worth rewriting for a formatting fix.
+
 ---
 ## [3.9.1] - 2026-08-06
 
