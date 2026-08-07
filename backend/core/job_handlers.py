@@ -121,7 +121,12 @@ async def _playlist_download(payload: dict[str, Any]) -> None:
     batch of tracks internally — running several would multiply out."""
     from backend.api.ingest import download_playlist_task
 
-    await download_playlist_task(payload["collection_id"], payload["memo_ids"])
+    await download_playlist_task(
+        payload["collection_id"],
+        payload["memo_ids"],
+        # Absent on jobs enqueued before forced re-downloads existed.
+        payload.get("replacing") or None,
+    )
 
 
 @register(KIND_PLAYLIST_THUMBS, concurrency=1)
@@ -162,9 +167,13 @@ def _p_process_file(args: tuple) -> tuple[str | None, dict[str, Any]]:
 
 
 def _p_playlist_download(args: tuple) -> tuple[str | None, dict[str, Any]]:
-    # download_playlist_task(collection_id, memo_ids) — not per-memo work, so
-    # memo_id stays None and dedupe does not apply (NULLs are distinct).
-    return None, {"collection_id": args[0], "memo_ids": list(args[1])}
+    # download_playlist_task(collection_id, memo_ids, replacing=None) — not
+    # per-memo work, so memo_id stays None and dedupe does not apply (NULLs are
+    # distinct). `replacing` carries the files a forced re-pull supersedes.
+    payload: dict[str, Any] = {"collection_id": args[0], "memo_ids": list(args[1])}
+    if len(args) > 2 and args[2]:
+        payload["replacing"] = dict(args[2])
+    return None, payload
 
 
 def _p_playlist_thumbs(args: tuple) -> tuple[str | None, dict[str, Any]]:

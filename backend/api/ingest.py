@@ -1274,7 +1274,11 @@ def clear_playlist_pause(collection_id: str) -> None:
     _PAUSED_PLAYLIST_DOWNLOADS.discard(collection_id)
 
 
-async def download_playlist_task(collection_id: str, memo_ids: list[str]):
+async def download_playlist_task(
+    collection_id: str,
+    memo_ids: list[str],
+    replacing: dict[str, str] | None = None,
+):
     """Background: download a playlist's tracks one at a time.
 
     Sequential on purpose — kind to the host and to the disk. Each track runs
@@ -1289,14 +1293,43 @@ async def download_playlist_task(collection_id: str, memo_ids: list[str]):
     A pause request (Music page) stops the loop at the next track boundary; the
     track in flight finishes, the rest are left for the pause endpoint to reset
     back to remote so their cloud chips return.
+
+    `replacing` maps memo_id → the file this pass supersedes (a forced full
+    re-download of an album whose tracks are already on disk). The old file is
+    deleted only once the memo points at a different file that really landed —
+    a failed re-pull leaves the track playing exactly as it was.
     """
     import asyncio
+
+    from backend.core.file_paths import resolve_memo_path
+
+    async def _drop_superseded(memo_id: str):
+        old = (replacing or {}).get(memo_id)
+        if not old:
+            return
+        async with AsyncSessionLocal() as db:
+            memo = await db.get(Memo, memo_id)
+            status = memo.localize_status if memo else None
+            new_path = memo.file_path if memo else None
+        if status != "done":
+            return  # the re-pull failed — the old file is still the only copy
+        landed = resolve_memo_path(new_path) if new_path else None
+        if landed is None or str(landed) == old:
+            return
+        try:
+            Path(old).unlink()
+        except Exception as e:
+            log.warning("Could not remove superseded file %s: %s", old, e)
 
     async def _download_one(memo_id: str):
         try:
             await localize_memo_task(memo_id, "audio")
         except Exception as e:
             log.warning("Playlist track download crashed for %s: %s", memo_id, e)
+        try:
+            await _drop_superseded(memo_id)
+        except Exception as e:
+            log.warning("Superseded-file cleanup failed for %s: %s", memo_id, e)
         try:
             await cache_thumbnail(memo_id)
         except Exception as e:

@@ -15,6 +15,7 @@ from sqlalchemy import select, desc
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.db.database import get_db
+from backend.core.file_paths import resolve_memo_path
 from backend.core.job_handlers import queue_task
 from backend.db.models import Collection, Memo, memo_collections
 
@@ -56,19 +57,27 @@ async def list_playlists(db: AsyncSession = Depends(get_db)):
     ).all()
 
     by_playlist: dict[str, dict] = {
-        pid: {"total": 0, "done": 0, "error": 0, "pending": 0, "covers": []} for pid in ids
+        pid: {"total": 0, "done": 0, "error": 0, "pending": 0, "missing": 0, "covers": []}
+        for pid in ids
     }
     for cid, thumb, status, file_path in rows:
         agg = by_playlist[cid]
         agg["total"] += 1
-        if file_path or status == "done":
-            agg["done"] += 1
+        # A row can claim a file that is no longer on disk (a wiped/restored
+        # files dir, a moved library). It is not downloaded — it only looks it.
+        on_disk = bool(file_path) and resolve_memo_path(file_path) is not None
+        if status in ("pending", "processing"):
+            # An active download. Checked first so a re-download of a track that
+            # still has its old file reports as pending, not as already done.
+            # Remote tracks saved without downloading have no status at all —
+            # they are neither done, failed, pending, nor missing.
+            agg["pending"] += 1
+        elif file_path and not on_disk:
+            agg["missing"] += 1
         elif status == "error":
             agg["error"] += 1
-        elif status in ("pending", "processing"):
-            # An active download. Remote tracks saved without downloading have
-            # no status at all — they are neither done, failed, nor pending.
-            agg["pending"] += 1
+        elif on_disk or status == "done":
+            agg["done"] += 1
         if thumb and len(agg["covers"]) < 4:
             agg["covers"].append(thumb)
 
@@ -100,6 +109,10 @@ async def list_playlists(db: AsyncSession = Depends(get_db)):
                 "done": by_playlist[p.id]["done"],
                 "error": by_playlist[p.id]["error"],
                 "pending": by_playlist[p.id]["pending"],
+                # Tracks whose file vanished from disk. They look local to the
+                # track list (file_path is set) but nothing can play them, so
+                # the Music page counts them into its re-download control.
+                "missing": by_playlist[p.id]["missing"],
                 "active": playlist_download_active(p.id),
             },
         }
@@ -111,14 +124,28 @@ async def list_playlists(db: AsyncSession = Depends(get_db)):
 async def download_playlist(
     playlist_id: str,
     background_tasks: BackgroundTasks,
+    scope: str = "missing",
     db: AsyncSession = Depends(get_db),
 ):
-    """Download every still-remote track of a playlist ("download all").
+    """Download a playlist's tracks ("download all" / "re-download everything").
 
-    Marks each remote track pending, then runs the same sequential playlist
-    downloader the ingest path uses. Tracks already local (or mid-download)
-    are left alone; failed ones get a fresh attempt.
+    Marks each selected track pending, then runs the same sequential playlist
+    downloader the ingest path uses. Tracks mid-download are left alone; failed
+    ones get a fresh attempt.
+
+    `scope`:
+      `missing` (default) — everything not playable on this device: never
+        downloaded, failed, or claiming a `file_path` whose file is gone (a
+        wiped or restored files dir). The stale path is cleared so the track
+        shows as remote again while it is re-pulled.
+      `all` — every track with a source, including ones that are on disk and
+        fine. This is the "pull the whole album down again" button: each track
+        keeps playing off its current file until the new one lands, and the
+        superseded file is deleted only after the replacement succeeds.
     """
+    if scope not in ("missing", "all"):
+        raise HTTPException(status_code=400, detail="scope must be 'missing' or 'all'")
+
     playlist = await db.get(Collection, playlist_id)
     if not playlist or (playlist.kind or "standard") != "playlist":
         raise HTTPException(status_code=404, detail="Playlist not found")
@@ -129,16 +156,28 @@ async def download_playlist(
             .join(memo_collections, memo_collections.c.memo_id == Memo.id)
             .where(memo_collections.c.collection_id == playlist_id)
             .where((Memo.is_deleted == False) | (Memo.is_deleted == None))  # noqa: E712
-            .where(Memo.file_path == None)  # noqa: E711
             .where(Memo.source_url != None)  # noqa: E711
             .order_by(desc(Memo.recency_at), desc(Memo.created_at))
         )
     ).scalars().all()
 
     queued: list[str] = []
+    # memo_id → the file this pass is replacing. The downloader unlinks it once
+    # the new file has landed, so a forced re-pull does not leave the old one
+    # orphaned under FILES_DIR (every localize writes a fresh uuid filename).
+    replacing: dict[str, str] = {}
     for m in rows:
         if m.localize_status == "processing":
             continue  # already being fetched right now
+        on_disk = resolve_memo_path(m.file_path) if m.file_path else None
+        if scope == "missing" and on_disk is not None:
+            continue  # already here and playable
+        if m.file_path and on_disk is None:
+            # The row points at a file that no longer exists. Drop the claim so
+            # the track reads as remote (cloud chip back, progress honest).
+            m.file_path = None
+        elif on_disk is not None:
+            replacing[m.id] = str(on_disk)
         m.localize_status = "pending"
         m.localize_error = None
         m.updated_at = datetime.utcnow()
@@ -150,9 +189,14 @@ async def download_playlist(
 
         # Starting (or resuming) a download wipes any stale pause request.
         clear_playlist_pause(playlist_id)
-        queue_task(download_playlist_task, playlist_id, queued)
+        queue_task(download_playlist_task, playlist_id, queued, replacing)
 
-    return {"id": playlist_id, "queued": len(queued), "status": "processing" if queued else "nothing-to-do"}
+    return {
+        "id": playlist_id,
+        "scope": scope,
+        "queued": len(queued),
+        "status": "processing" if queued else "nothing-to-do",
+    }
 
 
 @router.post("/playlists/{playlist_id}/download/pause")

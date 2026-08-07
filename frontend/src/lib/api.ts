@@ -293,9 +293,14 @@ export const collectionApi = {
 // audio_kind=music, optional collection_id=<playlist>).
 export const musicApi = {
   playlists: () => fetchJSON<import('@/types').MusicPlaylist[]>('/music/playlists'),
-  // "Download all" — queue every still-remote track of a playlist.
-  downloadPlaylist: (id: string) =>
-    fetchJSON<{ id: string; queued: number; status: string }>(`/music/playlists/${id}/download`, { method: 'POST' }),
+  // "Download all" — queue a playlist's tracks. scope 'missing' (default) takes
+  // everything not playable here (never downloaded, failed, or whose file is
+  // gone from disk); 'all' re-pulls the whole album, on-disk tracks included.
+  downloadPlaylist: (id: string, scope: 'missing' | 'all' = 'missing') =>
+    fetchJSON<{ id: string; scope: string; queued: number; status: string }>(
+      `/music/playlists/${id}/download?scope=${scope}`,
+      { method: 'POST' },
+    ),
   // Pause a running bulk pass — the in-flight track finishes, the rest reset.
   pausePlaylistDownload: (id: string) =>
     fetchJSON<{ id: string; reset: number; status: string }>(`/music/playlists/${id}/download/pause`, { method: 'POST' }),
