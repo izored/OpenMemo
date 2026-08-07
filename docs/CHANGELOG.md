@@ -7,6 +7,9 @@ All notable changes to OpenMemo are documented here.
 
 <!-- Add entries here as work lands: ### Added / ### Changed / ### Fixed -->
 
+---
+## [3.9.2] - 2026-08-07
+
 ### Fixed
 
 - 🎙️ **"Transcript" now means what was actually said, not the caption underneath the video.** Ask a video memo for its transcript and it could come back with the post's own write-up — the Instagram blurb, the YouTube description — presented as speech. Two faults lined up. First, Whisper runs behind a voice-activity gate that decides which parts of the audio are speech, and that gate scores singing, whispering and anything buried in a mix as silence: a music clip could have every single segment thrown away, leaving nothing at all. Second, that empty result was still filed as a finished transcript, and the page shows the memo's text whenever a transcript is finished — so it fell through to the description that was sitting there from the moment the memo was saved. When the gate drops everything, the audio is now decoded a second time with the gate off, which is what turns a song from "no transcript" into its actual words. A run that genuinely finds nothing is an error you can retry, never a silent success. And the transcript panel now refuses to display text that is word-for-word the memo's own description, so a blurb cannot be passed off as speech again, including on memos already saved. Local videos also try the source's subtitles first now, the same as remote ones, instead of going straight to Whisper.
