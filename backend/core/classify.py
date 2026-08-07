@@ -129,6 +129,28 @@ def can_summarize(memo) -> bool:
     return (getattr(memo, "type", None) or "").lower() in SUMMARIZABLE_TYPES
 
 
+def has_transcript(memo) -> bool:
+    """Whether `content_text` really holds a transcript of the spoken audio.
+
+    `transcript_status == 'done'` alone is not enough. `content_text` is seeded
+    at ingest with the source's own description/caption, and a run that produced
+    no text used to leave the status at 'done' anyway — so a memo could claim a
+    transcript while holding nothing but the post's blurb. Anything that reads
+    the transcript (the UI card, the summary source, Ask) goes through here, so
+    a description can never be presented as speech (ADR-004 update).
+    """
+    if (getattr(memo, "transcript_status", None) or "") != "done":
+        return False
+    text = (getattr(memo, "content_text", None) or "").strip()
+    if not text:
+        return False
+    blurbs = {
+        (getattr(memo, "video_description", None) or "").strip(),
+        (getattr(memo, "description", None) or "").strip(),
+    }
+    return text not in blurbs
+
+
 # Types the sorter is allowed to overwrite. We never touch a memo whose current
 # type isn't in this set (defensive — keeps unknown/custom types intact).
 _KNOWN_TYPES = {

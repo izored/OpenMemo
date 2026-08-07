@@ -43,7 +43,7 @@ import { AskMemoPanel } from '@/components/AskMemoPanel';
 import { BorderBeam } from 'border-beam';
 import { useBeamConfig, resolveBeamTheme } from '@/lib/beamConfig';
 import { useIsMobile } from '@/lib/useBreakpoint';
-import { audioEmbed, audioPlatformMeta, canMakeLocal, canTranscript, canSummarize, audioKind, mediaSrc } from '@/lib/media';
+import { audioEmbed, audioPlatformMeta, canMakeLocal, canTranscript, canSummarize, audioKind, mediaSrc, transcriptText } from '@/lib/media';
 import { videoEmbedUrl, resolveEmbedShape, platformMeta } from '@/lib/platforms';
 import { useImageAspect } from '@/lib/useMediaOrientation';
 import { truncateTitle, isLongTitle } from '@/lib/title';
@@ -614,7 +614,7 @@ function AudioTranscript({ memo }: { memo: Memo }) {
   const [starting, setStarting] = useState(false);
   const [open, setOpen] = useState(false);
   const status = memo.transcript_status;
-  const text = memo.content_text || '';
+  const text = transcriptText(memo) || '';
   const pending = status === 'pending' || status === 'processing' || starting;
 
   const startTranscribe = async () => {
@@ -774,7 +774,7 @@ function VideoContentPanel({ memo }: { memo: Memo }) {
             <Loader2 size={14} className="om-spin" style={{ verticalAlign: -2, marginRight: 6 }} />
             Pulling captions or transcribing… runs locally and may take a moment.
           </p>
-        ) : status === 'done' && memo.content_text ? (
+        ) : transcriptText(memo) ? (
           <div className="om-prose" style={{ whiteSpace: 'pre-wrap' }}>
             {/* Source/lang tags live inline at the head of the transcript, not
                 as chips on the toggle button (OPNMMO-0042). */}
@@ -788,9 +788,9 @@ function VideoContentPanel({ memo }: { memo: Memo }) {
                 )}
               </p>
             )}
-            <ReactMarkdown remarkPlugins={[remarkGfm]}>{memo.content_text}</ReactMarkdown>
+            <ReactMarkdown remarkPlugins={[remarkGfm]}>{transcriptText(memo)!}</ReactMarkdown>
           </div>
-        ) : status === 'error' ? (
+        ) : status === 'error' || status === 'done' ? (
           <div>
             <p className="om-detail-desc" style={{ marginBottom: 10 }}>
               Couldn’t get a transcript. The source may have no captions and no downloadable audio, or be private/region-locked.
@@ -1313,7 +1313,9 @@ function TranscriptCard({ memo, onSeek, open, onToggle }: { memo: Memo; onSeek?:
   const [starting, setStarting] = useState(false);
   const status = memo.transcript_status;
   const pending = status === 'pending' || status === 'processing' || starting;
-  const done = status === 'done' && !!memo.content_text;
+  // Only real spoken-word text counts as done — never the source's description.
+  const text = transcriptText(memo);
+  const done = !!text;
   const srcLabel = memo.transcript_source === 'captions' ? 'CC' : memo.transcript_source === 'stt' ? 'STT' : null;
 
   const startTranscribe = async () => {
@@ -1354,12 +1356,14 @@ function TranscriptCard({ memo, onSeek, open, onToggle }: { memo: Memo; onSeek?:
               )}
             </p>
           )}
-          <SummaryMarkdown text={memo.content_text!} onSeek={onSeek} />
+          <SummaryMarkdown text={text!} onSeek={onSeek} />
         </div>
-      ) : status === 'error' ? (
+      ) : status === 'error' || status === 'done' ? (
+        // 'done' with no transcript text means the run came back empty — treat it
+        // exactly like an error rather than falling back to the description.
         <div>
           <p className="om-detail-desc" style={{ marginBottom: 10 }}>
-            Couldn’t get a transcript. The source may have no captions and no downloadable audio, or be private/region-locked.
+            Couldn’t get a transcript. The source may have no captions and no speech in its audio, or be private/region-locked.
           </p>
           {canTranscript(memo) && (
             <button className="om-btn-ghost om-btn-pill" onClick={startTranscribe} disabled={starting}>

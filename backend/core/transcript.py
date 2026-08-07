@@ -1,5 +1,5 @@
-"""Extract a transcript for a REMOTE video/audio memo without re-homing it as
-the memo's local file or changing its type.
+"""Extract a transcript for a video/audio memo without re-homing it as the
+memo's local file or changing its type.
 
 Two stages, caption-first:
 
@@ -8,10 +8,14 @@ Two stages, caption-first:
    free, no Whisper. Works for any yt-dlp host that exposes subs (YouTube,
    Vimeo, Dailymotion, TikTok, …). Parsed into text with inline [mm:ss] markers.
 
-2. **STT fallback** — if the host exposes no captions, download the audio track
-   to a TEMP directory, run faster-whisper, then delete the temp file. The memo
-   keeps its original `type` and has no `file_path` set — a video memo stays a
-   video memo and keeps its inline platform embed.
+2. **STT fallback** — if the host exposes no captions, run faster-whisper over
+   the audio: the memo's own local file when it has one, otherwise an audio
+   track downloaded to a TEMP directory and deleted afterwards. The memo keeps
+   its original `type` and `file_path` either way — a video memo stays a video
+   memo and keeps its player.
+
+If neither stage produces text this raises. It never degrades to the memo's
+description: a caption/blurb is not a transcript of what is said.
 
 This is deliberately decoupled from "Make it local" (`localize_media.py`), which
 *captures a local file* and (for an explicit audio conversion) changes the memo
@@ -153,22 +157,48 @@ def _download_audio_temp(url: str) -> dict:
     raise TranscriptError("audio download finished but the file was not found")
 
 
-async def get_transcript(url: str, workspace_id: str = "default") -> dict:
-    """Return {text, lang, source} for a remote media URL.
+async def get_transcript(
+    url: str | None = None,
+    workspace_id: str = "default",
+    local_path: str | None = None,
+) -> dict:
+    """Return {text, lang, source} for a media memo. The single transcript path.
 
-    source is "captions" when host subtitles were used, "stt" when we fell back
-    to downloading audio + Whisper. Raises TranscriptError if neither works.
+    Stage 1 — host captions, when the memo has a `url`. Fast, free, no Whisper.
+    Stage 2 — Whisper STT on `local_path` if the memo already holds a local file
+    (nothing to download), otherwise on an audio track pulled to a temp dir and
+    deleted afterwards.
+
+    `source` is "captions" or "stt". Raises TranscriptError when no stage yields
+    text — the caller must surface that as an error, never fall back to the
+    memo's own description (see ADR-004 update).
     """
-    cap = await asyncio.to_thread(_pull_captions_sync, url)
-    if cap and cap.get("text"):
-        return {"text": cap["text"], "lang": cap.get("lang"), "source": "captions"}
+    if not url and not local_path:
+        raise TranscriptError("memo has no local file or source URL to transcribe")
+
+    if url:
+        cap = await asyncio.to_thread(_pull_captions_sync, url)
+        if cap and cap.get("text"):
+            return {"text": cap["text"], "lang": cap.get("lang"), "source": "captions"}
+
+    # No captions: Whisper. A local file is transcribed in place — the memo keeps
+    # its file, we just read the audio track out of the container.
+    if local_path and Path(local_path).exists():
+        result = await transcribe_audio(local_path)
+        text = (result.get("text") or "").strip()
+        if not text:
+            raise TranscriptError("no speech was found in the audio")
+        return {"text": text, "lang": result.get("language"), "source": "stt"}
+
+    if not url:
+        raise TranscriptError("the memo's local file is missing")
 
     audio = await asyncio.to_thread(_download_audio_temp, url)
     try:
         result = await transcribe_audio(audio["path"])
         text = (result.get("text") or "").strip()
         if not text:
-            raise TranscriptError("transcription produced no text")
+            raise TranscriptError("no speech was found in the audio")
         return {"text": text, "lang": result.get("language"), "source": "stt"}
     finally:
         shutil.rmtree(audio["dir"], ignore_errors=True)

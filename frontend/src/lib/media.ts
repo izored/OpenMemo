@@ -42,6 +42,26 @@ export function canTranscript(memo: Memo): boolean {
   );
 }
 
+/**
+ * The memo's transcript text, or null when it doesn't have one.
+ *
+ * `content_text` is seeded at ingest with the source's own description/caption
+ * and only later overwritten by a real transcript, so `transcript_status` alone
+ * can't tell the two apart — a run that produced no text once left the status at
+ * 'done' with the blurb still sitting there, and the Transcript card happily
+ * showed an Instagram caption as "what is said in the video". The server settles
+ * it with `has_transcript`; the string comparison is the fallback for payloads
+ * predating that field. Every read site goes through here (ADR-001).
+ */
+export function transcriptText(memo: Memo): string | null {
+  if (memo.transcript_status !== 'done') return null;
+  const text = (memo.content_text || '').trim();
+  if (!text) return null;
+  if (typeof memo.has_transcript === 'boolean') return memo.has_transcript ? text : null;
+  const blurbs = [(memo.video_description || '').trim(), (memo.description || '').trim()];
+  return blurbs.includes(text) ? null : text;
+}
+
 // Video platform detection + embed URLs live in `lib/platforms.ts`; linked-audio
 // hosts (SoundCloud/Bandcamp/Mixcloud/…) live in `lib/audioPlatforms.ts`. Both
 // are single registries consumed by every render site (ADR-001). Re-exported
