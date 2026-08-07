@@ -366,7 +366,13 @@ catch {
 $tagBodyFile = Join-Path ([System.IO.Path]::GetTempPath()) "openmemo-tag-$new.txt"
 try {
     Set-Content $tagBodyFile $tagBody -NoNewline -Encoding utf8
-    git tag -a $tag -F $tagBodyFile
+    # --cleanup=verbatim or the changelog loses its own headings. git tag
+    # defaults to 'strip', which deletes every line starting with '#' as a
+    # comment -- and the body here is markdown, so "## [3.9.1]" and "### Fixed"
+    # were being silently eaten. The tag is meant to be a complete record on its
+    # own, and release.yml reads it for the GitHub Release body, so a stripped
+    # annotation ships a headingless release. Verbatim keeps the file as written.
+    git tag -a $tag --cleanup=verbatim -F $tagBodyFile
     Ok "tagged $tag (annotation carries the full changelog)"
 }
 catch {
