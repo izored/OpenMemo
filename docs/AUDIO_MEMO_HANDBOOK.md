@@ -45,8 +45,9 @@ Play (one shared <audio> for the whole app)
             shared bits: Marquee (one-line title), VolumeControl (animated icon + slider)
 
 Transcribe (background)
-  └─ transcribe_memo_task → core/transcribe.py (faster-whisper)
-       → content_text + transcript_status + transcript_lang → embed
+  └─ transcript_memo_task → core/transcript.py (host captions → faster-whisper)
+       → content_text + transcript_status + transcript_lang + transcript_source → embed
+       an empty result is an error, never 'done' (see ADR-004)
 ```
 
 ### Key files
@@ -63,7 +64,7 @@ Transcribe (background)
 | `frontend/src/components/LiveWaveform.tsx` | Canvas waveform on audio cards, driven by the analyser. |
 | `backend/core/transcribe.py` | faster-whisper wrapper (lazy, threaded, device auto-detect). |
 | `backend/core/localize_media.py` | yt-dlp download ("Make it local"). |
-| `backend/api/ingest.py` | `ingest_file`, `transcribe_memo_task`, `localize_memo_task`. |
+| `backend/api/ingest.py` | `ingest_file`, `transcript_memo_task`, `localize_memo_task`. |
 | `backend/api/memos.py` | File serving with Range, `/transcribe`, `/localize` endpoints. |
 
 ---

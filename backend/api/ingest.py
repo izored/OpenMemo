@@ -1595,77 +1595,46 @@ async def ingest_album(
     }
 
 
-async def transcribe_memo_task(memo_id: str):
-    """Background: transcribe an audio memo, store the cleaned text in
-    content_text (so it embeds + is searchable), record the detected language,
-    then embed it. Status flows pending → processing → done | error.
+async def transcript_memo_task(memo_id: str):
+    """Background: extract a transcript for a video/audio memo without changing
+    its type or file_path (caption-first, Whisper STT fallback — see
+    core/transcript.py / ADR-004). Stores the timestamped text in content_text
+    (so it embeds + is searchable), records language + source. Status flows
+    pending → processing → done | error on memo.transcript_status.
+
+    One rule holds the whole thing together: `done` means content_text really is
+    a transcript of the spoken audio. When no stage produces text the memo lands
+    in `error` with content_text untouched — a video's own description is never
+    passed off as its transcript.
     """
-    from backend.core.transcribe import transcribe_audio
+    from backend.core.transcript import get_transcript
     from backend.core.file_paths import resolve_memo_path
 
     async with AsyncSessionLocal() as db:
         memo = await db.get(Memo, memo_id)
-        if not memo or not memo.file_path:
-            return
-        file_path = memo.file_path
-        memo.transcript_status = "processing"
-        await db.commit()
-
-    p = resolve_memo_path(file_path) or Path(file_path)
-    try:
-        result = await transcribe_audio(str(p))
-        text = (result.get("text") or "").strip()
-        lang = result.get("language")
-        status = "done"
-    except Exception as e:
-        log.warning("Transcription failed for %s: %s", memo_id, e)
-        text, lang, status = "", None, "error"
-
-    async with AsyncSessionLocal() as db:
-        memo = await db.get(Memo, memo_id)
-        if not memo:
-            return
-        if text:
-            memo.content_text = text
-            memo.content_raw = text
-            if not memo.description:
-                memo.description = text[:200]
-        memo.transcript_lang = lang
-        memo.transcript_status = status
-        memo.updated_at = datetime.utcnow()
-        await db.commit()
-
-    if status == "done" and text:
-        await process_memo(memo_id)
-
-
-async def transcript_memo_task(memo_id: str):
-    """Background: extract a transcript for a REMOTE video/audio memo without
-    downloading it as the local file or changing its type (caption-first, STT
-    fallback — see core/transcript.py / ADR-004). Stores the timestamped text in
-    content_text (so it embeds + is searchable), records language + source.
-    Status flows pending → processing → done | error on memo.transcript_status.
-    """
-    from backend.core.transcript import get_transcript
-
-    async with AsyncSessionLocal() as db:
-        memo = await db.get(Memo, memo_id)
-        if not memo or not memo.source_url:
+        if not memo or not (memo.file_path or memo.source_url):
             return
         url = memo.source_url
+        file_path = memo.file_path
+        is_audio = memo.type == "audio"
         ws = memo.workspace_id or "default"
         memo.transcript_status = "processing"
         await db.commit()
 
+    local = None
+    if file_path:
+        local = str(resolve_memo_path(file_path) or Path(file_path))
+
+    error = None
     try:
-        result = await get_transcript(url, ws)
+        result = await get_transcript(url, ws, local_path=local)
         text = (result.get("text") or "").strip()
         lang = result.get("lang")
         source = result.get("source")
         status = "done" if text else "error"
     except Exception as e:
         log.warning("Transcript failed for %s: %s", memo_id, e)
-        text, lang, source, status = "", None, None, "error"
+        text, lang, source, status, error = "", None, None, "error", str(e)
 
     async with AsyncSessionLocal() as db:
         memo = await db.get(Memo, memo_id)
@@ -1673,6 +1642,10 @@ async def transcript_memo_task(memo_id: str):
             return
         if text:
             memo.content_text = text
+            # For a voice/audio memo the transcript *is* the body, so it also
+            # becomes content_raw. A video keeps its own description there.
+            if is_audio:
+                memo.content_raw = text
             if not memo.description:
                 memo.description = text[:200]
         memo.transcript_lang = lang
@@ -1683,6 +1656,18 @@ async def transcript_memo_task(memo_id: str):
 
     if status == "done" and text:
         await process_memo(memo_id)
+    elif error:
+        log.info("Transcript for %s ended in error: %s", memo_id, error)
+
+
+async def transcribe_memo_task(memo_id: str):
+    """Back-compat entry point. Local-file memos used to take a separate
+    Whisper-only path that skipped host captions and marked an empty Whisper
+    result 'done'. Everything routes through the one pipeline above now; this
+    name survives so jobs queued as kind='transcribe' by an older build (and the
+    handler that runs them) still resolve.
+    """
+    await transcript_memo_task(memo_id)
 
 
 async def _localize_spotify_track(memo_id: str, url: str, ws: str):

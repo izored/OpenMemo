@@ -25,6 +25,10 @@ export interface Memo {
   transcript_status?: 'pending' | 'processing' | 'done' | 'error' | null;
   transcript_lang?: string | null;
   transcript_source?: 'captions' | 'stt' | null;
+  // Server's verdict on whether content_text is really spoken-word text and not
+  // the source's own description. Read it through `transcriptText()`, never by
+  // testing transcript_status yourself.
+  has_transcript?: boolean;
   // "Make it local" (yt-dlp download) state for link/video memos.
   localize_status?: 'pending' | 'processing' | 'done' | 'error' | null;
   // Last yt-dlp failure reason (truncated) — lets the UI tell an age/login gate

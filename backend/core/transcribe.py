@@ -86,22 +86,34 @@ def fmt_ts(seconds: float) -> str:
     return f"[{h}:{m:02d}:{sec:02d}]" if h else f"[{m:02d}:{sec:02d}]"
 
 
+def _run(model, file_path: str, vad: bool) -> tuple[str, object]:
+    """One decode pass → ('[mm:ss] line\\n…', info). Iterating the generator is
+    what performs the work."""
+    segments, info = model.transcribe(
+        file_path,
+        beam_size=settings.WHISPER_BEAM_SIZE,
+        vad_filter=vad,
+    )
+    lines = []
+    for seg in segments:
+        txt = _clean(seg.text)
+        if txt:
+            lines.append(f"{fmt_ts(seg.start)} {txt}")
+    return "\n".join(lines), info
+
+
 def _transcribe_sync(file_path: str) -> dict:
     model = _get_model()
     with _infer_lock:
-        segments, info = model.transcribe(
-            file_path,
-            beam_size=settings.WHISPER_BEAM_SIZE,
-            vad_filter=True,
-        )
-        # segments is a generator; iterating it performs the work. Keep each
-        # segment's start time as an inline [mm:ss] marker, one segment per line.
-        lines = []
-        for seg in segments:
-            txt = _clean(seg.text)
-            if txt:
-                lines.append(f"{fmt_ts(seg.start)} {txt}")
-        text = "\n".join(lines)
+        # Pass 1 with the VAD gate: it keeps hallucinated filler out of silence,
+        # which is the right default for talking-head audio.
+        text, info = _run(model, file_path, vad=True)
+        # Pass 2, no gate. Silero VAD scores *sung* vocals, whispered delivery and
+        # heavily-mixed speech as non-speech and can drop every segment — a music
+        # clip then transcribes to nothing at all. An empty first pass is that
+        # signal, so decode again ungated rather than report "no transcript".
+        if not text:
+            text, info = _run(model, file_path, vad=False)
     return {"text": text, "language": getattr(info, "language", None)}
 
 

@@ -99,6 +99,7 @@ async def chat_stream(data: ChatRequest, db: AsyncSession = Depends(get_db)):
     memo_source = None
     memo_thin = False
     if use_rag and data.memo_id:
+        from backend.core.classify import has_transcript
         from backend.core.rag import build_memo_context, build_memo_header
         memo = await db.get(Memo, data.memo_id)
         if memo:
@@ -106,7 +107,7 @@ async def chat_stream(data: ChatRequest, db: AsyncSession = Depends(get_db)):
                 description=memo.video_description or memo.description,
                 content_text=memo.content_text,
                 content_raw=memo.content_raw,
-                transcript_done=memo.transcript_status == "done",
+                transcript_done=has_transcript(memo),
             )
             # A memo with no transcript/extracted text (a freshly-saved song, a
             # link we didn't pull) still has a title and basic metadata. Feed that

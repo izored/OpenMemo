@@ -21,6 +21,7 @@ from backend.core.job_handlers import queue_task
 from backend.db.database import get_db, AsyncSessionLocal
 from backend.db.models import Memo, Collection, Tag, memo_collections, memo_tags
 from backend.core.security import sanitize_workspace_id
+from backend.core.classify import has_transcript
 from backend.core.file_paths import resolve_memo_path
 
 router = APIRouter(prefix="/api/memos", tags=["memos"])
@@ -286,6 +287,12 @@ async def get_memo(memo_id: str, db: AsyncSession = Depends(get_db)):
         "transcript_status": memo.transcript_status,
         "transcript_lang": memo.transcript_lang,
         "transcript_source": memo.transcript_source,
+        # Whether content_text actually holds spoken-word text. The UI must not
+        # infer this from transcript_status alone: rows written before the
+        # empty-result fix can be 'done' with content_text still holding the
+        # source's own description, and showing that as "Transcript" is the bug
+        # this flag exists to make impossible.
+        "has_transcript": has_transcript(memo),
         "localize_status": memo.localize_status,
         "localize_error": memo.localize_error,
         "audio_kind": memo.audio_kind,
@@ -459,10 +466,11 @@ async def transcribe_memo(
     """Kick off (or re-run) transcript extraction for a video/audio memo. Runs in
     the background; the client polls the memo until transcript_status is done.
 
-    Two non-destructive paths, neither changes the memo's type or file_path:
-      • Local file present  → faster-whisper STT on the local audio/video.
-      • Remote only (source_url, no file) → caption-first, STT fallback via
-        core/transcript.py (see ADR-004). A video memo keeps its embed."""
+    One non-destructive path that never changes the memo's type or file_path
+    (ADR-004): host captions first when there's a source_url, then faster-whisper
+    over the audio — the memo's own local file when it has one, otherwise an
+    audio track pulled to a temp dir. faster-whisper reads video containers
+    (PyAV), so a downloaded video is transcribed in place."""
     memo = await db.get(Memo, memo_id)
     if not memo:
         raise HTTPException(status_code=404, detail="Memo not found")
@@ -475,15 +483,9 @@ async def transcribe_memo(
     memo.updated_at = datetime.utcnow()
     await db.commit()
 
-    from backend.api.ingest import transcribe_memo_task, transcript_memo_task
+    from backend.api.ingest import transcript_memo_task
 
-    # faster-whisper reads video containers (PyAV) and pulls the audio track, so
-    # a downloaded video can be transcribed too. Remote-only memos use the
-    # caption-first extractor so the original stays a remote embed.
-    if memo.file_path:
-        queue_task(transcribe_memo_task, memo_id)
-    else:
-        queue_task(transcript_memo_task, memo_id)
+    queue_task(transcript_memo_task, memo_id)
     return {"id": memo_id, "status": "pending"}
 
 
@@ -932,8 +934,7 @@ def _summary_source(memo: Memo) -> str:
     desc = (memo.video_description or "").strip()
     text = (memo.content_text or "").strip()
     if memo.type in ("video", "audio"):
-        transcript_done = memo.transcript_status == "done"
-        if transcript_done and text and text != desc:
+        if has_transcript(memo):
             return f"{desc}\n\n--- TRANSCRIPT ---\n{text}" if desc else text
         return desc or text
     return text or desc
@@ -978,11 +979,8 @@ async def generate_memo_summary(
             memo.transcript_status = "pending"
             memo.updated_at = datetime.utcnow()
             await db.commit()
-            from backend.api.ingest import transcribe_memo_task, transcript_memo_task
-            if memo.file_path:
-                queue_task(transcribe_memo_task, memo_id)
-            else:
-                queue_task(transcript_memo_task, memo_id)
+            from backend.api.ingest import transcript_memo_task
+            queue_task(transcript_memo_task, memo_id)
         if memo.transcript_status in ("pending", "processing"):
             return {"id": memo.id, "mode": body.mode, "summary": None, "status": "transcript_pending"}
 

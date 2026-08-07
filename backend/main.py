@@ -168,6 +168,32 @@ async def lifespan(app: FastAPI):
     except Exception as e:
         logger.warning("Index creation warning (non-critical): %s", e)
 
+    # Fake transcripts. A Whisper run that returned nothing (its VAD gate can
+    # drop every segment of a sung or whispered clip) used to still land as
+    # 'done', leaving content_text holding the source's own description — which
+    # the detail page then showed under "Transcript". Clear the status on those
+    # rows so the card offers "Get transcript" again and the fixed pipeline can
+    # produce a real one. Only touches memos whose content_text is verbatim the
+    # description; a genuine transcript never matches it.
+    try:
+        from sqlalchemy import text as _sql_text
+
+        async with AsyncSessionLocal() as db:
+            res = await db.execute(_sql_text(
+                "UPDATE memos SET transcript_status = NULL, transcript_lang = NULL, "
+                "transcript_source = NULL "
+                "WHERE transcript_status = 'done' AND transcript_source IS NULL AND ("
+                "  content_text IS NULL OR TRIM(content_text) = '' "
+                "  OR TRIM(content_text) = TRIM(COALESCE(video_description, '')) "
+                "  OR TRIM(content_text) = TRIM(COALESCE(description, ''))"
+                ")"
+            ))
+            await db.commit()
+            if res.rowcount:
+                logger.info("[transcript] cleared %d memo(s) marked done without a real transcript", res.rowcount)
+    except Exception as e:
+        logger.warning("Transcript status repair warning (non-critical): %s", e)
+
     # Orphaned downloads (no job table — see music.py). A track left in
     # 'pending'/'processing' when the server stopped has no background task to
     # resume it, so it would spin "downloading" forever. Mark each as error on

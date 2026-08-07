@@ -1116,9 +1116,9 @@ changes a memo's `type` or `file_path`.** It is independent of "Make it local"
    untouched: a video memo stays a video memo.
 
 The result is stored in `content_text` (so it embeds for RAG + is searchable),
-with `transcript_source` recording `captions` vs `stt` for a UI badge. A local
-file present routes to direct Whisper STT (`transcribe_memo_task`); remote-only
-routes to the caption-first extractor (`transcript_memo_task`).
+with `transcript_source` recording `captions` vs `stt` for a UI badge. Both a
+local file and a remote-only memo run the same `transcript_memo_task` — see the
+2026-08-07 update below, which merged what were originally two paths.
 
 #### On-demand, multi-mode summary
 
@@ -1167,6 +1167,41 @@ error state with "open original" still available, never a dead end.
   sync for the `insights` mode so nothing downstream breaks.
 - Memos already flipped to `audio` by the old `audio_transcript` path are not
   auto-migrated; they can be re-saved or repaired manually.
+
+### Update (2026-08-07): "done" must mean there is a transcript
+
+An Instagram reel showed its **post caption** under "Transcript". Three things
+had to be true at once, and all three were:
+
+1. **Whisper's VAD gate can silence a whole clip.** `vad_filter=True` scores sung
+   vocals, whispered delivery and speech buried in a mix as non-speech. On the
+   reported clip it dropped *every* segment — 0 lines out. Decoding the same file
+   ungated returns the lyrics in full. `_transcribe_sync` now runs a second,
+   ungated pass whenever the first comes back empty; the gate stays the default
+   because it is right for talking-head audio.
+2. **An empty run was still marked `done`.** `transcribe_memo_task` only wrote
+   `error` on an exception, so "no text" landed as a success with `content_text`
+   untouched.
+3. **`content_text` is seeded with the source's description at ingest.** So the
+   UI's "status is done + content_text exists ⇒ show it as the transcript" read
+   an Instagram blurb as speech.
+
+The invariant now: **`transcript_status == 'done'` means `content_text` really is
+a transcript of the audio.** Nothing produces text ⇒ `error`, retryable. One
+predicate, `classify.has_transcript(memo)`, additionally rejects text that is
+verbatim the memo's own `video_description`/`description`; the API ships it as
+`has_transcript` and the frontend reads it through `media.ts` `transcriptText()`,
+so no render site re-derives the rule (ADR-001). Summary source and Ask context
+go through the same predicate. A startup pass clears the status on memos already
+sitting in the bad state, so they offer "Get transcript" again.
+
+The split path is also gone. `transcribe_memo_task` (local file ⇒ Whisper only)
+and `transcript_memo_task` (remote ⇒ captions, then Whisper) are one pipeline:
+`get_transcript(url, local_path=…)` tries host captions whenever there is a
+`source_url` — a downloaded video gets its free CC too — then Whispers the local
+file if there is one (no second download) or a temp audio pull if there isn't.
+The old name remains as a delegating wrapper so jobs queued as `kind='transcribe'`
+by an older build still run.
 
 ---
 
