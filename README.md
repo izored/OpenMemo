@@ -197,6 +197,8 @@ openmemo/
 │   ├── ollama.md                   # Models, retrieval, context windows
 │   ├── DECISIONS.md                # Architecture Decision Records
 │   ├── ADR-022-ASK-RAG.md          # The locked Ask Memo / RAG flow
+│   ├── make-it-local.md            # Download ladder, and how videos keep their sound
+│   ├── carousel-from-links.md      # Bundling pasted image links into one memo
 │   ├── memo-card-visual-system.md  # Card UI design reference
 │   ├── settings-and-appearance.md  # Settings bento + live appearance panel
 │   └── CHANGELOG.md                # Release history

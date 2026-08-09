@@ -136,9 +136,19 @@ export function AddMemoPanel({ embedded = false }: { embedded?: boolean } = {}) 
   const fileRef = useRef<HTMLInputElement>(null);
   const navigate = useNavigate();
 
+  // Every http(s) link in the field. The URL box takes a whole pasted BLOCK of
+  // links, not just one — images worth keeping together are usually found one
+  // at a time, on different sites, and drag-and-drop cannot express that
+  // because the files are not on disk.
+  const links = url.split(/\s+/).map((s) => s.trim()).filter((s) => /^https?:\/\//i.test(s));
+  const multi = links.length > 1;
+  // 'carousel' = one memo holding every image; 'separate' = one memo per link.
+  const [multiMode, setMultiMode] = useState<'carousel' | 'separate'>('carousel');
+
   // Playlist detection (OPNMMO-0023 / ADR-015). A playlist-shaped URL triggers
   // a flat yt-dlp probe; the panel then asks: whole playlist or just this one?
-  const plShape = playlistShape(url);
+  // Skipped entirely for a multi-link paste — that is a different question.
+  const plShape = multi ? { isPlaylist: false, hasSingleItem: false } : playlistShape(url);
   const [plProbe, setPlProbe] = useState<{
     title: string;
     count: number;
@@ -151,7 +161,8 @@ export function AddMemoPanel({ embedded = false }: { embedded?: boolean } = {}) 
   // from the Music page (per track or all at once) — like any music app.
   const [plDownload, setPlDownload] = useState(false);
   useEffect(() => {
-    const shape = playlistShape(url);
+    const many = url.split(/\s+/).filter((s) => /^https?:\/\//i.test(s.trim())).length > 1;
+    const shape = many ? { isPlaylist: false } : playlistShape(url);
     // eslint-disable-next-line react-hooks/set-state-in-effect -- reset probe state as the URL changes
     setPlProbe(null);
     if (!shape.isPlaylist) {
@@ -243,6 +254,7 @@ export function AddMemoPanel({ embedded = false }: { embedded?: boolean } = {}) 
   const reset = () => {
     setUrl('');
     setNoPull(false);
+    setMultiMode('carousel');
     setNote('');
     setNoteTitle('');
     setTags([]);
@@ -275,6 +287,52 @@ export function AddMemoPanel({ embedded = false }: { embedded?: boolean } = {}) 
     try {
       if (tab === 'link') {
         if (!url.trim()) return;
+        if (multi) {
+          if (multiMode === 'carousel') {
+            // One memo holding every picture. Links that hold no image are
+            // reported rather than dropped in silence.
+            const res = await ingestApi.gallery(links, {
+              collection_id: collection || undefined,
+              workspace_id: activeSpace || undefined,
+            });
+            if (res.failed?.length) {
+              queryClient.invalidateQueries({ queryKey: ['memos'] });
+              setError(
+                `Saved ${res.slides} image${res.slides === 1 ? '' : 's'}. ` +
+                `${res.failed.length} link${res.failed.length === 1 ? '' : 's'} held no image.`,
+              );
+              setUrl(res.failed.join('\n'));
+              return;
+            }
+            done();
+            navigate(`/memo/${res.id}`);
+            return;
+          }
+          // One memo per link — each goes through the normal save path, so a
+          // failing link never aborts the ones after it.
+          const bad: string[] = [];
+          setProgress({ done: 0, total: links.length });
+          for (let i = 0; i < links.length; i++) {
+            try {
+              await ingestApi.url(links[i], collection || undefined, {
+                noPull,
+                workspace_id: activeSpace || undefined,
+              });
+            } catch {
+              bad.push(links[i]);
+            }
+            setProgress({ done: i + 1, total: links.length });
+          }
+          setProgress(null);
+          if (bad.length) {
+            queryClient.invalidateQueries({ queryKey: ['memos'] });
+            setError(`${bad.length} of ${links.length} failed.`);
+            setUrl(bad.join('\n'));
+            return;
+          }
+          done();
+          return;
+        }
         if (plShape.isPlaylist && plChoice === 'playlist') {
           // Whole playlist → playlist collection; downloads only when asked.
           // Land on the playlist itself; a re-pasted URL returns the existing
@@ -436,16 +494,70 @@ export function AddMemoPanel({ embedded = false }: { embedded?: boolean } = {}) 
           {tab === 'link' && (
             <div className="om-add-tab-pane">
               <div className="om-add-sect mono">URL</div>
+              {/* A textarea, not an input: pasting a BLOCK of links (one per
+                  line) is the whole point of the carousel flow, and an <input>
+                  flattens a multi-line paste into one unreadable line. It grows
+                  with the content and stays one row tall for a single URL.
+                  Enter still saves; Shift+Enter adds a line. */}
               <div className="om-add-input">
                 <Icon name="globe" size={13} />
-                <input
+                <textarea
+                  className="om-add-url-area"
                   value={url}
+                  rows={Math.min(6, Math.max(1, url.split('\n').length))}
                   onChange={(e) => setUrl(e.target.value)}
-                  placeholder="Paste or type a URL…"
-                  onKeyDown={(e) => e.key === 'Enter' && save()}
+                  placeholder="Paste one URL — or several, one per line…"
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' && !e.shiftKey) {
+                      e.preventDefault();
+                      save();
+                    }
+                  }}
                 />
               </div>
-              {plShape.isPlaylist ? (
+              {multi ? (
+                // Several links pasted at once → the one question worth asking.
+                <div className="om-add-pl">
+                  <div className="om-add-sect mono">{links.length} links detected</div>
+                  <div className="om-add-pl-opts">
+                    <button
+                      className={cn('om-add-pl-opt', multiMode === 'carousel' && 'active')}
+                      onClick={() => setMultiMode('carousel')}
+                    >
+                      <Icon name="image" size={13} />
+                      <span className="om-add-pl-opt-main">
+                        <b>One carousel memo</b>
+                        <small>
+                          All {links.length} images in a single memo you swipe through. Each one is
+                          downloaded, so it survives the sources going away.
+                        </small>
+                      </span>
+                    </button>
+                    <button
+                      className={cn('om-add-pl-opt', multiMode === 'separate' && 'active')}
+                      onClick={() => setMultiMode('separate')}
+                    >
+                      <Icon name="link" size={13} />
+                      <span className="om-add-pl-opt-main">
+                        <b>Separate memos</b>
+                        <small>One memo per link, saved the usual way</small>
+                      </span>
+                    </button>
+                  </div>
+                  {multiMode === 'separate' && (
+                    <label className="om-switch-row">
+                      <input
+                        type="checkbox"
+                        className="om-switch-input"
+                        checked={noPull}
+                        onChange={(e) => setNoPull(e.target.checked)}
+                      />
+                      <span className="om-switch"><span className="om-switch-dot" /></span>
+                      <span className="om-switch-label">Don't pull content, just save the links</span>
+                    </label>
+                  )}
+                </div>
+              ) : plShape.isPlaylist ? (
                 // Playlist-shaped URL → ask: whole playlist or just this one?
                 <div className="om-add-pl">
                   {plProbing && !plProbe ? (
@@ -767,7 +879,7 @@ export function AddMemoPanel({ embedded = false }: { embedded?: boolean } = {}) 
         </button>
         {tab !== 'voice' && (
           <button className="om-add-foot-btn primary" onClick={save} disabled={busy}>
-            <span>{progress ? `Uploading ${progress.done}/${progress.total}…` : busy ? 'Saving…' : tab === 'multimedia' ? (staged.length ? `Add ${staged.length} file${staged.length === 1 ? '' : 's'}` : 'Choose files') : tab === 'link' && plShape.isPlaylist && plChoice === 'playlist' ? (plProbe?.alreadySaved ? 'Open playlist' : 'Save playlist') : 'Save'}</span>
+            <span>{progress ? (tab === 'link' ? `Saving ${progress.done}/${progress.total}…` : `Uploading ${progress.done}/${progress.total}…`) : busy ? 'Saving…' : tab === 'multimedia' ? (staged.length ? `Add ${staged.length} file${staged.length === 1 ? '' : 's'}` : 'Choose files') : tab === 'link' && multi ? (multiMode === 'carousel' ? `Save carousel (${links.length})` : `Save ${links.length} memos`) : tab === 'link' && plShape.isPlaylist && plChoice === 'playlist' ? (plProbe?.alreadySaved ? 'Open playlist' : 'Save playlist') : 'Save'}</span>
             <span className="mono om-add-kbd-inv">⏎</span>
           </button>
         )}

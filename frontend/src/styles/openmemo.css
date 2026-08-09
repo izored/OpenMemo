@@ -3043,6 +3043,22 @@ body.om-has-bbar .om-fab { display: none !important; }
   font-family: var(--font-mono);
   padding: 2px 0;
 }
+/* The URL field takes a whole pasted block of links, one per line, so it is a
+   textarea. Styled to sit flush with the icon like the single-line inputs and
+   to grow with its rows rather than scroll. */
+.om-add-input > svg { align-self: flex-start; margin-top: 3px; }
+.om-add-input:has(> input) > svg { align-self: center; margin-top: 0; }
+.om-add-url-area {
+  flex: 1; min-width: 0;
+  background: none; border: 0; outline: none;
+  font-size: 11.5px; color: var(--text);
+  font-family: var(--font-mono);
+  padding: 2px 0;
+  line-height: 1.5;
+  resize: none;
+  overflow-y: auto;
+  max-height: 116px;
+}
 [data-theme="light"] .om-add-input { background: rgba(255,255,255,0.7); border-color: rgba(0,0,0,0.08); }
 [data-theme="light"] .om-add-input:focus-within { background: rgba(255,255,255,0.95); }
 
