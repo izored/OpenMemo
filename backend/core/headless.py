@@ -278,6 +278,12 @@ async def _ensure_browser():
                     "--disable-dev-shm-usage",
                     "--disable-infobars",
                     "--window-size=1280,800",
+                    # Autoplay without a user gesture, so a player can start
+                    # UNMUTED. Chromium's default policy only permits muted
+                    # autoplay, and a muted DASH player never requests the audio
+                    # representation at all — which is precisely why sniffed
+                    # Instagram reels came back silent. See sniff_media.
+                    "--autoplay-policy=no-user-gesture-required",
                 ],
             )
             return _browser

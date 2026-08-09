@@ -106,15 +106,34 @@ def _best_image(item: dict) -> str | None:
 
 
 def _best_video(item: dict) -> str | None:
-    """Playable URL from an item's video_versions, if it is a video item."""
+    """Highest-resolution PROGRESSIVE URL from an item's video_versions.
+
+    This is the single most important field in the whole module for sound.
+    `video_versions[]` are Instagram's progressive MP4 renditions — one file,
+    video and audio already muxed. Every other tier ends up at Instagram's DASH
+    manifest, where the video and the audio are separate representations, and
+    grabbing "the biggest media response on the wire" gets the video-only one.
+    That is why reels kept landing silent.
+
+    Ordered by pixel count rather than trusting array order: the list is keyed
+    by a `type` code whose ordering is not guaranteed, and picking [0] blindly
+    can hand back a 480p rendition when a 1080p one is sitting right there.
+    """
+    best, best_px = None, -1
     try:
         for v in (item.get("video_versions") or []):
             u = v.get("url")
-            if u:
-                return u
+            if not u:
+                continue
+            try:
+                px = int(v.get("width") or 0) * int(v.get("height") or 0)
+            except (TypeError, ValueError):
+                px = 0
+            if px > best_px:
+                best, best_px = u, px
     except Exception:
-        pass
-    return None
+        return best
+    return best
 
 
 def _item_to_slide(item: dict) -> dict | None:
