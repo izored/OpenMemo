@@ -7,6 +7,16 @@ All notable changes to OpenMemo are documented here.
 
 <!-- Add entries here as work lands: ### Added / ### Changed / ### Fixed -->
 
+### Fixed
+
+- 🔊 **Instagram videos come down with their sound.** Reels kept arriving silent, and the reason is that Instagram does not serve a reel as one file. It serves DASH, where the picture and the sound are two separate downloads on the same page. Every route openMemo had ended up asking the same question, "what is the biggest media file this page loaded", and the answer to that is always the picture on its own. The download succeeded, the file played, and there was nothing to hear. Three things were wrong and all three are fixed. Instagram's own media API hands back an ordinary MP4 with the audio already inside it, and openMemo now asks for that first instead of last, which is the whole fix for most reels. The page-watching fallback no longer stops listening the moment the video arrives, because the sound is a separate response that turns up a beat later, and the headless browser now plays clips unmuted so the audio is actually requested at all. A muted player is allowed to skip the soundtrack entirely, and it was. If a download still lands silent, its audio is fetched separately and joined back on before the memo is filed. A clip that was genuinely posted without sound is still kept as-is, so nothing is lost chasing audio that never existed. Videos already in your library are fixed by re-pulling them from their own page.
+
+- 🎠 **Saving an Instagram carousel no longer errors out.** A carousel memo was saved, then immediately hit an internal error while queueing the job that downloads its slides. That job had never been registered with the queue at all. The save looked broken, and every slide stayed as a link to Instagram's CDN rather than a file on your disk, so the memo quietly died whenever those links expired.
+
+### Added
+
+- 🖼️ **Paste several image links and get one carousel memo.** Dropping a folder of files already makes a set. The pictures worth keeping together are usually found the other way, one at a time, on different sites, where there is no file to drag. The URL box now takes a whole block of links, one per line, and asks the only question that matters: one carousel you swipe through, or one memo each. Choose the carousel and every image is downloaded to your machine in the order you pasted them, so the memo survives the sources going away. Links that are pages rather than pictures still work, since each one is resolved the same way a normal save would resolve it. Anything that turns out to hold no image is named rather than silently dropped, and left in the box so you can see which one it was.
+
 ---
 ## [3.9.3] - 2026-08-07
 
