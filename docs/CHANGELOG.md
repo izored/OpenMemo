@@ -7,6 +7,9 @@ All notable changes to OpenMemo are documented here.
 
 <!-- Add entries here as work lands: ### Added / ### Changed / ### Fixed -->
 
+---
+## [3.9.4] - 2026-08-09
+
 ### Fixed
 
 - 🔊 **Instagram videos come down with their sound.** Reels kept arriving silent, and the reason is that Instagram does not serve a reel as one file. It serves DASH, where the picture and the sound are two separate downloads on the same page. Every route openMemo had ended up asking the same question, "what is the biggest media file this page loaded", and the answer to that is always the picture on its own. The download succeeded, the file played, and there was nothing to hear. Three things were wrong and all three are fixed. Instagram's own media API hands back an ordinary MP4 with the audio already inside it, and openMemo now asks for that first instead of last, which is the whole fix for most reels. The page-watching fallback no longer stops listening the moment the video arrives, because the sound is a separate response that turns up a beat later, and the headless browser now plays clips unmuted so the audio is actually requested at all. A muted player is allowed to skip the soundtrack entirely, and it was. If a download still lands silent, its audio is fetched separately and joined back on before the memo is filed. A clip that was genuinely posted without sound is still kept as-is, so nothing is lost chasing audio that never existed. Videos already in your library are fixed by re-pulling them from their own page.
