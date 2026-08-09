@@ -63,7 +63,14 @@ async def _run_migrations():
     import aiosqlite
     from backend.config import settings
     
-    db_path = str(settings.DATA_DIR / "openmemo.db")
+    # Take the file from DATABASE_URL rather than assuming DATA_DIR/openmemo.db.
+    # The engine above already uses DATABASE_URL, so a deployment that points it
+    # at a differently named SQLite file had its migrations run here against an
+    # empty file created on the spot, while the real database stayed unmigrated
+    # and every query failed with "no such table: memos". Docker's relative
+    # ./data/openmemo.db and the Windows default both resolve unchanged.
+    url = settings.DATABASE_URL
+    db_path = url.split("///", 1)[-1] if url.startswith("sqlite") else str(settings.DATA_DIR / "openmemo.db")
     async with aiosqlite.connect(db_path) as db:
         # WAL persists in the DB file header, so setting it once here applies to
         # every later connection: readers no longer block the single writer (and

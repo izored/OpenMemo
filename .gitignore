@@ -42,6 +42,11 @@ files/
 *.db
 chroma_data/
 
+# Permanent DEV database + media copies, created by dev-db.ps1. Same private
+# content as data/ and files/, so the same rule applies: never commit.
+dev-data/
+dev-files/
+
 # yt-dlp cookie jar — account credentials, never commit (also lives under data/)
 yt_cookies.txt
 **/yt_cookies.txt
