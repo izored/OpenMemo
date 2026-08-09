@@ -38,6 +38,10 @@ logger = logging.getLogger(__name__)
 KIND_PROCESS = "process"
 KIND_PROCESS_FILE = "process_file"
 KIND_THUMBNAIL = "thumbnail"
+# Localizing EVERY slide of a carousel, as opposed to the single cover image
+# KIND_THUMBNAIL handles. Its own kind because the two run for the same memo and
+# dedupe keys on (kind, memo_id) — sharing one would drop the gallery pass.
+KIND_GALLERY = "gallery"
 KIND_LOCALIZE = "localize"
 # Auto-localize is a SEPARATE kind from explicit localize on purpose. Both
 # fire for the same memo on the auto-download path (ingest.py ~2215), and
@@ -73,6 +77,13 @@ async def _thumbnail(payload: dict[str, Any]) -> None:
     from backend.api.ingest import cache_thumbnail
 
     await cache_thumbnail(payload["memo_id"])
+
+
+@register(KIND_GALLERY, concurrency=2)
+async def _gallery(payload: dict[str, Any]) -> None:
+    from backend.api.ingest import cache_gallery
+
+    await cache_gallery(payload["memo_id"])
 
 
 @register(KIND_LOCALIZE, concurrency=3)
@@ -184,6 +195,10 @@ _ROUTING: dict[str, tuple[str, Callable[[tuple], tuple[str | None, dict[str, Any
     "process_memo": (KIND_PROCESS, _p_memo),
     "process_file_memo": (KIND_PROCESS_FILE, _p_process_file),
     "cache_thumbnail": (KIND_THUMBNAIL, _p_memo),
+    # Was missing: every carousel save reached `queue_task(cache_gallery, …)`
+    # and raised "unrouted function" AFTER the memo was committed, so the save
+    # 500'd and no slide was ever downloaded to disk.
+    "cache_gallery": (KIND_GALLERY, _p_memo),
     "localize_memo_task": (KIND_LOCALIZE, _p_localize),
     "repull_memo_task": (KIND_REPULL, _p_localize),
     "_localize_memo_task": (KIND_LOCALIZE_AUTO, _p_localize_auto),

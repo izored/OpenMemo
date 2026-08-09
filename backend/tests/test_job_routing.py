@@ -74,6 +74,10 @@ def _fake(name):
     [
         ("process_memo", ("m1",), "process", "m1", {}),
         ("cache_thumbnail", ("m2",), "thumbnail", "m2", {}),
+        # A carousel's slides are their OWN kind, not the cover thumbnail's:
+        # both run for the same memo and dedupe keys on (kind, memo_id). This
+        # entry was missing entirely, so every carousel save raised.
+        ("cache_gallery", ("m9",), "gallery", "m9", {}),
         ("transcribe_memo_task", ("m3",), "transcribe", "m3", {}),
         ("transcript_memo_task", ("m4",), "transcript", "m4", {}),
         # auto-localize picks its own mode, so it must NOT carry one

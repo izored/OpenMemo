@@ -139,6 +139,67 @@ Detail page re-renders:
 
 ---
 
+## The download ladder (and why videos used to arrive silent)
+
+`backend/core/localize_media.py` tries several routes for the same file, in
+order, and stops at the first one that produces a **playable file with sound**.
+The order exists because no single downloader handles every host.
+
+| # | Tier | Used for | Notes |
+|---|---|---|---|
+| 0 | Instagram guest media-info API | `instagram.com` only | Returns `video_versions[]`, ordinary progressive MP4s with the audio already muxed in. Highest resolution wins. |
+| 1 | Network sniffer (`core/sniff_media.py`) | Threads, Instagram, and as a universal fallback | Loads the page in the headless browser, watches every network response, downloads the media directly with the Referer the browser used. |
+| 2 | yt-dlp | Everything else | Also the fallback whenever a tier above fails. |
+
+### The silent-video failure mode
+
+Instagram (and any DASH host) does **not** serve a clip as one file. The picture
+and the sound are two separate representations, fetched as two separate
+responses. That breaks the obvious strategy — "download the biggest media file
+this page loaded" — because the biggest one is the video with no audio in it.
+The download succeeds, the file plays, and there is nothing to hear.
+
+Four defences, all of which had to be in place:
+
+1. **Tier 0 exists at all.** Instagram's own API hands over a progressive MP4
+   with the audio inside. Asking for that first sidesteps DASH completely, and
+   it is what fixes the overwhelming majority of reels.
+2. **The browser plays unmuted.** Chromium only permits *muted* autoplay by
+   default, and a muted DASH player never requests the audio representation —
+   so there was no sound on the wire to capture. The browser is launched with
+   `--autoplay-policy=no-user-gesture-required` and the player is started
+   unmuted, with a muted retry as the fallback.
+3. **The sniffer keeps listening.** It used to return the instant a large media
+   response landed, which on DASH is the video half. It now waits an extra
+   `_AUDIO_GRACE_MS` for the audio half, and returns **every** response it saw
+   (`candidates`), not just the biggest.
+4. **A silent download is repaired, not accepted.** `_recover_audio` fetches the
+   audio candidate, verifies it with ffprobe (never trusting `Content-Type`),
+   and muxes it onto the video with `ffmpeg -c copy`.
+
+A tier that produces a silent file is held aside rather than returned, in case a
+later tier has sound. If **every** tier comes back silent, that is treated as
+evidence the clip was genuinely posted without audio, and the file is kept.
+Telling someone to re-pull a video that never had sound is a nag that can never
+be satisfied.
+
+> **Instagram needs the cookie jar.** The anonymous tier is rate-limited from
+> most IPs. Connect Instagram in Settings so tier 0 can use the session
+> (`data/yt_cookies.txt`, ADR-012). Without it, downloads fall to the sniffer.
+
+### Fixing videos already in your library
+
+Re-pull the memo from its own page (`POST /api/memos/:id/repull`). It re-resolves
+the post, downloads again through the ladder above, and rebuilds the cover. The
+old file is left in place until the new one lands, so a failed re-pull costs
+nothing.
+
+Settings → Library integrity reports a `silent_videos` count. It is a number to
+look at, not an alarm: it cannot tell a broken download from a clip that was
+posted muted.
+
+---
+
 ## Graceful fallback
 
 Memos that do not satisfy `canMakeLocal()` (articles, links, images, etc.) never

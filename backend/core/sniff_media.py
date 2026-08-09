@@ -46,6 +46,12 @@ _MEDIA_CTYPES = ("video/", "audio/", "application/vnd.apple.mpegurl",
 # poster frames. Filtered by size + extension, not by host.
 _MIN_PROGRESSIVE_BYTES = 200_000  # 200 KB — below this it is a preview/sprite
 
+# After the video half of a DASH stream lands, keep listening this long for the
+# audio half before returning. The two representations are separate responses
+# and the audio one trails; returning the instant video arrives is what left
+# every sniffed reel mute.
+_AUDIO_GRACE_MS = 4000
+
 
 def _path_ext(url: str) -> str:
     return urlparse(url).path.rsplit("/", 1)[-1].rsplit(".", 1)[-1].lower() if "." in url else ""
@@ -64,14 +70,42 @@ def _kind_for(url: str, ctype: str) -> Optional[str]:
     return None
 
 
+def _is_audio_ctype(ctype: str) -> bool:
+    """True when a response announces itself as an audio-only stream.
+
+    DASH splits a clip into separate video and audio representations, and the
+    audio one is always the smaller file — so "largest media response wins"
+    picks the video and throws the sound away. This is the cheap signal that
+    tells the two apart before anything is downloaded; the caller still ffprobes
+    what it fetched, because a host that mislabels its Content-Type must not be
+    able to produce a silent memo."""
+    return (ctype or "").split(";")[0].strip().lower().startswith("audio/")
+
+
 # JS run in-page: pull every <video>'s current source + the poster, and kick
 # autoplay so a lazily-loaded clip actually issues its media request. Host-blind.
+#
+# Plays UNMUTED first. A muted player is allowed to skip the audio
+# representation of a DASH stream entirely — it will never be heard, so why
+# fetch it — and then there is no sound on the wire for us to capture. The
+# browser is launched with --autoplay-policy=no-user-gesture-required so this
+# actually starts; the muted retry stays as the fallback for the case where it
+# does not, since a silent capture still beats no capture.
 _PLAY_AND_PROBE_JS = """() => {
   const out = { srcs: [], poster: '' };
   const vids = Array.from(document.querySelectorAll('video'));
   for (const v of vids) {
     try { v.scrollIntoView({block: 'center'}); } catch (_) {}
-    try { v.muted = true; const p = v.play(); if (p && p.catch) p.catch(() => {}); } catch (_) {}
+    try {
+      v.muted = false;
+      v.volume = 1;
+      const p = v.play();
+      if (p && p.catch) p.catch(() => {
+        try { v.muted = true; const q = v.play(); if (q && q.catch) q.catch(() => {}); } catch (_) {}
+      });
+    } catch (_) {
+      try { v.muted = true; const q = v.play(); if (q && q.catch) q.catch(() => {}); } catch (_) {}
+    }
     const s = v.currentSrc || v.src || '';
     if (s) out.srcs.push(s);
     if (!out.poster && v.poster) out.poster = v.poster;
@@ -115,7 +149,12 @@ async def sniff_media(
       "content_type": str,
       "thumbnail_url": str|None,     # og:image / <video> poster, for the card
       "main_image":  str|None,       # largest rendered still (want_image only)
+      "candidates":  [ {url, kind, referer, content_type, size, audio_only} ],
     }
+
+    `candidates` is EVERY media response seen, largest first. `media_url` is
+    only the best video pick out of it — on a DASH host the audio lives in a
+    second entry, and the download step muxes the pair back into one file.
 
     Picks the largest progressive container seen on the network (the actual
     video file), falling back to a captured manifest, then to og:video — all
@@ -196,16 +235,31 @@ async def sniff_media(
         except Exception:
             pass
 
-        # Let media requests fire. Break early once a real progressive file lands.
+        # Let media requests fire. Break early once a real progressive file
+        # lands — but on a DASH host the video and the audio representation are
+        # separate responses that do NOT arrive together, so once video is in
+        # hand keep listening for a short grace window instead of returning
+        # immediately with half the clip. Bailing at the first big response is
+        # what cost every sniffed reel its sound.
         deadline = settle_ms
         step = 500
+        grace_left = _AUDIO_GRACE_MS
         while deadline > 0:
             await page.wait_for_timeout(step)
             deadline -= step
-            if any(
+            have_media = any(
                 v["kind"] == "progressive" and v["size"] >= _MIN_PROGRESSIVE_BYTES
                 for v in seen.values()
+            )
+            if not have_media:
+                continue
+            if any(
+                v["kind"] == "progressive" and _is_audio_ctype(v["content_type"])
+                for v in seen.values()
             ):
+                break  # both halves captured — nothing left to wait for
+            grace_left -= step
+            if grace_left <= 0:
                 break
 
         og = {}
@@ -230,62 +284,65 @@ async def sniff_media(
 
         thumbnail_url = og.get("image") or None
 
+        # Every media response we saw, largest first, each with the Referer the
+        # browser used for it. The caller needs the WHOLE list, not just the
+        # winner: on a DASH host the sound is a second entry in here, and the
+        # download step pairs them back together.
+        candidates = [
+            {
+                "url": u,
+                "kind": v["kind"],
+                "referer": v["referer"],
+                "content_type": v["content_type"],
+                "size": v["size"],
+                "audio_only": v["kind"] == "progressive" and _is_audio_ctype(v["content_type"]),
+            }
+            for u, v in sorted(seen.items(), key=lambda kv: kv[1]["size"], reverse=True)
+        ]
+
+        def _result(media_url, kind, referer, content_type):
+            return {
+                "media_url": media_url,
+                "kind": kind,
+                "referer": referer,
+                "user_agent": _BROWSER_UA,
+                "content_type": content_type,
+                "thumbnail_url": thumbnail_url,
+                "main_image": main_image,
+                "candidates": candidates,
+            }
+
         # 1) Largest progressive container on the wire — the real video file.
+        # Audio-only responses are excluded from this pick: a DASH audio track
+        # can outweigh a short video representation, and picking it would file a
+        # soundtrack as the video. It stays in `candidates` for the mux step.
         progressive = [
-            (u, v) for u, v in seen.items() if v["kind"] == "progressive"
+            (u, v) for u, v in seen.items()
+            if v["kind"] == "progressive" and not _is_audio_ctype(v["content_type"])
         ]
         if progressive:
             best_url, best = max(progressive, key=lambda kv: kv[1]["size"])
-            return {
-                "media_url": best_url,
-                "kind": "progressive",
-                "referer": best["referer"],
-                "user_agent": _BROWSER_UA,
-                "content_type": best["content_type"],
-                "thumbnail_url": thumbnail_url,
-                "main_image": main_image,
-            }
+            return _result(best_url, "progressive", best["referer"], best["content_type"])
 
-        # 2) A manifest (HLS/DASH) — hand back so caller can mux it.
+        # 2) A manifest (HLS/DASH) — hand back so caller can mux it. Preferred
+        # over a lone audio response: ffmpeg pulls BOTH streams out of a
+        # manifest, which is the complete clip rather than half of one.
         manifests = [(u, v) for u, v in seen.items() if v["kind"] == "manifest"]
         if manifests:
             best_url, best = manifests[0]
-            return {
-                "media_url": best_url,
-                "kind": "manifest",
-                "referer": best["referer"],
-                "user_agent": _BROWSER_UA,
-                "content_type": best["content_type"],
-                "thumbnail_url": thumbnail_url,
-                "main_image": main_image,
-            }
+            return _result(best_url, "manifest", best["referer"], best["content_type"])
 
         # 3) og:video as a last resort (some hosts expose the mp4 in meta only).
         if og.get("video"):
             vid = og["video"]
-            return {
-                "media_url": vid,
-                "kind": "manifest" if vid.lower().split("?")[0].endswith(_MANIFEST_EXTS) else "progressive",
-                "referer": page_origin,
-                "user_agent": _BROWSER_UA,
-                "content_type": "",
-                "thumbnail_url": thumbnail_url,
-                "main_image": main_image,
-            }
+            kind = "manifest" if vid.lower().split("?")[0].endswith(_MANIFEST_EXTS) else "progressive"
+            return _result(vid, kind, page_origin, "")
 
         # 4) No video anywhere. A download caller gets None (nothing to fetch);
         # a want_image caller gets the verdict it asked for — "not a video, and
         # here is the still" — which is a real answer, not a failure.
         if want_image and (main_image or thumbnail_url):
-            return {
-                "media_url": None,
-                "kind": None,
-                "referer": page_origin,
-                "user_agent": _BROWSER_UA,
-                "content_type": "",
-                "thumbnail_url": thumbnail_url,
-                "main_image": main_image,
-            }
+            return _result(None, None, page_origin, "")
 
         return None
 

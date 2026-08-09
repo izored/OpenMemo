@@ -94,6 +94,23 @@ export const ingestApi = {
       method: 'POST',
       body: JSON.stringify({ url, collection_id, no_pull: opts?.noPull ?? false, audio_only: opts?.audioOnly ?? false, workspace_id: opts?.workspace_id }),
     }),
+  // Several image links → ONE carousel memo. The counterpart to dropping a
+  // folder of files, for pictures you find one at a time across different
+  // sites. `failed` names the links that held no image, so the panel can say so
+  // instead of silently dropping them.
+  gallery: (
+    urls: string[],
+    opts?: { title?: string; collection_id?: string; workspace_id?: string },
+  ) =>
+    fetchJSON<{ id: string; title: string; slides: number; failed: string[] }>('/ingest/gallery', {
+      method: 'POST',
+      body: JSON.stringify({
+        urls,
+        title: opts?.title,
+        collection_id: opts?.collection_id,
+        workspace_id: opts?.workspace_id,
+      }),
+    }),
   note: (title: string, content: string, collection_id?: string, workspace_id?: string) =>
     fetchJSON<{ id: string }>('/ingest/note', {
       method: 'POST',

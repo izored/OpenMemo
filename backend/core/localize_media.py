@@ -371,6 +371,205 @@ async def _download_hls(
     raise LocalizeError("HLS/DASH mux via ffmpeg failed")
 
 
+def _discard(result: dict | None) -> None:
+    """Delete a download a later tier made redundant.
+
+    The ladder now keeps a silent copy alive while it tries the next tier for
+    sound, so a successful retry leaves an orphan mp4 behind in FILES_DIR that
+    no memo references and nothing will ever clean up. Best-effort: a file that
+    will not delete is a wasted megabyte, never a failed download."""
+    if not result:
+        return
+    try:
+        Path(result["path"]).unlink()
+    except Exception:
+        pass
+
+
+def _is_instagram(url: str) -> bool:
+    try:
+        return "instagram.com" in urlparse(url).netloc.lower()
+    except Exception:
+        return False
+
+
+async def _localize_via_instagram_api(url: str, workspace_id: str) -> dict:
+    """Download an Instagram reel/video from its PROGRESSIVE rendition.
+
+    The first tier for Instagram, and the reason reels have sound again.
+    Instagram's guest media-info API hands back `video_versions[]` — ordinary
+    progressive MP4 files with the audio already muxed in. Every other route
+    ends up at the DASH manifest instead, where the picture and the sound are
+    separate representations and "download the media on the wire" gets the
+    silent half of the clip.
+
+    Resolves anonymously first, then with the cookie jar (same ladder as the
+    extractor). Raises LocalizeError when the post is not a video, the API is
+    throttled, or the download fails — so the caller falls to the sniffer.
+    """
+    from backend.core.instagram import fetch_media_info
+
+    cookies = get_cookies_path() if cookies_present() else None
+    info = await fetch_media_info(url)
+    if info is None and cookies is not None:
+        info = await fetch_media_info(url, cookies_path=cookies)
+    if info is None:
+        raise LocalizeError("Instagram media-info API did not answer (login or rate limit)")
+
+    media_url = info.get("video_url")
+    if not media_url:
+        # A carousel whose FIRST video slide is the thing worth downloading.
+        # A photo-only post has none, and that is not a download at all.
+        for slide in (info.get("gallery") or []):
+            if isinstance(slide, dict) and slide.get("video_url"):
+                media_url = slide["video_url"]
+                break
+    if not media_url:
+        raise LocalizeError("Instagram post carries no video")
+
+    base = Path(settings.FILES_DIR) / workspace_id
+    base.mkdir(parents=True, exist_ok=True)
+    dest = base / f"{uuid.uuid4()}.mp4"
+    shortcode = info.get("shortcode") or ""
+    await _download_direct(
+        media_url, dest,
+        referer=f"https://www.instagram.com/p/{shortcode}/" if shortcode
+        else "https://www.instagram.com/",
+    )
+    return {
+        "path": str(dest),
+        "type": "video",
+        "filename": dest.name,
+        "thumbnail_url": info.get("thumbnail"),
+        "has_audio": _has_audio_stream(dest),
+    }
+
+
+async def _mux_video_audio(video: Path, audio: Path, dest: Path) -> bool:
+    """Join a video-only file and an audio-only file into one playable mp4.
+
+    The repair step for DASH: the page served the picture and the sound as two
+    separate downloads, and this is what puts them back together. Stream-copy
+    first (instant, lossless); if the audio codec will not sit in an mp4 as-is,
+    re-encode just the audio to AAC. Returns False and leaves nothing behind on
+    failure, so the caller can keep the silent copy rather than lose the clip.
+    """
+    from backend.core.video import ffmpeg_available
+
+    if not ffmpeg_available():
+        return False
+
+    async def _run(codec_args: list[str]) -> bool:
+        proc = await asyncio.create_subprocess_exec(
+            settings.FFMPEG_BIN, "-y",
+            "-i", str(video),
+            "-i", str(audio),
+            # Explicit stream mapping: take the picture from input 0 and the
+            # sound from input 1. ffmpeg's default selection would pick one
+            # stream per type across ALL inputs, which on two video-bearing
+            # containers silently drops the one we are here for.
+            "-map", "0:v:0",
+            "-map", "1:a:0",
+            *codec_args,
+            "-shortest",
+            "-movflags", "+faststart",
+            str(dest),
+            stdout=asyncio.subprocess.DEVNULL,
+            stderr=asyncio.subprocess.PIPE,
+        )
+        try:
+            _, err = await asyncio.wait_for(proc.communicate(), timeout=600)
+        except asyncio.TimeoutError:
+            proc.kill()
+            return False
+        ok = (
+            proc.returncode == 0
+            and dest.exists()
+            and dest.stat().st_size >= _MIN_VALID_BYTES
+        )
+        if not ok and err:
+            tail = err.decode("utf-8", "ignore").strip().splitlines()[-1:] or [""]
+            print(f"[localize] ffmpeg mux: {tail[0]}")
+        return ok
+
+    if await _run(["-c", "copy"]):
+        return True
+    if await _run(["-c:v", "copy", "-c:a", "aac"]):
+        return True
+    try:
+        dest.unlink()
+    except Exception:
+        pass
+    return False
+
+
+async def _recover_audio(
+    info: dict, video_path: Path, base: Path, *, user_agent: str | None
+) -> bool | Path:
+    """Find the sound for an already-downloaded, silent video and mux it in.
+
+    Called when the file that landed has no audio track — which on a DASH host
+    is the normal outcome, not an error: the page served the video and the audio
+    as two separate responses and we fetched the bigger one. The sniffer handed
+    back every response it saw, so the missing half is usually already in the
+    list. Rewrites `video_path` in place on success. Returns False when nothing
+    usable is found, leaving the silent file untouched.
+    """
+    candidates = [
+        c for c in (info.get("candidates") or [])
+        if c.get("url") and c["url"] != info.get("media_url") and c.get("kind") == "progressive"
+    ]
+    if not candidates:
+        return False
+    # Anything the host LABELLED audio first (the reliable signal), then the
+    # remaining responses largest-first — a mislabelled Content-Type must not be
+    # able to hide the soundtrack. Capped: each probe is a real download.
+    ordered = (
+        [c for c in candidates if c.get("audio_only")]
+        + [c for c in candidates if not c.get("audio_only")]
+    )[:3]
+
+    for cand in ordered:
+        probe = base / f"{uuid.uuid4()}.audio"
+        try:
+            await _download_direct(
+                cand["url"], probe,
+                referer=cand.get("referer"), user_agent=user_agent,
+            )
+        except LocalizeError:
+            continue
+        # Trust ffprobe, not the Content-Type: this is the only check that
+        # cannot be fooled by a host labelling its streams badly.
+        if _has_audio_stream(probe) is not True:
+            try:
+                probe.unlink()
+            except Exception:
+                pass
+            continue
+        muxed = base / f"{uuid.uuid4()}.mp4"
+        ok = await _mux_video_audio(video_path, probe, muxed)
+        try:
+            probe.unlink()
+        except Exception:
+            pass
+        if not ok:
+            continue
+        # The muxed file IS the download now — take over the original's path so
+        # nothing downstream has to know a repair happened.
+        try:
+            video_path.unlink()
+        except Exception:
+            pass
+        try:
+            muxed.replace(video_path)
+        except OSError:
+            # Replace failed (locked file): keep the muxed copy and let the
+            # caller point at it instead of dropping the recovered sound.
+            return muxed
+        return True
+    return False
+
+
 async def _localize_via_sniff(url: str, workspace_id: str) -> dict:
     """Sniff the page for its real media URL, then fetch it directly.
 
@@ -378,7 +577,11 @@ async def _localize_via_sniff(url: str, workspace_id: str) -> dict:
     browser, watches the network for the media file, and downloads it with the
     captured Referer. Raises LocalizeError when nothing fetchable is found (or
     only a streaming manifest, which still needs yt-dlp/ffmpeg to mux) so the
-    caller can fall back."""
+    caller can fall back.
+
+    A progressive download that lands silent is not accepted as-is: DASH hosts
+    serve the picture and the sound separately, so the audio half is fetched
+    from the sniffer's other candidates and muxed in before returning."""
     from backend.core.sniff_media import sniff_media
 
     info = await sniff_media(url)
@@ -400,6 +603,18 @@ async def _localize_via_sniff(url: str, workspace_id: str) -> dict:
             info["media_url"], dest,
             referer=info.get("referer"), user_agent=info.get("user_agent"),
         )
+
+    has_audio = _has_audio_stream(dest)
+    if has_audio is False:
+        recovered = await _recover_audio(
+            info, dest, base, user_agent=info.get("user_agent")
+        )
+        if recovered:
+            if isinstance(recovered, Path):
+                dest = recovered
+            has_audio = _has_audio_stream(dest)
+            print(f"[localize] recovered the audio track for {url}")
+
     return {
         "path": str(dest),
         "type": "video",
@@ -407,7 +622,7 @@ async def _localize_via_sniff(url: str, workspace_id: str) -> dict:
         "thumbnail_url": info.get("thumbnail_url"),
         # False only when ffprobe positively found no audio track. None means it
         # could not tell, which the caller must not read as silence.
-        "has_audio": _has_audio_stream(dest),
+        "has_audio": has_audio,
     }
 
 
@@ -415,31 +630,63 @@ async def localize_media(url: str, workspace_id: str, mode: str, quality: int = 
     """Download `url` into FILES_DIR/<workspace>. Returns {path,type,filename}.
 
     Routing (video only — audio conversion always uses yt-dlp+ffmpeg):
+      0. Instagram → the guest API's progressive rendition (video+audio in one
+         file). Instagram is the host that serves DASH to everything else, so
+         asking it for the plain MP4 first is what keeps reels from arriving
+         silent; the sniffer and yt-dlp remain behind it.
       1. sniff-first hosts (Threads, …) → network sniffer, yt-dlp on failure
       2. every other host → yt-dlp, network sniffer as a universal fallback
+
+    A tier that produces a video with NO audio track is never accepted while a
+    later tier might still have sound: the silent file is held aside and only
+    returned if everything below it also fails, because some clips genuinely
+    were posted muted and a silent video still beats no video.
     """
     if mode not in VALID_MODES:
         raise LocalizeError(f"Invalid mode: {mode}")
 
     sniff_first = mode == "video" and _is_sniff_first(url)
     mute_fallback: dict | None = None
+
+    if mode == "video" and _is_instagram(url):
+        try:
+            pulled = await _localize_via_instagram_api(url, workspace_id)
+            if pulled.get("has_audio") is False:
+                mute_fallback = pulled
+                print(f"[localize] Instagram API rendition for {url} has no audio; trying the sniffer")
+            else:
+                return pulled
+        except LocalizeError as e:
+            print(f"[localize] Instagram API tier failed for {url} ({e}); trying the sniffer")
+
     if sniff_first:
         try:
             sniffed = await _localize_via_sniff(url, workspace_id)
             if sniffed.get("has_audio") is False:
-                # A DASH host handed us the video-only representation. yt-dlp
-                # muxes the two streams, so it is worth the second attempt —
-                # but KEEP this file, because some clips are genuinely silent
-                # and a failed yt-dlp must not cost us a working video.
+                # Still silent after the sniffer's own audio-recovery pass. yt-dlp
+                # muxes DASH streams too, so it is worth the next attempt — but
+                # KEEP this file, because some clips are genuinely silent and a
+                # failed yt-dlp must not cost us a working video.
+                _discard(mute_fallback)
                 mute_fallback = sniffed
                 print(f"[localize] sniffed video for {url} has no audio; trying yt-dlp for sound")
             else:
+                _discard(mute_fallback)
                 return sniffed
         except LocalizeError as e:
             print(f"[localize] sniff-first failed for {url} ({e}); trying yt-dlp")
 
     try:
-        return await asyncio.to_thread(_localize_sync, url, workspace_id, mode, quality)
+        pulled = await asyncio.to_thread(_localize_sync, url, workspace_id, mode, quality)
+        if mute_fallback is not None and pulled.get("has_audio") is False:
+            # Both tiers came back silent, from two independent routes. That is
+            # the signature of a clip that was posted without sound, not of a
+            # broken download — keep the first copy and drop the duplicate.
+            _discard(pulled)
+            print(f"[localize] every tier for {url} is silent; the clip has no sound")
+            return mute_fallback
+        _discard(mute_fallback)
+        return pulled
     except LocalizeError as ytdlp_err:
         # A silent video beats no video. The clip may simply have no sound.
         if mute_fallback is not None:

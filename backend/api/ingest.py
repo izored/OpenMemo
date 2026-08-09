@@ -1,6 +1,7 @@
 """Content ingestion API - handles URL saving, file uploads, and processing."""
 import asyncio
 import logging
+import re
 import uuid
 from datetime import datetime, timedelta
 from pathlib import Path
@@ -111,6 +112,23 @@ class SpotifyIngest(BaseModel):
 class NoteIngest(BaseModel):
     title: str
     content: str
+    workspace_id: Optional[str] = None
+    collection_id: Optional[str] = None
+
+
+class GalleryIngest(BaseModel):
+    """Bundle several pasted links into ONE carousel memo.
+
+    The counterpart to dropping a folder of files: images you find one at a
+    time, across different sites, that belong together as a single memo. Drag
+    and drop cannot express that — the files are not on disk — so the links are
+    the input.
+    """
+    urls: list[str]
+    # Optional heading. Defaults to a count, since a pile of CDN URLs has no
+    # title worth inheriting.
+    title: Optional[str] = None
+    description: Optional[str] = None
     workspace_id: Optional[str] = None
     collection_id: Optional[str] = None
 
@@ -1389,6 +1407,173 @@ async def ingest_note(
     queue_task(process_memo, memo.id)
 
     return {"id": memo.id, "title": memo.title, "type": "note", "status": "processing"}
+
+
+# --- Carousel from pasted links ---
+
+# A URL path ending in one of these IS the picture, so it goes straight into the
+# gallery with no network round trip at all.
+_IMAGE_URL_RE = re.compile(r"\.(?:jpe?g|png|webp|gif|avif|bmp|svg)(?:[?#]|$)", re.I)
+
+# Hard ceiling on one carousel. Every slide is downloaded and stored locally, so
+# an accidental paste of a hundred links should be refused, not obeyed.
+MAX_GALLERY_SLIDES = 40
+
+
+def _looks_like_image_url(url: str) -> bool:
+    """True when the URL path itself names an image file."""
+    from urllib.parse import urlparse
+
+    try:
+        return bool(_IMAGE_URL_RE.search(urlparse(url).path))
+    except Exception:
+        return False
+
+
+async def _resolve_slide(url: str) -> Optional[dict]:
+    """One pasted link → one carousel slide, or None if it holds no picture.
+
+    Three ways a link can be "an image", cheapest first:
+      1. the URL is the file          — a CDN .jpg/.png/… path, used as-is
+      2. the URL SERVES an image      — no extension, but the response is one
+         (Unsplash /download, signed CDN links, most share URLs)
+      3. the URL is a PAGE about one  — resolved through the normal extractor,
+         which is what makes an Instagram or Pinterest post work here too
+
+    Returns {"url", "type"} so a video link pasted into the set lands as a video
+    slide instead of a broken picture.
+    """
+    from backend.core.extractor import _is_video_media_url
+
+    if _is_video_media_url(url):
+        return {"url": url, "type": "video"}
+    if _looks_like_image_url(url):
+        return {"url": url, "type": "image"}
+
+    # 2 — ask the server what it serves, without pulling the body. Many CDNs
+    # refuse HEAD, so a refusal retries as a streamed GET whose headers arrive
+    # before any bytes do.
+    import httpx
+
+    try:
+        async with httpx.AsyncClient(
+            timeout=12, follow_redirects=True, headers=_thumb_headers(url)
+        ) as client:
+            resp = await client.head(url)
+            ctype = resp.headers.get("content-type", "")
+            if resp.status_code >= 400 or not ctype:
+                async with client.stream("GET", url) as sresp:
+                    ctype = sresp.headers.get("content-type", "")
+            head = ctype.split(";")[0].strip().lower()
+            if head.startswith("image/"):
+                return {"url": url, "type": "image"}
+            if head.startswith("video/"):
+                return {"url": url, "type": "video"}
+    except Exception:
+        pass
+
+    # 3 — a real page: let the resolver ladder find its picture.
+    try:
+        from backend.core.extractor import extract_url
+
+        meta = await extract_url(url)
+    except Exception:
+        return None
+    thumb = (meta or {}).get("thumbnail_path") or ""
+    # A link that resolves to its OWN carousel contributes only its first slide
+    # — one memo, one flat list, no nesting.
+    gallery = (meta or {}).get("gallery") or []
+    if not thumb and gallery:
+        first = gallery[0]
+        thumb = first.get("url") if isinstance(first, dict) else None
+    if thumb and str(thumb).startswith("http"):
+        return {"url": thumb, "type": "image"}
+    return None
+
+
+@router.post("/gallery")
+async def ingest_gallery(data: GalleryIngest, db: AsyncSession = Depends(get_db)):
+    """Several image links → ONE carousel memo.
+
+    Each link is resolved to a picture (see `_resolve_slide`) and the set becomes
+    a single image memo whose `gallery` holds every slide in paste order.
+    `cache_gallery` then downloads all of them to disk, so the memo keeps working
+    after any of the sources rot — which is the point of bundling them here
+    rather than keeping a list of links.
+
+    Links that resolve to nothing are skipped and named in the response, so one
+    dead URL in a paste of eight never costs the other seven.
+    """
+    raw = [u.strip() for u in (data.urls or []) if u and u.strip()]
+    # De-dupe, keeping paste order: the same picture twice is never the intent.
+    seen: set[str] = set()
+    urls = [u for u in raw if not (u in seen or seen.add(u))]
+    if not urls:
+        raise HTTPException(status_code=400, detail="No links given")
+    if len(urls) > MAX_GALLERY_SLIDES:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Too many links ({len(urls)}). A carousel holds at most {MAX_GALLERY_SLIDES}.",
+        )
+    for u in urls:
+        validate_url(u)
+
+    # Resolve concurrently — a paste of ten page links would otherwise be ten
+    # sequential fetches. Exceptions are captured, never raised into the request.
+    resolved = await asyncio.gather(
+        *(_resolve_slide(u) for u in urls), return_exceptions=True
+    )
+    ok = [isinstance(r, dict) and bool(r.get("url")) for r in resolved]
+    slides = [r for r, good in zip(resolved, ok) if good]
+    failed = [u for u, good in zip(urls, ok) if not good]
+
+    if not slides:
+        raise HTTPException(
+            status_code=400, detail="None of those links resolved to an image."
+        )
+
+    from urllib.parse import urlparse
+
+    domain = (urlparse(urls[0]).netloc or "").lstrip("www.")
+    title = (data.title or "").strip() or (
+        f"{len(slides)} images" if len(slides) > 1 else "Saved image"
+    )
+    memo = Memo(
+        id=str(uuid.uuid4()),
+        workspace_id=sanitize_workspace_id(data.workspace_id),
+        type="image",
+        title=title,
+        description=(data.description or "").strip() or None,
+        # The sources stay in the body so the memo still remembers where each
+        # picture came from once every slide is a local path.
+        content_text="\n".join(urls),
+        source_domain=domain or None,
+        source_favicon=f"https://www.google.com/s2/favicons?domain={domain}&sz=32" if domain else None,
+        thumbnail_path=slides[0]["url"],
+        # One surviving slide is not a carousel — leave `gallery` empty so the
+        # memo renders as the plain image it is.
+        gallery=slides if len(slides) > 1 else None,
+        created_at=datetime.utcnow(),
+        updated_at=datetime.utcnow(),
+    )
+    db.add(memo)
+    await _attach_collection(db, memo, data.collection_id)
+    await db.commit()
+
+    queue_task(process_memo, memo.id)
+    if memo.gallery:
+        queue_task(cache_gallery, memo.id)
+    else:
+        queue_task(cache_thumbnail, memo.id)
+
+    return {
+        "id": memo.id,
+        "title": memo.title,
+        "type": "image",
+        "status": "processing",
+        "slides": len(slides),
+        "failed": failed,
+    }
 
 
 # Types a caller may force via `type_override` on /file. Mirrors the taxonomy
