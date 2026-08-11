@@ -23,6 +23,7 @@ from backend.db.models import Memo, Collection, Tag, memo_collections, memo_tags
 from backend.core.security import sanitize_workspace_id
 from backend.core.classify import has_transcript
 from backend.core.file_paths import resolve_memo_path
+from backend.core.pictures import serve_pictures
 
 router = APIRouter(prefix="/api/memos", tags=["memos"])
 
@@ -220,7 +221,7 @@ async def list_memos(
     
     return {
         "items": [
-            {
+            serve_pictures({
                 "id": m.id,
                 "type": m.type,
                 "title": m.title,
@@ -253,7 +254,7 @@ async def list_memos(
                 "updated_at": m.updated_at.isoformat(),
                 "collections": [{"id": c.id, "name": c.name, "color": c.color} for c in m.collections],
                 "tags": [t.name for t in m.tags],
-            }
+            })
             for m, preview in rows
         ],
         "total": total,
@@ -276,7 +277,7 @@ async def get_memo(memo_id: str, db: AsyncSession = Depends(get_db)):
     if not memo:
         raise HTTPException(status_code=404, detail="Memo not found")
     
-    return {
+    return serve_pictures({
         "id": memo.id,
         "type": memo.type,
         "title": memo.title,
@@ -319,7 +320,7 @@ async def get_memo(memo_id: str, db: AsyncSession = Depends(get_db)):
         "updated_at": memo.updated_at.isoformat(),
         "collections": [{"id": c.id, "name": c.name, "color": c.color} for c in memo.collections],
         "tags": [t.name for t in memo.tags],
-    }
+    })
 
 
 def _parse_range(range_header: str, file_size: int) -> tuple[int, int] | None:
@@ -812,7 +813,7 @@ async def list_pinned_memos(
         )
     ).scalars().all()
     return [
-        {
+        serve_pictures({
             "id": m.id,
             "type": m.type,
             "title": m.title,
@@ -821,7 +822,7 @@ async def list_pinned_memos(
             "source_favicon": m.source_favicon,
             "pinned": m.pinned,
             "sort_order": m.sort_order,
-        }
+        })
         for m in rows
     ]
 
@@ -1049,13 +1050,13 @@ async def get_related_memos(memo_id: str, db: AsyncSession = Depends(get_db)):
         result = await db.execute(query)
         memos = result.scalars().all()
         return [
-            {
+            serve_pictures({
                 "id": m.id,
                 "type": m.type,
                 "title": m.title,
                 "thumbnail_path": m.thumbnail_path,
                 "source_domain": m.source_domain,
-            }
+            })
             for m in memos
         ]
     

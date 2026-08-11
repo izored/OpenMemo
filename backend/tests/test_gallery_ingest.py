@@ -21,7 +21,14 @@ def client():
 
 @pytest.fixture
 def no_network(monkeypatch):
-    """Resolve any link whose path names an image; everything else holds none."""
+    """Resolve any link whose path names an image; everything else holds none.
+
+    The download is stubbed too, because ingest now pulls every picture to disk
+    before it commits: a memo is not allowed to exist holding someone else's
+    image URL (backend/core/pictures.py). Leaving the fetch real would make
+    these tests assert the failure path instead of the shape of a saved
+    carousel.
+    """
     from backend.api import ingest
 
     async def _resolve(url: str):
@@ -29,7 +36,11 @@ def no_network(monkeypatch):
             return {"url": url, "type": "image"}
         return None
 
+    async def _download(src: str, name_stem: str):
+        return f"/api/files/thumb/{name_stem}.jpg"
+
     monkeypatch.setattr(ingest, "_resolve_slide", _resolve)
+    monkeypatch.setattr(ingest, "_download_thumb", _download)
 
 
 def test_several_links_become_one_carousel(client, no_network):
@@ -46,8 +57,12 @@ def test_several_links_become_one_carousel(client, no_network):
     memo = client.get(f"/api/memos/{body['id']}").json()
     assert memo["type"] == "image"
     # Paste order is the carousel order — the sequence is the user's editing.
-    assert [s["url"] for s in memo["gallery"]] == urls
-    assert memo["thumbnail_path"] == urls[0]
+    # The slides are local files by now, one per index, never the pasted URLs.
+    assert [s["url"] for s in memo["gallery"]] == [
+        f"/api/files/thumb/{body['id']}_g{i}.jpg" for i in range(3)
+    ]
+    assert memo["thumbnail_path"] == f"/api/files/thumb/{body['id']}_g0.jpg"
+    assert not body["pictures_pending"]
     # Where each picture came from survives, even after the slides are
     # rewritten to local paths by cache_gallery.
     assert all(u in memo["content_text"] for u in urls)
@@ -83,7 +98,7 @@ def test_a_single_image_is_not_a_carousel(client, no_network):
     memo = client.get(f"/api/memos/{r.json()['id']}").json()
     assert memo["type"] == "image"
     assert not memo["gallery"]
-    assert memo["thumbnail_path"] == "https://a.example.com/solo.jpg"
+    assert memo["thumbnail_path"] == f"/api/files/thumb/{r.json()['id']}.jpg"
 
 
 def test_a_title_can_be_given(client, no_network):
@@ -120,11 +135,25 @@ def test_a_non_http_link_is_rejected(client, no_network):
     assert r.status_code == 400
 
 
-def test_a_video_link_stays_a_video_slide(client):
-    """A clip pasted into the set must not be filed as a broken picture."""
+def test_a_video_link_stays_a_video_slide(client, monkeypatch):
+    """A clip pasted into the set must not be filed as a broken picture.
+
+    The picture is downloaded; the clip keeps its URL. That split is the point:
+    the local-only rule covers images, and media follows `auto_download_video`
+    because a set of long clips is a disk problem, not a picture problem.
+    """
+    from backend.api import ingest
+
+    async def _download(src: str, name_stem: str):
+        return f"/api/files/thumb/{name_stem}.jpg"
+
+    monkeypatch.setattr(ingest, "_download_thumb", _download)
+
     r = client.post("/api/ingest/gallery", json={
         "urls": ["https://a.example.com/one.jpg", "https://cdn.example.com/clip.mp4"],
     })
     assert r.status_code == 200
     memo = client.get(f"/api/memos/{r.json()['id']}").json()
     assert [s["type"] for s in memo["gallery"]] == ["image", "video"]
+    assert memo["gallery"][0]["url"].startswith("/api/files/thumb/")
+    assert memo["gallery"][1]["url"] == "https://cdn.example.com/clip.mp4"

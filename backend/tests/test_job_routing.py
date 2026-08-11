@@ -128,6 +128,46 @@ async def test_every_route_has_a_registered_handler():
         assert kind in jobs._HANDLERS, f"{kind} is routed but has no handler"
 
 
+def test_every_queued_function_is_actually_routed():
+    """The direction that was missing, and the reason six carousels rotted.
+
+    `test_every_routed_function_exists_with_that_signature` walks the table and
+    checks the functions exist. Nothing walked the CALL SITES and checked they
+    are in the table. So `queue_task(cache_gallery, …)` shipped against a table
+    with no `cache_gallery` entry: it raised "unrouted function" at runtime,
+    AFTER the memo had committed, and only on the carousel path. Green CI, a
+    500 on save, and no slide ever downloaded.
+
+    A registry with call sites in another file needs the check to run both ways.
+    This one is static — it never has to execute the carousel path to find out.
+    """
+    import pathlib
+    import re
+
+    call = re.compile(r"(?:queue_task|schedule)\(\s*([A-Za-z_][A-Za-z0-9_]*)\s*[,)]")
+    # `schedule` is also the local name of the callable ingest_url_core accepts,
+    # and these are the things handed TO it rather than queued through it.
+    not_a_task = {"fn", "self"}
+
+    offenders = []
+    for path in pathlib.Path("backend").rglob("*.py"):
+        rel = path.as_posix()
+        if any(v in f"/{rel}" for v in ("/.venv/", "/__pycache__/", "/tests/")):
+            continue
+        for i, line in enumerate(path.read_text(encoding="utf-8").splitlines(), 1):
+            if line.lstrip().startswith("#"):
+                continue
+            for name in call.findall(line):
+                if name in not_a_task or name in jh._ROUTING:
+                    continue
+                offenders.append(f"{rel}:{i} queues {name!r}")
+
+    assert not offenders, (
+        "these call sites queue a function that is not in _ROUTING, so they will "
+        f"raise at runtime after the memo has already been saved: {offenders}"
+    )
+
+
 async def test_unrouted_function_raises_instead_of_dropping_work():
     with pytest.raises(ValueError, match="unrouted function"):
         jh.queue_task(_fake("some_new_task_nobody_registered"), "m")

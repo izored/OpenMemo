@@ -15,6 +15,11 @@ export interface Memo {
    *  slides; thumbnail_path is the first one so the dashboard shows one cover.
    *  Absent/≤1 item = single-media memo. */
   gallery?: GalleryItem[] | null;
+  /** How many of this memo's pictures are not on disk yet. Set by the server
+   *  when it stripped a remote image URL out of the payload: openMemo renders
+   *  only files it owns, so those slots come through empty until the download
+   *  lands. Absent means every picture is local. */
+  pictures_pending?: number;
   ai_summary?: string;
   // On-demand AI summaries cached per mode (timestamp | insights | essay).
   summaries?: Partial<Record<SummaryMode, string>> | null;

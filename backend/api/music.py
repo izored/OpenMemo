@@ -16,6 +16,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.db.database import get_db
 from backend.core.file_paths import resolve_memo_path
+from backend.core.pictures import is_remote
 from backend.core.job_handlers import queue_task
 from backend.db.models import Collection, Memo, memo_collections
 
@@ -78,7 +79,10 @@ async def list_playlists(db: AsyncSession = Depends(get_db)):
             agg["error"] += 1
         elif on_disk or status == "done":
             agg["done"] += 1
-        if thumb and len(agg["covers"]) < 4:
+        # Only covers we actually hold. A remote URL here would put the playlist
+        # tile back on the source's server, which is the thing openMemo is for
+        # not doing (backend/core/pictures.py).
+        if thumb and not is_remote(thumb) and len(agg["covers"]) < 4:
             agg["covers"].append(thumb)
 
     # A bulk "Download all" pass is in flight only when the downloader says so.

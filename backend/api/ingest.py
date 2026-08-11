@@ -17,6 +17,7 @@ from pydantic import BaseModel
 
 from backend.config import settings
 from backend.core.job_handlers import queue_task
+from backend.core.pictures import is_picture_slide
 from backend.db.database import get_db, AsyncSessionLocal
 from sqlalchemy import select
 from sqlalchemy.orm.attributes import set_committed_value
@@ -213,6 +214,71 @@ async def _download_thumb(src: str, name_stem: str) -> str | None:
             return f"/api/files/thumb/{name}"
     except Exception:
         return None
+
+
+async def localize_pictures_inline(memo) -> int:
+    """Download a memo's pictures NOW, before the row is committed.
+
+    The background job was always meant to do this within seconds of the save.
+    Three different ways of losing it later, it is clear that "we will fetch it
+    shortly" is not a promise the ingest path can make on its own — see
+    `backend/core/pictures.py` for why a picture has to be a file.
+
+    So the download moves in front of the commit. Slides go in parallel, each
+    under `_download_thumb`'s own 20s timeout, so a nine-slide carousel costs
+    about as long as its slowest image rather than nine times that. Returns how
+    many are STILL remote.
+
+    Best-effort by design: what it cannot fetch keeps its URL for the retry job
+    to work on, and the memo saves either way. Refusing the save would trade a
+    missing picture for a missing memo, which is the worse of the two. The
+    serving layer makes sure the leftover URL is never rendered.
+    """
+    urls: list[tuple[int | None, str]] = []
+    if memo.thumbnail_path and str(memo.thumbnail_path).startswith("http"):
+        urls.append((None, str(memo.thumbnail_path)))
+    slides = list(memo.gallery or [])
+    for i, slide in enumerate(slides):
+        if not isinstance(slide, dict) or not is_picture_slide(slide):
+            continue  # a clip in the set follows the media rules, not this one
+        src = slide.get("url")
+        if src and str(src).startswith("http"):
+            urls.append((i, str(src)))
+    if not urls:
+        return 0
+
+    results = await asyncio.gather(
+        *(
+            _download_thumb(src, memo.id if i is None else f"{memo.id}_g{i}")
+            for i, src in urls
+        ),
+        return_exceptions=True,
+    )
+
+    still_remote = 0
+    changed_gallery = False
+    for (i, src), local in zip(urls, results):
+        if isinstance(local, BaseException) or not local:
+            still_remote += 1
+            continue
+        if i is None:
+            memo.thumbnail_path = local
+        else:
+            slides[i] = {**slides[i], "url": local}
+            changed_gallery = True
+
+    if changed_gallery:
+        memo.gallery = slides
+        first = slides[0].get("url") if isinstance(slides[0], dict) else None
+        if first and not str(first).startswith("http"):
+            memo.thumbnail_path = first
+
+    if still_remote:
+        log.warning(
+            "ingest: %d picture(s) for %s could not be downloaded at save time",
+            still_remote, memo.id,
+        )
+    return still_remote
 
 
 class PictureNotLocalized(Exception):
@@ -634,6 +700,11 @@ async def ingest_url_core(data: URLIngest, db: AsyncSession, schedule) -> dict:
     if auto_localize_audio or auto_localize_video:
         memo.localize_status = "pending"
 
+    # Pictures come down BEFORE the commit, so the row is written already
+    # holding local paths. The background job below stays as the retry for
+    # whatever this could not reach.
+    still_remote = await localize_pictures_inline(memo)
+
     if upgrade_memo is None:
         # New memo: persist it and file it into the requested collection. An
         # in-place upgrade is already persistent and keeps its memberships —
@@ -644,12 +715,14 @@ async def ingest_url_core(data: URLIngest, db: AsyncSession, schedule) -> dict:
 
     # Process in background
     schedule(process_memo, memo.id)
-    # A carousel localizes ALL slides (cache_gallery also owns slide 0's thumbnail);
-    # a single-image/link memo just localizes its one thumbnail.
-    if memo.gallery:
-        schedule(cache_gallery, memo.id)
-    elif memo.thumbnail_path and memo.thumbnail_path.startswith("http"):
-        schedule(cache_thumbnail, memo.id)
+    # Only what the inline pass could not get. A carousel localizes ALL slides
+    # (cache_gallery also owns slide 0's thumbnail); a single-image/link memo
+    # just localizes its one thumbnail.
+    if still_remote:
+        if memo.gallery:
+            schedule(cache_gallery, memo.id)
+        elif memo.thumbnail_path and memo.thumbnail_path.startswith("http"):
+            schedule(cache_thumbnail, memo.id)
     schedule(_localize_memo_task, memo.id)
     if auto_localize_audio:
         schedule(localize_memo_task, memo.id, "audio")
@@ -1653,15 +1726,18 @@ async def ingest_gallery(data: GalleryIngest, db: AsyncSession = Depends(get_db)
         created_at=datetime.utcnow(),
         updated_at=datetime.utcnow(),
     )
+    still_remote = await localize_pictures_inline(memo)
+
     db.add(memo)
     await _attach_collection(db, memo, data.collection_id)
     await db.commit()
 
     queue_task(process_memo, memo.id)
-    if memo.gallery:
-        queue_task(cache_gallery, memo.id)
-    else:
-        queue_task(cache_thumbnail, memo.id)
+    if still_remote:
+        if memo.gallery:
+            queue_task(cache_gallery, memo.id)
+        else:
+            queue_task(cache_thumbnail, memo.id)
 
     return {
         "id": memo.id,
@@ -1670,6 +1746,7 @@ async def ingest_gallery(data: GalleryIngest, db: AsyncSession = Depends(get_db)
         "status": "processing",
         "slides": len(slides),
         "failed": failed,
+        "pictures_pending": still_remote,
     }
 
 
