@@ -7,6 +7,20 @@ All notable changes to OpenMemo are documented here.
 
 <!-- Add entries here as work lands: ### Added / ### Changed / ### Fixed -->
 
+### Fixed
+
+- 📲 **Links shared to the bot can no longer vanish into a second copy of openMemo.** Telegram hands each message to exactly one asker and then forgets it, so two backends polling the same bot token do not both get your link, they take turns at random. If you had a development copy running alongside the real one, roughly half of everything you shared from your phone was saved into that copy's database instead. The bot replied "Saved" every time, because from its side it had been. Only one process on a machine may poll now: the development scripts switch the relay off outright, and the backend takes a lock the moment it starts polling so a second one backs off and says why in Settings rather than quietly competing.
+
+- 🖼️ **A picture that never made it onto your disk is now noticed while it can still be saved.** Instagram serves images from signed links that stop working after a few days. openMemo copies them locally on save, but when that copy failed there was nothing to say so: the memo committed, the card looked right, and the images died on their own schedule a week later. A download that fetches nothing is now an error the queue retries and records instead of a silent shrug, and the hourly library check counts pictures still pointing at a link with an expiry on it and names the memos holding them. There is a repair pass to go with it, which downloads what it can and re-reads the original post for fresh links when the old ones are already dead.
+
+- 🔒 **Every picture on a card is now a file on your machine, with no exceptions.** openMemo used to write the source's own image URL into a memo and swap it for a local copy a moment later in the background. When that swap failed, and it failed three different ways, the memo kept the URL forever: the card looked right because your browser was fetching the picture from Instagram, or Dribbble, or wherever, every single time you scrolled past it. Nothing was saved and nothing said so. Pictures are now downloaded before the memo is written, so the local path is what lands in the database in the first place, and anything that still slips through is stripped on the way out to the browser rather than rendered. A picture that has not arrived yet shows a placeholder and says it is pending. The one deliberate exception is unchanged and is about disk space, not pictures: a long video or track on a host with a working player stays remote until you ask for it.
+
+- 🖼️ **Re-pulling a photo post no longer marks it failed.** Re-pull runs the video downloader after it re-reads the source, and a photo post has no video in it, so every carousel came back wearing a red error chip that said "no video formats found". The pictures were fine, and the pictures are the whole content. A memo that resolves to photos now skips the download step entirely instead of failing at it.
+
+### Changed
+
+- 🤖 **The bot's default collection is called "Bot Inbox".** It was "IG Inbox", which described the first week of using it rather than what it does. The relay has always saved any link the app can handle, Instagram or not. Existing collections keep their names, and the setting is still yours to change.
+
 ---
 ## [3.9.4] - 2026-08-09
 

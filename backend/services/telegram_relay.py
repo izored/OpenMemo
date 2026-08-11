@@ -20,6 +20,7 @@ interval.
 """
 import asyncio
 import logging
+import os
 import random
 import re
 import uuid
@@ -351,9 +352,10 @@ async def _handle_message(client, token: str, msg: dict, settings: dict) -> str 
     # \S+ grabs trailing prose punctuation ("…/p/XYZ/," ) — strip it so the
     # URL that reaches the pipeline is the URL the user meant.
     url = m.group(0).rstrip(".,;:!?)]}’”")
+    inbox = settings.get("telegram_default_collection") or "Bot Inbox"
     result = await _save_url(
         url,
-        settings.get("telegram_default_collection") or "IG Inbox",
+        inbox,
         bool(settings.get("telegram_force_localize", True)),
     )
     status = result.get("status")
@@ -372,7 +374,7 @@ async def _handle_message(client, token: str, msg: dict, settings: dict) -> str 
         keyboard = await _collection_keyboard(result["id"])
         sent = await _tg(
             client, token, "sendMessage", chat_id=chat_id,
-            text=f"Saved → {settings.get('telegram_default_collection') or 'IG Inbox'} ✓\n{result.get('title', '')[:80]}",
+            text=f"Saved → {inbox} ✓\n{result.get('title', '')[:80]}",
             reply_markup={"inline_keyboard": keyboard} if keyboard else None,
         )
         if sent:
@@ -408,9 +410,46 @@ async def _drain(client, token: str, settings: dict, timeout: int) -> bool:
     return activity
 
 
+def relay_disabled_reason() -> str | None:
+    """Why this process must not poll Telegram, or None if it may.
+
+    Two independent guards, because they fail in different directions.
+
+    `OPENMEMO_DISABLE_TELEGRAM` is the explicit one, set by `dev-db.ps1`: a
+    backend started against the dev database is a second copy of the app and has
+    no business draining the real bot's queue.
+
+    The host lock is the guard for when nobody remembered to set that. Telegram
+    gives each message to exactly one caller, so a second poller does not
+    duplicate captures — it steals them, silently, into whichever database that
+    process happens to be using. See `backend/core/host_lock.py`.
+    """
+    if os.environ.get("OPENMEMO_DISABLE_TELEGRAM", "").strip().lower() in (
+        "1", "true", "yes", "on",
+    ):
+        return "OPENMEMO_DISABLE_TELEGRAM is set"
+
+    from backend.core.host_lock import claim
+
+    if not claim("telegram-relay"):
+        return (
+            "another openMemo process on this machine already polls Telegram "
+            "(only one may — messages are handed out once, not broadcast)"
+        )
+    return None
+
+
 async def run_relay_loop() -> None:
     """Forever loop, started from lifespan. Must never raise out."""
     global _offset
+
+    blocked = relay_disabled_reason()
+    if blocked:
+        RELAY_STATUS["running"] = False
+        RELAY_STATUS["last_error"] = f"relay not started: {blocked}"
+        log.warning("telegram relay not started: %s", blocked)
+        return
+
     RELAY_STATUS["running"] = True
     log.info("telegram relay loop started")
     while True:

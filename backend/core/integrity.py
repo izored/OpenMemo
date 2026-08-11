@@ -39,6 +39,55 @@ _INTERVAL_S = 60 * 60
 _STARTUP_DELAY_S = 2 * 60
 
 
+# Hosts that hand out SIGNED image URLs with an expiry baked in. A picture
+# still pointing at one of these is on a clock: it renders today and 403s in a
+# few days, with nothing on disk behind it.
+#
+# This is the gap that let six Instagram carousels rot unnoticed between
+# 2026-08-05 and 2026-08-09. `cache_gallery` was missing from the job routing
+# table, so every carousel save queued a download that never ran, and the check
+# below skipped the memos entirely on the reasoning that a remote URL "is not
+# ours to lose". For an expiring host that reasoning is backwards: the URL is
+# ours to lose precisely because we failed to copy it while it still worked.
+_EXPIRING_IMAGE_HOSTS = ("cdninstagram.com", "fbcdn.net")
+
+
+def _is_remote(url: str | None) -> bool:
+    return bool(url) and str(url).startswith("http")
+
+
+def _expires(url: str | None) -> bool:
+    """A remote picture URL that will stop working on its own."""
+    if not _is_remote(url):
+        return False
+    from urllib.parse import urlparse
+
+    try:
+        host = urlparse(str(url)).netloc.lower()
+    except ValueError:
+        return False
+    return any(host.endswith(h) or f".{h}" in host for h in _EXPIRING_IMAGE_HOSTS)
+
+
+def _picture_urls(thumbnail_path: str | None, gallery) -> list[str]:
+    """Every image URL a memo renders: its cover plus each carousel slide."""
+    urls: list[str] = []
+    if thumbnail_path:
+        urls.append(str(thumbnail_path))
+    if gallery:
+        import json
+
+        try:
+            slides = json.loads(gallery) if isinstance(gallery, (str, bytes)) else gallery
+        except (ValueError, TypeError):
+            slides = []
+        for slide in slides or []:
+            url = slide.get("url") if isinstance(slide, dict) else None
+            if url:
+                urls.append(str(url))
+    return urls
+
+
 def _scan_sync() -> dict:
     """Resolve every referenced path. Blocking: called via a thread.
 
@@ -60,8 +109,8 @@ def _scan_sync() -> dict:
         with engine.connect() as con:
             rows = con.execute(
                 text(
-                    "select file_path, thumbnail_path, source_url, type from memos "
-                    "where is_deleted = 0 or is_deleted is null"
+                    "select file_path, thumbnail_path, source_url, type, id, gallery "
+                    "from memos where is_deleted = 0 or is_deleted is null"
                 )
             ).fetchall()
     finally:
@@ -72,8 +121,10 @@ def _scan_sync() -> dict:
     memos = len(rows)
     with_media = missing_media = recoverable = unrecoverable = 0
     with_thumb = missing_thumbs = silent_videos = 0
+    remote_pictures = expiring_pictures = 0
+    expiring_memos: list[str] = []
 
-    for file_path, thumbnail_path, source_url, memo_type in rows:
+    for file_path, thumbnail_path, source_url, memo_type, memo_id, gallery in rows:
         if file_path:
             with_media += 1
             resolved = resolve_memo_path(file_path)
@@ -96,13 +147,26 @@ def _scan_sync() -> dict:
                 # `is False` only: None means ffprobe could not tell.
                 if _has_audio_stream(resolved) is False:
                     silent_videos += 1
-        # A remote thumbnail URL is not ours to lose, so only local ones count.
-        # These resolve differently from media: the column holds the URL the app
-        # serves the image at, and `/api/files/thumb/x` lives at `files/thumbs/x`.
+        # A remote thumbnail URL is not a file we can lose, so only local ones
+        # count as missing. These resolve differently from media: the column
+        # holds the URL the app serves the image at, and `/api/files/thumb/x`
+        # lives at `files/thumbs/x`.
         if thumbnail_path and not str(thumbnail_path).startswith("http"):
             with_thumb += 1
             if resolve_thumbnail_path(thumbnail_path) is None:
                 missing_thumbs += 1
+
+        # Pictures that were never copied to disk. Counted apart from missing
+        # files because the fix is different: nothing was lost, a download did
+        # not happen, and re-running it (or re-pulling the post once the signed
+        # URL is dead) puts it right.
+        urls = _picture_urls(thumbnail_path, gallery)
+        remote = [u for u in urls if _is_remote(u)]
+        remote_pictures += len(remote)
+        expiring = [u for u in remote if _expires(u)]
+        if expiring:
+            expiring_pictures += len(expiring)
+            expiring_memos.append(str(memo_id))
 
     return {
         "memos": memos,
@@ -113,6 +177,14 @@ def _scan_sync() -> dict:
         "with_thumb": with_thumb,
         "missing_thumbs": missing_thumbs,
         "silent_videos": silent_videos,
+        # Un-localized pictures. `remote_pictures` includes stable hosts (Apple
+        # artwork, YouTube covers) which are untidy but not urgent;
+        # `expiring_pictures` is the subset on a countdown.
+        "remote_pictures": remote_pictures,
+        "expiring_pictures": expiring_pictures,
+        # Capped: this rides in the settings JSON, and the point is to name the
+        # memos to repair, not to mirror the table.
+        "expiring_memo_ids": expiring_memos[:50],
     }
 
 
@@ -159,6 +231,16 @@ async def run_integrity_check() -> dict:
         log.info(
             "library integrity: %d media and %d thumbnails missing (unchanged)",
             scan["missing_media"], scan["missing_thumbs"],
+        )
+
+    # Separate line, separate severity: these pictures are still on screen
+    # today. Saying it while the URLs are alive is the whole value — once they
+    # expire the only repair left is re-pulling the post.
+    if scan.get("expiring_pictures"):
+        log.warning(
+            "library integrity: %d picture(s) across %d memo(s) never downloaded and "
+            "sit on expiring URLs — POST /api/maintenance/relocalize-pictures to fix",
+            scan["expiring_pictures"], len(scan.get("expiring_memo_ids") or []),
         )
     return result
 

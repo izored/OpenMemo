@@ -755,7 +755,7 @@ function TelegramRelayRows({ profile, save }: { profile: AppSettings | null; sav
         <div className="om-setting-row-text">
           <p>Telegram capture</p>
           <span className="mono">
-            Share any link to your private bot chat and it lands here, filed into "{profile?.telegram_default_collection || 'IG Inbox'}". openMemo polls Telegram outbound — no open ports, and messages queue while this machine sleeps. {statusLine}
+            Share any link to your private bot chat and it lands here, filed into "{profile?.telegram_default_collection || 'Bot Inbox'}". openMemo polls Telegram outbound — no open ports, and messages queue while this machine sleeps. {statusLine}
           </span>
         </div>
         <button
@@ -1120,7 +1120,7 @@ export function SettingsPage() {
       })
       .catch(() => {
         setMaxUploadMb(5120);
-        setProfile({ max_upload_mb: 5120, display_name: '', email: '', avatar_data_url: '', mailing_list_consent: false, auto_download_audio: true, auto_download_video: true, music_quality: '16', music_provider: 'qobuz', chat_model: '', num_ctx: 0, yt_cookies_present: false, bg_image_ext: '', hidden_passcode_set: false, telegram_enabled: false, telegram_poll_minutes: 15, telegram_default_collection: 'IG Inbox', telegram_force_localize: true, telegram_token_present: false, telegram_user_locked: false, music_relay_enabled: false, mesh_enabled: false, mesh_reachable: false, settings_card_layout: {} });
+        setProfile({ max_upload_mb: 5120, display_name: '', email: '', avatar_data_url: '', mailing_list_consent: false, auto_download_audio: true, auto_download_video: true, music_quality: '16', music_provider: 'qobuz', chat_model: '', num_ctx: 0, yt_cookies_present: false, bg_image_ext: '', hidden_passcode_set: false, telegram_enabled: false, telegram_poll_minutes: 15, telegram_default_collection: 'Bot Inbox', telegram_force_localize: true, telegram_token_present: false, telegram_user_locked: false, music_relay_enabled: false, mesh_enabled: false, mesh_reachable: false, settings_card_layout: {} });
       });
   }, []);
 

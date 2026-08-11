@@ -4,7 +4,7 @@ from pathlib import Path
 
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
-from sqlalchemy import delete, text
+from sqlalchemy import delete, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.config import settings
@@ -197,10 +197,67 @@ async def localize_content():
     return await localize_all()
 
 
+@router.post("/relocalize-pictures")
+async def relocalize_pictures(
+    expiring_only: bool = True,
+    dry_run: bool = False,
+    db: AsyncSession = Depends(get_db),
+):
+    """Copy to disk every picture that is still served from someone else's URL.
+
+    The repair half of the integrity check's `expiring_pictures` count. Each
+    memo gets one queued job, so this returns immediately and the work drains
+    at the queue's pace rather than firing a download per slide at once.
+
+    `expiring_only` (default) limits it to hosts that hand out signed links —
+    the ones on a clock. Pass false to also tidy the stable remotes (Apple
+    artwork, YouTube covers), which render fine but are not ours.
+    """
+    from backend.api.ingest import relocalize_pictures_task
+    from backend.core.integrity import _expires, _is_remote, _picture_urls
+    from backend.core.job_handlers import queue_task
+
+    rows = (
+        await db.execute(
+            select(Memo.id, Memo.thumbnail_path, Memo.gallery, Memo.source_domain).where(
+                Memo.is_deleted.is_(False)
+            )
+        )
+    ).all()
+
+    targets = []
+    for memo_id, thumbnail_path, gallery, source_domain in rows:
+        remote = [u for u in _picture_urls(thumbnail_path, gallery) if _is_remote(u)]
+        if not remote:
+            continue
+        if expiring_only and not any(_expires(u) for u in remote):
+            continue
+        targets.append({"id": memo_id, "domain": source_domain, "pictures": len(remote)})
+
+    if not dry_run:
+        for t in targets:
+            queue_task(relocalize_pictures_task, t["id"])
+
+    return {
+        "queued": 0 if dry_run else len(targets),
+        "memos": len(targets),
+        "pictures": sum(t["pictures"] for t in targets),
+        "expiring_only": expiring_only,
+        "dry_run": dry_run,
+        "targets": targets[:50],
+    }
+
+
 @router.post("/clear-cache")
 async def clear_cache():
-    """Delete locally-cached thumbnail previews. Safe — they re-cache on next
-    fetch / re-ingest."""
+    """Delete locally-cached thumbnail previews.
+
+    NOT as safe as it sounds, and the name is the only warning you get: a
+    localized thumbnail lives here and its `thumbnail_path` points at it, with
+    the original remote URL long gone from the row. Deleting the file leaves
+    nothing to re-cache from, and the memo needs a re-pull to get a cover back.
+    Only previews for memos that still hold a remote URL truly re-fetch.
+    """
     thumbs = Path(settings.FILES_DIR) / "thumbs"
     freed = _dir_size(thumbs)
     _empty_dir(thumbs)

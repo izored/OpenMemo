@@ -2,9 +2,12 @@
 # Usage: .\dev.ps1
 $root = $PSScriptRoot
 
-# Backend in a new visible terminal on port 8099 (avoid Windows-reserved ports)
+# Backend in a new visible terminal on port 8099 (avoid Windows-reserved ports).
+# OPENMEMO_DISABLE_TELEGRAM: a dev backend must not poll the bot. Telegram hands
+# each message to one caller only, so a second poller silently splits the user's
+# phone captures between two databases instead of duplicating them.
 Start-Process powershell -ArgumentList "-NoExit", "-Command",
-  "Set-Location '$root'; uvicorn backend.main:app --reload --port 8099"
+  "Set-Location '$root'; `$env:OPENMEMO_DISABLE_TELEGRAM = '1'; uvicorn backend.main:app --reload --port 8099"
 
 Start-Sleep -Seconds 1
 

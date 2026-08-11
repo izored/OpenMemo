@@ -13,6 +13,7 @@ from backend.db.models import Memo
 from backend.db.fts5 import search_fts5
 from backend.core.embedder import search_similar
 from backend.core.security import sanitize_workspace_id
+from backend.core.pictures import serve_pictures
 
 router = APIRouter(prefix="/api/search", tags=["search"])
 
@@ -55,7 +56,7 @@ async def hybrid_search(
                 for memo in memos:
                     if memo.id not in existing_ids:
                         existing_ids.add(memo.id)
-                        results.append({
+                        results.append(serve_pictures({
                             "id": memo.id,
                             "type": memo.type,
                             "title": memo.title,
@@ -64,7 +65,7 @@ async def hybrid_search(
                             "thumbnail_path": memo.thumbnail_path,
                             "created_at": memo.created_at.isoformat(),
                             "match_type": "semantic",
-                        })
+                        }))
     except Exception as e:
         logger.warning("Semantic search error: %s", e)
     
@@ -83,7 +84,7 @@ async def hybrid_search(
                 for memo in memos:
                     if memo.id not in existing_ids:
                         existing_ids.add(memo.id)
-                        results.append({
+                        results.append(serve_pictures({
                             "id": memo.id,
                             "type": memo.type,
                             "title": memo.title,
@@ -92,7 +93,7 @@ async def hybrid_search(
                             "thumbnail_path": memo.thumbnail_path,
                             "created_at": memo.created_at.isoformat(),
                             "match_type": "fulltext",
-                        })
+                        }))
         else:
             # Fallback to ilike if FTS5 not available
             async with AsyncSessionLocal() as db:
@@ -109,7 +110,7 @@ async def hybrid_search(
                 for memo in ft_memos:
                     if memo.id not in existing_ids:
                         existing_ids.add(memo.id)
-                        results.append({
+                        results.append(serve_pictures({
                             "id": memo.id,
                             "type": memo.type,
                             "title": memo.title,
@@ -118,7 +119,7 @@ async def hybrid_search(
                             "thumbnail_path": memo.thumbnail_path,
                             "created_at": memo.created_at.isoformat(),
                             "match_type": "fulltext",
-                        })
+                        }))
     except Exception as e:
         logger.warning("Full-text search error: %s", e)
     

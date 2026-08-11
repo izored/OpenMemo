@@ -1,7 +1,11 @@
 import type { Memo, MemoType } from '@/types';
 
-// Domains that use hotlink protection — proxy through backend.
-export const HOTLINK_DOMAINS = ['dribbble.com', 'behance.net', 'pinterest.com', 'cdn.dribbble.com'];
+// There is no hotlink list here any more, on purpose. It existed so cards could
+// render straight from dribbble/behance/pinterest through /api/proxy/image, and
+// that is the design openMemo is not supposed to have: a picture on a card is a
+// file on this machine, never a request to the source. See mediaSrc below and
+// backend/core/pictures.py. The proxy route itself stays, since it also writes
+// the fetched image to disk and is how a repair pass rescues a hotlinked cover.
 
 /**
  * Gating predicate for the "Make it local" panel.
@@ -139,15 +143,21 @@ export function isMemoWorking(memo: Memo): boolean {
   return memo.is_processed === false;
 }
 
+/**
+ * The image to render for a memo, or null for the type placeholder.
+ *
+ * Never returns a remote URL. A card that fetches its own picture from the
+ * source is a live window onto someone else's server, not a saved thing, and
+ * it goes blank whenever they decide — which is what happened to six
+ * Instagram carousels in August 2026. The backend already strips remote image
+ * URLs on the way out (backend/core/pictures.py); this is the second half of
+ * the same rule, so a stale cached payload cannot reintroduce a hotlink.
+ *
+ * A memo whose picture has not landed yet reports `pictures_pending`, and the
+ * card shows its placeholder until the download catches up.
+ */
 export function mediaSrc(memo: Memo): string | null {
-  if (memo.thumbnail_path) {
-    if (memo.thumbnail_path.startsWith('http')) {
-      const needsProxy = HOTLINK_DOMAINS.some((d) => memo.thumbnail_path!.includes(d));
-      if (needsProxy)
-        return `/api/proxy/image?url=${encodeURIComponent(memo.thumbnail_path)}&memo_id=${memo.id}`;
-    }
-    return memo.thumbnail_path;
-  }
+  if (memo.thumbnail_path && !memo.thumbnail_path.startsWith('http')) return memo.thumbnail_path;
   if (memo.type === 'image' && memo.file_path) return `/api/memos/${memo.id}/file`;
   return null;
 }
