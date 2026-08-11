@@ -15,6 +15,8 @@ All notable changes to OpenMemo are documented here.
 
 - 🔒 **Every picture on a card is now a file on your machine, with no exceptions.** openMemo used to write the source's own image URL into a memo and swap it for a local copy a moment later in the background. When that swap failed, and it failed three different ways, the memo kept the URL forever: the card looked right because your browser was fetching the picture from Instagram, or Dribbble, or wherever, every single time you scrolled past it. Nothing was saved and nothing said so. Pictures are now downloaded before the memo is written, so the local path is what lands in the database in the first place, and anything that still slips through is stripped on the way out to the browser rather than rendered. A picture that has not arrived yet shows a placeholder and says it is pending. The one deliberate exception is unchanged and is about disk space, not pictures: a long video or track on a host with a working player stays remote until you ask for it.
 
+- 🖼️ **Re-pulling a photo post no longer marks it failed.** Re-pull runs the video downloader after it re-reads the source, and a photo post has no video in it, so every carousel came back wearing a red error chip that said "no video formats found". The pictures were fine, and the pictures are the whole content. A memo that resolves to photos now skips the download step entirely instead of failing at it.
+
 ### Changed
 
 - 🤖 **The bot's default collection is called "Bot Inbox".** It was "IG Inbox", which described the first week of using it rather than what it does. The relay has always saved any link the app can handle, Instagram or not. Existing collections keep their names, and the setting is still yours to change.

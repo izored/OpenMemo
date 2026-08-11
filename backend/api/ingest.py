@@ -2663,16 +2663,34 @@ async def repull_memo_task(memo_id: str, mode: str):
             log.info("repull: instagram re-resolve failed for %s: %r", memo_id, e)
 
     # 2. The download. Sets localize_status itself, done | error.
-    try:
-        await localize_memo_task(memo_id, mode)
-    except Exception as e:
-        log.warning("repull: localize crashed for %s: %r", memo_id, e)
-        async with AsyncSessionLocal() as db:
-            memo = await db.get(Memo, memo_id)
-            if memo:
-                memo.localize_status = "error"
-                memo.localize_error = str(e)[:300]
-                await db.commit()
+    #
+    # Unless there is nothing to download. A photo post has no media stream, so
+    # handing it to yt-dlp buys one guaranteed "No video formats found" and a
+    # red error chip on a memo whose pictures are perfectly fine. Repairing the
+    # six rotted carousels marked all six failed for exactly this reason. The
+    # pictures ARE the content here, and step 1 already fetched them.
+    async with AsyncSessionLocal() as db:
+        memo = await db.get(Memo, memo_id)
+        pictures_only = bool(memo) and (memo.type or "").lower() == "image"
+        if pictures_only:
+            memo.localize_status = None
+            memo.localize_error = None
+            memo.updated_at = datetime.utcnow()
+            await db.commit()
+
+    if pictures_only:
+        log.info("repull: %s is a picture memo, skipping the media download", memo_id)
+    else:
+        try:
+            await localize_memo_task(memo_id, mode)
+        except Exception as e:
+            log.warning("repull: localize crashed for %s: %r", memo_id, e)
+            async with AsyncSessionLocal() as db:
+                memo = await db.get(Memo, memo_id)
+                if memo:
+                    memo.localize_status = "error"
+                    memo.localize_error = str(e)[:300]
+                    await db.commit()
 
     # 3. The cover, last, so a freshly downloaded video can supply a frame.
     try:

@@ -81,3 +81,69 @@ def test_a_previous_failure_is_cleared_before_retrying(client):
     fresh = client.get(f"/api/memos/{memo_id}").json()
     assert fresh["localize_status"] == "pending"
     assert not fresh.get("localize_error")
+
+
+class TestAPictureMemoIsNotHandedToTheVideoDownloader:
+    """Repairing the six rotted carousels marked all six as failed.
+
+    A photo post has no media stream. Running yt-dlp against it buys one
+    guaranteed "No video formats found", which lands on the memo as
+    `localize_error` and shows a red chip on a card whose pictures are fine.
+    The pictures ARE the content, and the re-resolve step already fetched them.
+    """
+
+    async def test_an_image_memo_skips_the_download_and_clears_the_error(self, monkeypatch):
+        import uuid
+
+        from backend.api import ingest
+        from backend.db.database import AsyncSessionLocal
+        from backend.db.models import Memo
+
+        memo_id = str(uuid.uuid4())
+        async with AsyncSessionLocal() as db:
+            db.add(Memo(
+                id=memo_id,
+                type="image",
+                title="carousel",
+                source_url="https://example.com/photos/1",
+                thumbnail_path="/api/files/thumb/x.jpg",
+                localize_status="error",
+                localize_error="yt-dlp failed: No video formats found!",
+            ))
+            await db.commit()
+
+        async def boom(*a, **kw):
+            raise AssertionError("a picture memo must never reach the media downloader")
+
+        monkeypatch.setattr(ingest, "localize_memo_task", boom)
+
+        await ingest.repull_memo_task(memo_id, "video")
+
+        async with AsyncSessionLocal() as db:
+            memo = await db.get(Memo, memo_id)
+            assert memo.localize_status is None
+            assert memo.localize_error is None
+
+    async def test_a_video_memo_still_downloads(self, monkeypatch):
+        import uuid
+
+        from backend.api import ingest
+        from backend.db.database import AsyncSessionLocal
+        from backend.db.models import Memo
+
+        memo_id = str(uuid.uuid4())
+        async with AsyncSessionLocal() as db:
+            db.add(Memo(id=memo_id, type="video", title="clip",
+                        source_url="https://example.com/watch/1"))
+            await db.commit()
+
+        called = []
+
+        async def fake(mid, mode, *a, **kw):
+            called.append((mid, mode))
+
+        monkeypatch.setattr(ingest, "localize_memo_task", fake)
+
+        await ingest.repull_memo_task(memo_id, "video")
+
+        assert called == [(memo_id, "video")]
