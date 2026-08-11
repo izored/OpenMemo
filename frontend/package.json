@@ -8,7 +8,10 @@
     "build": "tsc -b && vite build",
     "lint": "eslint .",
     "preview": "vite preview",
-    "test": "vitest run"
+    "test": "vitest run",
+    "fonts": "node scripts/fetch-fonts.mjs",
+    "predev": "node scripts/fetch-fonts.mjs",
+    "prebuild": "node scripts/fetch-fonts.mjs"
   },
   "dependencies": {
     "@dnd-kit/core": "^6.3.1",

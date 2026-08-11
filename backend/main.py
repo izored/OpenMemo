@@ -353,6 +353,9 @@ _thumb_store = SafePath(settings.FILES_DIR / "thumbs")
 _extracted_store = SafePath(settings.FILES_DIR / "extracted")
 
 
+_favicon_store = SafePath(settings.FILES_DIR / "favicons")
+
+
 # Must be registered BEFORE the catch-all /api/files/{file_path:path} (same
 # route-ordering gotcha as the thumb route). Serves locally-cached images
 # from extracted article content (public; only under files/extracted).
@@ -389,6 +392,23 @@ async def serve_thumb(name: str):
         ".jpg": "image/jpeg", ".jpeg": "image/jpeg",
         ".png": "image/png", ".gif": "image/gif",
     }.get(ext) or mimetypes.guess_type(str(target))[0] or "image/jpeg"
+    return FileResponse(str(target), media_type=media_type)
+
+
+@app.get("/api/files/favicon/{name}")
+async def serve_favicon(name: str):
+    """Serve a site icon from disk (public; only images under files/favicons).
+
+    One file per domain, fetched at ingest. Nothing here ever reaches out — see
+    backend/core/favicons.py for why the old Google-hosted URLs had to go.
+    """
+    target = _favicon_store.resolve(name)
+    if not target.exists():
+        raise HTTPException(status_code=404, detail="Favicon not found")
+    media_type = {
+        ".png": "image/png", ".ico": "image/x-icon", ".svg": "image/svg+xml",
+        ".webp": "image/webp", ".jpg": "image/jpeg", ".gif": "image/gif",
+    }.get(target.suffix.lower(), "image/png")
     return FileResponse(str(target), media_type=media_type)
 
 

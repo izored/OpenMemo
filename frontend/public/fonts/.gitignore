@@ -1,0 +1,6 @@
+# Fetched at build time by scripts/fetch-fonts.mjs.
+# Not committed: self-hosting is fine, redistributing the binaries from a
+# public repo is a separate decision. Runtime is offline either way.
+*.woff2
+*.woff
+*.ttf

@@ -248,6 +248,44 @@ async def relocalize_pictures(
     }
 
 
+@router.post("/localize-favicons")
+async def localize_favicons(dry_run: bool = False, db: AsyncSession = Depends(get_db)):
+    """Fetch one site icon per domain in the library, for the domains we lack.
+
+    Cheap by construction and the reason icons are per-domain: a 713-memo
+    library resolves to a few dozen distinct sites, and a domain already on disk
+    costs a `stat`. Safe to re-run, and re-running is how a domain that was
+    unreachable last week gets its icon.
+    """
+    from backend.core.favicons import ensure_local, ref_if_present
+
+    domains = [
+        d for (d,) in (
+            await db.execute(
+                select(Memo.source_domain)
+                .where(Memo.is_deleted.is_(False), Memo.source_domain.isnot(None))
+                .distinct()
+            )
+        ).all() if d
+    ]
+    missing = [d for d in domains if not ref_if_present(d)]
+
+    fetched: list[str] = []
+    failed: list[str] = []
+    if not dry_run:
+        for domain in missing:
+            (fetched if await ensure_local(domain) else failed).append(domain)
+
+    return {
+        "domains": len(domains),
+        "already_local": len(domains) - len(missing),
+        "missing": len(missing),
+        "fetched": len(fetched),
+        "failed": failed,
+        "dry_run": dry_run,
+    }
+
+
 @router.post("/clear-cache")
 async def clear_cache():
     """Delete locally-cached thumbnail previews.
