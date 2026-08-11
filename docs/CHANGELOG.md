@@ -9,7 +9,9 @@ All notable changes to OpenMemo are documented here.
 
 ### Fixed
 
-- 🔗 **Memo cards are real links, so ctrl+click opens one in a new tab.** openMemo had no links in it at all. Every card, row and tile was a plain box with a click handler, which a browser has no way to understand: ctrl+click did nothing, middle-click did nothing, right-click offered no "open in new tab" or "copy link address", the address never appeared in the status bar on hover, and keyboard users could not reach a memo at all. A card now carries a real link covering it, under the buttons, so every one of those works the way it does on any other website. The card looks and behaves exactly as before otherwise, including drag to reorder. The now-playing music card and its title got the same treatment.
+- 🔗 **Everything that goes somewhere is a real link now, so ctrl+click opens it in a new tab.** openMemo had no links in it at all. Every card, row and tile was a plain box with a click handler, which a browser has no way to understand: ctrl+click did nothing, middle-click did nothing, right-click offered no "open in new tab" or "copy link address", the address never appeared in the status bar on hover, and keyboard users could not reach a memo at all. A card now carries a real link covering it, under the buttons, so every one of those works the way it does on any other website. The card looks and behaves exactly as before otherwise, including drag to reorder. The same is true of Spaces, playlist tiles, search results, Ask citations, pinned memos in the sidebar and the now-playing card. Keyboard users can reach them all for the first time too.
+
+- 🖤 **The macOS loading screen is black and white.** It shimmered violet into sky blue with a violet glow on the spinner, none of which is an openMemo colour or a decision anyone made. It is greyscale now. The Ollama setup window had a stray purple on its button and focus ring as well, and uses the real accent instead.
 
 ### Fixed
 

@@ -6872,3 +6872,10 @@ button.om-add-link { background: none; border: 0; padding: 0; cursor: pointer; f
 .om-mesh-qr { display: flex; flex-direction: column; align-items: flex-start; gap: 6px; margin-top: 10px; }
 .om-mesh-qr img { width: 168px; height: 168px; background: #fff; border-radius: 8px; padding: 8px; }
 .om-mesh-qr .mono { font-size: 11.5px; color: var(--text-4); }
+
+/* Rows that became real links so they can be ctrl+clicked. They were <button>
+   and the styling assumed it, so this restores what the anchor changes: the
+   underline and the inherited link colour. Everything else already came from
+   the class. */
+.om-coll, .om-connected-row, .om-ask-source { text-decoration: none; }
+.om-coll:hover, .om-connected-row:hover, .om-ask-source:hover { text-decoration: none; }

@@ -1,5 +1,7 @@
 import React from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
+import { Link } from 'react-router-dom';
+import { isPlainClick } from '@/lib/nav';
 import { useQuery } from '@tanstack/react-query';
 import { useDroppable } from '@dnd-kit/core';
 import { motion } from 'framer-motion';
@@ -418,16 +420,20 @@ export function Sidebar() {
                     />
                   ))}
                   {pinnedMemos.map((m) => (
-                    <button
+                    <Link
                       key={`memo-${m.id}`}
+                      to={`/memo/${m.id}`}
                       className="om-coll pinned"
-                      onClick={() => { setActiveCollection(null); navigate(`/memo/${m.id}`); }}
+                      // Clearing the collection filter belongs to THIS tab. On a
+                      // ctrl+click the memo opens elsewhere and here should not move.
+                      onClick={(e) => { if (isPlainClick(e)) setActiveCollection(null); }}
                       title={m.title}
+                      draggable={false}
                     >
                       <span className="om-coll-dot" style={{ background: 'var(--accent)' }} />
                       <span className="om-coll-name">{m.title}</span>
                       <Icon name="pin" size={10} className="om-coll-count" />
-                    </button>
+                    </Link>
                   ))}
                 </div>
               </div>

@@ -25,17 +25,36 @@ import { Link } from 'react-router-dom';
  * The accessible name is the card's title, so a screen reader reads "Blue
  * archive, link" rather than "link".
  */
-export function CardLink({ to, label, className }: { to: string; label: string; className?: string }) {
+export function CardLink({
+  to,
+  label,
+  className,
+  onClick,
+}: {
+  to: string;
+  label: string;
+  className?: string;
+  /**
+   * Side effect for the current tab, such as selecting the Space you just
+   * clicked. Guard it with `isPlainClick` (lib/nav): on a ctrl+click the page
+   * opens in a new tab and rearranging this one is exactly wrong.
+   */
+  onClick?: (e: React.MouseEvent) => void;
+}) {
   return (
     <Link
       to={to}
       className={className ? `om-cardlink ${className}` : 'om-cardlink'}
       aria-label={label}
       draggable={false}
-      // A plain click is handled by the anchor itself. Stopping it here keeps
-      // the card's own onClick from firing a second navigation to the same
-      // place, and leaves modified clicks entirely to the browser.
-      onClick={(e) => e.stopPropagation()}
+      onClick={(e) => {
+        // Never preventDefault: navigation is the anchor's job, and modified
+        // clicks belong entirely to the browser.
+        onClick?.(e);
+        // Keeps the card's own handler from firing a second navigation to the
+        // same place.
+        e.stopPropagation();
+      }}
     />
   );
 }
