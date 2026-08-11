@@ -79,30 +79,55 @@ every endpoint that renders it, and fails any payload builder that skips
 
 ---
 
-## 2. Rendering makes no network request
+## 2. Opening openMemo pings nobody. Only a deliberate act does.
 
-Displaying what is already saved must work with the machine offline. That
-covers the app shell, the typeface, the icons, the pictures, the article bodies.
+Stated as the user did, because it is sharper than "rendering makes no network
+request" and it puts the line in the right place:
+
+> Loading openMemo contacts no outside host, ever. Browsing, searching, opening
+> a memo: nothing. The only time a source is contacted is when I press play on
+> something I already know is remote because it is a big video or track, and
+> **then**, because I asked.
+
+The distinction that matters is **the trigger, not the resource.** "Rendering
+makes no request" is too weak: an embedded player is markup, so a rule about
+markup lets the iframe mount on open and ping the host before anyone has
+pressed anything. The user opened a memo; they did not ask to talk to YouTube.
+
+So the test for any outbound request is: *did the person just ask for this
+specific thing?*
 
 **The nuances, stated narrowly so they cannot be stretched:**
 
-| Allowed online | Why |
+| Allowed online | Trigger |
 |---|---|
-| Fetching new content | Saving a link, re-pulling a post, polling the bot. This is the act of going to get something. Offline it fails and says so. |
-| Heavy media | A long video or track on a host with a working player is not downloaded unless `auto_download_video` / `auto_download_audio` says so, because a library of them fills a disk. `source_url` and embed markup may name remote hosts. |
-| Checking for a new version | Cannot be answered locally. Must be best-effort, must never block a render. |
+| Fetching new content | Saving a link, re-pulling a post, the bot relay polling. The act of going to get something. Offline it fails and says so. |
+| Playing heavy media that was left remote | **Pressing play.** Not opening the memo, not scrolling past the card. A long video or track on a host with a working player is not downloaded unless `auto_download_video` / `auto_download_audio` says so, because a library of them fills a disk. Until play is pressed, the card shows the local poster we already hold. |
+| Checking for a new version | Only when asked. It cannot be answered locally, so it belongs behind a button, never fired by opening a screen. |
 
 Everything else comes off this machine. The typeface is vendored at build time
-rather than linked (`frontend/scripts/fetch-fonts.mjs`), the icons are fetched
-once per domain at ingest, and `index.html` loads nothing at all.
+(`frontend/scripts/fetch-fonts.mjs`), the icons are fetched once per domain at
+ingest, and `index.html` loads nothing at all.
 
 Note what is **not** restricted: `source_url` is exactly what openMemo should
 keep. Remembering where something came from is the point, and a stored link is
-inert until clicked. The rule is about requests made to *render*, not about
-links held in the data.
+inert until clicked. Storing a remote URL is fine. *Reaching* it unasked is not.
 
 **Test:** `test_offline.py` fails on any external URL in the app shell, any
 remote `@font-face`, and any code that mints a Google-hosted favicon URL.
+
+### Known gaps at the time of writing
+
+Recorded rather than glossed, because an ADR that describes an aspiration as a
+fact is worse than no ADR:
+
+1. **Embedded players mount on open.** `PlatformEmbed` renders its `<iframe>`
+   immediately, so opening a remote video memo contacts YouTube, Instagram or
+   `platform.twitter.com` before play is pressed. The rule above says it must
+   be a click-to-load facade over the local poster. Not yet built.
+2. **The version check fires unprompted.** Settings and the changelog modal
+   both call `api.github.com` on open. Best-effort and silent on failure, but
+   nobody asked. It belongs behind a button.
 
 ---
 
