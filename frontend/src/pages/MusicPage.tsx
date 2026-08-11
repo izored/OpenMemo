@@ -1,6 +1,7 @@
 import { useRef, useEffect, useState, type SyntheticEvent } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useNavigate, useParams } from 'react-router-dom';
+import { CardLink } from '@/components/CardLink';
 import { useQuery, useInfiniteQuery, useQueryClient } from '@tanstack/react-query';
 import { useDroppable } from '@dnd-kit/core';
 import { SortableContext, rectSortingStrategy, useSortable, arrayMove } from '@dnd-kit/sortable';
@@ -101,8 +102,8 @@ function PlaylistCover({ covers, size = 'md', kind = 'playlist', override = null
   );
 }
 
-function PlaylistCard({ p, onOpen, onPlay, isCurrent = false, playing = false }: {
-  p: MusicPlaylist; onOpen: () => void; onPlay: () => void; isCurrent?: boolean; playing?: boolean;
+function PlaylistCard({ p, onPlay, isCurrent = false, playing = false }: {
+  p: MusicPlaylist; onPlay: () => void; isCurrent?: boolean; playing?: boolean;
 }) {
   // Droppable under the same `col-` namespace the sidebar uses, so dragging a
   // track card from the library files it into the playlist — same gesture,
@@ -122,11 +123,11 @@ function PlaylistCard({ p, onOpen, onPlay, isCurrent = false, playing = false }:
     <div
       ref={setNodeRef}
       className={cn('om-pl-card', isOver && 'drop-over', isCurrent && 'is-playing')}
-      onClick={onOpen}
-      role="button"
-      tabIndex={0}
-      onKeyDown={(e) => e.key === 'Enter' && onOpen()}
     >
+      {/* The tile is a real link now, so a playlist opens in a new tab like
+          anything else. It replaced a div with role="button", which also means
+          the Enter key works for free instead of via a handler. */}
+      <CardLink to={`/music/${p.id}`} label={p.name} />
       <div className="om-pl-card-art">
         <PlaylistCover covers={p.covers} kind={p.music_kind} override={p.cover_url} />
         {/* The currently-playing playlist keeps its badge pinned (not hover-only)
@@ -283,8 +284,8 @@ function MusicTile({ m, index, active, playing, onPlay, onDownload, onRemove, on
 // `layout` + AnimatePresence let a freshly-pinned card slide the row right
 // (the prepend animation, OPNMMO music hero). Pinned cards also get hover
 // tools: change the background image and unpin/remove from the rail.
-function HeroCard({ p, onOpen, onPlay, isCurrent = false, playing = false, onEditCover, onUnpin }: {
-  p: MusicPlaylist; onOpen: () => void; onPlay: () => void; isCurrent?: boolean; playing?: boolean;
+function HeroCard({ p, onPlay, isCurrent = false, playing = false, onEditCover, onUnpin }: {
+  p: MusicPlaylist; onPlay: () => void; isCurrent?: boolean; playing?: boolean;
   onEditCover?: () => void; onUnpin?: () => void;
 }) {
   const isHero = p.music_kind === 'hero';
@@ -303,11 +304,8 @@ function HeroCard({ p, onOpen, onPlay, isCurrent = false, playing = false, onEdi
       exit={{ opacity: 0, scale: 0.85 }}
       transition={{ type: 'spring', stiffness: 420, damping: 34 }}
       className={cn('om-hero-card', isCurrent && 'is-playing', isHero && 'is-hero')}
-      onClick={onOpen}
-      role="button"
-      tabIndex={0}
-      onKeyDown={(e) => e.key === 'Enter' && onOpen()}
     >
+      <CardLink to={`/music/${p.id}`} label={p.name} />
       <div className="om-hero-art">
         {!single ? (
           <span className="om-hero-glyph"><Icon name={isHero ? 'image' : 'music'} size={40} /></span>
@@ -1323,7 +1321,6 @@ export function MusicPage() {
                 <HeroCard
                   key={p.id}
                   p={p}
-                  onOpen={() => navigate(`/music/${p.id}`)}
                   onPlay={() => playOrToggle(p)}
                   isCurrent={isPlayingSource(p.id)}
                   playing={playing}
@@ -1350,7 +1347,6 @@ export function MusicPage() {
               <PlaylistCard
                 key={p.id}
                 p={p}
-                onOpen={() => navigate(`/music/${p.id}`)}
                 onPlay={() => playOrToggle(p)}
                 isCurrent={isPlayingSource(p.id)}
                 playing={playing}
@@ -1407,7 +1403,6 @@ export function MusicPage() {
               <PlaylistCard
                 key={p.id}
                 p={p}
-                onOpen={() => navigate(`/music/${p.id}`)}
                 onPlay={() => playOrToggle(p)}
                 isCurrent={isPlayingSource(p.id)}
                 playing={playing}

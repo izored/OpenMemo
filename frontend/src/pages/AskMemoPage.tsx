@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { useNavigate, useLocation } from 'react-router-dom';
+import { useLocation, Link } from 'react-router-dom';
 import { Loader2 } from 'lucide-react';
 import { Icon } from '@/components/Icon';
 import { useAppStore } from '@/stores/appStore';
@@ -121,7 +121,6 @@ export function AskMemoPage() {
   const { chatModel, setChatModel } = useAppStore();
   const theme = useAppStore((s) => s.tweaks.theme);
   const beam = useBeamConfig();
-  const navigate = useNavigate();
   const location = useLocation();
   const queryClient = useQueryClient();
   const [messages, setMessages] = useState<Message[]>([]);
@@ -607,12 +606,12 @@ export function AskMemoPage() {
                     {msg.sources && msg.sources.length > 0 && (
                       <div className="om-msg-cards">
                         {msg.sources.map((s, i) => (
-                          <button
+                          <Link
                             key={i}
-                            type="button"
+                            to={s.memo_id ? `/memo/${s.memo_id}` : '#'}
                             className="om-ask-source"
-                            onClick={() => s.memo_id && navigate(`/memo/${s.memo_id}`)}
                             title={s.title}
+                            draggable={false}
                           >
                             <span className="om-ask-source-num mono">{i + 1}</span>
                             <span className="om-ask-source-title">{s.title}</span>
@@ -621,7 +620,7 @@ export function AskMemoPage() {
                               <Icon name="arrowUpRight" size={11} />
                               See memo
                             </span>
-                          </button>
+                          </Link>
                         ))}
                       </div>
                     )}

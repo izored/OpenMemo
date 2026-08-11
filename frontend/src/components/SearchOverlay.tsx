@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { Link } from 'react-router-dom';
+import { isPlainClick } from '@/lib/nav';
 import { Icon } from './Icon';
 import { searchApi } from '@/lib/api';
 import { useAppStore } from '@/stores/appStore';
@@ -8,7 +9,6 @@ import type { Memo } from '@/types';
 export function SearchOverlay() {
   const open = useAppStore((s) => s.searchOpen);
   const setOpen = useAppStore((s) => s.setSearchOpen);
-  const navigate = useNavigate();
   const [q, setQ] = useState('');
   const [results, setResults] = useState<Memo[]>([]);
   const [loading, setLoading] = useState(false);
@@ -54,9 +54,11 @@ export function SearchOverlay() {
 
   if (!open) return null;
 
-  const go = (id: string) => {
-    setOpen(false);
-    navigate(`/memo/${id}`);
+  // Closing the overlay is a change to THIS tab, so it only happens on a
+  // plain click. Ctrl+click opens the result elsewhere and leaves the search
+  // where it is, which is the whole point of ctrl+click.
+  const go = (e: React.MouseEvent) => {
+    if (isPlainClick(e)) setOpen(false);
   };
 
   return (
@@ -82,11 +84,11 @@ export function SearchOverlay() {
             <p className="om-add-hint mono">No results.</p>
           )}
           {results.map((r) => (
-            <button key={r.id} className="om-connected-row" onClick={() => go(r.id)}>
+            <Link key={r.id} to={`/memo/${r.id}`} className="om-connected-row" onClick={go} draggable={false}>
               <Icon name="fileText" size={12} />
               <span className="om-connected-title">{r.title}</span>
               <span className="om-connected-date mono">{r.source_domain || r.type}</span>
-            </button>
+            </Link>
           ))}
         </div>
       </div>
