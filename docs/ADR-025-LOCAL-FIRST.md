@@ -121,10 +121,17 @@ remote `@font-face`, and any code that mints a Google-hosted favicon URL.
 Recorded rather than glossed, because an ADR that describes an aspiration as a
 fact is worse than no ADR:
 
-1. **Embedded players mount on open.** `PlatformEmbed` renders its `<iframe>`
-   immediately, so opening a remote video memo contacts YouTube, Instagram or
-   `platform.twitter.com` before play is pressed. The rule above says it must
-   be a click-to-load facade over the local poster. Not yet built.
+1. ~~**Embedded players mount on open.**~~ Closed. `PlatformEmbed` holds the
+   frame with the local poster and the usual play chip, and the `<iframe>` is
+   created on the click. Audio does the same: the source widget starts
+   collapsed and its iframe exists only while it is open. A transcript
+   timestamp arms and seeks in one go, since clicking a timestamp is a play
+   request.
+
+   **The lightbox is treated as consent**, and this is a judgement rather than
+   an oversight. Opening it means clicking that memo's media specifically, not
+   browsing past it, so the player appearing is the thing you asked for. If
+   that ever feels wrong, the fix is the same facade one level in.
 2. **The version check fires unprompted.** Settings and the changelog modal
    both call `api.github.com` on open. Best-effort and silent on failure, but
    nobody asked. It belongs behind a button.

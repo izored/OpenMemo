@@ -7,6 +7,10 @@ All notable changes to OpenMemo are documented here.
 
 <!-- Add entries here as work lands: ### Added / ### Changed / ### Fixed -->
 
+### Fixed
+
+- 🔌 **Opening a memo no longer contacts YouTube, Instagram or X.** An embedded player was built the moment a memo appeared on screen, so simply reading something you had saved reached out to the site it came from before you pressed anything. The frame now holds the picture openMemo already has on your disk, with the same play button it has always used, and the real player is created when you click it. Nothing looks different and nothing you do changes: press play and it plays. Music from SoundCloud, Bandcamp or YouTube works the same way, with the source player folded away until you open it. Clicking a timestamp in a transcript still jumps straight to that moment, because asking for a moment is asking to play.
+
 ---
 ## [3.10.0] - 2026-08-11
 

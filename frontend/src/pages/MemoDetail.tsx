@@ -282,11 +282,29 @@ function GalleryCarousel({ gallery, alt }: { gallery: GalleryItem[]; alt: string
 // (keyed by the seek nonce) to seek + autoplay.
 function PlatformEmbed({ memo, src, kind, aspectRatio, seek }: { memo: Memo; src: string; kind: 'video' | 'portrait' | 'card'; aspectRatio?: string; seek?: SeekSignal | null }) {
   const url = seek ? src + (src.includes('?') ? '&' : '?') + `start=${seek.sec}&autoplay=1` : src;
+
+  // The iframe does not exist until you ask for it (ADR-025 §2).
+  //
+  // Mounting it on render meant that merely OPENING a memo contacted YouTube,
+  // Instagram or platform.twitter.com, before anyone had pressed anything. A
+  // local-first app that phones the source when you look at a saved thing is
+  // not local-first, and "it is only markup" is not a defence: the request is
+  // the request.
+  //
+  // Nothing about the look changes. The frame keeps its size and shows the
+  // poster openMemo already holds on disk, with the same play affordance the
+  // un-embeddable case has always used. One click and the real player takes
+  // over exactly as before.
+  const [armed, setArmed] = useState(false);
+  // A transcript timestamp IS a play request, so it arms and seeks in one go.
+  useEffect(() => {
+    if (seek) setArmed(true);
+  }, [seek]);
   // Card embeds (X/Twitter) report their content height to the parent via
   // postMessage. Start at a sensible height, then track the real one.
   const [cardHeight, setCardHeight] = useState(560);
   useEffect(() => {
-    if (kind !== 'card') return;
+    if (kind !== 'card' || !armed) return;
     const onMsg = (e: MessageEvent) => {
       if (e.origin !== 'https://platform.twitter.com') return;
       let data: unknown = e.data;
@@ -301,9 +319,31 @@ function PlatformEmbed({ memo, src, kind, aspectRatio, seek }: { memo: Memo; src
     };
     window.addEventListener('message', onMsg);
     return () => window.removeEventListener('message', onMsg);
-  }, [kind]);
+  }, [kind, armed]);
+
+  // Shown until the click. Same frame, the poster we own, the same play chip.
+  const facade = (label: string) => (
+    <button
+      type="button"
+      className={cn('om-detail-poster om-embed-facade', !memo.thumbnail_path && 'no-thumb')}
+      onClick={() => setArmed(true)}
+      aria-label={label}
+    >
+      {memo.thumbnail_path && <img src={memo.thumbnail_path} alt={memo.title} />}
+      <span className="om-detail-poster-play">
+        <Play size={22} style={{ fill: 'currentColor' }} />
+      </span>
+    </button>
+  );
 
   if (kind === 'card') {
+    if (!armed) {
+      return (
+        <div className="om-video-embed om-video-embed--card" style={{ marginBottom: '24px' }}>
+          {facade(`Load this post from ${memo.source_domain || 'the source'}`)}
+        </div>
+      );
+    }
     return (
       <div className="om-video-embed om-video-embed--card" style={{ marginBottom: '24px' }}>
         <iframe
@@ -324,6 +364,7 @@ function PlatformEmbed({ memo, src, kind, aspectRatio, seek }: { memo: Memo; src
       className={`om-video-embed${kind === 'portrait' ? ' om-video-embed--portrait' : ''}`}
       style={{ marginBottom: '24px', aspectRatio: aspectRatio ?? (kind === 'portrait' ? '9/16' : '16/9') }}
     >
+      {!armed ? facade(`Play from ${memo.source_domain || 'the source'}`) : (
       <iframe
         key={seek?.nonce ?? 'base'}
         src={url}
@@ -332,6 +373,7 @@ function PlatformEmbed({ memo, src, kind, aspectRatio, seek }: { memo: Memo; src
         scrolling="no"
         title={memo.title}
       />
+      )}
     </div>
   );
 }
@@ -826,9 +868,16 @@ function VideoContentPanel({ memo }: { memo: Memo }) {
 function AudioStreamEmbed({ memo, reference = false }: { memo: Memo; reference?: boolean }) {
   const queryClient = useQueryClient();
   const [saving, setSaving] = useState(false);
-  // When the track is already local (reference embed), the source widget is just
-  // a secondary reference — collapse it by default.
-  const [collapsed, setCollapsed] = useState(reference);
+  // Always starts collapsed, and the iframe below only exists while it is open,
+  // so opening a memo never contacts SoundCloud, Bandcamp or YouTube (ADR-025
+  // §2). Audio follows the same rule as video: the source is reached when you
+  // ask for it, not when you look at the memo.
+  //
+  // `reference` (the track is already local, so this widget is only a pointer
+  // back to where it came from) no longer changes the initial state, because
+  // the initial state is now collapsed either way. It stays a prop because the
+  // heading copy still uses it.
+  const [collapsed, setCollapsed] = useState(true);
   const embed = audioEmbed(memo);
   const meta = audioPlatformMeta(memo);
   const sourceName = meta?.label || memo.source_domain || 'the source';

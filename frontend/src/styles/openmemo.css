@@ -1593,6 +1593,20 @@ input, textarea { font: inherit; color: inherit; }
                          display: inline-flex; align-items: center; gap: 6px; padding: 6px 10px;
                          border-radius: 999px; background: rgba(0,0,0,.6); color: #fff;
                          font-size: 12px; backdrop-filter: blur(4px); }
+/* The embed facade: what sits in the frame before you press play.
+   It reuses .om-detail-poster wholesale so it looks like the poster openMemo
+   already shows for un-embeddable video, rather than introducing a second
+   visual language. The only differences are that it is a <button>, so it
+   needs the button reset, and that it fills its frame rather than shrinking
+   to the image, because the frame's aspect ratio is already correct. */
+.om-embed-facade {
+  display: block; width: 100%; height: 100%;
+  margin: 0; padding: 0; border: 0; cursor: pointer;
+  background: var(--surface-2);
+}
+.om-embed-facade img { width: 100%; height: 100%; max-height: none; object-fit: cover; }
+.om-video-embed .om-embed-facade { border-radius: inherit; }
+
 .om-ai-rerun { display: inline-flex; align-items: center; gap: 4px; margin-left: 8px; font-size: 11px; color: var(--accent); font-family: var(--font-mono); }
 .om-connected { display: flex; flex-direction: column; gap: 1px; }
 .om-connected-row { display: grid; grid-template-columns: 16px 1fr auto; gap: 10px; align-items: center; padding: 8px 10px; border-radius: 8px; transition: background .15s; }
