@@ -2,6 +2,7 @@ import React from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Link } from 'react-router-dom';
 import { CardLink } from './CardLink';
+import { isPlainClick } from '@/lib/nav';
 import { useQueryClient } from '@tanstack/react-query';
 import type { DraggableAttributes } from '@dnd-kit/core';
 import { Icon } from './Icon';
@@ -180,7 +181,9 @@ function Chrome({
   children: React.ReactNode;
   dataTint?: number;
   onCardClick?: () => void;
-  onOpen?: (e: React.MouseEvent) => void;
+  /** Show the open-in-page arrow. The destination is the memo, always, so
+   *  this is a flag rather than a handler: the arrow is a real link. */
+  onOpen?: boolean;
   confirmOverlay?: React.ReactNode;
   playerOverlay?: React.ReactNode;
 }) {
@@ -201,14 +204,25 @@ function Chrome({
       /* ignore — next click retries */
     }
   };
-  // A card that just opens its memo gets a real anchor covering it, so every
-  // way a browser opens a link works. A card with custom click behaviour (a
-  // picker, a selection mode) keeps the handler, because there is no URL to
-  // put in an href.
-  const linksToMemo = !onCardClick;
-  const handleClick = () => {
-    if (onCardClick) onCardClick();
-  };
+  // EVERY card is covered by a real anchor to its memo, including the ones
+  // whose plain click does something else.
+  //
+  // An image or a playable video opens the lightbox when you click it, which
+  // is right, and the first pass therefore skipped the anchor on those cards
+  // entirely. That left them with no way to be opened in a new tab at all,
+  // which is exactly what this whole change was for.
+  //
+  // So the anchor is always there and the lightbox intercepts only the plain
+  // click. A modified click is never touched, so ctrl+click and middle-click
+  // open the memo page, right-click offers copy-link-address, and the status
+  // bar shows where it goes. The lightbox behaves exactly as before.
+  const interceptPlainClick = onCardClick
+    ? (e: React.MouseEvent) => {
+        if (!isPlainClick(e)) return;
+        e.preventDefault();
+        onCardClick();
+      }
+    : undefined;
   return (
     <div
       {...(dragHandleProps?.attributes || {})}
@@ -216,9 +230,8 @@ function Chrome({
       className={cn('om-card om-card-hover', isMemoWorking(memo) && 'is-working', className)}
       style={style}
       data-tint={dataTint !== undefined ? String(dataTint) : undefined}
-      onClick={onCardClick ? handleClick : undefined}
     >
-      {linksToMemo && <CardLink to={`/memo/${memo.id}`} label={memo.title} />}
+      <CardLink to={`/memo/${memo.id}`} label={memo.title} onClick={interceptPlainClick} />
       {bgSrc && (
         <div className="om-card-dom" aria-hidden>
           <span style={{ backgroundImage: `url(${bgSrc})` }} />
@@ -245,9 +258,16 @@ function Chrome({
       <AnimatePresence>{playerOverlay}</AnimatePresence>
       <div className="om-card-actions">
         {onOpen && (
-          <button className="om-action" onClick={onOpen} data-tip="Open memo page" aria-label="Open memo">
+          <Link
+            to={`/memo/${memo.id}`}
+            className="om-action"
+            onClick={(e) => e.stopPropagation()}
+            draggable={false}
+            data-tip="Open memo page"
+            aria-label="Open memo"
+          >
             <Icon name="arrowUpRight" size={14} />
-          </button>
+          </Link>
         )}
         {isMusicCard && (
           <button
@@ -458,11 +478,6 @@ export function MemoCard({ memo, dragHandleProps, lightboxGroup }: CardProps) {
     openLightbox(group, idx >= 0 ? idx : 0);
   };
 
-  const goDetail = (e: React.MouseEvent) => {
-    e.stopPropagation();
-    navigate(`/memo/${memo.id}`);
-  };
-
   const handleDelete = (e: React.MouseEvent) => {
     e.stopPropagation();
     setConfirmDeleteOpen(true);
@@ -553,7 +568,7 @@ export function MemoCard({ memo, dragHandleProps, lightboxGroup }: CardProps) {
         memo={memo}
         dragHandleProps={dragHandleProps}
         onDelete={handleDelete} onPin={handlePin}
-        onOpen={goDetail}
+        onOpen
         className="om-card-note"
         dataTint={tintIdx}
         confirmOverlay={confirmOverlay}
@@ -588,7 +603,7 @@ export function MemoCard({ memo, dragHandleProps, lightboxGroup }: CardProps) {
           bgSrc={src}
           className="om-card-image"
           onCardClick={showInLightbox}
-          onOpen={goDetail}
+          onOpen
           confirmOverlay={confirmOverlay}
         >
           <div className="om-image-frame" data-orient={imageOrient} style={{ background: heroBg, ...(imageAR ? { ['--card-ar']: imageAR } : {}) } as React.CSSProperties}>
@@ -649,7 +664,7 @@ export function MemoCard({ memo, dragHandleProps, lightboxGroup }: CardProps) {
           bgSrc={src}
           className="om-card-video"
           onCardClick={canPlay ? showInLightbox : undefined}
-          onOpen={goDetail}
+          onOpen
           confirmOverlay={confirmOverlay}
         >
           <div className="om-video-frame" data-orient={videoOrient} style={{ background: heroBg, ...(videoAR ? { ['--card-ar']: videoAR } : {}) } as React.CSSProperties}>
@@ -690,7 +705,7 @@ export function MemoCard({ memo, dragHandleProps, lightboxGroup }: CardProps) {
   if (memo.type === 'document') {
     return (
       <>
-      <Chrome memo={memo} dragHandleProps={dragHandleProps} onDelete={handleDelete} onPin={handlePin} onOpen={goDetail} className="om-card-doc" confirmOverlay={confirmOverlay}>
+      <Chrome memo={memo} dragHandleProps={dragHandleProps} onDelete={handleDelete} onPin={handlePin} onOpen className="om-card-doc" confirmOverlay={confirmOverlay}>
         <div className="om-doc-frame">
           <div className="om-doc-stack">
             <span className="om-doc-page" />
@@ -718,7 +733,7 @@ export function MemoCard({ memo, dragHandleProps, lightboxGroup }: CardProps) {
     const ext = (memo.title.includes('.') ? memo.title.split('.').pop()! : '').toLowerCase();
     return (
       <>
-      <Chrome memo={memo} dragHandleProps={dragHandleProps} onDelete={handleDelete} onPin={handlePin} onOpen={goDetail} className="om-card-doc" confirmOverlay={confirmOverlay}>
+      <Chrome memo={memo} dragHandleProps={dragHandleProps} onDelete={handleDelete} onPin={handlePin} onOpen className="om-card-doc" confirmOverlay={confirmOverlay}>
         <div className="om-doc-frame">
           <FileBadge ext={ext} />
         </div>
@@ -781,7 +796,7 @@ export function MemoCard({ memo, dragHandleProps, lightboxGroup }: CardProps) {
           dragHandleProps={dragHandleProps}
           onDelete={handleDelete}
           onPin={handlePin}
-          onOpen={goDetail}
+          onOpen
           bgSrc={src}
           className={cn('om-card-audio', active && 'is-active', isMusic && 'is-music', richMusic && 'has-cover', isThisPlaying && 'is-playing')}
           confirmOverlay={confirmOverlay}
@@ -823,7 +838,7 @@ export function MemoCard({ memo, dragHandleProps, lightboxGroup }: CardProps) {
   const domain = rootDomain(memo.source_domain);
   return (
     <>
-    <Chrome memo={memo} dragHandleProps={dragHandleProps} onDelete={handleDelete} onPin={handlePin} onOpen={goDetail} bgSrc={src} className="om-card-link" confirmOverlay={confirmOverlay}>
+    <Chrome memo={memo} dragHandleProps={dragHandleProps} onDelete={handleDelete} onPin={handlePin} onOpen bgSrc={src} className="om-card-link" confirmOverlay={confirmOverlay}>
       <div className="om-card-hero" style={{ background: heroBg }}>
         {src ? (
           <img
