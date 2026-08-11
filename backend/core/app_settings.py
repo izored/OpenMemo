@@ -78,7 +78,9 @@ _DEFAULTS: dict[str, Any] = {
     # relay). Saves land in the named collection (auto-created if missing).
     "telegram_enabled": False,
     "telegram_poll_minutes": 15,
-    "telegram_default_collection": "IG Inbox",
+    # Named for the bot, not for Instagram: the relay saves any link the ingest
+    # pipeline handles, and always did.
+    "telegram_default_collection": "Bot Inbox",
     # Pull media locally for every bot save (video/audio download on save,
     # regardless of the embed-host rule) so an on-the-go capture survives
     # takedown without a manual "Make it local" visit. Off = bot saves follow

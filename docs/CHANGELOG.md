@@ -7,6 +7,16 @@ All notable changes to OpenMemo are documented here.
 
 <!-- Add entries here as work lands: ### Added / ### Changed / ### Fixed -->
 
+### Fixed
+
+- 📲 **Links shared to the bot can no longer vanish into a second copy of openMemo.** Telegram hands each message to exactly one asker and then forgets it, so two backends polling the same bot token do not both get your link, they take turns at random. If you had a development copy running alongside the real one, roughly half of everything you shared from your phone was saved into that copy's database instead. The bot replied "Saved" every time, because from its side it had been. Only one process on a machine may poll now: the development scripts switch the relay off outright, and the backend takes a lock the moment it starts polling so a second one backs off and says why in Settings rather than quietly competing.
+
+- 🖼️ **A picture that never made it onto your disk is now noticed while it can still be saved.** Instagram serves images from signed links that stop working after a few days. openMemo copies them locally on save, but when that copy failed there was nothing to say so: the memo committed, the card looked right, and the images died on their own schedule a week later. A download that fetches nothing is now an error the queue retries and records instead of a silent shrug, and the hourly library check counts pictures still pointing at a link with an expiry on it and names the memos holding them. There is a repair pass to go with it, which downloads what it can and re-reads the original post for fresh links when the old ones are already dead.
+
+### Changed
+
+- 🤖 **The bot's default collection is called "Bot Inbox".** It was "IG Inbox", which described the first week of using it rather than what it does. The relay has always saved any link the app can handle, Instagram or not. Existing collections keep their names, and the setting is still yours to change.
+
 ---
 ## [3.9.4] - 2026-08-09
 

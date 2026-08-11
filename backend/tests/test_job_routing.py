@@ -78,6 +78,9 @@ def _fake(name):
         # both run for the same memo and dedupe keys on (kind, memo_id). This
         # entry was missing entirely, so every carousel save raised.
         ("cache_gallery", ("m9",), "gallery", "m9", {}),
+        # Repair pass for pictures that were never copied to disk. Its own kind,
+        # so dedupe cannot collapse it into the ingest-time gallery job.
+        ("relocalize_pictures_task", ("m10",), "relocalize_pictures", "m10", {}),
         ("transcribe_memo_task", ("m3",), "transcribe", "m3", {}),
         ("transcript_memo_task", ("m4",), "transcript", "m4", {}),
         # auto-localize picks its own mode, so it must NOT carry one

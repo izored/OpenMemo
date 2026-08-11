@@ -215,6 +215,17 @@ async def _download_thumb(src: str, name_stem: str) -> str | None:
         return None
 
 
+class PictureNotLocalized(Exception):
+    """Nothing was copied to disk, so the memo still renders someone else's URL.
+
+    Raised rather than returned so the durable queue does what it is for:
+    retry with backoff, then park the job as `failed` with a reason attached.
+    The alternative is what shipped before — a silent `return`, a memo that
+    looks fine until the CDN link expires, and no record anywhere that the
+    download was ever attempted.
+    """
+
+
 async def cache_thumbnail(memo_id: str):
     """Download a remote thumbnail once and serve it locally."""
     async with AsyncSessionLocal() as db:
@@ -225,10 +236,11 @@ async def cache_thumbnail(memo_id: str):
         if not src.startswith("http"):
             return
         local = await _download_thumb(src, memo_id)
-        if local:
-            memo.thumbnail_path = local
-            memo.updated_at = datetime.utcnow()
-            await db.commit()
+        if not local:
+            raise PictureNotLocalized(f"thumbnail download failed: {src[:120]}")
+        memo.thumbnail_path = local
+        memo.updated_at = datetime.utcnow()
+        await db.commit()
 
 
 async def cache_gallery(memo_id: str):
@@ -243,14 +255,18 @@ async def cache_gallery(memo_id: str):
             return
         slides = list(memo.gallery)
         changed = False
+        attempted = failed = 0
         for i, slide in enumerate(slides):
             src = (slide or {}).get("url") if isinstance(slide, dict) else None
             if not src or not src.startswith("http"):
                 continue
+            attempted += 1
             local = await _download_thumb(src, f"{memo_id}_g{i}")
             if local:
                 slides[i] = {**slide, "url": local}
                 changed = True
+            else:
+                failed += 1
         if changed:
             memo.gallery = slides
             first = slides[0].get("url") if isinstance(slides[0], dict) else None
@@ -258,6 +274,87 @@ async def cache_gallery(memo_id: str):
                 memo.thumbnail_path = first
             memo.updated_at = datetime.utcnow()
             await db.commit()
+
+    # Partial success is kept (a dead slide should never cost the live ones),
+    # but the job still has to report the gap. A carousel where every slide
+    # failed is the exact shape of the six that rotted: committed, on screen,
+    # pointing entirely at signed URLs with days to live.
+    if failed:
+        raise PictureNotLocalized(
+            f"{failed}/{attempted} carousel slides not downloaded"
+        )
+
+
+async def relocalize_pictures_task(memo_id: str):
+    """Get a memo's pictures onto disk, re-resolving the post if the links died.
+
+    Repairing an un-localized picture has two cases and only one of them is a
+    download. While the signed URL is alive, fetching it is enough. Once it has
+    expired, no amount of retrying that URL helps — the post has to be resolved
+    again for a fresh set of links, and only then downloaded.
+
+    Deliberately narrower than `repull_memo_task`, which also runs yt-dlp: a
+    photo carousel handed to yt-dlp comes back "No video formats found" and
+    parks a `localize_error` on a memo whose only real problem was a picture
+    that was never copied.
+    """
+    from urllib.parse import urlparse
+
+    async def _pictures_are_local() -> bool:
+        async with AsyncSessionLocal() as db:
+            memo = await db.get(Memo, memo_id)
+            if not memo:
+                return True
+            urls = [memo.thumbnail_path] + [
+                (s or {}).get("url") for s in (memo.gallery or []) if isinstance(s, dict)
+            ]
+            return not any(u and str(u).startswith("http") for u in urls)
+
+    async def _cache() -> None:
+        async with AsyncSessionLocal() as db:
+            memo = await db.get(Memo, memo_id)
+            has_gallery = bool(memo and memo.gallery)
+        if has_gallery:
+            await cache_gallery(memo_id)
+        else:
+            await cache_thumbnail(memo_id)
+
+    try:
+        await _cache()
+        return
+    except PictureNotLocalized:
+        pass
+
+    # The links are dead. Instagram is the one host where re-resolving gets a
+    # working set back, so it is the only one worth a second attempt.
+    async with AsyncSessionLocal() as db:
+        memo = await db.get(Memo, memo_id)
+        source_url = memo.source_url if memo else None
+    if not source_url or "instagram.com" not in urlparse(source_url).netloc:
+        raise PictureNotLocalized(f"pictures unreachable and {source_url or 'no source'} cannot be re-resolved")
+
+    from backend.core.extractor import _instagram_resolve
+
+    resolved = await _instagram_resolve(source_url, "instagram.com")
+    gallery = resolved.get("gallery") or []
+    thumb = resolved.get("thumbnail_path") or (gallery[0]["url"] if gallery else None)
+    if not thumb:
+        raise PictureNotLocalized(f"re-resolve returned no picture for {source_url}")
+
+    async with AsyncSessionLocal() as db:
+        memo = await db.get(Memo, memo_id)
+        if not memo:
+            return
+        memo.resolve_tier = resolved.get("resolve_tier") or memo.resolve_tier
+        if len(gallery) > 1:
+            memo.gallery = gallery
+        memo.thumbnail_path = thumb
+        memo.updated_at = datetime.utcnow()
+        await db.commit()
+
+    await _cache()
+    if not await _pictures_are_local():
+        raise PictureNotLocalized("re-resolved, but pictures are still remote")
 
 
 # --- Background processing ---

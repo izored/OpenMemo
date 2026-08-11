@@ -104,7 +104,7 @@ class _C:
 
 
 class TestCollectionMatch:
-    COLLS = [_C("Faces"), _C("Film Photography"), _C("IG Inbox"), _C("Style refs")]
+    COLLS = [_C("Faces"), _C("Film Photography"), _C("Bot Inbox"), _C("Style refs")]
 
     def test_exact_ci(self):
         assert _match_collection(self.COLLS, "faces").name == "Faces"
@@ -113,7 +113,7 @@ class TestCollectionMatch:
         assert _match_collection(self.COLLS, "film").name == "Film Photography"
 
     def test_substring(self):
-        assert _match_collection(self.COLLS, "inbox").name == "IG Inbox"
+        assert _match_collection(self.COLLS, "inbox").name == "Bot Inbox"
 
     def test_no_match(self):
         assert _match_collection(self.COLLS, "zzz") is None
@@ -154,3 +154,88 @@ class TestOwnerLockSettings:
         aps.set_telegram_token("")
         assert not aps.telegram_token_present()
         assert not aps.telegram_user_locked()
+
+
+class TestOnlyOnePollerPerHost:
+    """Telegram hands each message to exactly ONE caller of getUpdates.
+
+    So a second backend polling the same token does not duplicate the user's
+    captures — it takes them, at random, into whatever database that process is
+    using. A dev backend started from dev-db.ps1 did precisely that between
+    2026-08-09 and 2026-08-11: the bot kept answering "Saved OK" while roughly
+    half the memos landed in dev-data and never showed up in the app.
+    """
+
+    def test_env_kill_switch_stops_the_relay(self, monkeypatch):
+        from backend.services import telegram_relay as tr
+
+        monkeypatch.setenv("OPENMEMO_DISABLE_TELEGRAM", "1")
+        reason = tr.relay_disabled_reason()
+        assert reason and "OPENMEMO_DISABLE_TELEGRAM" in reason
+
+    def test_kill_switch_accepts_the_usual_truthy_spellings(self, monkeypatch):
+        from backend.services import telegram_relay as tr
+
+        for value in ("1", "true", "TRUE", "yes", "on"):
+            monkeypatch.setenv("OPENMEMO_DISABLE_TELEGRAM", value)
+            assert tr.relay_disabled_reason(), f"{value!r} should disable the relay"
+
+    def test_an_empty_or_false_value_does_not_disable_it(self, monkeypatch):
+        from backend.core import host_lock
+        from backend.services import telegram_relay as tr
+
+        host_lock.release("telegram-relay")
+        for value in ("", "0", "false", "no"):
+            monkeypatch.setenv("OPENMEMO_DISABLE_TELEGRAM", value)
+            assert tr.relay_disabled_reason() is None, f"{value!r} should not disable it"
+        host_lock.release("telegram-relay")
+
+    async def test_the_relay_loop_returns_instead_of_polling(self, monkeypatch):
+        """A blocked relay must exit the loop, not spin. It also has to say why
+        in RELAY_STATUS, so Settings shows a reason rather than a dead widget."""
+        from backend.services import telegram_relay as tr
+
+        monkeypatch.setenv("OPENMEMO_DISABLE_TELEGRAM", "1")
+
+        async def boom(*a, **kw):
+            raise AssertionError("a disabled relay must never call Telegram")
+
+        monkeypatch.setattr(tr, "_tg", boom)
+
+        await tr.run_relay_loop()
+
+        assert tr.RELAY_STATUS["running"] is False
+        assert "not started" in (tr.RELAY_STATUS["last_error"] or "")
+
+
+class TestHostLock:
+    def test_a_second_claim_from_another_handle_is_refused(self, monkeypatch, tmp_path):
+        """Two processes, one machine, different data directories — the case the
+        Mesh singleton election cannot see."""
+        import tempfile
+
+        from backend.core import host_lock
+
+        monkeypatch.setattr(tempfile, "gettempdir", lambda: str(tmp_path))
+        host_lock.release("probe")
+
+        assert host_lock.claim("probe") is True
+
+        # Simulate the other process: a fresh handle on the same lock file.
+        handle = open(host_lock._lock_path("probe"), "a+")
+        try:
+            assert host_lock._try_lock(handle) is False
+        finally:
+            handle.close()
+            host_lock.release("probe")
+
+    def test_claiming_twice_in_one_process_is_fine(self, monkeypatch, tmp_path):
+        import tempfile
+
+        from backend.core import host_lock
+
+        monkeypatch.setattr(tempfile, "gettempdir", lambda: str(tmp_path))
+        host_lock.release("probe2")
+        assert host_lock.claim("probe2") is True
+        assert host_lock.claim("probe2") is True
+        host_lock.release("probe2")

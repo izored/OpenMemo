@@ -64,7 +64,7 @@ connects to openMemo at all.**
 - **Ingest is the existing pipeline, called directly.** The relay extracts the first URL
   from the message and invokes the same code path as `POST /api/ingest/url` — no
   HTTP-self-call, no parallel ingest world (ADR-001). Saves land in an auto-created
-  "IG Inbox" collection; a `source_url` match short-circuits to "Already saved ✓"
+  "Bot Inbox" collection; a `source_url` match short-circuits to "Already saved ✓"
   instead of minting a twin memo.
 - **Instagram photo posts resolve down a three-tier ladder, best first.** (The "zero
   extraction changes" v1 died on contact: the existing pipeline filed a photo post as

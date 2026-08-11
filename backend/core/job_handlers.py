@@ -56,6 +56,9 @@ KIND_TRANSCRIBE = "transcribe"
 KIND_TRANSCRIPT = "transcript"
 KIND_PLAYLIST_DOWNLOAD = "playlist_download"
 KIND_PLAYLIST_THUMBS = "playlist_thumbs"
+# Repair, not ingest: a picture that was never copied to disk, re-resolving the
+# post first when its signed URL has already expired.
+KIND_RELOCALIZE_PICTURES = "relocalize_pictures"
 
 
 @register(KIND_PROCESS, concurrency=2)
@@ -84,6 +87,13 @@ async def _gallery(payload: dict[str, Any]) -> None:
     from backend.api.ingest import cache_gallery
 
     await cache_gallery(payload["memo_id"])
+
+
+@register(KIND_RELOCALIZE_PICTURES, concurrency=2)
+async def _relocalize_pictures(payload: dict[str, Any]) -> None:
+    from backend.api.ingest import relocalize_pictures_task
+
+    await relocalize_pictures_task(payload["memo_id"])
 
 
 @register(KIND_LOCALIZE, concurrency=3)
@@ -199,6 +209,7 @@ _ROUTING: dict[str, tuple[str, Callable[[tuple], tuple[str | None, dict[str, Any
     # and raised "unrouted function" AFTER the memo was committed, so the save
     # 500'd and no slide was ever downloaded to disk.
     "cache_gallery": (KIND_GALLERY, _p_memo),
+    "relocalize_pictures_task": (KIND_RELOCALIZE_PICTURES, _p_memo),
     "localize_memo_task": (KIND_LOCALIZE, _p_localize),
     "repull_memo_task": (KIND_REPULL, _p_localize),
     "_localize_memo_task": (KIND_LOCALIZE_AUTO, _p_localize_auto),
