@@ -7,17 +7,17 @@ All notable changes to OpenMemo are documented here.
 
 <!-- Add entries here as work lands: ### Added / ### Changed / ### Fixed -->
 
+### Changed
+
+- 🤖 **The bot's default collection is called "Bot Inbox".** It was "IG Inbox", which described the first week of using it rather than what it does. The relay has always saved any link the app can handle, Instagram or not. Existing collections keep their names, and the setting is still yours to change.
+
 ### Fixed
 
 - 🔗 **Ctrl+click now works on every card, including images and videos.** The first pass gave a card a real link only when clicking it did nothing else. An image or a playable video opens the lightbox when you click it, so those cards got no link at all, which left the exact cards you most want to open beside something else with no way to do it. Every card carries its link now, and the lightbox intercepts only the plain click. Ctrl+click and middle-click open the memo page in a new tab, right-click offers copy link address, hovering shows where it goes, and clicking normally still opens the lightbox exactly as before. The small arrow in a card's corner is a real link too.
 
-### Fixed
-
 - 🔗 **Everything that goes somewhere is a real link now, so ctrl+click opens it in a new tab.** openMemo had no links in it at all. Every card, row and tile was a plain box with a click handler, which a browser has no way to understand: ctrl+click did nothing, middle-click did nothing, right-click offered no "open in new tab" or "copy link address", the address never appeared in the status bar on hover, and keyboard users could not reach a memo at all. A card now carries a real link covering it, under the buttons, so every one of those works the way it does on any other website. The card looks and behaves exactly as before otherwise, including drag to reorder. The same is true of Spaces, playlist tiles, search results, Ask citations, pinned memos in the sidebar and the now-playing card. Keyboard users can reach them all for the first time too.
 
 - 🖤 **The macOS loading screen is black and white.** It shimmered violet into sky blue with a violet glow on the spinner, none of which is an openMemo colour or a decision anyone made. It is greyscale now. The Ollama setup window had a stray purple on its button and focus ring as well, and uses the real accent instead.
-
-### Fixed
 
 - 📲 **Links shared to the bot can no longer vanish into a second copy of openMemo.** Telegram hands each message to exactly one asker and then forgets it, so two backends polling the same bot token do not both get your link, they take turns at random. If you had a development copy running alongside the real one, roughly half of everything you shared from your phone was saved into that copy's database instead. The bot replied "Saved" every time, because from its side it had been. Only one process on a machine may poll now: the development scripts switch the relay off outright, and the backend takes a lock the moment it starts polling so a second one backs off and says why in Settings rather than quietly competing.
 
@@ -28,10 +28,6 @@ All notable changes to OpenMemo are documented here.
 - 🖼️ **Re-pulling a photo post no longer marks it failed.** Re-pull runs the video downloader after it re-reads the source, and a photo post has no video in it, so every carousel came back wearing a red error chip that said "no video formats found". The pictures were fine, and the pictures are the whole content. A memo that resolves to photos now skips the download step entirely instead of failing at it.
 
 - 🔌 **openMemo works with the internet unplugged.** Three things quietly needed a connection just to draw the app. Every card fetched its little site icon from Google, which meant opening openMemo was one request to Google per card on screen and a running list, handed to Google, of every site you had ever saved. Every page load fetched the typeface from a font CDN, so with no connection openMemo could not even render its own interface in its own type. And pictures came from wherever they were found. All three are fixed the same way: the icon is now one small file per site kept on your machine, the typeface ships with the app, and pictures were already local as of this release. Opening, browsing, searching and reading now touch nothing outside your machine. Going to fetch something new still needs the internet, obviously, and a long video on a site with a working player is still left there unless you ask for it, because a library of those fills a disk.
-
-### Changed
-
-- 🤖 **The bot's default collection is called "Bot Inbox".** It was "IG Inbox", which described the first week of using it rather than what it does. The relay has always saved any link the app can handle, Instagram or not. Existing collections keep their names, and the setting is still yours to change.
 
 ---
 ## [3.9.4] - 2026-08-09
