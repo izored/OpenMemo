@@ -1,4 +1,6 @@
 import { useNavigate } from 'react-router-dom';
+import { CardLink } from '@/components/CardLink';
+import { isPlainClick } from '@/lib/nav';
 import { useQuery, useQueries } from '@tanstack/react-query';
 import { Icon } from '@/components/Icon';
 import { PageHeader } from '@/components/PageHeader';
@@ -11,9 +13,10 @@ function cover(color: string): string {
   return `linear-gradient(150deg, ${c} 0%, color-mix(in oklab, ${c} 55%, #14131c) 70%, color-mix(in oklab, ${c} 30%, #0c0b12) 100%)`;
 }
 
-function SpaceCard({ s, coverImg, onOpen, onEdit }: { s: Space; coverImg?: string; onOpen: () => void; onEdit: (e: React.MouseEvent) => void }) {
+function SpaceCard({ s, coverImg, to, onOpen, onEdit }: { s: Space; coverImg?: string; to: string; onOpen: (e: React.MouseEvent) => void; onEdit: (e: React.MouseEvent) => void }) {
   return (
-    <div className="om-coll-card" onClick={onOpen}>
+    <div className="om-coll-card">
+      <CardLink to={to} label={s.name} onClick={onOpen} />
       <span className="om-coll-stack om-coll-stack-2" style={{ background: s.color || '#6366F1' }} />
       <span className="om-coll-stack om-coll-stack-1" style={{ background: s.color || '#6366F1' }} />
       <div className="om-coll-face" style={{ ['--hue' as string]: s.color || '#6366F1' }}>
@@ -62,9 +65,11 @@ export function SpacesPage() {
     })),
   });
 
-  const open = (s: Space) => {
-    setActiveSpace(s.id);
-    navigate(`/space/${s.id}`);
+  // Selecting the Space is a change to THIS tab. Navigation itself is the
+  // anchor's job now, so a ctrl+click opens it over there and leaves the list
+  // exactly as it was.
+  const open = (s: Space) => (e: React.MouseEvent) => {
+    if (isPlainClick(e)) setActiveSpace(s.id);
   };
   const edit = (s: Space) => {
     setEditingSpace(s);
@@ -100,7 +105,8 @@ export function SpacesPage() {
                 key={s.id}
                 s={s}
                 coverImg={coverImg ?? undefined}
-                onOpen={() => open(s)}
+                to={`/space/${s.id}`}
+                onOpen={open(s)}
                 onEdit={(e) => { e.stopPropagation(); edit(s); }}
               />
             );

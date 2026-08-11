@@ -1,5 +1,7 @@
 import React from 'react';
 import { useNavigate } from 'react-router-dom';
+import { Link } from 'react-router-dom';
+import { CardLink } from './CardLink';
 import { useQueryClient } from '@tanstack/react-query';
 import type { DraggableAttributes } from '@dnd-kit/core';
 import { Icon } from './Icon';
@@ -182,7 +184,6 @@ function Chrome({
   confirmOverlay?: React.ReactNode;
   playerOverlay?: React.ReactNode;
 }) {
-  const navigate = useNavigate();
   const queryClient = useQueryClient();
   const openThumbEdit = useAppStore((s) => s.openThumbEdit);
   // "Add to playlist" — music memos only, touch-first (no drag needed).
@@ -200,9 +201,13 @@ function Chrome({
       /* ignore — next click retries */
     }
   };
+  // A card that just opens its memo gets a real anchor covering it, so every
+  // way a browser opens a link works. A card with custom click behaviour (a
+  // picker, a selection mode) keeps the handler, because there is no URL to
+  // put in an href.
+  const linksToMemo = !onCardClick;
   const handleClick = () => {
     if (onCardClick) onCardClick();
-    else navigate(`/memo/${memo.id}`);
   };
   return (
     <div
@@ -211,8 +216,9 @@ function Chrome({
       className={cn('om-card om-card-hover', isMemoWorking(memo) && 'is-working', className)}
       style={style}
       data-tint={dataTint !== undefined ? String(dataTint) : undefined}
-      onClick={handleClick}
+      onClick={onCardClick ? handleClick : undefined}
     >
+      {linksToMemo && <CardLink to={`/memo/${memo.id}`} label={memo.title} />}
       {bgSrc && (
         <div className="om-card-dom" aria-hidden>
           <span style={{ backgroundImage: `url(${bgSrc})` }} />
@@ -317,7 +323,6 @@ function Meta({ memo }: { memo: Memo }) {
 // stays crisp; a bottom→top gradient (mood tint + a blur behind the controls)
 // carries the transport + title. Voice memos never get this (waveform stays).
 function CardMusicPlayer({ memo, cover, mood }: { memo: Memo; cover?: string | null; mood?: CoverMood | null }) {
-  const navigate = useNavigate();
   const queryClient = useQueryClient();
   const { toggle, seek, playing, currentTime, duration, isActive, repeat, toggleRepeat } = useAudioPlayer();
   const [pinned, setPinned] = React.useState(!!memo.pinned);
@@ -348,9 +353,6 @@ function CardMusicPlayer({ memo, cover, mood }: { memo: Memo; cover?: string | n
       className={cn('om-card-player', mood && 'is-tinted')}
       role="group"
       aria-label="Now playing"
-      // Clicking the cover (anywhere not a control — those stop propagation)
-      // opens the memo's detail page.
-      onClick={(e) => { e.stopPropagation(); navigate(`/memo/${memo.id}`); }}
       style={mood ? ({ ['--cov-base']: mood.base, ['--cov-deep']: mood.deep } as React.CSSProperties) : undefined}
       initial={{ opacity: 0, scale: 0.985 }}
       animate={{ opacity: 1, scale: 1 }}
@@ -359,6 +361,10 @@ function CardMusicPlayer({ memo, cover, mood }: { memo: Memo; cover?: string | n
     >
       {cover && <div className="om-card-player-cover" style={{ backgroundImage: `url(${cover})` }} aria-hidden />}
       <div className="om-card-player-scrim" aria-hidden />
+      {/* The cover opens the memo. A link rather than a click handler, so the
+          now-playing card can be ctrl+clicked like everything else. Sits under
+          the transport controls, which carry their own z-index. */}
+      <CardLink to={`/memo/${memo.id}`} label={memo.title} />
 
       {/* Corner transport cluster (ADR-010): play is the primary, top-right
           corner; pin + repeat are smaller satellites. No centered play button —
@@ -408,12 +414,14 @@ function CardMusicPlayer({ memo, cover, mood }: { memo: Memo; cover?: string | n
           <span className="om-card-player-time mono">{hasDur ? formatTime(duration) : '--:--'}</span>
         </div>
         <VolumeControl size={18}>
-          <button
+          <Link
+            to={`/memo/${memo.id}`}
             className="om-card-player-title"
-            onClick={(e) => { e.stopPropagation(); navigate(`/memo/${memo.id}`); }}
+            onClick={(e) => e.stopPropagation()}
+            draggable={false}
           >
             <Marquee text={memo.title} auto />
-          </button>
+          </Link>
         </VolumeControl>
       </div>
     </motion.div>
