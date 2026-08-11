@@ -161,8 +161,11 @@ def _parse_html(html: str, base_url: str, url: str, domain: str) -> dict | None:
         or next((o["description"] for o in jsonld if isinstance(o.get("description"), str)), "")
     )
     thumbnail = _pick_image(soup, jsonld, base_url)
-    favicon = f"https://www.google.com/s2/favicons?domain={domain}&sz=32"
-
+    # The site icon is no longer stored on the row. It is derived from
+    # source_domain at serve time from a file we hold, one per domain,
+    # see backend/core/favicons.py. Storing Google's URL meant the
+    # dashboard fetched an icon from Google per card, forever.
+    favicon = None
     root = _clean_content_node(soup)
     for img in root.find_all("img"):
         src = img.get("src") or img.get("data-src")
@@ -239,7 +242,7 @@ def _direct_media_memo(url: str, domain: str, ctype: str | None = None) -> dict 
         "content_text": "",
         "source_url": url,
         "source_domain": domain,
-        "source_favicon": f"https://www.google.com/s2/favicons?domain={domain}&sz=32",
+        "source_favicon": None,
         "thumbnail_path": url if cat == "image" else "",
         "type": cat,
     }
@@ -562,7 +565,7 @@ async def extract_video(url: str) -> dict:
                 "video_description": video_desc,
                 "source_url": url,
                 "source_domain": domain,
-                "source_favicon": f"https://www.google.com/s2/favicons?domain={domain}&sz=32",
+                "source_favicon": None,
                 "thumbnail_path": thumbnail,
                 "type": "audio" if is_audio else "video",
             }
@@ -748,7 +751,7 @@ def _instagram_needs_cookies(url: str, domain: str) -> dict:
         "content_text": url,
         "source_url": canonical_source_url(url),
         "source_domain": domain,
-        "source_favicon": f"https://www.google.com/s2/favicons?domain={domain}&sz=32",
+        "source_favicon": None,
         "resolve_tier": IG_TIER_BLOCKED,
         "thumbnail_path": "",
         "type": "link",
@@ -801,7 +804,7 @@ async def _instagram_resolve(url: str, domain: str) -> dict:
     from backend.core.app_settings import cookies_present, get_cookies_path
     from backend.core.instagram import fetch_media_info
 
-    fav = f"https://www.google.com/s2/favicons?domain={domain}&sz=32"
+    fav = None
     cookies = get_cookies_path() if cookies_present() else None
 
     # Tiers 1–2: the guest media-info API (anonymous, then with the session jar).
@@ -1033,7 +1036,7 @@ async def _minimal_link(url: str, domain: str | None = None) -> dict:
                     "content_raw": "",
                     "source_url": url,
                     "source_domain": domain,
-                    "source_favicon": f"https://www.google.com/s2/favicons?domain={domain}&sz=32",
+                    "source_favicon": None,
                     "thumbnail_path": "",
                     "type": "link",
                 }
@@ -1057,7 +1060,7 @@ async def _minimal_link(url: str, domain: str | None = None) -> dict:
         "content_text": enrichment.get("description") or url,
         "source_url": url,
         "source_domain": domain,
-        "source_favicon": f"https://www.google.com/s2/favicons?domain={domain}&sz=32",
+        "source_favicon": None,
         "thumbnail_path": enrichment.get("thumbnail_path") or "",
         "type": "link",
     }

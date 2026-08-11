@@ -1,0 +1,45 @@
+/* Satoshi, served from this machine.
+ *
+ * openMemo's own face (see --font-ui / --font-display / --font-mono in
+ * openmemo.css) used to arrive from api.fontshare.com on every page load, and
+ * index.html also pulled Inter and JetBrains Mono from Google that nothing
+ * rendered. Both links are gone: rendering openMemo now makes no network
+ * request at all.
+ *
+ * The .woff2 files land in public/fonts via scripts/fetch-fonts.mjs at build
+ * time. If they are missing the stack below falls through to the system sans,
+ * which is legible and wrong rather than broken.
+ *
+ * font-display: swap so first paint is never blocked on a face. */
+
+@font-face {
+  font-family: 'Satoshi';
+  src: url('/fonts/satoshi-300.woff2') format('woff2');
+  font-weight: 300;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'Satoshi';
+  src: url('/fonts/satoshi-400.woff2') format('woff2');
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'Satoshi';
+  src: url('/fonts/satoshi-500.woff2') format('woff2');
+  font-weight: 500;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'Satoshi';
+  src: url('/fonts/satoshi-700.woff2') format('woff2');
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+}

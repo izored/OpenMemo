@@ -96,6 +96,17 @@ def serve_pictures(payload: dict) -> dict:
     """
     pending = 0
 
+    # The site icon is derived, never trusted from the row. 660 memos still
+    # hold `google.com/s2/favicons?domain=…` from before icons were kept
+    # locally, and rendering those means a request to Google per card on
+    # screen. The domain is the only input that matters, and the answer is one
+    # file per site (backend/core/favicons.py). A site we have no icon for
+    # shows none, which is the honest version of "we do not have it".
+    if "source_favicon" in payload or payload.get("source_domain"):
+        from backend.core.favicons import ref_if_present
+
+        payload["source_favicon"] = ref_if_present(payload.get("source_domain"))
+
     if is_remote(payload.get("thumbnail_path")):
         payload["thumbnail_path"] = None
         pending += 1

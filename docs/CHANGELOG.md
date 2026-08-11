@@ -17,6 +17,8 @@ All notable changes to OpenMemo are documented here.
 
 - 🖼️ **Re-pulling a photo post no longer marks it failed.** Re-pull runs the video downloader after it re-reads the source, and a photo post has no video in it, so every carousel came back wearing a red error chip that said "no video formats found". The pictures were fine, and the pictures are the whole content. A memo that resolves to photos now skips the download step entirely instead of failing at it.
 
+- 🔌 **openMemo works with the internet unplugged.** Three things quietly needed a connection just to draw the app. Every card fetched its little site icon from Google, which meant opening openMemo was one request to Google per card on screen and a running list, handed to Google, of every site you had ever saved. Every page load fetched the typeface from a font CDN, so with no connection openMemo could not even render its own interface in its own type. And pictures came from wherever they were found. All three are fixed the same way: the icon is now one small file per site kept on your machine, the typeface ships with the app, and pictures were already local as of this release. Opening, browsing, searching and reading now touch nothing outside your machine. Going to fetch something new still needs the internet, obviously, and a long video on a site with a working player is still left there unless you ask for it, because a library of those fills a disk.
+
 ### Changed
 
 - 🤖 **The bot's default collection is called "Bot Inbox".** It was "IG Inbox", which described the first week of using it rather than what it does. The relay has always saved any link the app can handle, Instagram or not. Existing collections keep their names, and the setting is still yours to change.
