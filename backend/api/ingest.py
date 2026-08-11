@@ -234,6 +234,16 @@ async def localize_pictures_inline(memo) -> int:
     missing picture for a missing memo, which is the worse of the two. The
     serving layer makes sure the leftover URL is never rendered.
     """
+    # The site icon rides along: it is a picture on the card too, it is fetched
+    # once per DOMAIN rather than per memo, and by the time this runs the domain
+    # is known. Failure is silent and costs the card its icon, nothing more.
+    try:
+        from backend.core.favicons import ensure_local
+
+        await ensure_local(getattr(memo, "source_domain", None))
+    except Exception as e:
+        log.info("favicon fetch skipped for %s: %r", getattr(memo, "id", "?"), e)
+
     urls: list[tuple[int | None, str]] = []
     if memo.thumbnail_path and str(memo.thumbnail_path).startswith("http"):
         urls.append((None, str(memo.thumbnail_path)))
@@ -511,7 +521,7 @@ async def _light_link(url: str) -> dict:
         "content_text": meta.get("description") or url,
         "source_url": url,
         "source_domain": domain,
-        "source_favicon": f"https://www.google.com/s2/favicons?domain={domain}&sz=32" if domain else None,
+        "source_favicon": None,
         "thumbnail_path": meta.get("thumbnail_path") or "",
     }
 
@@ -881,7 +891,7 @@ async def ingest_playlist(
             source_url=entry["url"],
             source_domain=domain or None,
             source_favicon=(
-                f"https://www.google.com/s2/favicons?domain={domain}&sz=32" if domain else None
+                None
             ),
             thumbnail_path=entry.get("thumbnail"),
             # download=False leaves the track remote (no status) — it can be
@@ -1038,7 +1048,7 @@ async def ingest_spotify(
             audio_artist=meta.get("artist"),
             source_url=meta["spotify_url"],
             source_domain="open.spotify.com",
-            source_favicon="https://www.google.com/s2/favicons?domain=spotify.com&sz=32",
+            source_favicon=None,
             thumbnail_path=meta.get("cover"),
             localize_status="pending" if data.download else None,
             created_at=now,
@@ -1136,7 +1146,7 @@ async def ingest_spotify(
             audio_album=probed["title"][:200] if kind == "album" else None,
             source_url=turl,
             source_domain="open.spotify.com",
-            source_favicon="https://www.google.com/s2/favicons?domain=spotify.com&sz=32",
+            source_favicon=None,
             thumbnail_path=track.get("cover") or probed.get("cover"),
             localize_status="pending" if data.download else None,
             created_at=now,
@@ -1177,7 +1187,7 @@ async def ingest_spotify(
 # reuses SpotifyProbe/SpotifyIngest and the same lossless settings — only the
 # metadata front-end differs. Audio still comes from Qobuz.
 _APPLE_DOMAIN = "music.apple.com"
-_APPLE_FAVICON = "https://www.google.com/s2/favicons?domain=music.apple.com&sz=32"
+_APPLE_FAVICON = None
 
 
 @router.post("/apple/probe", dependencies=[Depends(music_relay_enabled)])
@@ -1718,7 +1728,7 @@ async def ingest_gallery(data: GalleryIngest, db: AsyncSession = Depends(get_db)
         # picture came from once every slide is a local path.
         content_text="\n".join(urls),
         source_domain=domain or None,
-        source_favicon=f"https://www.google.com/s2/favicons?domain={domain}&sz=32" if domain else None,
+        source_favicon=None,
         thumbnail_path=slides[0]["url"],
         # One surviving slide is not a carousel — leave `gallery` empty so the
         # memo renders as the plain image it is.
@@ -2475,7 +2485,7 @@ async def ingest_from_ai(
         source_url=data.source_url,
         source_domain=domain,
         source_favicon=data.source_favicon or (
-            f"https://www.google.com/s2/favicons?domain={domain}&sz=32" if domain else None
+            None
         ),
         thumbnail_path=data.thumbnail_url,
         created_at=datetime.utcnow(),
@@ -2566,7 +2576,7 @@ async def ingest_from_extension(
         video_description=extracted.get("video_description"),
         source_url=data.url,
         source_domain=extracted.get("source_domain") or domain,
-        source_favicon=data.favicon or extracted.get("source_favicon") or (f"https://www.google.com/s2/favicons?domain={domain}&sz=32" if domain else None),
+        source_favicon=data.favicon or extracted.get("source_favicon"),
         thumbnail_path=pick("thumbnail_path", data.thumbnail),
         created_at=datetime.utcnow(),
         updated_at=datetime.utcnow(),
