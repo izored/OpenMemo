@@ -1593,6 +1593,37 @@ input, textarea { font: inherit; color: inherit; }
                          display: inline-flex; align-items: center; gap: 6px; padding: 6px 10px;
                          border-radius: 999px; background: rgba(0,0,0,.6); color: #fff;
                          font-size: 12px; backdrop-filter: blur(4px); }
+/* Offline strip. Only exists while the machine is offline, so there is no
+   reserved space and no layout shift either way. Deliberately quiet: openMemo
+   is not in an error state when the wifi drops, the library is right here. */
+.om-offline-bar {
+  position: sticky; top: 0; z-index: 300;
+  display: flex; align-items: center; justify-content: center; gap: 8px;
+  padding: 7px 16px;
+  background: var(--surface-2);
+  border-bottom: 1px solid var(--border);
+  color: var(--text-2); font-size: 12.5px; line-height: 1.35;
+  text-align: center;
+}
+.om-offline-bar svg { flex: none; opacity: 0.75; }
+
+/* The same frame, when playing it is not currently possible. Not styled as an
+   error: nothing is broken, this memo was simply never made local. */
+.om-embed-facade.is-offline { cursor: default; }
+.om-embed-facade.is-offline img { opacity: 0.35; }
+.om-embed-offline {
+  position: absolute; inset: 0; margin: auto;
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  gap: 6px; padding: 24px; text-align: center; line-height: 1.45;
+  color: var(--text-2); background: color-mix(in oklab, var(--surface-2) 78%, transparent);
+}
+.om-embed-offline b { font-size: 13.5px; font-weight: 500; color: var(--text); }
+.om-embed-offline span { font-size: 12px; max-width: 42ch; }
+
+/* Version number doubles as the update check, so it needs room for a word. */
+.om-version-note { margin-left: 6px; font-size: 10.5px; color: var(--text-4); }
+.om-version-btn:disabled { opacity: 0.7; cursor: default; }
+
 /* The embed facade: what sits in the frame before you press play.
    It reuses .om-detail-poster wholesale so it looks like the poster openMemo
    already shows for un-embeddable video, rather than introducing a second

@@ -7,6 +7,14 @@ All notable changes to OpenMemo are documented here.
 
 <!-- Add entries here as work lands: ### Added / ### Changed / ### Fixed -->
 
+### Added
+
+- 📴 **openMemo tells you when you are offline, and stays useful.** A quiet strip appears at the top when the connection drops and disappears when it returns. It says what still works rather than what broke, because almost everything does: your whole library is on this machine. Open a memo whose video was left at its source and the frame explains that this one was never made local and needs a connection, instead of mounting a player and handing you the browser's error page inside your own memo.
+
+### Changed
+
+- 🔎 **Checking for updates is something you ask for.** Opening Settings used to quietly call GitHub to see whether a newer version existed. Nobody asked it to, and openMemo does not contact anyone unless you do. The version number at the bottom of Settings is now the control: hover it and it offers to check, click it and it tells you whether you are on the latest, or that it could not reach GitHub.
+
 ### Fixed
 
 - 🔌 **Opening a memo no longer contacts YouTube, Instagram or X.** An embedded player was built the moment a memo appeared on screen, so simply reading something you had saved reached out to the site it came from before you pressed anything. The frame now holds the picture openMemo already has on your disk, with the same play button it has always used, and the real player is created when you click it. Nothing looks different and nothing you do changes: press play and it plays. Music from SoundCloud, Bandcamp or YouTube works the same way, with the source player folded away until you open it. Clicking a timestamp in a transcript still jumps straight to that moment, because asking for a moment is asking to play.

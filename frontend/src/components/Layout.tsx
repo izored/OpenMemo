@@ -24,6 +24,7 @@ import { Onboarding } from './Onboarding';
 import { AddCollectionModal } from './AddCollectionModal';
 import { AddSpaceModal } from './AddSpaceModal';
 import { Lightbox } from './Lightbox';
+import { OfflineBar } from './OfflineBar';
 import { GuideHost } from './GuideHost';
 import { ThumbnailEditHost } from './ThumbnailEditHost';
 import { PlaylistCoverHost } from './PlaylistCoverHost';
@@ -254,6 +255,7 @@ export function Layout() {
         onDragOver={(e) => dndBusRef.current.onDragOver?.(e)}
         onDragEnd={(e) => dndBusRef.current.onDragEnd?.(e)}
       >
+      <OfflineBar />
       <CloudBackground />
       <div className="om-bg-veil" style={{ opacity: tweaks.bgFade ?? 0 }} aria-hidden />
       <MobileTopBar />
