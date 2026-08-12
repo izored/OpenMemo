@@ -132,9 +132,17 @@ fact is worse than no ADR:
    an oversight. Opening it means clicking that memo's media specifically, not
    browsing past it, so the player appearing is the thing you asked for. If
    that ever feels wrong, the fix is the same facade one level in.
-2. **The version check fires unprompted.** Settings and the changelog modal
-   both call `api.github.com` on open. Best-effort and silent on failure, but
-   nobody asked. It belongs behind a button.
+2. ~~**The version check fires unprompted.**~~ Closed. Settings no longer
+   calls GitHub on open. The version number in the footer is the ask: hover it
+   and it offers to check, click it and it does, reporting "latest", "offline"
+   or the update dot in place. The changelog modal still fetches when opened,
+   and that stays: clicking "Changelog" is a request to see the changelog.
+
+No known gaps remain. What is left is enforcement rather than behaviour: a
+Content Security Policy so the browser refuses violations outright, and a
+runtime test that browses the app and asserts zero external requests. Both are
+worth more than the greps, because every failure so far was something nobody
+knew to look for.
 
 ---
 

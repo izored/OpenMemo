@@ -36,6 +36,7 @@ import {
   RefreshCw,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { useOnline } from '@/lib/useOnline';
 import { BackButton } from '@/components/BackButton';
 import { MarkdownEditor } from '@/components/MarkdownEditor';
 import { memoApi, collectionApi } from '@/lib/api';
@@ -296,6 +297,7 @@ function PlatformEmbed({ memo, src, kind, aspectRatio, seek }: { memo: Memo; src
   // un-embeddable case has always used. One click and the real player takes
   // over exactly as before.
   const [armed, setArmed] = useState(false);
+  const online = useOnline();
   // A transcript timestamp IS a play request, so it arms and seeks in one go.
   useEffect(() => {
     if (seek) setArmed(true);
@@ -325,14 +327,29 @@ function PlatformEmbed({ memo, src, kind, aspectRatio, seek }: { memo: Memo; src
   const facade = (label: string) => (
     <button
       type="button"
-      className={cn('om-detail-poster om-embed-facade', !memo.thumbnail_path && 'no-thumb')}
-      onClick={() => setArmed(true)}
-      aria-label={label}
+      className={cn('om-detail-poster om-embed-facade', !memo.thumbnail_path && 'no-thumb', !online && 'is-offline')}
+      onClick={() => online && setArmed(true)}
+      aria-label={online ? label : 'Offline: this one is kept at its source'}
+      aria-disabled={!online}
     >
       {memo.thumbnail_path && <img src={memo.thumbnail_path} alt={memo.title} />}
-      <span className="om-detail-poster-play">
-        <Play size={22} style={{ fill: 'currentColor' }} />
-      </span>
+      {online ? (
+        <span className="om-detail-poster-play">
+          <Play size={22} style={{ fill: 'currentColor' }} />
+        </span>
+      ) : (
+        // Offline, pressing play would mount an iframe and hand back the
+        // browser's error page inside the memo. Say what is actually true
+        // instead: this one was never downloaded, so it needs the connection.
+        <span className="om-embed-offline">
+          <Icon name="cloudOff" size={18} />
+          <b>This one lives on {memo.source_domain || 'its source'}</b>
+          <span>
+            It was never made local, so playing it needs a connection. Everything
+            else about this memo is on your machine.
+          </span>
+        </span>
+      )}
     </button>
   );
 

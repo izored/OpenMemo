@@ -1082,6 +1082,26 @@ export function SettingsPage() {
   const [stats, setStats] = useState<Stats | null>(null);
   const [changelogOpen, setChangelogOpen] = useState(false);
   const [updateAvailable, setUpdateAvailable] = useState(false);
+  // 'idle' until you click the version number. The check is the one thing here
+  // that cannot be answered locally, so it waits to be asked for.
+  const [updateCheck, setUpdateCheck] = useState<'idle' | 'checking' | 'current' | 'failed'>('idle');
+
+  const checkForUpdate = async () => {
+    setUpdateCheck('checking');
+    try {
+      const r = await fetch('https://api.github.com/repos/izored/OpenMemo/releases/latest');
+      if (!r.ok) throw new Error(String(r.status));
+      const latest = (await r.json())?.tag_name?.replace(/^v/, '');
+      if (latest && version && cmpVersion(latest, version) > 0) {
+        setUpdateAvailable(true);
+        setUpdateCheck('idle');
+      } else {
+        setUpdateCheck('current');
+      }
+    } catch {
+      setUpdateCheck('failed');
+    }
+  };
   const [backing, setBacking] = useState<'structure' | 'essential' | 'full' | null>(null);
   const [restoring, setRestoring] = useState(false);
   const [maxUploadMb, setMaxUploadMb] = useState<number | null>(null);
@@ -1099,16 +1119,9 @@ export function SettingsPage() {
       .then((d) => {
         setVersion(d.version || '');
         setOllamaConnected(d.ollama_connected);
-        // Check GitHub for a newer release (best-effort).
-        fetch('https://api.github.com/repos/izored/OpenMemo/releases/latest')
-          .then((r) => (r.ok ? r.json() : null))
-          .then((rel) => {
-            const latest = rel?.tag_name?.replace(/^v/, '');
-            if (latest && d.version && cmpVersion(latest, d.version) > 0) {
-              setUpdateAvailable(true);
-            }
-          })
-          .catch(() => {});
+        // No update check here. Opening Settings is not a request to talk to
+        // GitHub, and openMemo contacts nobody unless you ask (ADR-025 §2).
+        // The version number itself is the ask: hover it, click it.
       })
       .catch(() => setOllamaConnected(false));
     systemApi.models().then((d) => setOllamaModels(d.models || [])).catch(() => setOllamaModels([]));
@@ -1816,10 +1829,20 @@ export function SettingsPage() {
 
         <button
           className="om-version-btn"
-          onClick={() => setChangelogOpen(true)}
-          title={showUpdateDot ? 'Update available' : 'Up to date'}
+          onClick={checkForUpdate}
+          disabled={updateCheck === 'checking'}
+          title={
+            updateAvailable ? 'Update available'
+              : updateCheck === 'checking' ? 'Checking…'
+              : updateCheck === 'current' ? 'You are on the latest version'
+              : updateCheck === 'failed' ? 'Could not reach GitHub'
+              : 'Click to check for updates'
+          }
         >
           openMemo · v{version || '...'}
+          {updateCheck === 'checking' && <span className="om-version-note">checking…</span>}
+          {updateCheck === 'current' && <span className="om-version-note">latest</span>}
+          {updateCheck === 'failed' && <span className="om-version-note">offline</span>}
           {showUpdateDot && <span className="om-update-dot" />}
         </button>
 

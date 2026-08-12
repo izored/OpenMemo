@@ -44,6 +44,8 @@ const ICON_PATHS: Record<string, string> = {
   cloudDownload: 'M8 17l4 4 4-4m-4-5v9M20.88 18.09A5 5 0 0 0 18 9h-1.26A8 8 0 1 0 3 16.29',
   // Plain cloud + filled-circle dot — appearance background mode chips (OPNMMO-0048).
   cloud: 'M18 10h-1.26A8 8 0 1 0 9 20h9a5 5 0 0 0 0-10z',
+  // Offline: the same cloud, struck through. Used by the offline bar.
+  cloudOff: 'M22.61 16.95A5 5 0 0 0 18 10h-1.26a8 8 0 0 0-1.62-3.5M2 2l20 20M5.78 5.79A8 8 0 0 0 9 20h9a5 5 0 0 0 1.7-.3',
   circle: 'M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18z',
   share: 'M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8M16 6l-4-4-4 4M12 2v13',
   send: 'M22 2 11 13M22 2l-7 20-4-9-9-4z',
