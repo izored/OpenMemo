@@ -7,6 +7,10 @@ All notable changes to OpenMemo are documented here.
 
 <!-- Add entries here as work lands: ### Added / ### Changed / ### Fixed -->
 
+### Fixed
+
+- 📣 **A release no longer announces itself twice.** The release workflow tells the profile repo about a new version from a job of its own, and the release script asked for the same announcement again at the end of its run. Nothing on the receiving side notices a repeat, so the changelog there gained a second identical entry for the same version. The script no longer announces anything. It now checks that exactly one entry arrived, and says so plainly if there are none yet or more than one.
+
 ---
 ## [3.11.0] - 2026-08-14
 
