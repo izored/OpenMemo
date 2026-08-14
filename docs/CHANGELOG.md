@@ -7,6 +7,9 @@ All notable changes to OpenMemo are documented here.
 
 <!-- Add entries here as work lands: ### Added / ### Changed / ### Fixed -->
 
+---
+## [3.11.0] - 2026-08-14
+
 ### Added
 
 - 📴 **openMemo tells you when you are offline, and stays useful.** A quiet strip appears at the top when the connection drops and disappears when it returns. It says what still works rather than what broke, because almost everything does: your whole library is on this machine. Open a memo whose video was left at its source and the frame explains that this one was never made local and needs a connection, instead of mounting a player and handing you the browser's error page inside your own memo.
