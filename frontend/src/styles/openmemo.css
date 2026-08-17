@@ -5522,7 +5522,10 @@ body.om-has-bbar .om-fab { display: none !important; }
 .om-coach-layer { position: fixed; inset: 0; z-index: 190; pointer-events: auto; }
 /* When a step gates progression on a user action (e.g. clicking the FAB),
    let pointer events fall through to the underlying UI; the coach card stays
-   clickable so Skip / Next still work. */
+   clickable so Skip / Next still work. The class stays on for the WHOLE gated
+   step, including after the gate is satisfied: it used to drop the moment the
+   panel opened, which left the tour telling you to save a link into a New Memo
+   panel that no longer took clicks. */
 .om-coach-layer.gated { pointer-events: none; }
 .om-coach-layer.gated .om-coach-card { pointer-events: auto; }
 .om-coach-dim { position: absolute; inset: 0; background: rgba(0,0,0,0.42); animation: fade .2s ease; }

@@ -29,32 +29,37 @@ interface Step {
   orbs: [[string, string], [string, string]];
 }
 
+// Copy rules this had to be rewritten against: name the mess before the
+// solution, short sentences, concrete nouns, never lead with privacy, and no
+// platform claim. The old slide 1 said "everything you save lives on your Mac"
+// in the SPA that Docker and Windows also serve, and three of four slides sold
+// privacy before the product did anything.
 const STEPS: Step[] = [
   {
     id: 'welcome',
     kicker: 'Welcome to',
     title: 'openMemo',
-    body: 'Your local AI knowledge OS. Everything you save lives on your Mac. No cloud, no accounts.',
+    body: 'You saved it somewhere. A tab, a DM to yourself, a screenshot you will never find again. openMemo is the somewhere. No cloud, no accounts.',
     orbs: [['18%', '24%'], ['78%', '70%']],
   },
   {
     id: 'capture',
-    title: 'Capture anything',
-    body: 'Links, notes, images, video, audio. Drop it in and openMemo files it for you.',
+    title: 'Throw it all in here',
+    body: 'Links, notes, images, video, audio, whole playlists. Drop it in and openMemo pulls the title, the thumbnail and the text, then files it.',
     Icon: Upload,
     orbs: [['72%', '20%'], ['22%', '74%']],
   },
   {
     id: 'ask',
-    title: 'Ask your Memos',
-    body: 'Local AI answers from your own stuff and shows its sources. Your data never leaves the machine.',
+    title: 'Ask your own library',
+    body: 'You will never remember which memo said it. Ask in plain words and a local model answers from your own stuff, showing the memos it used. It runs on your machine, so nothing leaves it.',
     Icon: Bot,
     orbs: [['26%', '70%'], ['76%', '26%']],
   },
   {
     id: 'ollama',
     title: 'Bring your own brain',
-    body: 'openMemo talks to your own Ollama. Gemma 4 is a great place to start.',
+    body: 'That model is Ollama, and you install it yourself from ollama.com. openMemo only talks to it. Gemma 4 is a good place to start, and everything else here works without it.',
     Icon: Globe,
     orbs: [['50%', '18%'], ['50%', '82%']],
   },
@@ -68,15 +73,16 @@ export function IntroSequence({ onTakeTour, onSkip }: Props) {
 
   const last = i === STEPS.length - 1;
 
+  // onTakeTour is the PARENT's setState. Calling it from inside a setI updater
+  // ran it during the render phase, which React can replay: read `i` directly
+  // and keep the side effect in the event handler where it belongs.
   const next = useCallback(() => {
-    setI((n) => {
-      if (n >= STEPS.length - 1) {
-        onTakeTour();
-        return n;
-      }
-      return n + 1;
-    });
-  }, [onTakeTour]);
+    if (i >= STEPS.length - 1) {
+      onTakeTour();
+      return;
+    }
+    setI(i + 1);
+  }, [i, onTakeTour]);
 
   const back = useCallback(() => setI((n) => Math.max(0, n - 1)), []);
 
