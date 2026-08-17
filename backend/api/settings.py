@@ -166,14 +166,98 @@ async def reset_telegram_user_lock():
     return {"telegram_user_locked": telegram_user_locked()}
 
 
+class PollNow(BaseModel):
+    """Body exists to force a CORS preflight, not to carry anything.
+
+    A POST with no body and no content type is a CORS *simple* request: any web
+    page the user has open can fire it cross-origin and the browser sends it,
+    blocking only the reply. That would let a random site drive this endpoint in
+    a loop, and each hit makes the backend call api.telegram.org with the user's
+    bot token, from the user's IP, at whatever rate the page likes. Requiring a
+    JSON body means a preflight the origin allowlist can refuse.
+    """
+
+    reason: Optional[str] = None
+
+
+# Server-side floor on how often a kick may actually do something. Low, because
+# the shell deliberately sends two nudges seconds apart on a lid opening: the
+# `resume` one fires while Wi-Fi is still reassociating and the `unlock` one
+# lands with a working network. A 20 second floor kept the useless one and threw
+# away the good one. The thing the floor was really protecting, the relay's error
+# backoff, is no longer kickable at all (see run_relay_loop), so this only has to
+# stop a flood from being free.
+_POLL_NOW_MIN_INTERVAL_S = 5.0
+_last_poll_now = 0.0
+
+
+@router.post("/telegram/poll-now")
+async def poll_telegram_now(body: PollNow):
+    """Drain Telegram immediately instead of waiting out the poll interval.
+
+    Called by the macOS shell on wake and unlock, and by the SPA when the
+    network comes back. Both matter because macOS stops the monotonic clock
+    during system sleep: a lid closed for eight hours leaves a 15 minute timer
+    with 15 minutes still to run, and Telegram only holds a share for 24 hours.
+
+    Returns `telegram_enabled` as well, so the caller can decide whether to keep
+    the app awake without a second request.
+    """
+    import time as _time
+
+    from backend.core.app_settings import get_settings as _get
+    from backend.services.telegram_relay import (
+        RELAY_STATUS,
+        hours_since_success,
+        is_stale,
+        kick,
+    )
+
+    global _last_poll_now
+    enabled = bool(_get().get("telegram_enabled"))
+    running = bool(RELAY_STATUS.get("running"))
+    now = _time.monotonic()
+    kicked = running and (now - _last_poll_now) >= _POLL_NOW_MIN_INTERVAL_S
+    if kicked:
+        _last_poll_now = now
+        kick()
+    return {
+        "kicked": kicked,
+        "running": running,
+        "telegram_enabled": enabled,
+        # The caller (the macOS shell, on wake) uses this to decide whether to
+        # put a notification on screen. Reported before the kick has had time to
+        # land, which is correct: it describes the gap being recovered from.
+        # `hours_since_success` is None when Telegram has NEVER answered, so
+        # `stale` is the flag to branch on, not the number.
+        "hours_since_success": hours_since_success(),
+        "stale": bool(enabled and is_stale()),
+    }
+
+
 @router.get("/telegram/status")
 async def read_telegram_status():
     """Live relay status for the Settings card."""
-    from backend.core.app_settings import telegram_token_present, telegram_user_locked
-    from backend.services.telegram_relay import RELAY_STATUS
+    from backend.core.app_settings import (
+        get_telegram_last_success,
+        telegram_token_present,
+        telegram_user_locked,
+    )
+    from backend.services.telegram_relay import (
+        RELAY_STATUS,
+        STALE_AFTER_HOURS,
+        hours_since_success,
+        is_stale,
+    )
 
     return {
         **RELAY_STATUS,
+        # Falls back to the persisted stamp, so a freshly launched app can still
+        # say when it last got through instead of showing a blank.
+        "last_success_at": RELAY_STATUS.get("last_success_at") or get_telegram_last_success(),
+        "hours_since_success": hours_since_success(),
+        "stale": is_stale(),
+        "stale_after_hours": STALE_AFTER_HOURS,
         "telegram_token_present": telegram_token_present(),
         "telegram_user_locked": telegram_user_locked(),
     }

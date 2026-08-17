@@ -46,9 +46,11 @@ works without them, and never blocks startup):
 
 ## 3. Point it at your Ollama
 
-Default is `http://localhost:11434`. To change it: **menu bar → OpenMemo →
-Ollama Host…**, type your address, **Save & Restart**. That's the only thing the
-app needs to know about Ollama — it never manages models for you.
+Default is `http://localhost:11434`. To change it: **Settings → Local AI →
+Host**, or **menu bar → OpenMemo → Ollama Host…**. Both save, restart the
+backend and reload. That's the only thing the app needs to know about Ollama:
+it never manages models for you. If your host doesn't answer, openMemo also
+tries a small built-in fallback list before giving up.
 
 You can confirm the connection any time in **Settings → Local AI**.
 
@@ -61,10 +63,14 @@ Everything writable lives outside the (read-only) app bundle, in:
 ```
 ~/Library/Application Support/OpenMemo/
   openmemo.db        SQLite (memos, collections, spaces)
+  app_settings.json  your Settings-page preferences
   chroma/            vector store
   files/             uploaded images, audio, video, thumbnails
+  backups/           automatic database snapshots
+  logs/              boot log (Settings → Security → Logs opens this)
   hf-cache/          speech-to-text model
   ms-playwright/     link-scraper Chromium
+  yt_cookies.txt     only if you uploaded a cookie jar
 ```
 
 Delete that folder to reset the app completely. Back it up to keep your library.
@@ -147,11 +153,16 @@ OPENMEMO_RENDERER_URL=http://localhost:3000 npm --prefix macOS run dev
   PIN lock is on, reopening asks for the PIN again.
 - **⌘N — New Memo** from the File menu, and **⌘⇧M from anywhere** (global
   shortcut) fronts the app with the add-memo island open.
+- **⌘, — Settings** opens the app's own Settings page, like any other Mac app.
+- **Phone capture catches up on wake.** Opening the lid, unlocking, or bringing
+  the window forward nudges the Telegram relay instead of waiting out its poll
+  interval. Telegram only holds a share for 24 hours, so if openMemo has not got
+  through in 20, it says so on the Settings card and in a notification.
 - **Drop files on the Dock icon** (or Finder → Open With → OpenMemo) and
   they're ingested as memos directly.
 - **`openmemo://` links** open the app — e.g. `openmemo://memo/<id>` jumps to a
   memo, `openmemo://settings` to Settings.
-- **Open at Login** — toggle in the OpenMemo menu.
+- **Open at Login** — in the OpenMemo menu, or Settings → Security.
 - Window size/position persist; About shows the real version; update checks on
   launch (menu → Check for Updates…).
 
@@ -159,7 +170,8 @@ OPENMEMO_RENDERER_URL=http://localhost:3000 npm --prefix macOS run dev
 
 ## Lock the app with a 4-digit PIN (optional)
 
-Set a PIN from the menu: **OpenMemo → App Lock (PIN)…**. Once set, every launch
+Set a PIN from **Settings → Security → App lock**, or the menu:
+**OpenMemo → App Lock (PIN)…**. Once set, every launch
 shows a lock screen and **the backend doesn't even start until you unlock** — so
 a locked app exposes nothing, not even on localhost. Change or turn it off from
 the same menu (it asks for the current PIN first).
@@ -198,7 +210,7 @@ against a determined attacker with full disk access.
 | "App can't be opened" on first launch | Gatekeeper — right-click → Open, or `xattr -dr com.apple.quarantine /Applications/OpenMemo.app` (§2). |
 | App dies instantly ("Killed: 9" in Console) | arm64 requires a valid signature on every binary. The build ad-hoc signs automatically (`scripts/afterPack.cjs`); if you assembled the app manually, run `codesign --force --deep --sign - /Applications/OpenMemo.app`. |
 | Window stuck on the loading screen | Backend failed to boot. The error dialog shows the last log lines; usually a missing bundled resource — rebuild. In dev, make sure `frontend/dist` exists and `backend/.venv` is set up. |
-| "Local AI: Offline" in Settings | Ollama isn't reachable. Start it, or set the right host via **OpenMemo → Ollama Host…**. |
+| "Local AI: Offline" in Settings | Ollama isn't reachable. Start it, or set the right host in **Settings → Local AI → Host** (or **OpenMemo → Ollama Host…**). |
 | Link previews for antibot sites don't enrich | The first-run Chromium fetch hasn't finished (or failed). It degrades gracefully to plain HTTP; relaunch to retry. |
 | Video thumbnails / "Make it local" muxing fail | The bundled ffmpeg isn't arm64. Rebuild with `FFMPEG_SRC` pointing at a known static arm64 binary. |
 

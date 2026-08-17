@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type ReactElement } from 'react';
-import { Outlet, useLocation } from 'react-router-dom';
+import { Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { AnimatePresence, motion } from 'framer-motion';
 import {
   DndContext,
@@ -31,6 +31,7 @@ import { PlaylistCoverHost } from './PlaylistCoverHost';
 import { DeleteToast } from './DeleteToast';
 import { NoticeToast } from './NoticeToast';
 import { AudioPlayerProvider } from '@/lib/audioPlayer';
+import { settingsApi } from '@/lib/api';
 import { Icon } from './Icon';
 import { useTransitionConfig, type TransitionConfig } from '@/lib/transitionConfig';
 import { useAppStore } from '@/stores/appStore';
@@ -63,6 +64,7 @@ export function Layout() {
   const setSidebarOpen = useAppStore((s) => s.setSidebarOpen);
   const isMobile = useIsMobile();
   const location = useLocation();
+  const navigate = useNavigate();
 
   const [txConfig, setTxConfig, resetTxConfig] = useTransitionConfig();
 
@@ -74,6 +76,22 @@ export function Layout() {
     window.addEventListener('openmemo:quick-add', openAdd);
     return () => window.removeEventListener('openmemo:quick-add', openAdd);
   }, [setAddPanelOpen]);
+
+  // Cmd+, on macOS. A client-side route change, so nothing is refetched and the
+  // page keeps its state; the shell dispatches the event rather than loading a
+  // URL for the same reason.
+  useEffect(() => {
+    const go = () => navigate('/settings');
+    window.addEventListener('openmemo:open-settings', go);
+    // The shell dispatches this from the main process and cannot know when the
+    // effect has run, so it polls for this marker rather than firing into a
+    // document that is painted but not listening yet.
+    (window as unknown as { __openmemoSettingsListener?: boolean }).__openmemoSettingsListener = true;
+    return () => {
+      window.removeEventListener('openmemo:open-settings', go);
+      (window as unknown as { __openmemoSettingsListener?: boolean }).__openmemoSettingsListener = false;
+    };
+  }, [navigate]);
 
   const [overlayKey, setOverlayKey] = useState(0);
   const [overlayTheme, setOverlayTheme] = useState(tweaks.theme);
@@ -223,6 +241,16 @@ export function Layout() {
     window.addEventListener('keydown', h);
     return () => window.removeEventListener('keydown', h);
   }, [setSearchOpen, setAddPanelOpen, setSidebarOpen]);
+
+  // Network came back: drain Telegram now rather than serving out an interval
+  // that started before the drop. Telegram only holds a share for 24 hours, so
+  // every missed window costs something. The browser fires `online` on a real
+  // transition only, and the endpoint is a no-op when the relay is off.
+  useEffect(() => {
+    const back = () => void settingsApi.telegramPollNow('online').catch(() => {});
+    window.addEventListener('online', back);
+    return () => window.removeEventListener('online', back);
+  }, []);
 
   // Close the off-canvas drawer whenever the route changes (tapping a nav item
   // inside the drawer navigates, then this dismisses it).

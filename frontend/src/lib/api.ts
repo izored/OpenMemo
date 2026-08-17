@@ -229,7 +229,8 @@ export const ingestApi = {
       const sizeMb = (file.size / (1024 * 1024)).toFixed(1);
       throw new Error(
         `Upload aborted (${sizeMb} MB). The server or a proxy refused the request before a response arrived. ` +
-        `If you are behind nginx/Docker, raise client_max_body_size; in dev mode make sure the Vite proxy points to uvicorn (default :8099).`,
+        `Check Max upload size in Settings. If you put your own proxy in front of openMemo, raise its ` +
+        `body-size cap too; in dev, check the Vite proxy points at uvicorn (default :8099).`,
         { cause: e },
       );
     }
@@ -428,13 +429,37 @@ export interface AppSettings {
   settings_card_layout: { left: string[]; right: string[] } | Record<string, never>;
   telegram_token_present: boolean;
   telegram_user_locked: boolean;
+  /** Read-only. Which build is serving this SPA: the packaged Mac app, a Docker
+   *  stack, or a dev checkout. Anything that names a file path, a port or an
+   *  update command must branch on this (see lib/install.ts). */
+  install_kind: InstallKind;
+  /** Read-only. `Darwin` | `Windows` | `Linux`, as the BACKEND sees itself. Not
+   *  the viewer's OS: a Mac can be looking at the Docker install. */
+  platform: string;
+  /** Read-only. Where the backend looks for Ollama. Comes from env everywhere;
+   *  only the Mac app can change it from the page, through its own shell. */
+  ollama_host: string;
 }
+
+export type InstallKind = 'macos' | 'docker' | 'dev';
 
 export interface TelegramRelayStatus {
   running: boolean;
+  /** When the relay last TRIED. */
   last_poll_at: string | null;
+  /** When Telegram last ANSWERED. The one to show: a poll that failed still
+   *  stamps `last_poll_at`, which is how the card used to look healthy offline. */
+  last_success_at: string | null;
   last_error: string | null;
   saved_count: number;
+  /** Hours since Telegram last answered, across restarts. Null if it never has. */
+  hours_since_success: number | null;
+  /** Past this, the 24 hour drop is close enough to warn about. */
+  stale_after_hours: number;
+  /** The backend's own verdict. Branch on this, not on the number: the number
+   *  is null when Telegram has NEVER answered, which is the worst case, not a
+   *  healthy one. */
+  stale: boolean;
   telegram_token_present: boolean;
   telegram_user_locked: boolean;
 }
@@ -561,6 +586,16 @@ export const settingsApi = {
       method: 'DELETE',
     }),
   telegramStatus: () => fetchJSON<TelegramRelayStatus>('/settings/telegram/status'),
+  /** Drain Telegram now instead of waiting out the poll interval. Fired when
+   *  the network comes back; the macOS shell fires it on wake and unlock. */
+  telegramPollNow: (reason: string) =>
+    // The body is not payload, it is the preflight. A bodyless POST is a CORS
+    // simple request, so any page the user has open could drive this endpoint
+    // cross-origin and make the backend hammer Telegram with their bot token.
+    fetchJSON<{ kicked: boolean; running: boolean; telegram_enabled: boolean }>(
+      '/settings/telegram/poll-now',
+      { method: 'POST', body: JSON.stringify({ reason }) },
+    ),
   // Instagram login (final-fallback session for IG pulls). Writes into the same
   // shared cookie jar. The password is never stored — used once to sign in.
   instagramStatus: () =>

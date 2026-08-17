@@ -3,6 +3,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import { Icon } from './Icon';
 import { ingestApi } from '@/lib/api';
 import { useAppStore } from '@/stores/appStore';
+import { MOD_ENTER } from '@/lib/install';
 import { cn } from '@/lib/utils';
 
 export function FullscreenWriter() {
@@ -76,7 +77,7 @@ export function FullscreenWriter() {
             disabled={busy}
           >
             <span>{busy ? 'Saving…' : 'Save Memo'}</span>
-            <span className="mono om-add-kbd-inv">⌘⏎</span>
+            <span className="mono om-add-kbd-inv">{MOD_ENTER}</span>
           </button>
         </div>
       </div>

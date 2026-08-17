@@ -20,7 +20,18 @@ class OllamaModelMissing(Exception):
 
 class OllamaClient:
     def __init__(self):
-        self.hosts = settings.OLLAMA_HOSTS if settings.OLLAMA_HOSTS else [settings.OLLAMA_HOST]
+        # OLLAMA_HOST first, then the fallback list.
+        #
+        # This used to be `OLLAMA_HOSTS or [OLLAMA_HOST]`, and OLLAMA_HOSTS has a
+        # non-empty default, so OLLAMA_HOST was never read at all. The macOS app
+        # sets only OLLAMA_HOST: its "Ollama Host" sheet saved the value,
+        # restarted the backend, and the backend then ignored it and probed the
+        # four defaults. The setting appeared to work and did nothing unless the
+        # host happened to already be one of them.
+        fallbacks = list(settings.OLLAMA_HOSTS) if settings.OLLAMA_HOSTS else []
+        primary = (settings.OLLAMA_HOST or "").strip()
+        ordered = ([primary] if primary else []) + [h for h in fallbacks if h != primary]
+        self.hosts = ordered or ["http://localhost:11434"]
         self.timeout = httpx.Timeout(180.0, connect=10.0)
         self._working_host: str | None = None
         self._host_cache_time: float = 0.0

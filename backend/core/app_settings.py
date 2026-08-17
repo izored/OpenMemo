@@ -14,6 +14,7 @@ from pathlib import Path
 from typing import Any
 
 from backend.config import settings
+from backend.core.install import install_kind, os_name
 
 _PATH = Path(settings.DATA_DIR) / "app_settings.json"
 # yt-dlp cookie jar (Netscape cookies.txt). Used to download age-restricted /
@@ -148,6 +149,19 @@ def _read() -> dict[str, Any]:
     return dict(_DEFAULTS)
 
 
+def _host_without_credentials(host: str) -> str:
+    """A host safe to hand back over the API. Never the userinfo half."""
+    try:
+        from urllib.parse import urlsplit, urlunsplit
+
+        parts = urlsplit(host)
+        if not parts.netloc or "@" not in parts.netloc:
+            return host
+        return urlunsplit((parts.scheme, parts.netloc.rsplit("@", 1)[-1], parts.path, "", ""))
+    except ValueError:
+        return ""
+
+
 def get_settings() -> dict[str, Any]:
     # `yt_cookies_present` is computed from disk, never persisted in the JSON —
     # so the UI can show cookie status without ever exposing the jar itself.
@@ -159,6 +173,7 @@ def get_settings() -> dict[str, Any]:
     data.pop(_TG_USER_KEY, None)
     data.pop(_CANARY_KEY, None)
     data.pop(_INTEGRITY_KEY, None)
+    data.pop(_TG_SUCCESS_KEY, None)
     data.pop(_MUSIC_RELAY_KEY, None)
     # Mesh key material. `mesh_secret` is the 32-byte root every Mesh key is
     # derived from, and `mesh_code_words` is the same secret in the form a
@@ -174,6 +189,18 @@ def get_settings() -> dict[str, Any]:
         "hidden_passcode_set": hidden_passcode_set(),
         "telegram_token_present": telegram_token_present(),
         "telegram_user_locked": telegram_user_locked(),
+        # Not preferences: facts about the install, so the one SPA served by the
+        # Mac app, Docker and a dev checkout can stop telling two thirds of its
+        # users something false about paths, ports and updates (core/install.py).
+        "install_kind": install_kind(),
+        "platform": os_name(),
+        # Read-only. Where the backend looks for Ollama. Set by env everywhere;
+        # the Mac app writes that env through its own settings store, so the
+        # Settings page can offer to change it there and only there.
+        # Credentials stripped: this endpoint is reachable by any local process
+        # and by the browser extension origin, and an env-set host can carry
+        # http://user:pass@host.
+        "ollama_host": _host_without_credentials(settings.OLLAMA_HOST),
     }
 
 
@@ -326,6 +353,30 @@ def set_library_integrity(result: dict) -> None:
     with _LOCK:
         current = _read()
         current[_INTEGRITY_KEY] = result
+        _write_raw(current)
+
+
+# Last time Telegram actually answered (services/telegram_relay.py). A health
+# record like the two above, so it is stripped from the settings API and
+# surfaced by /telegram/status instead.
+#
+# It has to survive a restart. Telegram drops an undelivered share after 24
+# hours, and "when did we last get through" is the only way to know whether that
+# clock is running out. Kept in memory only, it resets to None on every launch,
+# which is precisely the moment the question matters: the app has just opened
+# after being closed for who knows how long.
+_TG_SUCCESS_KEY = "telegram_last_success_at"
+
+
+def get_telegram_last_success() -> str | None:
+    value = _read().get(_TG_SUCCESS_KEY)
+    return value if isinstance(value, str) else None
+
+
+def set_telegram_last_success(iso: str) -> None:
+    with _LOCK:
+        current = _read()
+        current[_TG_SUCCESS_KEY] = iso
         _write_raw(current)
 
 

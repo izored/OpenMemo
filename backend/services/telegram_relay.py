@@ -17,6 +17,13 @@ Cadence (user decision, plan instagram-telegram-capture): poll every
 "active window" of long-polls open for a few minutes after any activity so
 collection-button taps get an instant response instead of waiting a full
 interval.
+
+Telegram's queue has one hard limit: an undelivered update is kept for **24
+hours** and then dropped. Nothing recovers it afterwards (a bot cannot read chat
+history), so the whole job of this service on a laptop is to be reachable at
+least once a day. `kick()` exists for that: the macOS shell calls it on wake and
+unlock, because macOS stops the monotonic clock during system sleep, so a lid
+closed for eight hours leaves a 15 minute timer with 15 minutes still to run.
 """
 import asyncio
 import logging
@@ -24,15 +31,17 @@ import os
 import random
 import re
 import uuid
-from datetime import datetime
+from datetime import datetime, timezone
 
 import httpx
 
 from backend.core.app_settings import (
     get_settings,
+    get_telegram_last_success,
     get_telegram_token,
     get_telegram_allowed_user,
     set_telegram_allowed_user,
+    set_telegram_last_success,
 )
 from backend.core.job_handlers import queue_task
 from backend.db.database import AsyncSessionLocal
@@ -51,12 +60,189 @@ _LONG_POLL_S = 25
 _BATCH_JITTER_S = (10, 30)
 
 # Live status for the Settings UI (read via /api/settings/telegram/status).
+#
+# `last_poll_at` is when we last TRIED, `last_success_at` is when Telegram last
+# ANSWERED. Keeping only the first one is how the UI used to read "Polling. Last
+# check 14:32" through an entire flight with no wifi: every call was failing,
+# and every failure was being swallowed one level down.
 RELAY_STATUS: dict = {
     "running": False,
+    # When this process started polling. Used to tell "brand new" apart from
+    # "has never once got through", which are the same None otherwise.
+    "running_since": None,
     "last_poll_at": None,
+    "last_success_at": None,
     "last_error": None,
     "saved_count": 0,
 }
+
+# Set to make the loop drain now instead of waiting out its interval. Fired by
+# POST /api/settings/telegram/poll-now, which the macOS shell calls on wake and
+# unlock and the SPA calls when the network comes back.
+#
+# Held per event loop, not as one module-level Event: an asyncio.Event binds
+# itself to the first loop that touches it and raises on every other one, so a
+# single instance breaks the moment the relay is restarted on a fresh loop.
+# Rebinding is the WAITER's job only, never the kicker's (see `kick`).
+_KICK: asyncio.Event | None = None
+_KICK_LOOP: asyncio.AbstractEventLoop | None = None
+
+
+def _adopt_kick_event() -> asyncio.Event:
+    """Take ownership of the kick event for the loop that is about to wait.
+
+    Only the WAITER may (re)bind. An Event belongs to the loop that awaits it,
+    so the waiter is the one that knows which loop that is.
+    """
+    global _KICK, _KICK_LOOP
+    loop = asyncio.get_running_loop()
+    if _KICK is None or _KICK_LOOP is not loop:
+        _KICK = asyncio.Event()
+        _KICK_LOOP = loop
+    return _KICK
+
+
+def kick() -> None:
+    """Ask the relay to poll immediately. No-op if nothing is waiting.
+
+    Deliberately does NOT create or rebind the event. An earlier version called
+    the same helper the waiter used, so a kick arriving from a different loop
+    replaced the very Event the relay was parked on: that kick was lost, and so
+    was every later one for the rest of the interval, because the relay was
+    still awaiting the orphan.
+    """
+    try:
+        loop = asyncio.get_running_loop()
+    except RuntimeError:
+        return  # no running loop, so nothing here is waiting
+    if _KICK is None or _KICK_LOOP is not loop:
+        return
+    _KICK.set()
+
+
+async def _sleep_or_kick(seconds: float) -> None:
+    """Wait out the interval, or return early when someone kicks."""
+    event = _adopt_kick_event()
+    try:
+        await asyncio.wait_for(event.wait(), timeout=seconds)
+    except asyncio.TimeoutError:
+        pass
+    finally:
+        event.clear()
+
+
+# Telegram drops an undelivered share at 24 hours. Warn at 20, which leaves
+# four hours to do something about it, and is far enough from a normal night
+# with the lid shut that it never cries wolf.
+STALE_AFTER_HOURS = 20.0
+
+# Persisting on every long poll would rewrite the settings file every 25
+# seconds. Ten minutes of slack cannot change the answer to "has it been more
+# than twenty hours".
+#
+# Throttled on the WALL clock, not `time.monotonic()`. Monotonic stops during
+# macOS sleep, which is the entire environment this feature exists for: a laptop
+# that drains once a day accumulates roughly a minute of monotonic time between
+# drains, never reaches ten, and never persists. The disk stamp would then sit
+# days behind a perfectly healthy relay, and the next launch would read that as
+# "we have not reached Telegram in 72 hours" and shout about it.
+_SUCCESS_PERSIST_EVERY_S = 600
+_last_persisted_iso: str | None = None
+
+# A drain that follows a gap this much longer than the configured interval is a
+# catch-up worth telling the owner about, on the phone they shared the links
+# from. A flat two hours would fire after every ordinary poll once the interval
+# is set to two hours, which the setting allows.
+_RECOVERY_NOTICE_HOURS = 2.0
+
+# A relay that has been up this long without Telegram ever answering is broken,
+# not new. That is the shape of a mistyped or revoked token.
+_NEVER_ANSWERED_GRACE_HOURS = 1.0
+
+
+def _to_naive_utc(iso: str) -> datetime | None:
+    """Parse one of our stamps. None if it is not one.
+
+    `datetime.fromisoformat` accepts offsets and (3.11+) a trailing Z, so a
+    stamp written by anything but `utcnow().isoformat()` parses fine and then
+    explodes on subtraction against a naive `utcnow()`. That raised out of
+    `hours_since_success`, past the guard, into the relay's generic handler, and
+    wedged the loop in a 60 second retry that never called Telegram again.
+    """
+    try:
+        then = datetime.fromisoformat(iso)
+    except (TypeError, ValueError):
+        return None
+    if then.tzinfo is not None:
+        then = then.astimezone(timezone.utc).replace(tzinfo=None)
+    return then
+
+
+def _note_success() -> None:
+    """Record that Telegram answered, in memory always and on disk sometimes."""
+    global _last_persisted_iso
+    now = datetime.utcnow()
+    stamp = now.isoformat()
+    RELAY_STATUS["last_success_at"] = stamp
+
+    prior_iso = _last_persisted_iso or get_telegram_last_success()
+    prior = _to_naive_utc(prior_iso) if prior_iso else None
+    if prior and (now - prior).total_seconds() < _SUCCESS_PERSIST_EVERY_S:
+        return
+    try:
+        set_telegram_last_success(stamp)
+        # Only after the write actually landed. Advancing it first meant one
+        # transient PermissionError blackholed the stamp for ten minutes, and a
+        # lid closed inside that window lost it entirely.
+        _last_persisted_iso = stamp
+    except Exception as e:  # a settings write must never kill the relay
+        log.warning("could not persist telegram last-success: %r", e)
+
+
+def hours_since_success() -> float | None:
+    """Hours since Telegram last answered, across restarts. None if never.
+
+    Falls back to the persisted stamp, which is the whole point: right after a
+    launch the in-memory value is empty and the gap is at its widest.
+    """
+    iso = RELAY_STATUS.get("last_success_at") or get_telegram_last_success()
+    if not iso:
+        return None
+    then = _to_naive_utc(iso)
+    if then is None:
+        return None
+    try:
+        return max(0.0, (datetime.utcnow() - then).total_seconds() / 3600)
+    except (OverflowError, OSError, ValueError):
+        return None
+
+
+def is_stale() -> bool:
+    """Has it been long enough that Telegram is about to start dropping shares?
+
+    "Never answered" counts. It reads as None, every caller treated None as
+    healthy, and the user it describes is the worst off of anyone: a token that
+    was wrong from the first minute produces no warning anywhere while every
+    share they send is discarded a day later.
+    """
+    hours = hours_since_success()
+    if hours is not None:
+        return hours >= STALE_AFTER_HOURS
+    started = RELAY_STATUS.get("running_since")
+    if not started:
+        return False
+    since = _to_naive_utc(started)
+    if since is None:
+        return False
+    return (datetime.utcnow() - since).total_seconds() / 3600 >= _NEVER_ANSWERED_GRACE_HOURS
+
+
+class TelegramUnreachable(RuntimeError):
+    """Telegram could not be reached, or refused the call.
+
+    Raised on the getUpdates path only. A failed sendMessage is cosmetic: a lost
+    receipt is not a lost capture, so those keep returning None.
+    """
 
 # getUpdates offset lives in memory only. After a restart Telegram redelivers
 # unacked updates; the ingest dedupe (source_url) makes reprocessing harmless.
@@ -67,17 +253,47 @@ def _api(token: str, method: str) -> str:
     return f"https://api.telegram.org/bot{token}/{method}"
 
 
-async def _tg(client: httpx.AsyncClient, token: str, method: str, **params):
-    """One Telegram Bot API call. Returns the `result` payload or None."""
+async def _tg_strict(client: httpx.AsyncClient, token: str, method: str, **params):
+    """One Telegram Bot API call. Raises TelegramUnreachable on any failure.
+
+    Note the `result` payload is returned as-is, so an empty list from a quiet
+    getUpdates is a SUCCESS, not a failure. Callers must not treat falsy as
+    broken; that conflation is the bug this split exists to prevent.
+    """
     try:
         resp = await client.post(_api(token, method), json=params)
         body = resp.json()
-        if body.get("ok"):
-            return body.get("result")
-        log.warning("telegram %s failed: %s", method, body.get("description"))
     except Exception as e:
-        log.warning("telegram %s error: %r", method, e)
-    return None
+        raise TelegramUnreachable(f"{type(e).__name__}: {e}") from e
+    # A proxy or captive portal can answer with bare `null` or a list under a
+    # JSON content type. `body.get` on that is an AttributeError, which escaped
+    # `_tg` too and killed a cycle over a cosmetic sendMessage.
+    if not isinstance(body, dict):
+        raise TelegramUnreachable(f"unexpected response: {type(body).__name__}")
+    if not body.get("ok"):
+        raise TelegramUnreachable(str(body.get("description") or "call rejected"))
+    return body.get("result")
+
+
+async def _tg(client: httpx.AsyncClient, token: str, method: str, **params):
+    """As `_tg_strict`, but returns None instead of raising. For the chatty
+    calls (receipts, keyboards, callback answers) where failing is cosmetic."""
+    try:
+        return await _tg_strict(client, token, method, **params)
+    except TelegramUnreachable as e:
+        log.warning("telegram %s: %s", method, scrub_token(str(e)))
+        return None
+
+
+def scrub_token(text: str) -> str:
+    """Never let the bot token out in an error string.
+
+    The token is part of the request URL (`_api`), so any exception whose
+    message quotes the URL would carry it into `last_error`, which is served by
+    an unauthenticated endpoint and written to the shell log.
+    """
+    token = get_telegram_token()
+    return text.replace(token, "<token>") if token else text
 
 
 async def _get_or_create_collection(db, name: str) -> str:
@@ -383,13 +599,18 @@ async def _handle_message(client, token: str, msg: dict, settings: dict) -> str 
 
 
 async def _drain(client, token: str, settings: dict, timeout: int) -> bool:
-    """One getUpdates call + processing. Returns True on any activity."""
+    """One getUpdates call + processing. Returns True on any activity.
+
+    Raises TelegramUnreachable when the call itself failed, so the caller can
+    tell "nothing new" from "we never got through".
+    """
     global _offset
-    updates = await _tg(
+    updates = await _tg_strict(
         client, token, "getUpdates",
         offset=_offset, limit=100, timeout=timeout,
         allowed_updates=["message", "callback_query"],
     )
+    _note_success()
     if not updates:
         return False
 
@@ -451,6 +672,7 @@ async def run_relay_loop() -> None:
         return
 
     RELAY_STATUS["running"] = True
+    RELAY_STATUS["running_since"] = datetime.utcnow().isoformat()
     log.info("telegram relay loop started")
     while True:
         try:
@@ -476,10 +698,42 @@ async def run_relay_loop() -> None:
             except (TypeError, ValueError):
                 minutes = 15
 
+            # Measured BEFORE the drain: how long we were out of touch, and how
+            # many saves this cycle adds. Together they decide whether this was
+            # an ordinary poll or a catch-up worth mentioning.
+            gap_hours = hours_since_success()
+            saved_before = RELAY_STATUS["saved_count"]
+
             async with httpx.AsyncClient(timeout=httpx.Timeout(_LONG_POLL_S + 10)) as client:
-                activity = await _drain(client, token, settings, timeout=0)
                 RELAY_STATUS["last_poll_at"] = datetime.utcnow().isoformat()
+                activity = await _drain(client, token, settings, timeout=0)
                 RELAY_STATUS["last_error"] = None
+
+                # Back after a real absence, with something to show for it. Say
+                # so on Telegram: that is the phone the links were shared from,
+                # and it answers "did the laptop pick those up" without opening
+                # the laptop.
+                #
+                # Sent before the active window, not after: a wifi drop inside
+                # that window raises straight past this block, and by the next
+                # cycle the gap has been reset by this drain's own success, so
+                # the message could never be sent at all.
+                #
+                # The threshold scales with the interval. A flat two hours fires
+                # after every ordinary poll once the user picks a two hour
+                # interval, which the setting offers.
+                caught_up = RELAY_STATUS["saved_count"] - saved_before
+                owner = get_telegram_allowed_user()
+                notice_after = max(_RECOVERY_NOTICE_HOURS, (minutes / 60) * 2)
+                if caught_up > 0 and owner and (gap_hours or 0) >= notice_after:
+                    await _tg(
+                        client, token, "sendMessage", chat_id=owner,
+                        text=(
+                            f"Back online after {gap_hours:.0f}h. "
+                            f"Saved {caught_up} share{'' if caught_up == 1 else 's'} "
+                            f"that {'was' if caught_up == 1 else 'were'} waiting."
+                        ),
+                    )
 
                 # Active window: stay responsive right after activity so button
                 # taps and follow-up shares land instantly, then go quiet.
@@ -490,11 +744,23 @@ async def run_relay_loop() -> None:
                     else:
                         window_left -= _LONG_POLL_S
 
-            await asyncio.sleep(minutes * 60)
+            await _sleep_or_kick(minutes * 60)
         except asyncio.CancelledError:
             RELAY_STATUS["running"] = False
             raise
-        except Exception as e:
-            RELAY_STATUS["last_error"] = str(e)[:200]
-            log.error("telegram relay cycle failed: %r", e)
+        except TelegramUnreachable as e:
+            # Offline, captive portal, revoked token. Say so instead of leaving
+            # a stale "last check" on the Settings page looking healthy. Kickable
+            # too, so plugging the wifi back in retries at once.
+            RELAY_STATUS["last_error"] = scrub_token(str(e))[:200]
+            log.warning("telegram relay could not reach Telegram: %s", scrub_token(str(e)))
+            # NOT kickable. This is the backoff, and anything that can interrupt
+            # it can also defeat it: a page looping the poll-now endpoint would
+            # keep this at zero and hammer Telegram with the user's token until
+            # it rate-limits the bot. Sixty seconds against Telegram's 24 hours
+            # is a cheap thing to wait.
             await asyncio.sleep(60)
+        except Exception as e:
+            RELAY_STATUS["last_error"] = scrub_token(str(e))[:200]
+            log.error("telegram relay cycle failed: %r", e)
+            await asyncio.sleep(60)  # see above: a backoff that can be skipped is not one

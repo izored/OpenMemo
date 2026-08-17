@@ -32,6 +32,10 @@ export interface ShellSettings {
   windowState?: WindowState;
   /** A release version the user chose to skip in the update notifier. */
   updateSkipVersion?: string;
+  /** When the "we have not reached Telegram" notification last appeared, as an
+   *  epoch ms. Persisted rather than kept in memory so quitting and relaunching
+   *  does not re-show the same warning on every single launch. */
+  staleWarnedAt?: number;
 }
 
 const DEFAULTS: ShellSettings = {

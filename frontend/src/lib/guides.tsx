@@ -37,7 +37,9 @@ const cookiesSteps: GuideStep[] = [
           happens to it.
         </p>
         <ul style={{ margin: '12px 0 0', paddingLeft: 18, lineHeight: 1.7 }}>
-          <li>It lives <b>only on this machine</b>, tucked inside openMemo's own private data store (a Docker volume), as a file named <code>yt_cookies.txt</code>. It is never put on the internet.</li>
+          {/* This guide is a static export with no hook, so it stays install-neutral.
+              The exact path is on the Settings row that sends you here. */}
+          <li>It lives <b>only on this machine</b>, tucked inside openMemo's own private data store, as a file named <code>yt_cookies.txt</code>. It is never put on the internet.</li>
           <li><b>Everything runs local.</b> yt-dlp is a small program sitting on this machine, not a website. It reads the cookie right here on disk.</li>
           <li>
             The <b>one and only</b> moment a cookie touches the network is when yt-dlp asks YouTube
