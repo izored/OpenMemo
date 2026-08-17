@@ -20,8 +20,8 @@
     8.  after pushing main: origin really moved, BEFORE the tag is pushed
     9.  after pushing the tag: the GitHub Release exists and its body is the
         changelog section, not an empty or auto-generated one
-   10.  the profile-repo announcement is dispatched explicitly, because
-        `release: published` does NOT fire for a release made by GITHUB_TOKEN
+   10.  the profile repo ended up with exactly ONE entry for this tag.
+        release.yml announces it from a dependent job; this script only checks
 
   Anything that fails between the first write and the push rolls the working
   tree back. Anything that fails after the push prints the exact recovery
@@ -448,14 +448,28 @@ else {
 Write-Host "       $($release.name)"
 Write-Host "       $($release.url)"
 
-# `release: published` does NOT fire when the release is created by a workflow
-# using GITHUB_TOKEN, which is how release.yml creates ours — so the profile
-# repo announcement has to be asked for explicitly.
+# The profile-repo announcement is NOT dispatched from here. release.yml has a
+# dependent `notify` job that does it, because `release: published` never fires
+# for a release created by GITHUB_TOKEN. Dispatching notify-changelog.yml here
+# as well produced a SECOND identical entry in izored/izored on 2026-08-14, and
+# there is no de-duplication on the receiving end. So this step verifies rather
+# than announces.
 Write-Host ""
-Step "dispatching the profile-repo announcement..."
-& $gh workflow run notify-changelog.yml -f tag=$tag 2>&1 | Out-Null
-if ($LASTEXITCODE -eq 0) { Ok "notify-changelog dispatched for $tag" }
-else { Warn2 "could not dispatch notify-changelog — run it manually: gh workflow run notify-changelog.yml -f tag=$tag" }
+Step "checking the profile repo received $tag..."
+$profileJson = & $gh api repos/izored/izored/contents/CHANGELOG.json --jq '.content' 2>$null
+if ($LASTEXITCODE -ne 0 -or -not $profileJson) {
+    Warn2 "could not read izored/izored CHANGELOG.json to confirm the announcement"
+}
+else {
+    $decoded = [Text.Encoding]::UTF8.GetString([Convert]::FromBase64String(($profileJson -replace '\s', '')))
+    $hits = ([regex]::Matches($decoded, '"version"\s*:\s*"' + [regex]::Escape($tag) + '"')).Count
+    if ($hits -eq 1) { Ok "izored/izored has exactly one entry for $tag" }
+    elseif ($hits -eq 0) {
+        Warn2 "izored/izored has NO entry for $tag yet. release.yml's notify job may still be running, or it failed."
+        Warn2 "check: gh run list --workflow=release.yml --limit 1"
+    }
+    else { Warn2 "izored/izored has $hits entries for $tag. One is a duplicate and should be removed by hand." }
+}
 
 Write-Host ""
 Write-Host "  Released $tag" -ForegroundColor Green
