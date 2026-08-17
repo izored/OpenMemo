@@ -18,6 +18,7 @@ export function AppearancePanel() {
   const setOpen = useAppStore((s) => s.setAppearancePanelOpen);
   const t = useAppStore((s) => s.tweaks);
   const setTweak = useAppStore((s) => s.setTweak);
+  const showNotice = useAppStore((s) => s.showNotice);
   const fileRef = useRef<HTMLInputElement>(null);
   const cloudSupported = CloudRenderer.supported();
 
@@ -43,7 +44,7 @@ export function AppearancePanel() {
     e.target.value = '';
     if (!f) return;
     if (f.size > 10 * 1024 * 1024) {
-      alert('Image over 10 MB. Lossless compression for large backgrounds is coming soon — please use a smaller image for now.');
+      showNotice('That image is over 10 MB. Lossless compression for large backgrounds is not built yet, so pick a smaller one for now.');
       return;
     }
     try {
@@ -54,7 +55,7 @@ export function AppearancePanel() {
       await settingsApi.uploadBackground(f);
       setTweak({ bgImage: `/api/settings/background?t=${Date.now()}`, bgPreset: '', bgMode: 'image' });
     } catch (err) {
-      alert((err as Error).message || 'Could not set background.');
+      showNotice((err as Error).message || 'Could not set background.');
     }
   };
 

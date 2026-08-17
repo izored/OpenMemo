@@ -13,6 +13,8 @@ All notable changes to OpenMemo are documented here.
 
 ### Changed
 
+- 🗨️ **No browser dialogs left anywhere.** The last of them were in the memo page, the music page, the appearance panel, the writer and both file-drop paths: re-downloading a playlist, deleting a pinned card, a failed save, a huge upload warning. Inside the Mac app each one rendered as a system sheet announcing "localhost:8099 says" and froze the window until it was dismissed. They all use openMemo's own dialog and toast now, and the ones that delete something say what goes and what stays.
+
 - 🔄 **One update check, not two.** In the Mac app the version number at the bottom of Settings ran its own check against GitHub and then told you to run `git pull`, while the app itself ran a separate check on launch and offered you the `.dmg`. Two answers to the same question, and only one of them was true. The version number now hands the whole thing to the app's own updater, so there is one check and one instruction.
 
 - 🗨️ **The destructive confirmations look like openMemo.** Resetting the workspace, restoring a backup and clearing the preview cache all went through the browser's own dialog, which inside the Mac app is a system sheet that says "localhost:8099 says" and freezes the window while it is up. They are proper openMemo dialogs now, and the two-step ones say what the second step is for instead of repeating themselves. Results and failures arrive as the same quiet toast everything else uses.
