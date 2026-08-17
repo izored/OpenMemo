@@ -239,3 +239,112 @@ class TestHostLock:
         assert host_lock.claim("probe2") is True
         assert host_lock.claim("probe2") is True
         host_lock.release("probe2")
+
+
+class TestUnreachableIsNotSilence:
+    """A relay that cannot reach Telegram must say so.
+
+    `_tg` used to swallow every exception and return None, which `_drain` read
+    as "no new messages". The loop then cleared `last_error` and stamped
+    `last_poll_at`, so the Settings card said "Polling. Last check 14:32"
+    through an entire flight with no wifi while every call was failing.
+    """
+
+    async def test_transport_failure_raises_rather_than_returning_none(self):
+        import httpx
+
+        from backend.services import telegram_relay as tr
+
+        class DeadClient:
+            async def post(self, *a, **kw):
+                raise httpx.ConnectError("nodename nor servname provided")
+
+        try:
+            await tr._tg_strict(DeadClient(), "tok", "getUpdates")
+        except tr.TelegramUnreachable as e:
+            assert "ConnectError" in str(e)
+        else:
+            raise AssertionError("a dead connection must raise, not return None")
+
+    async def test_api_level_rejection_raises_with_the_reason(self):
+        from backend.services import telegram_relay as tr
+
+        class RejectingClient:
+            async def post(self, *a, **kw):
+                class R:
+                    @staticmethod
+                    def json():
+                        return {"ok": False, "description": "Unauthorized"}
+
+                return R()
+
+        try:
+            await tr._tg_strict(RejectingClient(), "revoked", "getUpdates")
+        except tr.TelegramUnreachable as e:
+            assert "Unauthorized" in str(e)
+        else:
+            raise AssertionError("a revoked token must surface, not look quiet")
+
+    async def test_an_empty_update_list_is_success_not_failure(self):
+        """The trap in the split: getUpdates answering `[]` means "reached
+        Telegram, nothing new". Treating falsy as broken would flip a healthy
+        quiet relay into a permanent error state."""
+        from backend.services import telegram_relay as tr
+
+        class QuietClient:
+            async def post(self, *a, **kw):
+                class R:
+                    @staticmethod
+                    def json():
+                        return {"ok": True, "result": []}
+
+                return R()
+
+        assert await tr._tg_strict(QuietClient(), "tok", "getUpdates") == []
+
+    async def test_chatty_calls_still_swallow(self):
+        """Losing a receipt is not losing a capture, so `_tg` keeps returning
+        None for the cosmetic calls."""
+        import httpx
+
+        from backend.services import telegram_relay as tr
+
+        class DeadClient:
+            async def post(self, *a, **kw):
+                raise httpx.ConnectError("down")
+
+        assert await tr._tg(DeadClient(), "tok", "sendMessage") is None
+
+
+class TestKick:
+    """macOS stops the monotonic clock during system sleep, so the backend's
+    15 minute timer comes out of an eight hour nap with 15 minutes still to
+    run. Wake, unlock and reconnect all cut that short."""
+
+    async def test_a_kick_ends_the_wait_early(self):
+        import asyncio
+        import time
+
+        from backend.services import telegram_relay as tr
+
+        async def kick_soon():
+            await asyncio.sleep(0.02)
+            tr.kick()
+
+        started = time.monotonic()
+        await asyncio.gather(tr._sleep_or_kick(30), kick_soon())
+        assert time.monotonic() - started < 5, "the kick did not interrupt the sleep"
+
+    async def test_the_event_is_cleared_so_the_next_wait_still_waits(self):
+        import asyncio
+
+        from backend.services import telegram_relay as tr
+
+        tr.kick()
+        await tr._sleep_or_kick(30)          # consumed by the kick above
+        try:
+            await asyncio.wait_for(tr._sleep_or_kick(30), timeout=0.05)
+        except asyncio.TimeoutError:
+            pass                             # correct: it is waiting again
+        else:
+            raise AssertionError("a stale kick leaked into the next interval")

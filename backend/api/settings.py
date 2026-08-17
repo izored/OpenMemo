@@ -166,6 +166,28 @@ async def reset_telegram_user_lock():
     return {"telegram_user_locked": telegram_user_locked()}
 
 
+@router.post("/telegram/poll-now")
+async def poll_telegram_now():
+    """Drain Telegram immediately instead of waiting out the poll interval.
+
+    Called by the macOS shell on wake and unlock, and by the SPA when the
+    network comes back. Both matter because macOS stops the monotonic clock
+    during system sleep: a lid closed for eight hours leaves a 15 minute timer
+    with 15 minutes still to run, and Telegram only holds a share for 24 hours.
+
+    Returns `telegram_enabled` as well, so the caller can decide whether to keep
+    the app awake without a second request.
+    """
+    from backend.core.app_settings import get_settings as _get
+    from backend.services.telegram_relay import RELAY_STATUS, kick
+
+    enabled = bool(_get().get("telegram_enabled"))
+    running = bool(RELAY_STATUS.get("running"))
+    if running:
+        kick()
+    return {"kicked": running, "running": running, "telegram_enabled": enabled}
+
+
 @router.get("/telegram/status")
 async def read_telegram_status():
     """Live relay status for the Settings card."""

@@ -6,7 +6,17 @@
  * browser is ever opened. Ollama is user-provided — we only pass it the
  * host:port to talk to.
  */
-import { app, BrowserWindow, Menu, dialog, globalShortcut, ipcMain, shell } from 'electron';
+import {
+  app,
+  BrowserWindow,
+  Menu,
+  dialog,
+  globalShortcut,
+  ipcMain,
+  powerMonitor,
+  powerSaveBlocker,
+  shell,
+} from 'electron';
 import { spawn } from 'node:child_process';
 import path from 'node:path';
 import fs from 'node:fs';
@@ -208,6 +218,7 @@ async function openAppWindow(): Promise<void> {
       appendLog(`[shell] Backend up at ${backend.url}\n`);
       maybeInstallChromium(); // first-run, background, non-blocking
       flushPendingOpenFiles();
+      void nudgeRelay('boot');
     }
     const target = rendererOverride ?? backend!.url;
     await loadAppUrl(target);
@@ -283,6 +294,45 @@ function flushPendingOpenFiles(): void {
   if (pendingOpenFiles.length === 0) return;
   const batch = pendingOpenFiles.splice(0, pendingOpenFiles.length);
   void ingestFiles(batch);
+}
+
+// ── Telegram relay: wake it, and keep it awake ────────────────────────────
+// Telegram holds an undelivered share for 24 hours and then drops it, so the
+// whole job on a laptop is being reachable at least once a day. Two things
+// fight that. macOS stops the monotonic clock during system sleep, so the
+// backend's 15 minute timer comes out of an eight hour nap with 15 minutes
+// still to run. And App Nap stretches timers in a backgrounded app. Wake,
+// unlock and focus nudge the backend to drain now; App Nap is held off only
+// while phone capture is actually on, because a power blocker on a laptop is
+// not free.
+let lastNudge = 0;
+let suspendBlockerId: number | null = null;
+
+/** Hold off App Nap while phone capture is on, and only then. */
+function syncSuspendBlocker(relayOn: boolean): void {
+  if (relayOn && suspendBlockerId === null) {
+    suspendBlockerId = powerSaveBlocker.start('prevent-app-suspension');
+    appendLog('[shell] App Nap held off (phone capture is on).\n');
+  } else if (!relayOn && suspendBlockerId !== null) {
+    powerSaveBlocker.stop(suspendBlockerId);
+    suspendBlockerId = null;
+    appendLog('[shell] App Nap released.\n');
+  }
+}
+
+async function nudgeRelay(reason: string): Promise<void> {
+  if (!backend || !isBackendRunning()) return;
+  const now = Date.now();
+  if (now - lastNudge < 30_000) return; // focus fires constantly; once is enough
+  lastNudge = now;
+  try {
+    const res = await fetch(`${backend.url}api/settings/telegram/poll-now`, { method: 'POST' });
+    const body = (await res.json()) as { kicked?: boolean; telegram_enabled?: boolean };
+    appendLog(`[shell] relay nudge (${reason}) → kicked=${!!body.kicked}\n`);
+    syncSuspendBlocker(!!body.telegram_enabled);
+  } catch (e) {
+    appendLog(`[shell] relay nudge (${reason}) failed: ${e instanceof Error ? e.message : e}\n`);
+  }
 }
 
 /**
@@ -580,10 +630,19 @@ if (!app.requestSingleInstanceLock()) {
     app.on('activate', () => {
       if (!mainWindow) void openAppWindow();
     });
+
+    // Coming back from sleep, the lock screen, or another app: drain Telegram
+    // now rather than serving out a timer that did not advance while asleep.
+    powerMonitor.on('resume', () => void nudgeRelay('resume'));
+    powerMonitor.on('unlock-screen', () => void nudgeRelay('unlock'));
+    app.on('browser-window-focus', () => void nudgeRelay('focus'));
   });
 }
 
-app.on('will-quit', () => globalShortcut.unregisterAll());
+app.on('will-quit', () => {
+  globalShortcut.unregisterAll();
+  syncSuspendBlocker(false);
+});
 
 // macOS convention: closing the window keeps the app (and the warm backend)
 // alive in the Dock — reopening is instant. Everywhere else, close = quit.

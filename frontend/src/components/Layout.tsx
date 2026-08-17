@@ -31,6 +31,7 @@ import { PlaylistCoverHost } from './PlaylistCoverHost';
 import { DeleteToast } from './DeleteToast';
 import { NoticeToast } from './NoticeToast';
 import { AudioPlayerProvider } from '@/lib/audioPlayer';
+import { settingsApi } from '@/lib/api';
 import { Icon } from './Icon';
 import { useTransitionConfig, type TransitionConfig } from '@/lib/transitionConfig';
 import { useAppStore } from '@/stores/appStore';
@@ -223,6 +224,16 @@ export function Layout() {
     window.addEventListener('keydown', h);
     return () => window.removeEventListener('keydown', h);
   }, [setSearchOpen, setAddPanelOpen, setSidebarOpen]);
+
+  // Network came back: drain Telegram now rather than serving out an interval
+  // that started before the drop. Telegram only holds a share for 24 hours, so
+  // every missed window costs something. The browser fires `online` on a real
+  // transition only, and the endpoint is a no-op when the relay is off.
+  useEffect(() => {
+    const back = () => void settingsApi.telegramPollNow().catch(() => {});
+    window.addEventListener('online', back);
+    return () => window.removeEventListener('online', back);
+  }, []);
 
   // Close the off-canvas drawer whenever the route changes (tapping a nav item
   // inside the drawer navigates, then this dismisses it).
