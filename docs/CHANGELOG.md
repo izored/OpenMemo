@@ -7,6 +7,9 @@ All notable changes to OpenMemo are documented here.
 
 <!-- Add entries here as work lands: ### Added / ### Changed / ### Fixed -->
 
+---
+## [3.12.0] - 2026-08-17
+
 ### Added
 
 - 🧭 **openMemo knows whether it is the Mac app, the Docker stack, or a checkout.** One page is served by all three, and until now nothing in it could tell them apart, so every sentence naming a file path, a port or an update command was hardcoded and wrong for two thirds of the people reading it. The backend now reports which install it is, and the page reads it.
