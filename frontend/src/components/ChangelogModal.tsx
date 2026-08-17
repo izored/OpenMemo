@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { Icon } from './Icon';
+import { useInstall } from '@/lib/install';
 
 const REPO = 'izored/OpenMemo';
 
@@ -35,6 +36,7 @@ export function ChangelogModal({
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const modalRef = useRef<HTMLDivElement>(null);
+  const install = useInstall();
 
   useEffect(() => {
     const el = modalRef.current;
@@ -132,10 +134,21 @@ export function ChangelogModal({
                   }}
                 >
                   <span className="mono om-modal-eyebrow">How to update</span>
-                  <ol style={{ margin: 0, paddingLeft: 18, fontSize: 13, lineHeight: 1.7 }}>
-                    <li><code>git pull</code></li>
-                    <li><code>docker compose up -d --build</code> (or rerun the dev servers)</li>
-                  </ol>
+                  {/* The Mac app is a .dmg, not a checkout: `git pull` means
+                      nothing there, and the shell runs its own update check
+                      (macOS/src/update-notifier.ts) that offers the download.
+                      Both surfaces must say the same thing. */}
+                  {install.isMac ? (
+                    <ol style={{ margin: 0, paddingLeft: 18, fontSize: 13, lineHeight: 1.7 }}>
+                      <li>Download the new <code>.dmg</code> from the release below.</li>
+                      <li>Drag OpenMemo to Applications, replacing the old one. Your library stays put.</li>
+                    </ol>
+                  ) : (
+                    <ol style={{ margin: 0, paddingLeft: 18, fontSize: 13, lineHeight: 1.7 }}>
+                      <li><code>git pull</code></li>
+                      <li><code>docker compose up -d --build</code> (or rerun the dev servers)</li>
+                    </ol>
+                  )}
                 </div>
               )}
             </>

@@ -14,6 +14,7 @@ from pathlib import Path
 from typing import Any
 
 from backend.config import settings
+from backend.core.install import install_kind, os_name
 
 _PATH = Path(settings.DATA_DIR) / "app_settings.json"
 # yt-dlp cookie jar (Netscape cookies.txt). Used to download age-restricted /
@@ -174,6 +175,11 @@ def get_settings() -> dict[str, Any]:
         "hidden_passcode_set": hidden_passcode_set(),
         "telegram_token_present": telegram_token_present(),
         "telegram_user_locked": telegram_user_locked(),
+        # Not preferences: facts about the install, so the one SPA served by the
+        # Mac app, Docker and a dev checkout can stop telling two thirds of its
+        # users something false about paths, ports and updates (core/install.py).
+        "install_kind": install_kind(),
+        "platform": os_name(),
     }
 
 

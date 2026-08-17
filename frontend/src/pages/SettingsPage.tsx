@@ -10,6 +10,7 @@ import { MeshConflictModal } from '@/components/MeshConflictModal';
 import { MeshPairingPanel } from '@/components/MeshPairingPanel';
 import { meshApi, type MeshBatch } from '@/lib/api';
 import { ONBOARDING_KEY } from '@/lib/onboarding';
+import { useInstall } from '@/lib/install';
 import { useAppStore } from '@/stores/appStore';
 import { useIsMobile } from '@/lib/useBreakpoint';
 import { CookiesUpload } from '@/components/CookiesUpload';
@@ -739,15 +740,18 @@ function TelegramRelayRows({ profile, save }: { profile: AppSettings | null; sav
     setTokenPresent(r.telegram_token_present);
   };
 
+  // Show when Telegram last ANSWERED, never when we last tried. The card used
+  // to read "Polling. Last check 14:32" through a whole flight with no wifi,
+  // because a failed call still stamped the attempt.
   const statusLine = !present
     ? 'Paste a bot token from @BotFather to begin.'
     : !enabled
       ? 'Token stored. Turn the relay on to start polling.'
       : status?.last_error
-        ? `Error: ${status.last_error}`
-        : status?.last_poll_at
-          ? `Polling. Last check ${new Date(status.last_poll_at + 'Z').toLocaleTimeString()} · ${status.saved_count} saved this session`
-          : 'On — first poll runs within a minute.';
+        ? `Cannot reach Telegram: ${status.last_error}`
+        : status?.last_success_at
+          ? `Polling. Telegram last answered ${new Date(status.last_success_at + 'Z').toLocaleTimeString()}, ${status.saved_count} saved this session.`
+          : 'On. First poll runs within a minute.';
 
   return (
     <>
@@ -755,7 +759,7 @@ function TelegramRelayRows({ profile, save }: { profile: AppSettings | null; sav
         <div className="om-setting-row-text">
           <p>Telegram capture</p>
           <span className="mono">
-            Share any link to your private bot chat and it lands here, filed into "{profile?.telegram_default_collection || 'Bot Inbox'}". openMemo polls Telegram outbound — no open ports, and messages queue while this machine sleeps. {statusLine}
+            Share any link to your private bot chat and it lands here, filed into "{profile?.telegram_default_collection || 'Bot Inbox'}". openMemo polls Telegram outbound, so there are no open ports, and your shares wait on Telegram while this machine sleeps. Telegram holds them for 24 hours: openMemo catches up the moment it wakes, but leave it off for longer than a day and Telegram drops the older ones. {statusLine}
           </span>
         </div>
         <button
@@ -819,7 +823,7 @@ function TelegramRelayRows({ profile, save }: { profile: AppSettings | null; sav
       <div className="om-setting-row" style={{ borderTop: '1px solid var(--border)', marginTop: 8, paddingTop: 8 }}>
         <div className="om-setting-row-text">
           <p>Check every</p>
-          <span className="mono">How often openMemo asks Telegram for new shares. Capture is queued, not lost, between checks.</span>
+          <span className="mono">How often openMemo asks Telegram for new shares. Between checks they wait on Telegram, and waking this machine or reconnecting asks straight away.</span>
         </div>
         <select
           className="om-input"
@@ -1075,6 +1079,7 @@ export function SettingsPage() {
     navigate('/');
     setTimeout(() => setAppearancePanelOpen(true), 280);
   };
+  const install = useInstall();
   const [version, setVersion] = useState('');
   const [ollamaConnected, setOllamaConnected] = useState<boolean | null>(null);
   // null = still loading (skeleton); [] = loaded, none installed.
@@ -1133,7 +1138,7 @@ export function SettingsPage() {
       })
       .catch(() => {
         setMaxUploadMb(5120);
-        setProfile({ max_upload_mb: 5120, display_name: '', email: '', avatar_data_url: '', mailing_list_consent: false, auto_download_audio: true, auto_download_video: true, music_quality: '16', music_provider: 'qobuz', chat_model: '', num_ctx: 0, yt_cookies_present: false, bg_image_ext: '', hidden_passcode_set: false, telegram_enabled: false, telegram_poll_minutes: 15, telegram_default_collection: 'Bot Inbox', telegram_force_localize: true, telegram_token_present: false, telegram_user_locked: false, music_relay_enabled: false, mesh_enabled: false, mesh_reachable: false, settings_card_layout: {} });
+        setProfile({ max_upload_mb: 5120, display_name: '', email: '', avatar_data_url: '', mailing_list_consent: false, auto_download_audio: true, auto_download_video: true, music_quality: '16', music_provider: 'qobuz', chat_model: '', num_ctx: 0, yt_cookies_present: false, bg_image_ext: '', hidden_passcode_set: false, telegram_enabled: false, telegram_poll_minutes: 15, telegram_default_collection: 'Bot Inbox', telegram_force_localize: true, telegram_token_present: false, telegram_user_locked: false, music_relay_enabled: false, mesh_enabled: false, mesh_reachable: false, settings_card_layout: {}, install_kind: 'dev', platform: '' });
       });
   }, []);
 
@@ -1482,7 +1487,7 @@ export function SettingsPage() {
                 <div className="om-setting-row-text" style={{ maxWidth: 560 }}>
                   <p>Cookies for restricted downloads</p>
                   <span className="mono">
-                    Lets "Make it local" fetch age-restricted or private videos, and unlocks full-resolution uncropped Instagram photos (without cookies, Instagram only serves a 640px square crop). The cookie file stays on this machine, in openMemo's own data store (a Docker volume), as <code>yt_cookies.txt</code>. It is only handed to yt-dlp and gallery-dl to fetch media, never sent to any openMemo service (there isn't one). Use a throwaway account.{' '}
+                    Lets "Make it local" fetch age-restricted or private videos, and unlocks full-resolution uncropped Instagram photos (without cookies, Instagram only serves a 640px square crop). The cookie file stays on this machine, in <code>{install.dataHome}</code>, as <code>yt_cookies.txt</code>. It is only handed to yt-dlp and gallery-dl to fetch media, never sent to any openMemo service (there isn't one). Use a throwaway account.{' '}
                     <button type="button" onClick={() => openGuide('yt-cookies')} style={{ color: 'var(--accent)', fontWeight: 500 }}>Show me how</button>
                   </span>
                 </div>
@@ -1505,7 +1510,11 @@ export function SettingsPage() {
               <div className="om-ext-card-body">
                 <div className="om-ext-cta">
                   <p className="om-ext-cta-sub">
-                    Save pages, highlight text, or clip tabs directly from your browser. Load unpacked from <code>chrome-extension/</code> in the repo.
+                    Save pages, highlight text, or clip tabs directly from your browser.{' '}
+                    {install.isMac
+                      ? <>You installed the app, not the source, so grab the <code>chrome-extension</code> folder from GitHub and load it unpacked.</>
+                      : <>Load unpacked from <code>chrome-extension/</code> in the repo.</>}
+                    {' '}Point it at <code>{window.location.origin}/api</code>, which is where this window is talking right now.
                   </p>
                   <a
                     className="om-ext-install-btn"

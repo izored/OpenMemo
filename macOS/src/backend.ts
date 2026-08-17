@@ -84,6 +84,9 @@ export async function startBackend(onLog?: (line: string) => void): Promise<Star
     FRONTEND_DIST: paths.frontendDist,
     FFMPEG_BIN: paths.ffmpegBin,
     OLLAMA_HOST: settings.ollamaHost,
+    // Tells the SPA which install is serving it, so copy about file paths,
+    // ports and updates stops being Docker-only (backend/core/install.py).
+    OPENMEMO_INSTALL: 'macos',
     PYTHONUNBUFFERED: '1',
     // Bundled ffmpeg + venv bin first, so bare `ffmpeg` (yt-dlp internal) and
     // `yt-dlp` resolve without a system install.
