@@ -10,7 +10,7 @@ import { SidebarPlayer } from './SidebarPlayer';
 import { collectionApi, memoApi, systemApi, settingsApi, spaceApi } from '@/lib/api';
 import { useAppStore } from '@/stores/appStore';
 import { useIsMobile } from '@/lib/useBreakpoint';
-import { MOD } from '@/lib/install';
+import { modKey } from '@/lib/install';
 import type { Collection, Space } from '@/types';
 import { cn } from '@/lib/utils';
 
@@ -287,7 +287,7 @@ export function Sidebar() {
         {!sidebarCollapsed && (
           <>
             <span>Search</span>
-            <span className="om-kbd mono">{MOD}K</span>
+            <span className="om-kbd mono">{modKey('K')}</span>
           </>
         )}
       </button>

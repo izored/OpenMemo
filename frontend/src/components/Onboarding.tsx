@@ -3,7 +3,7 @@ import { Icon } from './Icon';
 import { TOUR_STEPS, ONBOARDING_KEY, type TourStep } from '@/lib/onboarding';
 import { useAppStore } from '@/stores/appStore';
 import { cn } from '@/lib/utils';
-import { modKeys } from '@/lib/install';
+import { modKeys, useInstall } from '@/lib/install';
 import { IntroSequence } from './onboarding/IntroSequence';
 
 type Phase = 'intro' | 'tour' | 'done';
@@ -19,13 +19,29 @@ type Phase = 'intro' | 'tour' | 'done';
  * top-left corner, and drew the spotlight off screen: a tour pointing at
  * nothing, over an app the layer had locked.
  */
+function rectIsVisible(r: DOMRect): boolean {
+  if (r.width <= 0 || r.height <= 0) return false; // display:none measures as zero
+  return r.right > 0 && r.bottom > 0 && r.left < window.innerWidth && r.top < window.innerHeight;
+}
+
+/**
+ * The first candidate in `selector` that is actually on screen, or null.
+ *
+ * `querySelector` returns the first match in DOM order, which is the wrong one
+ * when a page ships two versions of the same control and hides one. Walking the
+ * matches and taking the first visible one is what lets a step name both.
+ */
+function visibleAnchor(selector?: string): Element | null {
+  if (!selector) return null;
+  for (const el of document.querySelectorAll(selector)) {
+    if (rectIsVisible(el.getBoundingClientRect())) return el;
+  }
+  return null;
+}
+
 function anchorUsable(selector?: string): boolean {
   if (!selector) return true; // centered step, nothing to point at by design
-  const el = document.querySelector(selector);
-  if (!el) return false;
-  const r = el.getBoundingClientRect();
-  if (r.width <= 0 || r.height <= 0) return false;
-  return r.right > 0 && r.bottom > 0 && r.left < window.innerWidth && r.top < window.innerHeight;
+  return !!visibleAnchor(selector);
 }
 
 function useAnchorRect(selector?: string, active?: boolean) {
@@ -38,7 +54,7 @@ function useAnchorRect(selector?: string, active?: boolean) {
     }
     let scrolled = false;
     const measure = () => {
-      const el = document.querySelector(selector);
+      const el = visibleAnchor(selector);
       if (el && !scrolled) {
         // Sidebar sections live in their own scroll region, so Collections can
         // sit below the fold on a short window. Bring it up once per step,
@@ -46,6 +62,10 @@ function useAnchorRect(selector?: string, active?: boolean) {
         scrolled = true;
         el.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
       }
+      // Null, not a zero or off-screen rect. The card then falls back to the
+      // centered layout with a plain dim, instead of drawing a 12px spotlight
+      // in the corner over an app the layer has locked. This is what keeps a
+      // mid-tour resize or sidebar collapse from reproducing the original bug.
       setRect(el ? el.getBoundingClientRect() : null);
     };
     measure();
@@ -66,6 +86,7 @@ export function Onboarding() {
   const [steps, setSteps] = useState<TourStep[]>(TOUR_STEPS);
   const setAddPanelOpen = useAppStore((s) => s.setAddPanelOpen);
   const addPanelOpen = useAppStore((s) => s.addPanelOpen);
+  const { isMac } = useInstall();
 
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect -- show the intro once on first mount
@@ -109,7 +130,13 @@ export function Onboarding() {
   // Gate logic: the `add` step waits for the user to click the FAB and open
   // the panel before Next becomes available. Once open, the spot morphs to
   // the new-memo panel via `morphTarget`.
-  const gateSatisfied = current?.gate === 'panelOpen' ? addPanelOpen : true;
+  // Gated on the panel opening, unless the thing to click is not on screen any
+  // more. The user can move around during a gated step (that is the point of
+  // letting clicks through), and Ask Memo has no + at all while Music's + opens
+  // a different panel: without this, wandering there left Next disabled with no
+  // way forward but Skip.
+  const gateAnchorGone = current?.gate === 'panelOpen' && !visibleAnchor(current.target);
+  const gateSatisfied = current?.gate === 'panelOpen' ? addPanelOpen || gateAnchorGone : true;
   const effectiveTarget = current?.gate === 'panelOpen' && addPanelOpen
     ? current.morphTarget ?? current.target
     : current?.target;
@@ -179,7 +206,7 @@ export function Onboarding() {
   // A card clamped to the corner puts its own header there, and on the Mac the
   // sidebar header is also a window-drag region, which eats clicks the same way.
   const TRAFFIC_LIGHTS = { w: 120, h: 40 };
-  if (x < TRAFFIC_LIGHTS.w && y < TRAFFIC_LIGHTS.h) y = TRAFFIC_LIGHTS.h + 4;
+  if (isMac && x < TRAFFIC_LIGHTS.w && y < TRAFFIC_LIGHTS.h) y = TRAFFIC_LIGHTS.h + 4;
   const cardStyle: React.CSSProperties = { position: 'fixed', left: x, top: y, transform: 'none' };
 
   return (

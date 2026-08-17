@@ -1757,7 +1757,12 @@ export function SettingsPage() {
     // Packaged Mac app only: every row inside crosses into the main process.
     // A card that is absent is handled by the layout (unknown ids are filtered,
     // unplaced known ids are appended), so this can come and go safely.
-    ...(install.isMac && shellBridge()
+    //
+    // Keyed off the bridge alone, not `install.isMac`. The bridge is there
+    // synchronously in the packaged app, while `isMac` is false until the
+    // settings fetch lands: gating on both made the card appear one render late
+    // and visibly reshuffle the two columns on every Settings open.
+    ...(shellBridge()
       ? [{ id: 'security', label: 'Security', node: (
           <SettingCard title="Security" eyebrow="This Mac">
             <SecurityRows />

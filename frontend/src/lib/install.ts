@@ -19,8 +19,14 @@ import { settingsApi, type InstallKind } from './api';
 export const APPLE_KEYBOARD = /Mac|iPhone|iPad|iPod/.test(
   navigator.userAgent || '',
 );
-/** Print in shortcut hints: `⌘K` / `Ctrl K`. */
+/** Bare modifier, for prose. Use `modKey()` for a chip: `⌘K` needs no space
+ *  and `CtrlK` very much does. */
 export const MOD = APPLE_KEYBOARD ? '⌘' : 'Ctrl';
+
+/** A printable chord: `⌘K` on Apple keyboards, `Ctrl K` everywhere else. */
+export function modKey(key: string): string {
+  return APPLE_KEYBOARD ? `${MOD}${key}` : `${MOD} ${key}`;
+}
 /** Submit chord for the writer and composers. */
 export const MOD_ENTER = APPLE_KEYBOARD ? '⌘⏎' : 'Ctrl ⏎';
 

@@ -8,7 +8,10 @@ export interface TourStep {
   id: string;
   title: string;
   body: string;
-  /** CSS selector to anchor the popup to. Omit → centered. */
+  /** CSS selector to anchor the popup to. Omit for a centered card.
+   *  May list several candidates: the first VISIBLE match wins, because the
+   *  same control has different markup per page (the dashboard's bottom bar
+   *  owns the + and hides the global FAB). */
   target?: string;
   placement?: 'right' | 'left' | 'top' | 'bottom' | 'center';
   /** Side-effect run when the step becomes active. */
@@ -29,10 +32,17 @@ export const TOUR_STEPS: TourStep[] = [
     id: 'add',
     title: 'Capture anything',
     body: 'Click the + button to open the New Memo panel.',
-    target: '.om-fab',
+    // The dashboard, which is where first launch lands, renders BottomBar. Its
+    // mount effect puts `om-has-bbar` on <body>, which hides `.om-fab` outright
+    // (openmemo.css). So this step spent its whole life pointing at a
+    // display:none element: a zero-size rect, a 12px spotlight in the corner,
+    // and a card clamped to 16,16 under the macOS traffic lights, which eat
+    // every click under them. The + the user was told to press was the bottom
+    // bar's island, which the tour never mentioned.
+    target: '.om-island-trigger, .om-fab',
     placement: 'left',
     gate: 'panelOpen',
-    morphTarget: '.om-add-panel.open',
+    morphTarget: '.om-island.open, .om-add-panel.open',
     gateBody: 'Save a link, note, file, or voice memo (or press N anytime). Hit Next when ready.',
   },
   {

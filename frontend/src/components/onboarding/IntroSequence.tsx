@@ -73,23 +73,28 @@ export function IntroSequence({ onTakeTour, onSkip }: Props) {
 
   const last = i === STEPS.length - 1;
 
-  // onTakeTour is the PARENT's setState. Calling it from inside a setI updater
-  // ran it during the render phase, which React can replay: read `i` directly
-  // and keep the side effect in the event handler where it belongs.
+  // onTakeTour is the PARENT's setState, and calling it from inside a setI
+  // updater ran it during the render phase, which React can replay. Keep the
+  // side effect in the handler, but keep the functional updater too, so two
+  // increments in one batch stay two.
   const next = useCallback(() => {
     if (i >= STEPS.length - 1) {
       onTakeTour();
       return;
     }
-    setI(i + 1);
+    setI((n) => Math.min(n + 1, STEPS.length - 1));
   }, [i, onTakeTour]);
 
   const back = useCallback(() => setI((n) => Math.max(0, n - 1)), []);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
+      // A focused button turns Enter into a click as well, so handling it here
+      // too advanced two slides for one keypress once the user had clicked Next
+      // with the mouse. Let the button own Enter when the button has focus.
+      const onButton = (e.target as HTMLElement | null)?.tagName === 'BUTTON';
       if (e.key === 'Escape') onSkip();
-      else if (e.key === 'ArrowRight' || e.key === 'Enter') next();
+      else if (e.key === 'ArrowRight' || (e.key === 'Enter' && !onButton)) next();
       else if (e.key === 'ArrowLeft') back();
     };
     window.addEventListener('keydown', onKey);
