@@ -30,6 +30,7 @@ import logging
 import os
 import random
 import re
+import time
 import uuid
 from datetime import datetime
 
@@ -37,9 +38,11 @@ import httpx
 
 from backend.core.app_settings import (
     get_settings,
+    get_telegram_last_success,
     get_telegram_token,
     get_telegram_allowed_user,
     set_telegram_allowed_user,
+    set_telegram_last_success,
 )
 from backend.core.job_handlers import queue_task
 from backend.db.database import AsyncSessionLocal
@@ -110,6 +113,52 @@ async def _sleep_or_kick(seconds: float) -> None:
         pass
     finally:
         event.clear()
+
+
+# Telegram drops an undelivered share at 24 hours. Warn at 20, which leaves
+# four hours to do something about it, and is far enough from a normal night
+# with the lid shut that it never cries wolf.
+STALE_AFTER_HOURS = 20.0
+
+# Persisting on every long poll would rewrite the settings file every 25
+# seconds. Ten minutes of slack cannot change the answer to "has it been more
+# than twenty hours".
+_SUCCESS_PERSIST_EVERY_S = 600
+_last_persisted = 0.0
+
+# A drain that follows a gap this long is a catch-up worth telling the owner
+# about, on the phone they shared the links from.
+_RECOVERY_NOTICE_HOURS = 2.0
+
+
+def _note_success() -> None:
+    """Record that Telegram answered, in memory always and on disk sometimes."""
+    global _last_persisted
+    stamp = datetime.utcnow().isoformat()
+    RELAY_STATUS["last_success_at"] = stamp
+    now = time.monotonic()
+    if now - _last_persisted >= _SUCCESS_PERSIST_EVERY_S or _last_persisted == 0.0:
+        _last_persisted = now
+        try:
+            set_telegram_last_success(stamp)
+        except Exception as e:  # a settings write must never kill the relay
+            log.warning("could not persist telegram last-success: %r", e)
+
+
+def hours_since_success() -> float | None:
+    """Hours since Telegram last answered, across restarts. None if never.
+
+    Falls back to the persisted stamp, which is the whole point: right after a
+    launch the in-memory value is empty and the gap is at its widest.
+    """
+    iso = RELAY_STATUS.get("last_success_at") or get_telegram_last_success()
+    if not iso:
+        return None
+    try:
+        then = datetime.fromisoformat(iso)
+    except (TypeError, ValueError):
+        return None
+    return max(0.0, (datetime.utcnow() - then).total_seconds() / 3600)
 
 
 class TelegramUnreachable(RuntimeError):
@@ -469,7 +518,7 @@ async def _drain(client, token: str, settings: dict, timeout: int) -> bool:
         offset=_offset, limit=100, timeout=timeout,
         allowed_updates=["message", "callback_query"],
     )
-    RELAY_STATUS["last_success_at"] = datetime.utcnow().isoformat()
+    _note_success()
     if not updates:
         return False
 
@@ -556,6 +605,12 @@ async def run_relay_loop() -> None:
             except (TypeError, ValueError):
                 minutes = 15
 
+            # Measured BEFORE the drain: how long we were out of touch, and how
+            # many saves this cycle adds. Together they decide whether this was
+            # an ordinary poll or a catch-up worth mentioning.
+            gap_hours = hours_since_success()
+            saved_before = RELAY_STATUS["saved_count"]
+
             async with httpx.AsyncClient(timeout=httpx.Timeout(_LONG_POLL_S + 10)) as client:
                 RELAY_STATUS["last_poll_at"] = datetime.utcnow().isoformat()
                 activity = await _drain(client, token, settings, timeout=0)
@@ -569,6 +624,21 @@ async def run_relay_loop() -> None:
                         window_left = _ACTIVE_WINDOW_S
                     else:
                         window_left -= _LONG_POLL_S
+
+                # Back after a real absence, with something to show for it. Say
+                # so on Telegram: that is the phone the links were shared from,
+                # and it answers "did the laptop ever pick those up" without
+                # opening the laptop.
+                caught_up = RELAY_STATUS["saved_count"] - saved_before
+                owner = get_telegram_allowed_user()
+                if caught_up > 0 and owner and (gap_hours or 0) >= _RECOVERY_NOTICE_HOURS:
+                    await _tg(
+                        client, token, "sendMessage", chat_id=owner,
+                        text=(
+                            f"Back online after {gap_hours:.0f}h. "
+                            f"Saved {caught_up} share{'' if caught_up == 1 else 's'} that were waiting."
+                        ),
+                    )
 
             await _sleep_or_kick(minutes * 60)
         except asyncio.CancelledError:

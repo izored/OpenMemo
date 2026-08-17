@@ -13,6 +13,7 @@ import {
   dialog,
   globalShortcut,
   ipcMain,
+  Notification,
   powerMonitor,
   powerSaveBlocker,
   shell,
@@ -152,6 +153,19 @@ function createWindow(): void {
   // Open target=_blank / external links in the system browser, never in-app.
   mainWindow.webContents.setWindowOpenHandler(({ url }) => {
     if (isLocalAppUrl(url)) {
+      // A local /api/ URL opened in a new window is a file, not a page:
+      // "Export all Memos" is an <a target="_blank"> to /api/export/markdown.
+      // Allowing it opened a second frameless window with no menu, started the
+      // download inside it, and left the empty window sitting on screen. Hand
+      // the URL to the downloader and open nothing.
+      try {
+        if (new URL(url).pathname.startsWith('/api/')) {
+          mainWindow?.webContents.downloadURL(url);
+          return { action: 'deny' };
+        }
+      } catch {
+        /* unparseable local URL: fall through to the normal window */
+      }
       return { action: 'allow' };
     }
     shell.openExternal(url);
@@ -265,6 +279,22 @@ async function triggerQuickAdd(): Promise<void> {
 }
 
 /**
+ * Front the window and take the SPA to Settings (menu → Settings…, Cmd+,).
+ * A client-side route change, not a reload, so nothing is refetched.
+ */
+async function openSettingsPage(): Promise<void> {
+  if (!mainWindow) await openAppWindow();
+  if (!mainWindow) return;
+  if (mainWindow.isMinimized()) mainWindow.restore();
+  mainWindow.show();
+  mainWindow.focus();
+  void mainWindow.webContents.executeJavaScript(
+    "window.dispatchEvent(new CustomEvent('openmemo:open-settings'))",
+    true,
+  );
+}
+
+/**
  * Ingest files dropped on the Dock icon (or opened via Finder "Open With").
  * Posted straight to the backend's multipart endpoint; the SPA refetches on
  * window focus, so new memos appear without a manual reload.
@@ -320,6 +350,9 @@ function syncSuspendBlocker(relayOn: boolean): void {
   }
 }
 
+/** Don't repeat the "we have not reached Telegram" warning every wake. */
+let lastStaleWarning = 0;
+
 async function nudgeRelay(reason: string): Promise<void> {
   if (!backend || !isBackendRunning()) return;
   const now = Date.now();
@@ -327,9 +360,26 @@ async function nudgeRelay(reason: string): Promise<void> {
   lastNudge = now;
   try {
     const res = await fetch(`${backend.url}api/settings/telegram/poll-now`, { method: 'POST' });
-    const body = (await res.json()) as { kicked?: boolean; telegram_enabled?: boolean };
+    const body = (await res.json()) as {
+      kicked?: boolean;
+      telegram_enabled?: boolean;
+      stale?: boolean;
+      hours_since_success?: number | null;
+    };
     appendLog(`[shell] relay nudge (${reason}) → kicked=${!!body.kicked}\n`);
     syncSuspendBlocker(!!body.telegram_enabled);
+    // Past the warning line, and the 24 hour cliff is close. Say it on screen
+    // rather than only on a Settings page nobody has open: the whole failure
+    // mode is the app being closed or asleep for too long.
+    if (body.stale && Notification.isSupported() && now - lastStaleWarning > 6 * 60 * 60 * 1000) {
+      lastStaleWarning = now;
+      const hours = Math.round(body.hours_since_success ?? 0);
+      new Notification({
+        title: 'openMemo has not reached Telegram',
+        body: `Last answer was ${hours} hours ago. Telegram drops shares after 24, and it is catching up now.`,
+        silent: false,
+      }).show();
+    }
   } catch (e) {
     appendLog(`[shell] relay nudge (${reason}) failed: ${e instanceof Error ? e.message : e}\n`);
   }
@@ -434,9 +484,16 @@ function buildMenu(): void {
                 click: () => void checkForUpdates({ silent: false }),
               },
               { type: 'separator' as const },
+              // Cmd+, means Settings on every Mac, so it opens Settings. It
+              // used to open the Ollama host sheet, which is one row inside
+              // that page now (and still reachable here for muscle memory).
+              {
+                label: 'Settings…',
+                accelerator: 'Cmd+,',
+                click: () => void openSettingsPage(),
+              },
               {
                 label: 'Ollama Host…',
-                accelerator: 'Cmd+,',
                 click: () => openOllamaHostDialog(),
               },
               {
@@ -542,6 +599,16 @@ function registerIpc(): void {
     return { ok: false };
   });
   ipcMain.handle('lock:status', () => ({ enabled: isLockEnabled() }));
+  // The Settings page asks for the sheet rather than building its own PIN form:
+  // the current-PIN check and the safeStorage write stay in one place.
+  ipcMain.handle('lock:configure', () => openPinConfigDialog());
+  ipcMain.handle('login-item:get', () => app.getLoginItemSettings().openAtLogin);
+  ipcMain.handle('login-item:set', (_evt, on: boolean) => {
+    app.setLoginItemSettings({ openAtLogin: !!on });
+    buildMenu(); // the menu carries the same checkbox; keep the two in step
+    return app.getLoginItemSettings().openAtLogin;
+  });
+  ipcMain.handle('logs:open', () => void shell.openPath(path.dirname(logFile())));
   ipcMain.handle('lock:set', (_evt, { current, next }: { current: string; next: string }) => {
     if (isLockEnabled() && !verifyPin(current)) {
       return { ok: false, error: 'Current PIN is incorrect' };

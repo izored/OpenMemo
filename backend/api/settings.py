@@ -179,23 +179,52 @@ async def poll_telegram_now():
     the app awake without a second request.
     """
     from backend.core.app_settings import get_settings as _get
-    from backend.services.telegram_relay import RELAY_STATUS, kick
+    from backend.services.telegram_relay import (
+        RELAY_STATUS,
+        STALE_AFTER_HOURS,
+        hours_since_success,
+        kick,
+    )
 
     enabled = bool(_get().get("telegram_enabled"))
     running = bool(RELAY_STATUS.get("running"))
     if running:
         kick()
-    return {"kicked": running, "running": running, "telegram_enabled": enabled}
+    stale = hours_since_success()
+    return {
+        "kicked": running,
+        "running": running,
+        "telegram_enabled": enabled,
+        # The caller (the macOS shell, on wake) uses this to decide whether to
+        # put a notification on screen. Reported before the kick has had time to
+        # land, which is correct: it describes the gap being recovered from.
+        "hours_since_success": stale,
+        "stale": bool(enabled and stale is not None and stale >= STALE_AFTER_HOURS),
+    }
 
 
 @router.get("/telegram/status")
 async def read_telegram_status():
     """Live relay status for the Settings card."""
-    from backend.core.app_settings import telegram_token_present, telegram_user_locked
-    from backend.services.telegram_relay import RELAY_STATUS
+    from backend.core.app_settings import (
+        get_telegram_last_success,
+        telegram_token_present,
+        telegram_user_locked,
+    )
+    from backend.services.telegram_relay import (
+        RELAY_STATUS,
+        STALE_AFTER_HOURS,
+        hours_since_success,
+    )
 
+    stale = hours_since_success()
     return {
         **RELAY_STATUS,
+        # Falls back to the persisted stamp, so a freshly launched app can still
+        # say when it last got through instead of showing a blank.
+        "last_success_at": RELAY_STATUS.get("last_success_at") or get_telegram_last_success(),
+        "hours_since_success": stale,
+        "stale_after_hours": STALE_AFTER_HOURS,
         "telegram_token_present": telegram_token_present(),
         "telegram_user_locked": telegram_user_locked(),
     }

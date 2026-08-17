@@ -52,6 +52,35 @@ const DATA_HOME: Record<InstallKind, string> = {
 // only vaguer.
 const DATA_HOME_UNKNOWN = "openMemo's own data store on this machine";
 
+// ── The Mac shell's own settings ─────────────────────────────────────────────
+// Ollama's host, the launch PIN and Open at Login belong to the shell, not the
+// backend, and lived only in the menu bar. A Mac user opens Settings first, so
+// the page reaches them through this bridge (macOS/src/preload.ts). Absent in
+// any browser, which is also a second, independent signal that this is the app.
+
+export interface ShellBridge {
+  platform: string;
+  /** Saves, restarts the backend, and reloads the window. */
+  setOllamaHost(host: string): Promise<{ ok: boolean; error?: string }>;
+  getOllamaHost(): Promise<string>;
+  lockStatus(): Promise<{ enabled: boolean }>;
+  /** Opens the native sheet. The page never handles the PIN itself. */
+  configureLock(): Promise<void>;
+  getOpenAtLogin(): Promise<boolean>;
+  setOpenAtLogin(on: boolean): Promise<boolean>;
+  openLogsFolder(): Promise<void>;
+}
+
+declare global {
+  interface Window {
+    openmemoShell?: ShellBridge;
+  }
+}
+
+export function shellBridge(): ShellBridge | null {
+  return typeof window === 'undefined' ? null : window.openmemoShell ?? null;
+}
+
 export function useInstall(): Install {
   const { data } = useQuery({
     queryKey: ['settings'],

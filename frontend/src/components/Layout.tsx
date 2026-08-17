@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type ReactElement } from 'react';
-import { Outlet, useLocation } from 'react-router-dom';
+import { Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { AnimatePresence, motion } from 'framer-motion';
 import {
   DndContext,
@@ -64,6 +64,7 @@ export function Layout() {
   const setSidebarOpen = useAppStore((s) => s.setSidebarOpen);
   const isMobile = useIsMobile();
   const location = useLocation();
+  const navigate = useNavigate();
 
   const [txConfig, setTxConfig, resetTxConfig] = useTransitionConfig();
 
@@ -75,6 +76,15 @@ export function Layout() {
     window.addEventListener('openmemo:quick-add', openAdd);
     return () => window.removeEventListener('openmemo:quick-add', openAdd);
   }, [setAddPanelOpen]);
+
+  // Cmd+, on macOS. A client-side route change, so nothing is refetched and the
+  // page keeps its state; the shell dispatches the event rather than loading a
+  // URL for the same reason.
+  useEffect(() => {
+    const go = () => navigate('/settings');
+    window.addEventListener('openmemo:open-settings', go);
+    return () => window.removeEventListener('openmemo:open-settings', go);
+  }, [navigate]);
 
   const [overlayKey, setOverlayKey] = useState(0);
   const [overlayTheme, setOverlayTheme] = useState(tweaks.theme);

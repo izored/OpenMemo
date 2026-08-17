@@ -436,6 +436,9 @@ export interface AppSettings {
   /** Read-only. `Darwin` | `Windows` | `Linux`, as the BACKEND sees itself. Not
    *  the viewer's OS: a Mac can be looking at the Docker install. */
   platform: string;
+  /** Read-only. Where the backend looks for Ollama. Comes from env everywhere;
+   *  only the Mac app can change it from the page, through its own shell. */
+  ollama_host: string;
 }
 
 export type InstallKind = 'macos' | 'docker' | 'dev';
@@ -449,6 +452,10 @@ export interface TelegramRelayStatus {
   last_success_at: string | null;
   last_error: string | null;
   saved_count: number;
+  /** Hours since Telegram last answered, across restarts. Null if it never has. */
+  hours_since_success: number | null;
+  /** Past this, the 24 hour drop is close enough to warn about. */
+  stale_after_hours: number;
   telegram_token_present: boolean;
   telegram_user_locked: boolean;
 }

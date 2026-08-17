@@ -160,6 +160,7 @@ def get_settings() -> dict[str, Any]:
     data.pop(_TG_USER_KEY, None)
     data.pop(_CANARY_KEY, None)
     data.pop(_INTEGRITY_KEY, None)
+    data.pop(_TG_SUCCESS_KEY, None)
     data.pop(_MUSIC_RELAY_KEY, None)
     # Mesh key material. `mesh_secret` is the 32-byte root every Mesh key is
     # derived from, and `mesh_code_words` is the same secret in the form a
@@ -180,6 +181,10 @@ def get_settings() -> dict[str, Any]:
         # users something false about paths, ports and updates (core/install.py).
         "install_kind": install_kind(),
         "platform": os_name(),
+        # Read-only. Where the backend looks for Ollama. Set by env everywhere;
+        # the Mac app writes that env through its own settings store, so the
+        # Settings page can offer to change it there and only there.
+        "ollama_host": settings.OLLAMA_HOST,
     }
 
 
@@ -332,6 +337,30 @@ def set_library_integrity(result: dict) -> None:
     with _LOCK:
         current = _read()
         current[_INTEGRITY_KEY] = result
+        _write_raw(current)
+
+
+# Last time Telegram actually answered (services/telegram_relay.py). A health
+# record like the two above, so it is stripped from the settings API and
+# surfaced by /telegram/status instead.
+#
+# It has to survive a restart. Telegram drops an undelivered share after 24
+# hours, and "when did we last get through" is the only way to know whether that
+# clock is running out. Kept in memory only, it resets to None on every launch,
+# which is precisely the moment the question matters: the app has just opened
+# after being closed for who knows how long.
+_TG_SUCCESS_KEY = "telegram_last_success_at"
+
+
+def get_telegram_last_success() -> str | None:
+    value = _read().get(_TG_SUCCESS_KEY)
+    return value if isinstance(value, str) else None
+
+
+def set_telegram_last_success(iso: str) -> None:
+    with _LOCK:
+        current = _read()
+        current[_TG_SUCCESS_KEY] = iso
         _write_raw(current)
 
 

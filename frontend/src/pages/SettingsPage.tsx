@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { motion } from 'framer-motion';
@@ -10,7 +10,7 @@ import { MeshConflictModal } from '@/components/MeshConflictModal';
 import { MeshPairingPanel } from '@/components/MeshPairingPanel';
 import { meshApi, type MeshBatch } from '@/lib/api';
 import { ONBOARDING_KEY } from '@/lib/onboarding';
-import { useInstall } from '@/lib/install';
+import { useInstall, shellBridge } from '@/lib/install';
 import { useAppStore } from '@/stores/appStore';
 import { useIsMobile } from '@/lib/useBreakpoint';
 import { CookiesUpload } from '@/components/CookiesUpload';
@@ -743,6 +743,9 @@ function TelegramRelayRows({ profile, save }: { profile: AppSettings | null; sav
   // Show when Telegram last ANSWERED, never when we last tried. The card used
   // to read "Polling. Last check 14:32" through a whole flight with no wifi,
   // because a failed call still stamped the attempt.
+  const staleHours = status?.hours_since_success ?? null;
+  const stale =
+    enabled && staleHours !== null && staleHours >= (status?.stale_after_hours ?? 20);
   const statusLine = !present
     ? 'Paste a bot token from @BotFather to begin.'
     : !enabled
@@ -755,6 +758,27 @@ function TelegramRelayRows({ profile, save }: { profile: AppSettings | null; sav
 
   return (
     <>
+      {/* Past 20 hours the 24 hour drop is close, and the person who needs to
+          know is the one whose shares are about to be discarded. Loud, and only
+          then: a normal night with the lid shut never reaches this. */}
+      {stale && (
+        <div
+          role="status"
+          style={{
+            border: '1px solid var(--border-warning, #E5C07B)',
+            background: 'var(--bg-warning, rgba(186,117,23,0.08))',
+            borderRadius: 10, padding: '10px 12px', maxWidth: 560, marginBottom: 10,
+          }}
+        >
+          <p style={{ margin: 0, fontWeight: 500, color: 'var(--text-warning, #BA7517)' }}>
+            openMemo has not reached Telegram in {Math.round(staleHours ?? 0)} hours
+          </p>
+          <span className="mono" style={{ display: 'block', marginTop: 4 }}>
+            Telegram drops a share it could not deliver after 24 hours, so anything shared before
+            then is at risk. Check this machine is online and openMemo is running.
+          </span>
+        </div>
+      )}
       <div className="om-setting-row">
         <div className="om-setting-row-text">
           <p>Telegram capture</p>
@@ -836,6 +860,138 @@ function TelegramRelayRows({ profile, save }: { profile: AppSettings | null; sav
           <option value="30">30 minutes</option>
           <option value="60">1 hour</option>
         </select>
+      </div>
+    </>
+  );
+}
+
+/**
+ * Where openMemo looks for Ollama.
+ *
+ * It was nowhere on this page. The card could say "Offline" and offer no way to
+ * do anything about it, because the host was env-only: a compose file on Docker,
+ * and a menu-bar sheet on the Mac. On the Mac it is editable here now, through
+ * the shell that owns the value; saving restarts the backend and reloads, which
+ * the main process handles, so this component simply hands the string over.
+ */
+function OllamaHostRow({ current, editable }: { current: string; editable: boolean }) {
+  const [value, setValue] = useState(current);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState('');
+  const dirty = value.trim() !== current;
+
+  const save = async () => {
+    const shell = shellBridge();
+    if (!shell) return;
+    setBusy(true);
+    setError('');
+    try {
+      const r = await shell.setOllamaHost(value.trim());
+      if (!r.ok) setError(r.error || 'Could not save the host');
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Could not save the host');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  if (!editable) {
+    return <span className="mono om-setting-val">{current || 'not set'}</span>;
+  }
+  return (
+    <div className="om-inline-control">
+      <input
+        className="om-input"
+        type="text"
+        value={value}
+        placeholder="http://localhost:11434"
+        onChange={(e) => setValue(e.target.value)}
+        style={{ width: 210 }}
+        disabled={busy}
+      />
+      <button className="om-btn-secondary" onClick={save} disabled={!dirty || busy}>
+        {busy ? 'Restarting…' : 'Save'}
+      </button>
+      {error && <span className="mono om-setting-val" style={{ color: '#EF5048' }}>{error}</span>}
+    </div>
+  );
+}
+
+/**
+ * The three native settings that used to exist only in the menu bar. A Mac user
+ * looks in Settings for the launch PIN and Open at Login, and finding neither
+ * reads as "openMemo cannot do that", not "look in the menu".
+ *
+ * Rendered only inside the packaged app: everything here crosses into the main
+ * process, and there is no main process in a browser tab.
+ */
+function SecurityRows() {
+  const shell = shellBridge();
+  const [locked, setLocked] = useState<boolean | null>(null);
+  const [atLogin, setAtLogin] = useState<boolean | null>(null);
+
+  const refresh = useCallback(() => {
+    if (!shell) return;
+    shell.lockStatus().then((s) => setLocked(s.enabled)).catch(() => setLocked(null));
+    shell.getOpenAtLogin().then(setAtLogin).catch(() => setAtLogin(null));
+  }, [shell]);
+
+  useEffect(refresh, [refresh]);
+
+  // The PIN sheet is a separate native window, so there is no callback when it
+  // closes. Re-read on focus instead, which is when the user comes back.
+  useEffect(() => {
+    window.addEventListener('focus', refresh);
+    return () => window.removeEventListener('focus', refresh);
+  }, [refresh]);
+
+  if (!shell) return null;
+
+  return (
+    <>
+      <div className="om-setting-row">
+        <div className="om-setting-row-text">
+          <p>App lock</p>
+          <span className="mono">
+            A 4-digit PIN on every launch. The backend does not even start until you unlock, so a
+            locked app exposes nothing. This is separate from the hidden section's passcode: that
+            one guards memos inside an app that is already open.
+          </span>
+        </div>
+        <div className="om-inline-control">
+          <span className="mono om-setting-val">
+            {locked === null ? '' : locked ? 'On' : 'Off'}
+          </span>
+          <button className="om-btn-secondary" onClick={() => void shell.configureLock()}>
+            {locked ? 'Change' : 'Set PIN'}
+          </button>
+        </div>
+      </div>
+      <div className="om-setting-row" style={{ borderTop: '1px solid var(--border)', marginTop: 8, paddingTop: 8 }}>
+        <div className="om-setting-row-text">
+          <p>Open at login</p>
+          <span className="mono">
+            Start openMemo when you log in. Worth having on if you use phone capture: Telegram holds
+            a share for 24 hours and openMemo can only collect it while it is running.
+          </span>
+        </div>
+        <button
+          type="button"
+          className="om-add-toggle"
+          aria-pressed={!!atLogin}
+          onClick={() => void shell.setOpenAtLogin(!atLogin).then(setAtLogin).catch(() => {})}
+        >
+          <span className={'om-add-toggle-switch' + (atLogin ? ' on' : '')}>
+            <span className="om-add-toggle-knob" />
+          </span>
+        </button>
+      </div>
+      <div className="om-setting-row" style={{ borderTop: '1px solid var(--border)', marginTop: 8, paddingTop: 8 }}>
+        <div className="om-setting-row-text">
+          <p>Logs</p>
+          <span className="mono">Everything the app printed while starting up. Useful when it did not.</span>
+        </div>
+        <button className="om-btn-secondary" onClick={() => void shell.openLogsFolder()}>Open folder</button>
       </div>
     </>
   );
@@ -1138,7 +1294,7 @@ export function SettingsPage() {
       })
       .catch(() => {
         setMaxUploadMb(5120);
-        setProfile({ max_upload_mb: 5120, display_name: '', email: '', avatar_data_url: '', mailing_list_consent: false, auto_download_audio: true, auto_download_video: true, music_quality: '16', music_provider: 'qobuz', chat_model: '', num_ctx: 0, yt_cookies_present: false, bg_image_ext: '', hidden_passcode_set: false, telegram_enabled: false, telegram_poll_minutes: 15, telegram_default_collection: 'Bot Inbox', telegram_force_localize: true, telegram_token_present: false, telegram_user_locked: false, music_relay_enabled: false, mesh_enabled: false, mesh_reachable: false, settings_card_layout: {}, install_kind: 'dev', platform: '' });
+        setProfile({ max_upload_mb: 5120, display_name: '', email: '', avatar_data_url: '', mailing_list_consent: false, auto_download_audio: true, auto_download_video: true, music_quality: '16', music_provider: 'qobuz', chat_model: '', num_ctx: 0, yt_cookies_present: false, bg_image_ext: '', hidden_passcode_set: false, telegram_enabled: false, telegram_poll_minutes: 15, telegram_default_collection: 'Bot Inbox', telegram_force_localize: true, telegram_token_present: false, telegram_user_locked: false, music_relay_enabled: false, mesh_enabled: false, mesh_reachable: false, settings_card_layout: {}, install_kind: 'dev', platform: '', ollama_host: '' });
       });
   }, []);
 
@@ -1362,6 +1518,30 @@ export function SettingsPage() {
               </div>
               <div className="om-setting-row">
                 <div className="om-setting-row-text">
+                  <p>Host</p>
+                  <span className="mono">
+                    {install.isMac
+                      ? 'Where openMemo looks for Ollama. Saving restarts the backend and reloads.'
+                      : 'Where openMemo looks for Ollama. Set with OLLAMA_HOST where the backend runs.'}
+                    {ollamaConnected === false && (
+                      <>
+                        {' '}Nothing is answering there. Ollama is yours to run, from{' '}
+                        <a href="https://ollama.com" target="_blank" rel="noopener noreferrer" style={{ color: 'var(--accent)', fontWeight: 500 }}>ollama.com</a>.
+                      </>
+                    )}
+                  </span>
+                </div>
+                {profile === null ? (
+                  <span className="om-skel ctrl" style={{ width: 200 }} />
+                ) : (
+                  <OllamaHostRow
+                    current={profile.ollama_host || ''}
+                    editable={install.isMac && !!shellBridge()}
+                  />
+                )}
+              </div>
+              <div className="om-setting-row">
+                <div className="om-setting-row-text">
                   <p>Default model</p>
                   <span className="mono">Used across chat and Ask</span>
                 </div>
@@ -1567,6 +1747,16 @@ export function SettingsPage() {
 
       </>
     ) },
+    // Packaged Mac app only: every row inside crosses into the main process.
+    // A card that is absent is handled by the layout (unknown ids are filtered,
+    // unplaced known ids are appended), so this can come and go safely.
+    ...(install.isMac && shellBridge()
+      ? [{ id: 'security', label: 'Security', node: (
+          <SettingCard title="Security" eyebrow="This Mac">
+            <SecurityRows />
+          </SettingCard>
+        ) }]
+      : []),
     { id: 'mesh', label: 'Mesh', node: (
       <>
             <SettingCard title="Mesh" eyebrow="Two-way device sync">
