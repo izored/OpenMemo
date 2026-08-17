@@ -14,6 +14,7 @@ import { useInstall, shellBridge } from '@/lib/install';
 import { useAppStore } from '@/stores/appStore';
 import { useIsMobile } from '@/lib/useBreakpoint';
 import { CookiesUpload } from '@/components/CookiesUpload';
+import { useConfirm } from '@/components/ConfirmModal';
 import { systemApi, maintenanceApi, backupApi, settingsApi, memoApi, type AppSettings, type LibraryIntegrity, type MusicRelayStatus, type TelegramRelayStatus } from '@/lib/api';
 import { DndContext, PointerSensor, closestCenter, useSensor, useSensors, type DragEndEvent } from '@dnd-kit/core';
 import { SortableContext, useSortable, verticalListSortingStrategy } from '@dnd-kit/sortable';
@@ -1250,6 +1251,7 @@ export function SettingsPage() {
     setTimeout(() => setAppearancePanelOpen(true), 280);
   };
   const install = useInstall();
+  const [ask, confirmModal] = useConfirm();
   const [version, setVersion] = useState('');
   const [ollamaConnected, setOllamaConnected] = useState<boolean | null>(null);
   // null = still loading (skeleton); [] = loaded, none installed.
@@ -1262,6 +1264,15 @@ export function SettingsPage() {
   const [updateCheck, setUpdateCheck] = useState<'idle' | 'checking' | 'current' | 'failed'>('idle');
 
   const checkForUpdate = async () => {
+    // One updater. The shell already checks GitHub on launch and knows how to
+    // offer the .dmg; a second check here meant a Mac user could get two
+    // prompts telling them two different things. Hand it over and let the
+    // native dialog own the whole flow.
+    const shell = shellBridge();
+    if (shell) {
+      void shell.checkForUpdates();
+      return;
+    }
     setUpdateCheck('checking');
     try {
       const r = await fetch('https://api.github.com/repos/izored/OpenMemo/releases/latest');
@@ -1328,7 +1339,7 @@ export function SettingsPage() {
     const f = e.target.files?.[0];
     if (!f) return;
     if (f.size > 2 * 1024 * 1024) {
-      alert('Image too large. Max 2 MB before resize.');
+      showNotice('Image too large. Max 2 MB before resize.');
       e.target.value = '';
       return;
     }
@@ -1357,7 +1368,12 @@ export function SettingsPage() {
 
   const runLocalize = async () => {
     if (localizing) return;
-    if (!confirm('Download remote images in all saved articles to local copies? This may take a while for large libraries.')) return;
+    const go = await ask({
+      title: 'Localize saved content',
+      body: 'Download the remote images in every saved article so the memos survive the source being deleted. On a large library this takes a while.',
+      confirmLabel: 'Localize',
+    });
+    if (!go) return;
     setLocalizing(true);
     setLocalizeResult(null);
     try {
@@ -1388,15 +1404,21 @@ export function SettingsPage() {
     try {
       await backupApi.download(scope);
     } catch (err) {
-      alert(`Backup failed: ${(err as Error).message}`);
+      showNotice(`Backup failed: ${(err as Error).message}`);
     } finally {
       setBacking(null);
     }
   };
 
-  const handleRestoreClick = () => {
-    if (!confirm('Restore will overwrite all current data from the backup file. This cannot be undone. Continue?')) return;
-    if (!confirm('Final confirmation: restore workspace from this backup?')) return;
+  const handleRestoreClick = async () => {
+    const go = await ask({
+      title: 'Restore from a backup',
+      body: 'Everything currently in openMemo is replaced by whatever is in the zip. This cannot be undone.',
+      secondary: 'Last chance. Your current library is overwritten the moment you pick a file.',
+      confirmLabel: 'Choose a backup',
+      danger: true,
+    });
+    if (!go) return;
     fileInputRef.current?.click();
   };
 
@@ -1406,10 +1428,10 @@ export function SettingsPage() {
     setRestoring(true);
     try {
       await backupApi.restore(file);
-      alert('Restore complete. Reloading.');
+      showNotice('Restore complete. Reloading.', 'info');
       location.reload();
     } catch (err) {
-      alert(`Restore failed: ${(err as Error).message}`);
+      showNotice(`Restore failed: ${(err as Error).message}`);
     } finally {
       setRestoring(false);
       e.target.value = '';
@@ -1794,6 +1816,24 @@ export function SettingsPage() {
       <>
             <SettingCard title="Backup & Restore" eyebrow="Data safety">
               <LibraryIntegrityRows />
+              {/* openMemo has been taking automatic database snapshots the whole
+                  time (core/autobackup.py) and never said so anywhere. Someone
+                  who lost data would not have known to look. */}
+              <div className="om-setting-row">
+                <div className="om-setting-row-text">
+                  <p>Automatic snapshots</p>
+                  <span className="mono">
+                    openMemo compresses a copy of the database on a schedule and keeps the recent
+                    ones, in <code>{install.dataHome}/backups</code>. Database only: the files you
+                    uploaded are not in there, which is what the backups below are for.
+                  </span>
+                </div>
+                {shellBridge() ? (
+                  <button className="om-btn-secondary" onClick={() => void shellBridge()?.openBackupsFolder()}>
+                    Open folder
+                  </button>
+                ) : null}
+              </div>
               <div className="om-setting-row">
                 <div className="om-setting-row-text">
                   <p>Structure backup</p>
@@ -1854,12 +1894,17 @@ export function SettingsPage() {
                   <button
                     className="om-btn-secondary"
                     onClick={async () => {
-                      if (!confirm('Delete all cached thumbnail previews? They re-cache automatically.')) return;
+                      const go = await ask({
+                        title: 'Delete cached previews',
+                        body: 'Thumbnails only. They re-cache on their own the next time you see the card.',
+                        confirmLabel: 'Clear',
+                      });
+                      if (!go) return;
                       try {
                         const r = await maintenanceApi.clearCache();
                         systemApi.stats(true).then(setStats).catch(() => {});
-                        alert(`Cleared ${fmtBytes(r.freed_bytes)} of cached previews.`);
-                      } catch { alert('Failed to clear cache.'); }
+                        showNotice(`Cleared ${fmtBytes(r.freed_bytes)} of cached previews.`, 'info');
+                      } catch { showNotice('Failed to clear cache.'); }
                     }}
                   >Clear</button>
                 </div>
@@ -1871,13 +1916,19 @@ export function SettingsPage() {
                   <button
                   className="om-btn-secondary danger"
                   onClick={async () => {
-                    if (!confirm('Permanently delete ALL Memos, collections, tags, chats and files? This cannot be undone.')) return;
-                    if (!confirm('Final confirmation. Reset the entire workspace?')) return;
+                    const go = await ask({
+                      title: 'Reset the whole workspace',
+                      body: 'Every memo, collection, tag, chat and uploaded file is deleted. There is no undo and no trash to fish it out of.',
+                      secondary: 'Really. Everything goes, and the only way back is a backup you already made.',
+                      confirmLabel: 'Delete everything',
+                      danger: true,
+                    });
+                    if (!go) return;
                     try {
                       await maintenanceApi.reset();
-                      alert('Workspace reset. Reloading.');
+                      showNotice('Workspace reset. Reloading.', 'info');
                       location.reload();
-                    } catch { alert('Failed to reset workspace.'); }
+                    } catch { showNotice('Failed to reset workspace.'); }
                   }}
                 >Reset</button>
                 </div>
@@ -2074,6 +2125,7 @@ export function SettingsPage() {
         </button>
       </div>
 
+      {confirmModal}
       {changelogOpen && (
         <ChangelogModal current={version || '0.0.0'} onClose={() => setChangelogOpen(false)} />
       )}

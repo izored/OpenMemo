@@ -60,6 +60,11 @@ async function waitForHealth(port: number, timeoutMs = 60_000): Promise<void> {
 export interface StartedBackend {
   port: number;
   url: string;
+  /** Set when 8099 was taken and we landed somewhere else. The browser
+   *  extension stores a fixed address, so a moved port breaks it silently:
+   *  the shell says so rather than letting the user find out by clipping a
+   *  page into nothing. */
+  driftedFrom?: number;
 }
 
 /** Spawn the backend and resolve once it is serving. `onLog` streams stdout/stderr. */
@@ -109,7 +114,14 @@ export async function startBackend(onLog?: (line: string) => void): Promise<Star
   child.on('exit', (code, signal) => onLog?.(`[backend] exited code=${code} signal=${signal}\n`));
 
   await waitForHealth(port);
-  return { port, url: `http://127.0.0.1:${port}/` };
+  if (port !== PREFERRED_PORT) {
+    onLog?.(`[backend] port ${PREFERRED_PORT} was taken, running on ${port} instead\n`);
+  }
+  return {
+    port,
+    url: `http://127.0.0.1:${port}/`,
+    ...(port !== PREFERRED_PORT ? { driftedFrom: PREFERRED_PORT } : {}),
+  };
 }
 
 /** True while the spawned backend process is alive. */

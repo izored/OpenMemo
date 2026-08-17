@@ -316,6 +316,21 @@ async function openAppWindow(): Promise<void> {
       maybeInstallChromium(); // first-run, background, non-blocking
       flushPendingOpenFiles();
       void nudgeRelay('boot');
+      // Say it out loud when the port moved. The app itself is fine, but the
+      // browser extension stores one fixed address, so the only symptom
+      // otherwise is clipping a page and having nothing arrive.
+      if (backend.driftedFrom) {
+        const moved = backend.port;
+        void dialog.showMessageBox({
+          type: 'warning',
+          title: 'openMemo is on a different port',
+          message: `Port ${backend.driftedFrom} was busy, so openMemo started on ${moved}.`,
+          detail:
+            'The app works normally. If you use the browser extension, point it at ' +
+            `http://localhost:${moved}/api, or quit whatever is holding ${backend.driftedFrom} and relaunch.`,
+          buttons: ['OK'],
+        });
+      }
     }
     const target = rendererOverride ?? backend!.url;
     await loadAppUrl(target);
@@ -821,6 +836,17 @@ function registerIpc(): void {
   ipcMain.handle('logs:open', (evt) => {
     requireUnlockedMainWindow(evt);
     void shell.openPath(path.dirname(logFile()));
+  });
+  ipcMain.handle('backups:open', (evt) => {
+    requireUnlockedMainWindow(evt);
+    // Created lazily by the backend's scheduler, so it may not exist on a
+    // brand new install. Opening userData is more useful than doing nothing.
+    const dir = path.join(app.getPath('userData'), 'backups');
+    void shell.openPath(fs.existsSync(dir) ? dir : app.getPath('userData'));
+  });
+  ipcMain.handle('update:check', (evt) => {
+    requireUnlockedMainWindow(evt);
+    void checkForUpdates({ silent: false });
   });
   ipcMain.handle('lock:set', (_evt, { current, next }: { current: string; next: string }) => {
     if (isLockEnabled() && !verifyPin(current)) {

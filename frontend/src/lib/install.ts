@@ -79,6 +79,9 @@ export interface ShellBridge {
   getOpenAtLogin(): Promise<boolean>;
   setOpenAtLogin(on: boolean): Promise<boolean>;
   openLogsFolder(): Promise<void>;
+  openBackupsFolder(): Promise<void>;
+  /** The shell's own GitHub check, with its native dialog. */
+  checkForUpdates(): Promise<void>;
 }
 
 declare global {
