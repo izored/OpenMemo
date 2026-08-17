@@ -200,7 +200,12 @@ class TestOnlyOnePollerPerHost:
         async def boom(*a, **kw):
             raise AssertionError("a disabled relay must never call Telegram")
 
+        # Both, not just the wrapper: _drain calls _tg_strict, so patching
+        # only _tg left this tripwire aimed at a function the poll path no
+        # longer uses, and a regressed kill switch would hang the forever
+        # loop here instead of failing the assertion.
         monkeypatch.setattr(tr, "_tg", boom)
+        monkeypatch.setattr(tr, "_tg_strict", boom)
 
         await tr.run_relay_loop()
 
@@ -340,11 +345,156 @@ class TestKick:
 
         from backend.services import telegram_relay as tr
 
+        waiter = asyncio.create_task(tr._sleep_or_kick(30))
+        await asyncio.sleep(0)               # let it bind the event and park
         tr.kick()
-        await tr._sleep_or_kick(30)          # consumed by the kick above
+        await waiter
         try:
             await asyncio.wait_for(tr._sleep_or_kick(30), timeout=0.05)
         except asyncio.TimeoutError:
             pass                             # correct: it is waiting again
         else:
             raise AssertionError("a stale kick leaked into the next interval")
+
+    async def test_a_kick_with_nothing_waiting_does_not_arm_the_next_wait(self):
+        """kick() must not create the event.
+
+        It used to call the same helper the waiter used, so a kick arriving from
+        another loop replaced the very Event the relay was parked on. That kick
+        was lost, and so was every later one for the rest of the interval.
+        """
+        import asyncio
+
+        from backend.services import telegram_relay as tr
+
+        tr._KICK = None
+        tr._KICK_LOOP = None
+        tr.kick()
+        assert tr._KICK is None, "kick() must not bind an event nobody is awaiting"
+        try:
+            await asyncio.wait_for(tr._sleep_or_kick(30), timeout=0.05)
+        except asyncio.TimeoutError:
+            pass
+        else:
+            raise AssertionError("a kick with no waiter pre-armed the next interval")
+
+    def test_a_kick_outside_a_loop_is_a_no_op(self):
+        from backend.services import telegram_relay as tr
+
+        tr.kick()   # must not raise
+
+
+
+class TestStaleness:
+    """Telegram drops an undelivered share at 24 hours, so "how long since it
+    answered" is the number every warning hangs on. Each of these was a real way
+    to get that number wrong."""
+
+    def _reset(self, monkeypatch, tmp_path):
+        import backend.core.app_settings as aps
+        from backend.services import telegram_relay as tr
+
+        monkeypatch.setattr(aps, "_PATH", tmp_path / "app_settings.json")
+        tr.RELAY_STATUS["last_success_at"] = None
+        tr.RELAY_STATUS["running_since"] = None
+        tr._last_persisted_iso = None
+        return tr
+
+    def test_a_timezone_aware_stamp_does_not_raise(self, monkeypatch, tmp_path):
+        """fromisoformat parses an offset or a trailing Z happily, and the
+        subtraction against a naive utcnow() then raises TypeError. That escaped
+        the guard, reached the relay's generic handler, and wedged the loop in a
+        60 second retry that never called Telegram again."""
+        tr = self._reset(monkeypatch, tmp_path)
+        for stamp in ("2026-08-17T09:41:02Z", "2026-08-17T09:41:02+00:00"):
+            tr.RELAY_STATUS["last_success_at"] = stamp
+            hours = tr.hours_since_success()
+            assert hours is not None and hours >= 0, stamp
+
+    def test_garbage_is_none_not_an_exception(self, monkeypatch, tmp_path):
+        tr = self._reset(monkeypatch, tmp_path)
+        tr.RELAY_STATUS["last_success_at"] = "not a timestamp"
+        assert tr.hours_since_success() is None
+
+    def test_never_answered_is_stale_once_the_relay_has_had_a_chance(self, monkeypatch, tmp_path):
+        """A token that was wrong from the first minute never writes a stamp, so
+        the gap reads as None. Treating None as healthy left the worst-off user
+        with no warning anywhere while Telegram dropped everything they sent."""
+        from datetime import datetime, timedelta
+
+        tr = self._reset(monkeypatch, tmp_path)
+        assert tr.hours_since_success() is None
+
+        tr.RELAY_STATUS["running_since"] = datetime.utcnow().isoformat()
+        assert tr.is_stale() is False, "a relay that just started is not stale yet"
+
+        tr.RELAY_STATUS["running_since"] = (
+            datetime.utcnow() - timedelta(hours=tr._NEVER_ANSWERED_GRACE_HOURS + 1)
+        ).isoformat()
+        assert tr.is_stale() is True, "hours up with no answer at all is the clearest stale there is"
+
+    def test_the_persist_throttle_uses_the_wall_clock(self, monkeypatch, tmp_path):
+        """It used to compare time.monotonic(), which stops during macOS sleep.
+        A laptop draining once a day gathered about a minute of monotonic time
+        between drains, never reached ten, and never persisted, so the disk
+        stamp sat days behind a healthy relay and the next launch shouted."""
+        from datetime import datetime, timedelta
+
+        import backend.core.app_settings as aps
+
+        tr = self._reset(monkeypatch, tmp_path)
+        tr._note_success()
+        first = aps.get_telegram_last_success()
+        assert first, "the first success must persist immediately"
+
+        tr._note_success()
+        assert aps.get_telegram_last_success() == first, "throttled inside the window"
+
+        # Eleven minutes of WALL time later, with no monotonic time passing at
+        # all, which is how a sleeping Mac experiences it.
+        tr._last_persisted_iso = (datetime.utcnow() - timedelta(minutes=11)).isoformat()
+        tr._note_success()
+        assert aps.get_telegram_last_success() != first, "past the window it must persist"
+
+    def test_a_failed_write_is_retried_rather_than_blackholed(self, monkeypatch, tmp_path):
+        """The marker used to advance before the write was known to have landed,
+        so one transient PermissionError skipped the stamp for ten minutes."""
+        from backend.services import telegram_relay as tr_mod
+
+        tr = self._reset(monkeypatch, tmp_path)
+        calls = []
+
+        def boom(stamp):
+            calls.append(stamp)
+            raise PermissionError("held by another process")
+
+        monkeypatch.setattr(tr_mod, "set_telegram_last_success", boom)
+        tr._note_success()
+        tr._note_success()
+        assert len(calls) == 2, "a failed persist must be retried on the next success"
+
+
+class TestNonDictResponse:
+    async def test_a_bare_null_body_does_not_escape_as_an_attribute_error(self):
+        """A proxy or captive portal can answer null or [] under a JSON content
+        type. Calling .get on that raised AttributeError straight through _tg,
+        which is documented never to raise, and killed the cycle over a
+        cosmetic sendMessage."""
+        from backend.services import telegram_relay as tr
+
+        class OddClient:
+            def __init__(self, payload):
+                self.payload = payload
+
+            async def post(self, *a, **kw):
+                payload = self.payload
+
+                class R:
+                    @staticmethod
+                    def json():
+                        return payload
+
+                return R()
+
+        for payload in (None, [], "nope"):
+            assert await tr._tg(OddClient(payload), "tok", "sendMessage") is None, payload

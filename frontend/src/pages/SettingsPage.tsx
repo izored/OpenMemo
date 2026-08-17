@@ -744,8 +744,10 @@ function TelegramRelayRows({ profile, save }: { profile: AppSettings | null; sav
   // to read "Polling. Last check 14:32" through a whole flight with no wifi,
   // because a failed call still stamped the attempt.
   const staleHours = status?.hours_since_success ?? null;
-  const stale =
-    enabled && staleHours !== null && staleHours >= (status?.stale_after_hours ?? 20);
+  // The backend decides. Recomputing from the number here would repeat the bug
+  // it just fixed: `hours_since_success` is null when Telegram has never once
+  // answered, and that reads as healthy while being the worst case there is.
+  const stale = enabled && !!status?.stale;
   const statusLine = !present
     ? 'Paste a bot token from @BotFather to begin.'
     : !enabled
@@ -771,11 +773,14 @@ function TelegramRelayRows({ profile, save }: { profile: AppSettings | null; sav
           }}
         >
           <p style={{ margin: 0, fontWeight: 500, color: 'var(--text-warning, #BA7517)' }}>
-            openMemo has not reached Telegram in {Math.round(staleHours ?? 0)} hours
+            {staleHours === null
+              ? 'openMemo has never reached Telegram'
+              : `openMemo has not reached Telegram in ${Math.round(staleHours)} hours`}
           </p>
           <span className="mono" style={{ display: 'block', marginTop: 4 }}>
-            Telegram drops a share it could not deliver after 24 hours, so anything shared before
-            then is at risk. Check this machine is online and openMemo is running.
+            {staleHours === null
+              ? 'Not once since capture was turned on, so nothing you have shared has arrived. The bot token is the usual cause.'
+              : 'Telegram drops a share it could not deliver after 24 hours, so anything shared before then is at risk. Check this machine is online and openMemo is running.'}
           </span>
         </div>
       )}
@@ -953,9 +958,11 @@ function SecurityRows() {
         <div className="om-setting-row-text">
           <p>App lock</p>
           <span className="mono">
-            A 4-digit PIN on every launch. The backend does not even start until you unlock, so a
-            locked app exposes nothing. This is separate from the hidden section's passcode: that
-            one guards memos inside an app that is already open.
+            A 4-digit PIN on every launch. On a cold start the backend does not even start until
+            you unlock, so a locked app exposes nothing, not even on localhost. Reopening a window
+            while openMemo is still running unlocks a backend that is already warm. This is
+            separate from the hidden section's passcode: that one guards memos inside an app that
+            is already open.
           </span>
         </div>
         <div className="om-inline-control">

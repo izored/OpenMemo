@@ -15,7 +15,6 @@ import {
   ipcMain,
   Notification,
   powerMonitor,
-  powerSaveBlocker,
   shell,
 } from 'electron';
 import { spawn } from 'node:child_process';
@@ -56,16 +55,66 @@ function logFile(): string {
 }
 
 /**
- * True only for the app's own local origins. Exact hostname match — a naive
- * startsWith('http://localhost') would also pass http://localhost.evil.com.
+ * True only for THIS app's own pages.
+ *
+ * "Local" is not the same as "ours". Accepting any loopback port meant any other
+ * listener on the machine counted as the app: a dev server, a helper process,
+ * something already compromised. Accepting any `file:` URL meant any HTML file
+ * anywhere on disk did too. That was survivable while the renderer had almost no
+ * privileges, and stopped being survivable the moment the preload started
+ * exposing the shell's own settings, because an allowed window inherits it.
+ *
+ * So: exact origin match against the backend we started (host AND port), plus
+ * the Vite origin in dev, plus files under our own static directory. Hostname is
+ * compared exactly, since startsWith('http://localhost') also passes
+ * http://localhost.evil.com.
  */
 function isLocalAppUrl(url: string): boolean {
   try {
     const u = new URL(url);
-    if (u.protocol === 'file:') return true;
-    return u.protocol === 'http:' && (u.hostname === '127.0.0.1' || u.hostname === 'localhost');
+    if (u.protocol === 'file:') {
+      const p = path.resolve(decodeURIComponent(u.pathname.replace(/^\/([A-Za-z]:)/, '$1')));
+      return p.startsWith(path.resolve(staticDir()));
+    }
+    if (u.protocol !== 'http:') return false;
+    if (u.hostname !== '127.0.0.1' && u.hostname !== 'localhost') return false;
+    const allowed = [backend?.url, process.env.OPENMEMO_RENDERER_URL].filter(Boolean) as string[];
+    // Before the backend is up there is no origin of ours to match, so nothing
+    // qualifies. Nothing legitimately navigates in that window at that point.
+    return allowed.some((base) => {
+      try {
+        return new URL(base).port === u.port;
+      } catch {
+        return false;
+      }
+    });
   } catch {
     return false;
+  }
+}
+
+/**
+ * Only the main window may call the shell bridge.
+ *
+ * `openmemoShell` can persist settings, restart the backend and set a login
+ * item, and the window it lives in renders remote content: scraped article HTML,
+ * memo descriptions, markdown from the web. A child window inherits the parent's
+ * preload, and the lock screen loads the same one, so "the bridge exists" is not
+ * the same as "this caller is allowed to use it". Every handler checks.
+ */
+function fromMainWindow(evt: Electron.IpcMainInvokeEvent): boolean {
+  return !!mainWindow && evt.sender === mainWindow.webContents;
+}
+
+/** True while the PIN gate is up and waiting. The bridge is dead until it clears. */
+function isLocked(): boolean {
+  return lockResolve !== null;
+}
+
+/** Guard for every `openmemoShell` handler. Throws, so the renderer sees a rejection. */
+function requireUnlockedMainWindow(evt: Electron.IpcMainInvokeEvent): void {
+  if (!fromMainWindow(evt) || isLocked()) {
+    throw new Error('not available from this window');
   }
 }
 
@@ -153,23 +202,55 @@ function createWindow(): void {
   // Open target=_blank / external links in the system browser, never in-app.
   mainWindow.webContents.setWindowOpenHandler(({ url }) => {
     if (isLocalAppUrl(url)) {
-      // A local /api/ URL opened in a new window is a file, not a page:
-      // "Export all Memos" is an <a target="_blank"> to /api/export/markdown.
-      // Allowing it opened a second frameless window with no menu, started the
-      // download inside it, and left the empty window sitting on screen. Hand
-      // the URL to the downloader and open nothing.
+      // Our own export and backup endpoints serve a file, not a page. "Export
+      // all Memos" is an <a target="_blank"> to /api/export/markdown, and
+      // allowing it opened a second frameless window with no menu, started the
+      // download inside it, and left the empty window on screen. Hand those to
+      // the downloader and open nothing.
+      //
+      // Named prefixes, not all of /api/: a memo's markdown can contain any
+      // link, and a blanket rule turned "/api/anything" inside saved content
+      // into a silent download.
       try {
-        if (new URL(url).pathname.startsWith('/api/')) {
+        const p = new URL(url).pathname;
+        if (p.startsWith('/api/export/') || p.startsWith('/api/backup')) {
           mainWindow?.webContents.downloadURL(url);
           return { action: 'deny' };
         }
       } catch {
         /* unparseable local URL: fall through to the normal window */
       }
-      return { action: 'allow' };
+      // Any window we do open renders app content but must NOT inherit the
+      // shell bridge: the preload is the main window's privilege, not the
+      // origin's.
+      return {
+        action: 'allow',
+        overrideBrowserWindowOptions: {
+          webPreferences: { preload: undefined, contextIsolation: true, nodeIntegration: false },
+        },
+      };
     }
     shell.openExternal(url);
     return { action: 'deny' };
+  });
+
+  // A download that fails does so silently otherwise: no window, no error, the
+  // user clicks Export and nothing ever happens.
+  mainWindow.webContents.session.on('will-download', (_e, item) => {
+    item.once('done', (_evt, state) => {
+      if (state === 'completed') {
+        appendLog(`[shell] Saved ${item.getFilename()}\n`);
+        return;
+      }
+      appendLog(`[shell] Download ${state}: ${item.getFilename()}\n`);
+      if (state === 'interrupted') {
+        void dialog.showMessageBox({
+          type: 'error',
+          message: 'The download did not finish.',
+          detail: `${item.getFilename()} was interrupted. Try again from Settings.`,
+        });
+      }
+    });
   });
 
   // Never let the window itself navigate away from the local app (a stray link
@@ -208,7 +289,9 @@ async function openAppWindow(): Promise<void> {
   // exposes nothing on localhost. On reopen (backend already warm) the gate
   // still covers the UI.
   if (isLockEnabled()) {
+    buildMenu(true); // no DevTools, no backend restart, while the gate is up
     const unlocked = await showLockGate();
+    buildMenu();
     if (!unlocked) return;
   }
 
@@ -288,10 +371,24 @@ async function openSettingsPage(): Promise<void> {
   if (mainWindow.isMinimized()) mainWindow.restore();
   mainWindow.show();
   mainWindow.focus();
-  void mainWindow.webContents.executeJavaScript(
-    "window.dispatchEvent(new CustomEvent('openmemo:open-settings'))",
-    true,
-  );
+  // The window may be showing lock.html or loading.html. Both are ours, so
+  // isLocalAppUrl says yes, but neither listens for this. Match the SPA's own
+  // origin instead: dispatching into the other two is a silent no-op.
+  const spa = process.env.OPENMEMO_RENDERER_URL ?? backend?.url;
+  if (!spa || !mainWindow.webContents.getURL().startsWith(spa)) return;
+  // The SPA registers its listener in an effect, so a dispatch that arrives in
+  // the same tick as first paint lands on nobody. Retry a few times, cheaply,
+  // and stop as soon as the app confirms it handled one.
+  for (let i = 0; i < 10; i++) {
+    const handled = await mainWindow.webContents
+      .executeJavaScript(
+        "!!window.__openmemoSettingsListener && (window.dispatchEvent(new CustomEvent('openmemo:open-settings')), true)",
+        true,
+      )
+      .catch(() => false);
+    if (handled) return;
+    await new Promise((r) => setTimeout(r, 150));
+  }
 }
 
 /**
@@ -326,61 +423,80 @@ function flushPendingOpenFiles(): void {
   void ingestFiles(batch);
 }
 
-// ── Telegram relay: wake it, and keep it awake ────────────────────────────
+// ── Telegram relay: wake it up ────────────────────────────────────────────
 // Telegram holds an undelivered share for 24 hours and then drops it, so the
-// whole job on a laptop is being reachable at least once a day. Two things
-// fight that. macOS stops the monotonic clock during system sleep, so the
-// backend's 15 minute timer comes out of an eight hour nap with 15 minutes
-// still to run. And App Nap stretches timers in a backgrounded app. Wake,
-// unlock and focus nudge the backend to drain now; App Nap is held off only
-// while phone capture is actually on, because a power blocker on a laptop is
-// not free.
-let lastNudge = 0;
-let suspendBlockerId: number | null = null;
+// whole job on a laptop is being reachable at least once a day. macOS stops the
+// monotonic clock during system sleep, so the backend's 15 minute timer comes
+// out of an eight hour nap with 15 minutes still to run. Wake, unlock, focus and
+// an hourly tick all nudge it to drain now.
+//
+// There is deliberately NO powerSaveBlocker here. `prevent-app-suspension` reads
+// like "hold off App Nap" and is not: on macOS it asserts
+// PreventUserIdleSystemSleep, so the whole Mac stops idle-sleeping for as long
+// as phone capture is on. That is a battery bug on a laptop, and it would also
+// remove the `resume` event this code depends on.
+//
+// Two debounce buckets, not one. A lid opening emits `resume` while Wi-Fi is
+// still reassociating, then `unlock-screen` seconds later once the user has
+// authenticated and the network is actually up. Sharing one bucket meant the
+// early, useless nudge won and the good one was dropped.
+let lastCasualNudge = 0;
+const CASUAL_NUDGE_MS = 30_000;
 
-/** Hold off App Nap while phone capture is on, and only then. */
-function syncSuspendBlocker(relayOn: boolean): void {
-  if (relayOn && suspendBlockerId === null) {
-    suspendBlockerId = powerSaveBlocker.start('prevent-app-suspension');
-    appendLog('[shell] App Nap held off (phone capture is on).\n');
-  } else if (!relayOn && suspendBlockerId !== null) {
-    powerSaveBlocker.stop(suspendBlockerId);
-    suspendBlockerId = null;
-    appendLog('[shell] App Nap released.\n');
-  }
+/** Persisted so relaunching does not re-show a warning the user just dismissed. */
+function staleWarnedAt(): number {
+  return loadSettings().staleWarnedAt ?? 0;
 }
 
-/** Don't repeat the "we have not reached Telegram" warning every wake. */
-let lastStaleWarning = 0;
-
-async function nudgeRelay(reason: string): Promise<void> {
+/**
+ * @param reason  free text for the log
+ * @param force   wake events skip the debounce; `focus` and the hourly tick do not
+ */
+async function nudgeRelay(reason: string, force = false): Promise<void> {
   if (!backend || !isBackendRunning()) return;
   const now = Date.now();
-  if (now - lastNudge < 30_000) return; // focus fires constantly; once is enough
-  lastNudge = now;
+  if (!force && now - lastCasualNudge < CASUAL_NUDGE_MS) return;
+  if (!force) lastCasualNudge = now;
   try {
-    const res = await fetch(`${backend.url}api/settings/telegram/poll-now`, { method: 'POST' });
+    const res = await fetch(`${backend.url}api/settings/telegram/poll-now`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ reason }),
+    });
+    if (!res.ok) {
+      // Parsing an error body would read `telegram_enabled: undefined` as "off".
+      appendLog(`[shell] relay nudge (${reason}) → HTTP ${res.status}\n`);
+      return;
+    }
     const body = (await res.json()) as {
       kicked?: boolean;
-      telegram_enabled?: boolean;
       stale?: boolean;
       hours_since_success?: number | null;
     };
     appendLog(`[shell] relay nudge (${reason}) → kicked=${!!body.kicked}\n`);
-    syncSuspendBlocker(!!body.telegram_enabled);
-    // Past the warning line, and the 24 hour cliff is close. Say it on screen
-    // rather than only on a Settings page nobody has open: the whole failure
-    // mode is the app being closed or asleep for too long.
-    if (body.stale && Notification.isSupported() && now - lastStaleWarning > 6 * 60 * 60 * 1000) {
-      lastStaleWarning = now;
-      const hours = Math.round(body.hours_since_success ?? 0);
-      new Notification({
+    // Past the warning line, the 24 hour cliff is close. Say it on screen rather
+    // than only on a Settings page nobody has open: the whole failure mode is
+    // the app being closed or asleep for too long.
+    if (body.stale && Notification.isSupported() && now - staleWarnedAt() > 6 * 60 * 60 * 1000) {
+      const hours = body.hours_since_success;
+      const n = new Notification({
         title: 'openMemo has not reached Telegram',
-        body: `Last answer was ${hours} hours ago. Telegram drops shares after 24, and it is catching up now.`,
-        silent: false,
-      }).show();
+        body:
+          hours === null || hours === undefined
+            ? 'It has never got through since phone capture was turned on. Check the bot token in Settings.'
+            : `Last answer was ${Math.round(hours)} hours ago. Telegram drops shares after 24.`,
+      });
+      // Only burn the six hour window once the notification is actually on
+      // screen. If macOS refuses it (authorization denied, or an unsigned build
+      // failing the bundle-proxy check) we want to try again on the next wake.
+      n.once('show', () => saveSettings({ staleWarnedAt: Date.now() }));
+      n.once('click', () => void openSettingsPage());
+      n.show();
     }
   } catch (e) {
+    // Do not keep the debounce for an attempt that never landed: the wifi was
+    // probably still coming up, and the next event is the retry.
+    if (!force) lastCasualNudge = 0;
     appendLog(`[shell] relay nudge (${reason}) failed: ${e instanceof Error ? e.message : e}\n`);
   }
 }
@@ -448,8 +564,13 @@ function openOllamaHostDialog(): void {
   win.loadFile(path.join(staticDir(), 'ollama-config.html'));
 }
 
+/** One PIN sheet at a time: the renderer can ask for it, so it must not stack. */
+let pinDialogOpen = false;
+
 /** Modal to set / change / turn off the 4-digit app-lock PIN. */
 function openPinConfigDialog(): void {
+  if (pinDialogOpen) return;
+  pinDialogOpen = true;
   const win = new BrowserWindow({
     width: 440,
     height: 300,
@@ -467,11 +588,29 @@ function openPinConfigDialog(): void {
     },
   });
   win.setMenuBarVisibility(false);
+  win.on('closed', () => { pinDialogOpen = false; });
   win.loadFile(path.join(staticDir(), 'pin-config.html'));
 }
 
-function buildMenu(): void {
+/**
+ * @param locked  the PIN gate is up. The full menu is a way around it: View →
+ *   Toggle DevTools reaches the lock renderer, and Ollama Host… restarts the
+ *   backend and loads the unlocked app, abandoning the gate. While locked the
+ *   menu is About and Quit and nothing else.
+ */
+function buildMenu(locked = false): void {
   const isMac = process.platform === 'darwin';
+  if (locked) {
+    Menu.setApplicationMenu(
+      Menu.buildFromTemplate([
+        {
+          label: app.name,
+          submenu: [{ role: 'about' as const }, { type: 'separator' as const }, { role: 'quit' as const }],
+        },
+      ]),
+    );
+    return;
+  }
   const template: Electron.MenuItemConstructorOptions[] = [
     ...(isMac
       ? [
@@ -564,20 +703,75 @@ function buildMenu(): void {
   Menu.setApplicationMenu(Menu.buildFromTemplate(template));
 }
 
+/**
+ * A host string safe to hand the backend, or null.
+ *
+ * The value ends up as OLLAMA_HOST, which the backend turns into outbound
+ * request URLs carrying chat prompts and memo excerpts. It arrives from a
+ * renderer that also displays scraped web content, so "non-empty" is not
+ * enough of a check: an http(s) URL, no credentials in it, nothing else.
+ */
+function cleanOllamaHost(raw: string): string | null {
+  const clean = (raw || '').trim();
+  if (!clean) return null;
+  try {
+    const u = new URL(clean);
+    if (u.protocol !== 'http:' && u.protocol !== 'https:') return null;
+    if (u.username || u.password) return null;
+    if (!u.hostname) return null;
+    return u.origin;
+  } catch {
+    return null;
+  }
+}
+
 function registerIpc(): void {
-  ipcMain.handle('ollama:get', () => loadSettings().ollamaHost);
-  ipcMain.handle('ollama:save', async (_evt, host: string) => {
-    const clean = (host || '').trim();
-    if (!clean) return { ok: false, error: 'Host is empty' };
+  ipcMain.handle('ollama:get', (evt) => {
+    requireUnlockedMainWindow(evt);
+    return loadSettings().ollamaHost;
+  });
+  ipcMain.handle('ollama:save', async (evt, host: string) => {
+    // The menu sheet has its own window and its own preload, so it is allowed
+    // through; everything else must be the unlocked main window.
+    if (evt.sender === mainWindow?.webContents && isLocked()) {
+      return { ok: false, error: 'not available while locked' };
+    }
+    const clean = cleanOllamaHost(host);
+    if (!clean) return { ok: false, error: 'Enter a full http address, e.g. http://localhost:11434' };
+    const previous = loadSettings().ollamaHost;
     saveSettings({ ollamaHost: clean });
     // Restart the backend so it picks up the new OLLAMA_HOST, then reload.
     try {
       await mainWindow?.loadFile(path.join(staticDir(), 'loading.html'));
       backend = await restartBackend(appendLog);
       await loadAppUrl(process.env.OPENMEMO_RENDERER_URL ?? backend.url);
+      // Land back where the change was made, not on the dashboard.
+      void openSettingsPage();
       return { ok: true };
     } catch (err) {
-      return { ok: false, error: err instanceof Error ? err.message : String(err) };
+      // The caller was destroyed by the loadFile above, so an error returned to
+      // it reaches nobody: the window would sit on the loading screen forever
+      // with no explanation and no way back. Say it natively, and put the old
+      // host back, because a bad one leaves the app unable to start at all.
+      const detail = err instanceof Error ? err.message : String(err);
+      appendLog(`[shell] Ollama host ${clean} failed: ${detail}\n`);
+      dialog.showMessageBoxSync({
+        type: 'error',
+        title: 'Could not start with that Ollama host',
+        message: 'The backend did not come back up.',
+        detail: `${detail}\n\nGoing back to ${previous}.`,
+        buttons: ['OK'],
+      });
+      saveSettings({ ollamaHost: previous });
+      try {
+        backend = await restartBackend(appendLog);
+        await loadAppUrl(process.env.OPENMEMO_RENDERER_URL ?? backend.url);
+      } catch {
+        // Even the old host will not come up, so this is not about Ollama.
+        // openAppWindow's own Retry/Quit dialog is the right owner of that.
+        await openAppWindow();
+      }
+      return { ok: false, error: detail };
     }
   });
 
@@ -600,15 +794,34 @@ function registerIpc(): void {
   });
   ipcMain.handle('lock:status', () => ({ enabled: isLockEnabled() }));
   // The Settings page asks for the sheet rather than building its own PIN form:
-  // the current-PIN check and the safeStorage write stay in one place.
-  ipcMain.handle('lock:configure', () => openPinConfigDialog());
-  ipcMain.handle('login-item:get', () => app.getLoginItemSettings().openAtLogin);
-  ipcMain.handle('login-item:set', (_evt, on: boolean) => {
-    app.setLoginItemSettings({ openAtLogin: !!on });
-    buildMenu(); // the menu carries the same checkbox; keep the two in step
+  // the current-PIN check and the safeStorage write stay in one place. One at a
+  // time, so nothing can stack native modals over the app.
+  ipcMain.handle('lock:configure', (evt) => {
+    requireUnlockedMainWindow(evt);
+    if (pinDialogOpen) return;
+    openPinConfigDialog();
+  });
+  ipcMain.handle('login-item:get', (evt) => {
+    requireUnlockedMainWindow(evt);
     return app.getLoginItemSettings().openAtLogin;
   });
-  ipcMain.handle('logs:open', () => void shell.openPath(path.dirname(logFile())));
+  ipcMain.handle('login-item:set', (evt, on: boolean) => {
+    requireUnlockedMainWindow(evt);
+    app.setLoginItemSettings({ openAtLogin: !!on });
+    buildMenu(); // the menu carries the same checkbox; keep the two in step
+    // setLoginItemSettings returns void and macOS can refuse the registration
+    // (SMAppService rejects some unsigned or non-/Applications builds), so read
+    // it back: the caller shows what actually happened, not what was asked for.
+    const actual = app.getLoginItemSettings().openAtLogin;
+    if (actual !== !!on) {
+      appendLog(`[shell] macOS refused Open at Login = ${!!on}\n`);
+    }
+    return actual;
+  });
+  ipcMain.handle('logs:open', (evt) => {
+    requireUnlockedMainWindow(evt);
+    void shell.openPath(path.dirname(logFile()));
+  });
   ipcMain.handle('lock:set', (_evt, { current, next }: { current: string; next: string }) => {
     if (isLockEnabled() && !verifyPin(current)) {
       return { ok: false, error: 'Current PIN is incorrect' };
@@ -700,16 +913,18 @@ if (!app.requestSingleInstanceLock()) {
 
     // Coming back from sleep, the lock screen, or another app: drain Telegram
     // now rather than serving out a timer that did not advance while asleep.
-    powerMonitor.on('resume', () => void nudgeRelay('resume'));
-    powerMonitor.on('unlock-screen', () => void nudgeRelay('unlock'));
+    // Wake events force past the debounce (see nudgeRelay); focus does not.
+    powerMonitor.on('resume', () => void nudgeRelay('resume', true));
+    powerMonitor.on('unlock-screen', () => void nudgeRelay('unlock', true));
     app.on('browser-window-focus', () => void nudgeRelay('focus'));
+    // A Mac that never sleeps (a desktop, or a laptop on a desk) fires none of
+    // the above. Without this the 20 hour warning and the 24 hour cliff can both
+    // pass in total silence while the app sits there open.
+    setInterval(() => void nudgeRelay('hourly'), 60 * 60 * 1000).unref?.();
   });
 }
 
-app.on('will-quit', () => {
-  globalShortcut.unregisterAll();
-  syncSuspendBlocker(false);
-});
+app.on('will-quit', () => globalShortcut.unregisterAll());
 
 // macOS convention: closing the window keeps the app (and the warm backend)
 // alive in the Dock — reopening is instant. Everywhere else, close = quit.

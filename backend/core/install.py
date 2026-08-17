@@ -20,9 +20,12 @@ be a Mac browsing the Docker install. See `frontend/src/lib/install.ts`.
 """
 from __future__ import annotations
 
+import logging
 import os
 import platform
 from pathlib import Path
+
+log = logging.getLogger(__name__)
 
 KINDS = ("macos", "docker", "dev")
 
@@ -32,6 +35,11 @@ def install_kind() -> str:
     declared = os.environ.get("OPENMEMO_INSTALL", "").strip().lower()
     if declared in KINDS:
         return declared
+    if declared:
+        # Say so. Silently falling through to "dev" hands a Mac app user the
+        # dev-checkout paths and update instructions, which is the exact wrong
+        # copy this module exists to prevent.
+        log.warning("OPENMEMO_INSTALL=%r is not one of %s, ignoring", declared, KINDS)
     try:
         if Path("/.dockerenv").exists():
             return "docker"

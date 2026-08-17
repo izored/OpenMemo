@@ -149,6 +149,19 @@ def _read() -> dict[str, Any]:
     return dict(_DEFAULTS)
 
 
+def _host_without_credentials(host: str) -> str:
+    """A host safe to hand back over the API. Never the userinfo half."""
+    try:
+        from urllib.parse import urlsplit, urlunsplit
+
+        parts = urlsplit(host)
+        if not parts.netloc or "@" not in parts.netloc:
+            return host
+        return urlunsplit((parts.scheme, parts.netloc.rsplit("@", 1)[-1], parts.path, "", ""))
+    except ValueError:
+        return ""
+
+
 def get_settings() -> dict[str, Any]:
     # `yt_cookies_present` is computed from disk, never persisted in the JSON —
     # so the UI can show cookie status without ever exposing the jar itself.
@@ -184,7 +197,10 @@ def get_settings() -> dict[str, Any]:
         # Read-only. Where the backend looks for Ollama. Set by env everywhere;
         # the Mac app writes that env through its own settings store, so the
         # Settings page can offer to change it there and only there.
-        "ollama_host": settings.OLLAMA_HOST,
+        # Credentials stripped: this endpoint is reachable by any local process
+        # and by the browser extension origin, and an env-set host can carry
+        # http://user:pass@host.
+        "ollama_host": _host_without_credentials(settings.OLLAMA_HOST),
     }
 
 

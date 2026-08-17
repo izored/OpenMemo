@@ -83,7 +83,14 @@ export function Layout() {
   useEffect(() => {
     const go = () => navigate('/settings');
     window.addEventListener('openmemo:open-settings', go);
-    return () => window.removeEventListener('openmemo:open-settings', go);
+    // The shell dispatches this from the main process and cannot know when the
+    // effect has run, so it polls for this marker rather than firing into a
+    // document that is painted but not listening yet.
+    (window as unknown as { __openmemoSettingsListener?: boolean }).__openmemoSettingsListener = true;
+    return () => {
+      window.removeEventListener('openmemo:open-settings', go);
+      (window as unknown as { __openmemoSettingsListener?: boolean }).__openmemoSettingsListener = false;
+    };
   }, [navigate]);
 
   const [overlayKey, setOverlayKey] = useState(0);
@@ -240,7 +247,7 @@ export function Layout() {
   // every missed window costs something. The browser fires `online` on a real
   // transition only, and the endpoint is a no-op when the relay is off.
   useEffect(() => {
-    const back = () => void settingsApi.telegramPollNow().catch(() => {});
+    const back = () => void settingsApi.telegramPollNow('online').catch(() => {});
     window.addEventListener('online', back);
     return () => window.removeEventListener('online', back);
   }, []);
