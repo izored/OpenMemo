@@ -37,4 +37,8 @@ contextBridge.exposeInMainWorld('openmemoShell', {
   getOpenAtLogin: (): Promise<boolean> => ipcRenderer.invoke('login-item:get'),
   setOpenAtLogin: (on: boolean): Promise<boolean> => ipcRenderer.invoke('login-item:set', on),
   openLogsFolder: (): Promise<void> => ipcRenderer.invoke('logs:open'),
+  openBackupsFolder: (): Promise<void> => ipcRenderer.invoke('backups:open'),
+  /** The shell's own update check, dialog and all. The page defers to it so
+   *  there is one updater rather than two disagreeing ones. */
+  checkForUpdates: (): Promise<void> => ipcRenderer.invoke('update:check'),
 });
