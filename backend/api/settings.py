@@ -180,11 +180,14 @@ class PollNow(BaseModel):
     reason: Optional[str] = None
 
 
-# Server-side floor on how often a kick may actually do something. The macOS
-# shell debounces too, but that only covers the shell: the SPA and anything else
-# on localhost reach this directly, and a flood was able to interrupt the
-# relay's own error backoff, which is the one thing that must not be defeated.
-_POLL_NOW_MIN_INTERVAL_S = 20.0
+# Server-side floor on how often a kick may actually do something. Low, because
+# the shell deliberately sends two nudges seconds apart on a lid opening: the
+# `resume` one fires while Wi-Fi is still reassociating and the `unlock` one
+# lands with a working network. A 20 second floor kept the useless one and threw
+# away the good one. The thing the floor was really protecting, the relay's error
+# backoff, is no longer kickable at all (see run_relay_loop), so this only has to
+# stop a flood from being free.
+_POLL_NOW_MIN_INTERVAL_S = 5.0
 _last_poll_now = 0.0
 
 

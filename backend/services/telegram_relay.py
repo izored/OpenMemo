@@ -730,7 +730,8 @@ async def run_relay_loop() -> None:
                         client, token, "sendMessage", chat_id=owner,
                         text=(
                             f"Back online after {gap_hours:.0f}h. "
-                            f"Saved {caught_up} share{'' if caught_up == 1 else 's'} that were waiting."
+                            f"Saved {caught_up} share{'' if caught_up == 1 else 's'} "
+                            f"that {'was' if caught_up == 1 else 'were'} waiting."
                         ),
                     )
 
@@ -753,8 +754,13 @@ async def run_relay_loop() -> None:
             # too, so plugging the wifi back in retries at once.
             RELAY_STATUS["last_error"] = scrub_token(str(e))[:200]
             log.warning("telegram relay could not reach Telegram: %s", scrub_token(str(e)))
-            await _sleep_or_kick(60)
+            # NOT kickable. This is the backoff, and anything that can interrupt
+            # it can also defeat it: a page looping the poll-now endpoint would
+            # keep this at zero and hammer Telegram with the user's token until
+            # it rate-limits the bot. Sixty seconds against Telegram's 24 hours
+            # is a cheap thing to wait.
+            await asyncio.sleep(60)
         except Exception as e:
             RELAY_STATUS["last_error"] = scrub_token(str(e))[:200]
             log.error("telegram relay cycle failed: %r", e)
-            await _sleep_or_kick(60)
+            await asyncio.sleep(60)  # see above: a backoff that can be skipped is not one

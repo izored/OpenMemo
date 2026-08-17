@@ -138,9 +138,9 @@ export function ChangelogModal({
                       nothing there, and the shell runs its own update check
                       (macOS/src/update-notifier.ts) that offers the download.
                       Both surfaces must say the same thing. */}
-                  {install.isMac ? (
+                  {!install.known ? null : install.isMac ? (
                     <ol style={{ margin: 0, paddingLeft: 18, fontSize: 13, lineHeight: 1.7 }}>
-                      <li>Download the new <code>.dmg</code> from the release below.</li>
+                      <li>Open the release on GitHub with the button below and download the new <code>.dmg</code>.</li>
                       <li>Drag OpenMemo to Applications, replacing the old one. Your library stays put.</li>
                     </ol>
                   ) : (

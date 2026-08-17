@@ -712,6 +712,9 @@ function MeshRows({ profile, save }: { profile: AppSettings | null; save: (p: Pa
 
 
 function TelegramRelayRows({ profile, save }: { profile: AppSettings | null; save: (p: Partial<AppSettings>) => void }) {
+  // Waking is a Mac-app claim: powerMonitor lives in the shell, and Docker and
+  // dev have no equivalent. Reconnecting is true everywhere.
+  const install = useInstall();
   const [tokenInput, setTokenInput] = useState('');
   const [tokenPresent, setTokenPresent] = useState<boolean | null>(null);
   const [tokenError, setTokenError] = useState('');
@@ -753,7 +756,7 @@ function TelegramRelayRows({ profile, save }: { profile: AppSettings | null; sav
     : !enabled
       ? 'Token stored. Turn the relay on to start polling.'
       : status?.last_error
-        ? `Cannot reach Telegram: ${status.last_error}`
+        ? `Relay problem: ${status.last_error}`
         : status?.last_success_at
           ? `Polling. Telegram last answered ${new Date(status.last_success_at + 'Z').toLocaleTimeString()}, ${status.saved_count} saved this session.`
           : 'On. First poll runs within a minute.';
@@ -780,7 +783,7 @@ function TelegramRelayRows({ profile, save }: { profile: AppSettings | null; sav
           <span className="mono" style={{ display: 'block', marginTop: 4 }}>
             {staleHours === null
               ? 'Not once since capture was turned on, so nothing you have shared has arrived. The bot token is the usual cause.'
-              : 'Telegram drops a share it could not deliver after 24 hours, so anything shared before then is at risk. Check this machine is online and openMemo is running.'}
+              : 'Telegram drops a share it could not deliver after 24 hours, so everything from the last day is at risk and anything older is already gone. Check this machine is online and openMemo is running.'}
           </span>
         </div>
       )}
@@ -788,7 +791,7 @@ function TelegramRelayRows({ profile, save }: { profile: AppSettings | null; sav
         <div className="om-setting-row-text">
           <p>Telegram capture</p>
           <span className="mono">
-            Share any link to your private bot chat and it lands here, filed into "{profile?.telegram_default_collection || 'Bot Inbox'}". openMemo polls Telegram outbound, so there are no open ports, and your shares wait on Telegram while this machine sleeps. Telegram holds them for 24 hours: openMemo catches up the moment it wakes, but leave it off for longer than a day and Telegram drops the older ones. {statusLine}
+            Share any link to your private bot chat and it lands here, filed into "{profile?.telegram_default_collection || 'Bot Inbox'}". openMemo polls Telegram outbound, so there are no open ports, and your shares wait on Telegram while this machine is away. Telegram holds them for 24 hours{install.isMac ? ', and openMemo catches up the moment this Mac wakes' : ''}, but leave it off for longer than a day and Telegram drops the older ones. {statusLine}
           </span>
         </div>
         <button
@@ -852,7 +855,10 @@ function TelegramRelayRows({ profile, save }: { profile: AppSettings | null; sav
       <div className="om-setting-row" style={{ borderTop: '1px solid var(--border)', marginTop: 8, paddingTop: 8 }}>
         <div className="om-setting-row-text">
           <p>Check every</p>
-          <span className="mono">How often openMemo asks Telegram for new shares. Between checks they wait on Telegram, and waking this machine or reconnecting asks straight away.</span>
+          <span className="mono">
+            How often openMemo asks Telegram for new shares. Between checks they wait on Telegram,
+            and reconnecting asks straight away.{install.isMac ? ' Waking this Mac does too.' : ''}
+          </span>
         </div>
         <select
           className="om-input"
@@ -979,7 +985,8 @@ function SecurityRows() {
           <p>Open at login</p>
           <span className="mono">
             Start openMemo when you log in. Worth having on if you use phone capture: Telegram holds
-            a share for 24 hours and openMemo can only collect it while it is running.
+            a share for 24 hours and openMemo can only collect it while it is running. With App
+            Lock on that means once you unlock, since the backend waits for the PIN.
           </span>
         </div>
         <button
@@ -996,7 +1003,7 @@ function SecurityRows() {
       <div className="om-setting-row" style={{ borderTop: '1px solid var(--border)', marginTop: 8, paddingTop: 8 }}>
         <div className="om-setting-row-text">
           <p>Logs</p>
-          <span className="mono">Everything the app printed while starting up. Useful when it did not.</span>
+          <span className="mono">Everything the app has printed since it launched. Useful when something did not work.</span>
         </div>
         <button className="om-btn-secondary" onClick={() => void shell.openLogsFolder()}>Open folder</button>
       </div>
@@ -1527,9 +1534,11 @@ export function SettingsPage() {
                 <div className="om-setting-row-text">
                   <p>Host</p>
                   <span className="mono">
-                    {install.isMac
-                      ? 'Where openMemo looks for Ollama. Saving restarts the backend and reloads.'
-                      : 'Where openMemo looks for Ollama. Set with OLLAMA_HOST where the backend runs.'}
+                    {!install.known
+                      ? 'Where openMemo looks for Ollama.'
+                      : install.isMac && shellBridge()
+                        ? 'Where openMemo looks for Ollama. Saving restarts the backend and reloads. If it is not answering, openMemo also tries a built-in fallback list.'
+                        : 'Where openMemo looks for Ollama. Set with OLLAMA_HOST where the backend runs, and openMemo tries a built-in fallback list behind it.'}
                     {ollamaConnected === false && (
                       <>
                         {' '}Nothing is answering there. Ollama is yours to run, from{' '}
@@ -1700,8 +1709,11 @@ export function SettingsPage() {
                     Save pages, highlight text, or clip tabs directly from your browser.{' '}
                     {install.isMac
                       ? <>You installed the app, not the source, so grab the <code>chrome-extension</code> folder from GitHub and load it unpacked.</>
-                      : <>Load unpacked from <code>chrome-extension/</code> in the repo.</>}
+                      : install.known
+                        ? <>Load unpacked from <code>chrome-extension/</code> in the repo.</>
+                        : null}
                     {' '}Point it at <code>{window.location.origin}/api</code>, which is where this window is talking right now.
+                    {install.isMac && ' If openMemo ever starts on a different port, come back here for the new one.'}
                   </p>
                   <a
                     className="om-ext-install-btn"

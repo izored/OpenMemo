@@ -50,7 +50,11 @@ export interface Install {
 
 const DATA_HOME: Record<InstallKind, string> = {
   macos: '~/Library/Application Support/OpenMemo',
-  docker: "openMemo's own Docker volume",
+  // A bind mount, not a volume: docker-compose.yml maps ./data:/app/data, so
+  // the file is in the data/ folder next to the compose file, on the host.
+  // Calling it a Docker volume is the same wrong sentence this module exists to
+  // delete, pointed at the other install.
+  docker: 'the data/ folder next to your docker-compose.yml',
   dev: "openMemo's data folder",
 };
 

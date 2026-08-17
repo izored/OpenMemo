@@ -229,8 +229,8 @@ export const ingestApi = {
       const sizeMb = (file.size / (1024 * 1024)).toFixed(1);
       throw new Error(
         `Upload aborted (${sizeMb} MB). The server or a proxy refused the request before a response arrived. ` +
-        `Check Max upload size in Settings. If openMemo runs behind a proxy (the Docker stack puts nginx in front), ` +
-        `raise its body-size cap too; in dev, check the Vite proxy points at uvicorn (default :8099).`,
+        `Check Max upload size in Settings. If you put your own proxy in front of openMemo, raise its ` +
+        `body-size cap too; in dev, check the Vite proxy points at uvicorn (default :8099).`,
         { cause: e },
       );
     }
