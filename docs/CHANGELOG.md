@@ -11,6 +11,8 @@ All notable changes to OpenMemo are documented here.
 
 - 📣 **A release no longer announces itself twice.** The release workflow tells the profile repo about a new version from a job of its own, and the release script asked for the same announcement again at the end of its run. Nothing on the receiving side notices a repeat, so the changelog there gained a second identical entry for the same version. The script no longer announces anything. It now checks that exactly one entry arrived, and says so plainly if there are none yet or more than one.
 
+- 🐳 **Building the web image works on either Docker builder.** The frontend image copied `package.json` and `package-lock.json` with a destination that had no trailing slash. Docker only allows that when a single file matches, and two do here, so the build died on the third step with "the destination must be a directory" for anyone not using BuildKit. BuildKit lets it pass, and BuildKit is what `docker compose` picks by default, so the image had never been built any other way and nothing had ever caught it. The line now ends in a slash and builds the same on both.
+
 ---
 ## [3.11.0] - 2026-08-14
 
