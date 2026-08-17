@@ -7,7 +7,27 @@ All notable changes to OpenMemo are documented here.
 
 <!-- Add entries here as work lands: ### Added / ### Changed / ### Fixed -->
 
+### Added
+
+- 🧭 **openMemo knows whether it is the Mac app, the Docker stack, or a checkout.** One page is served by all three, and until now nothing in it could tell them apart, so every sentence naming a file path, a port or an update command was hardcoded and wrong for two thirds of the people reading it. The backend now reports which install it is, and the page reads it.
+
+- ⏰ **Phone capture wakes up when your Mac does.** Telegram holds a share for 24 hours and then drops it, so the only thing that matters on a laptop is being reachable inside that day. macOS stops the clock the backend is counting on while the machine sleeps, so a lid closed for eight hours used to come back with a fifteen minute timer still to run. Opening the lid, unlocking the screen, bringing the window forward and reconnecting the wifi all ask Telegram straight away now. While phone capture is on, the Mac app also keeps macOS from putting it to sleep in the background.
+
+### Changed
+
+- ✍️ **The first-run intro talks about the mess before it talks about the product.** It opened with "your local AI knowledge OS", then spent three of its four slides on privacy before openMemo had done anything, and told everyone their library "lives on your Mac" including the people running it in Docker on Windows. It now starts with the tab, the DM to yourself and the screenshot you will never find again, says what happens when you drop something in, and explains that the AI part is Ollama and where to get it. Privacy is stated once, as a fact, in the place it matters.
+
+- ⌨️ **Keyboard hints match the keyboard you are using.** The search chip, the tour and the writer's save button all printed ⌘ regardless of what you were typing on, so anyone on Windows or Linux read a shortcut for a key they do not have. The shortcuts themselves always accepted both.
+
 ### Fixed
+
+- 📵 **Phone capture stops claiming it is fine when it cannot reach Telegram.** Every network error was swallowed one level down and came back as "no new messages", so the Settings card cleared its error, stamped the time, and read "Polling. Last check 14:32" through an entire flight with no wifi. It now separates when it last tried from when Telegram last answered, shows the second one, and says what went wrong when the answer never came. A revoked token surfaces the same way instead of looking quiet. The card also names the 24 hour limit, which nothing did before.
+
+- 🧯 **The product tour no longer locks the panel it just told you to use.** Step one asks you to press + and open the New Memo panel, and the moment you did, the tour re-armed the invisible layer that holds the app still, over the panel it was pointing at. The card said "save a link, hit Next when ready" above something that no longer took clicks. That step now stays interactive from start to finish.
+
+- 🗺️ **The tour skips the steps it cannot point at, instead of pointing at nothing.** Below 1024px wide the sidebar becomes a drawer that sits off the left edge of the screen, and a collapsed sidebar drops whole sections. Both cases still measured, so six of the eight steps aimed a spotlight off screen and pinned their card to the top-left corner, under the macOS window buttons, which swallow every click underneath them. Steps whose target is missing or off screen are dropped when the tour opens, anything below the fold in the sidebar is scrolled into view, and the card is never parked under the traffic lights.
+
+- 🍎 **The Mac app stops giving Docker instructions.** It told you to update by running `git pull` and `docker compose up -d --build`, in an app installed from a .dmg with no checkout to pull, while the app's own menu offered the real download. It said your cookie file lived in "a Docker volume" rather than in Application Support. It pointed at a `chrome-extension/` folder in a repo you do not have, and never mentioned which port the extension should talk to, which matters because the Mac app picks its own. All four now say the true thing for the install you are running.
 
 - 📣 **A release no longer announces itself twice.** The release workflow tells the profile repo about a new version from a job of its own, and the release script asked for the same announcement again at the end of its run. Nothing on the receiving side notices a repeat, so the changelog there gained a second identical entry for the same version. The script no longer announces anything. It now checks that exactly one entry arrived, and says so plainly if there are none yet or more than one.
 
