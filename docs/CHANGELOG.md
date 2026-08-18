@@ -7,9 +7,21 @@ All notable changes to OpenMemo are documented here.
 
 <!-- Add entries here as work lands: ### Added / ### Changed / ### Fixed -->
 
+### Added
+
+- 🛟 **The Mac app backs your memos up before it updates them.** Dropping a new build into Applications never touched your library, which lives in Application Support and not inside the app. What it did do was hand the old database straight to a new backend, which migrates the schema on the way up, forward only, with nothing fresh to fall back on: the automatic backups start five minutes into a run and then repeat daily, so on the one boot where a migration actually happens the newest copy on disk is from yesterday at best, and on a young library there is none at all. The app now records which version last opened your library, and when that changes it saves a copy to the backups folder before the backend is allowed to start, named for the jump it is about to make. It is an ordinary openMemo backup, so Settings can put it back: a copy you cannot restore is not a safety net. Three are kept per direction, and going backwards keeps its own three, so retreating from a bad update cannot rotate away the copy you are retreating to.
+
+- ⏪ **The Mac app warns you before it opens a library that a newer version has already touched.** The database only migrates forwards, so a library that has been through a newer build carries columns an older one has never heard of. Rather than finding that out by using the app, you get told before anything starts, with a copy saved first and the option to quit straight back out. Backing out and thinking again costs nothing: the same switch is only ever captured once, and a build that stamped itself and then failed to start is treated as the repair it is rather than as a warning you did not need.
+
+### Changed
+
+- 📖 **The Mac docs explain updating, not just installing.** There is a step-by-step for replacing the app now: quit first, drag and replace, clear the quarantine flag that comes back with every fresh download, and let the new build take its copy. Plus how to put that copy back, what to do when the PIN lock meets a new signature, and the Gatekeeper route that actually works on macOS 15, where right-click and Open quietly stopped being an override. The one folder you must never delete is called out as exactly that.
+
 ### Fixed
 
 - 🩺 **The release script can see the release it just made.** Its last two checks, that the release body really is the changelog section and that the profile changelog got exactly one entry, had never run. The command asking GitHub for the release listed its fields with spaces after the commas, so PowerShell split them into separate arguments and the call failed every time. The script read that as "not published yet", waited out its full ten minutes on a release that had been live for two, and exited before the checks. Both are running now.
+
+- 📍 **The Mac app's data folder no longer depends on what the app is called.** Electron works out where to keep everything from the product name, so a rename, even a change of casing, would have quietly pointed a new build at a brand new empty folder: no memos, no settings, no PIN, and no error anywhere to explain it. The old library would still have been sitting on disk, simply invisible to the app. The folder name is stated once in the code now and never derived again.
 
 ---
 ## [3.12.1] - 2026-08-18

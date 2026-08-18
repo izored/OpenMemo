@@ -38,6 +38,14 @@ import {
   WindowState,
 } from './settings-store';
 import { checkForUpdates } from './update-notifier';
+import { guardVersionSwitch, markLaunchHealthy } from './upgrade';
+import { pinUserDataPath, userDataPinFailure } from './user-data';
+
+// Before anything reads a path, and before Chromium builds its session: nail
+// the data directory to a fixed name instead of letting it follow productName.
+// See user-data.ts — a rename would otherwise open an empty library with no
+// error at all.
+pinUserDataPath();
 
 let mainWindow: BrowserWindow | null = null;
 let backend: StartedBackend | null = null;
@@ -298,6 +306,11 @@ async function openAppWindow(): Promise<void> {
   // Show the loading screen immediately so launch never looks frozen.
   await mainWindow?.loadFile(path.join(staticDir(), 'loading.html'));
 
+  // Pinning happens before the boot log exists, so it reports here instead.
+  // Silence would be wrong: the fallback is the exact failure it prevents.
+  const pinFailed = userDataPinFailure();
+  if (pinFailed) appendLog(`[shell] Could not pin the data folder: ${pinFailed}\n`);
+
   // In dev, the built SPA must exist (the backend serves it). Tell the user how.
   const { frontendDist } = resolvePaths();
   const rendererOverride = process.env.OPENMEMO_RENDERER_URL; // e.g. Vite for HMR
@@ -311,8 +324,19 @@ async function openAppWindow(): Promise<void> {
   try {
     // Reuse the running backend on window reopen; never double-spawn.
     if (!isBackendRunning()) {
+      // A new build opening an old library gets one snapshot before uvicorn
+      // starts, because the backend migrates the schema as it boots and there
+      // is no "before" to capture afterwards. Returns false only when the user
+      // met the downgrade warning and chose to quit.
+      if (!(await guardVersionSwitch(appendLog))) {
+        app.quit();
+        return;
+      }
       backend = await startBackend(appendLog);
       appendLog(`[shell] Backend up at ${backend.url}\n`);
+      // The version stamp is written before the spawn above, so until here it
+      // only records what was attempted. Now it records what ran.
+      markLaunchHealthy();
       maybeInstallChromium(); // first-run, background, non-blocking
       flushPendingOpenFiles();
       void nudgeRelay('boot');

@@ -2,7 +2,7 @@
   "name": "openmemo-desktop",
   "productName": "OpenMemo",
   "version": "3.12.1",
-  "description": "OpenMemo — your local AI knowledge OS, as a native macOS app.",
+  "description": "OpenMemo \u2014 your local AI knowledge OS, as a native macOS app.",
   "author": "izo.studio",
   "license": "MIT",
   "private": true,
@@ -13,7 +13,8 @@
     "build:frontend": "npm --prefix ../frontend run build",
     "dev": "npm run build:ts && electron .",
     "bundle:backend": "node scripts/bundle-backend.mjs",
-    "dist": "npm run build:ts && npm run build:frontend && npm run bundle:backend && electron-builder --mac --arm64 --publish never"
+    "dist": "npm run build:ts && npm run build:frontend && npm run bundle:backend && electron-builder --mac --arm64 --publish never",
+    "test": "npm run build:ts && node --test dist-electron/*.test.js"
   },
   "devDependencies": {
     "@types/node": "^22.10.0",

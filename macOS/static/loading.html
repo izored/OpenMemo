@@ -55,10 +55,18 @@
     <div class="log" id="log"></div>
     <script>
       const log = document.getElementById('log');
+      const status = document.querySelector('.status');
       if (window.openmemoBoot) {
         window.openmemoBoot.onLog((line) => {
           const t = String(line).trim();
           if (!t) return;
+          // Lines marked [status] say what the app is doing right now and belong
+          // in the headline. Everything else is boot detail for the ticker,
+          // which shows one line at a time and scrolls past too fast to read.
+          if (t.startsWith('[status]')) {
+            status.textContent = t.slice('[status]'.length).trim();
+            return;
+          }
           log.textContent = t;
           log.style.opacity = '1';
         });
