@@ -67,7 +67,12 @@ function backupDir(): string {
  */
 export function detectVersionChange(): VersionState {
   const current = app.getVersion();
-  const previous = loadSettings().lastRunVersion || null;
+  // The stamp is read back off a JSON file that a person can edit and a full
+  // disk can truncate. Anything that is not a string is treated as no stamp at
+  // all, which routes to the snapshot path rather than throwing past it: the
+  // failure mode of a bad stamp must not be silently skipping the backup.
+  const raw = loadSettings().lastRunVersion;
+  const previous = typeof raw === 'string' && raw.trim() ? raw.trim() : null;
   if (!previous) {
     const hasLibrary = fs.existsSync(dbPath());
     return { kind: hasLibrary ? 'upgrade' : 'first-run', previous, current };
@@ -181,6 +186,37 @@ async function gzipFile(src: string, dest: string): Promise<boolean> {
   }
 }
 
+/**
+ * Is this file actually a SQLite database?
+ *
+ * The python path raises and exits non-zero on a bad copy, so it polices
+ * itself. The sqlite3 CLI is trusted on exit code alone, and a truncated or
+ * empty staged file gzips perfectly happily: the log would then claim a
+ * snapshot was saved and the file would restore to nothing. A safety net
+ * reported as present but hollow is worse than one reported as missing.
+ * Same 16-byte header check the backend's restore endpoint does.
+ */
+function looksLikeSqlite(file: string): boolean {
+  const MAGIC = Buffer.from('SQLite format 3\0', 'latin1');
+  let fd: number | null = null;
+  try {
+    fd = fs.openSync(file, 'r');
+    const head = Buffer.alloc(MAGIC.length);
+    const read = fs.readSync(fd, head, 0, MAGIC.length, 0);
+    return read === MAGIC.length && head.equals(MAGIC);
+  } catch {
+    return false;
+  } finally {
+    if (fd !== null) {
+      try {
+        fs.closeSync(fd);
+      } catch {
+        /* already gone */
+      }
+    }
+  }
+}
+
 /** Write one gzipped snapshot at dest. Never throws. */
 async function snapshot(dest: string): Promise<boolean> {
   const src = dbPath();
@@ -197,7 +233,7 @@ async function snapshot(dest: string): Promise<boolean> {
   // Fallback: macOS's own sqlite3 stages an intact copy, node gzips it.
   const staged = path.join(os.tmpdir(), `openmemo-switch-${process.pid}.db`);
   try {
-    if (await run('/usr/bin/sqlite3', [src, `.backup '${staged}'`])) {
+    if (await run('/usr/bin/sqlite3', [src, `.backup '${staged}'`]) && looksLikeSqlite(staged)) {
       if (await gzipFile(staged, dest)) return true;
     }
   } finally {
@@ -222,17 +258,31 @@ function prune(): void {
     const names = fs.readdirSync(dir);
     // A snapshot killed part-written leaves its .part behind. Nothing else ever
     // removes those, and they are the same size as the real thing.
+    // Each removal stands alone: one unreadable entry, or one that vanished
+    // between readdir and stat, must not abort the sweep for everything else.
+    const drop = (full: string) => {
+      try {
+        fs.rmSync(full, { force: true, recursive: true });
+      } catch {
+        /* leave it; disk space is not worth a failed launch */
+      }
+    };
     for (const orphan of names.filter((n) => /^pre(upgrade|downgrade)-.*\.db\.gz\.part$/.test(n))) {
-      fs.rmSync(path.join(dir, orphan), { force: true });
+      drop(path.join(dir, orphan));
     }
     const mine = names
       .filter((n) => /^pre(upgrade|downgrade)-.*\.db\.gz$/.test(n))
       .map((n) => {
         const full = path.join(dir, n);
-        return { full, at: fs.statSync(full).mtimeMs };
+        try {
+          return { full, at: fs.statSync(full).mtimeMs };
+        } catch {
+          return null;
+        }
       })
+      .filter((e): e is { full: string; at: number } => e !== null)
       .sort((a, b) => b.at - a.at);
-    for (const doomed of mine.slice(KEEP)) fs.rmSync(doomed.full, { force: true });
+    for (const doomed of mine.slice(KEEP)) drop(doomed.full);
   } catch {
     /* pruning is housekeeping; never let it affect a launch */
   }
@@ -282,8 +332,12 @@ export async function guardVersionSwitch(log: (line: string) => void): Promise<b
   let state: VersionState;
   try {
     state = detectVersionChange();
-  } catch {
-    return true; // an unreadable stamp must never be able to block a launch
+  } catch (e) {
+    // An unreadable stamp must never block a launch, but it must not vanish
+    // either: this is the branch where no snapshot gets taken, so it is the one
+    // worth finding in the log afterwards.
+    log(`[shell] Could not work out the previous version: ${e instanceof Error ? e.message : String(e)}\n`);
+    return true;
   }
 
   if (state.kind === 'same') return true;
