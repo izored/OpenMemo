@@ -11,7 +11,7 @@ All notable changes to OpenMemo are documented here.
 
 - 🛟 **The Mac app saves a copy of your database before it updates.** Dropping a new build into Applications never touched your library, which lives in Application Support and not inside the app. What it did do was hand the old database straight to a new backend, which migrates the schema on the way up, forward only, with nothing fresh to fall back on: the automatic backups start five minutes into a run and then repeat daily, so on the one boot where a migration actually happens the newest copy on disk is from yesterday at best, and on a young library there is none at all. The app now records which version last opened your library, and when that changes it writes a compressed copy to the backups folder before the backend is allowed to start, named for the jump it is about to make. The last few are kept, and the daily rotation leaves them alone.
 
-- ⏪ **Opening an older build over a newer library now says so first.** The database only migrates forwards, so a library that has been through a newer version carries columns an older one has never heard of. Rather than finding that out by using the app, you get told before anything starts, with a copy of the database saved first and the option to quit straight back out.
+- ⏪ **The Mac app warns you before it opens a library that a newer version has already touched.** The database only migrates forwards, so a library that has been through a newer build carries columns an older one has never heard of. Rather than finding that out by using the app, you get told before anything starts, with a copy of the database saved first and the option to quit straight back out.
 
 ### Changed
 

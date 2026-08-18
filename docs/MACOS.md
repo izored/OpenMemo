@@ -68,8 +68,16 @@ So updating is:
 4. Launch it. Before the backend starts, the app notices the version changed
    and writes a compressed copy of your database to
    `~/Library/Application Support/OpenMemo/backups/`, named
-   `preupgrade-<old>-to-<new>-<date>.db.gz`. Then it opens the library and
-   applies whatever schema changes the new version needs.
+   `preupgrade-<old>-to-<new>-<date>-<time>.db.gz`. Then it opens the library
+   and applies whatever schema changes the new version needs.
+
+   Updating from a build older than 3.12.2 gives you
+   `preupgrade-unknown-to-<new>-...`: those builds did not record their own
+   version, so there is nothing to name the old side after.
+
+   If that copy cannot be written, usually a full disk, the app says so and
+   carries on rather than refusing to open. So it is a strong safety net, not
+   a guarantee. Settings, under Backup, takes one on demand any time.
 
 The last few pre-update copies are kept. They sit alongside the daily automatic
 backups but are never removed by that rotation, so an update snapshot is still
@@ -119,7 +127,12 @@ Everything writable lives outside the (read-only) app bundle, in:
   yt_cookies.txt     only if you uploaded a cookie jar
 ```
 
-Delete that folder to reset the app completely. Back it up to keep your library.
+That folder is your library. Copy it somewhere to keep a spare, and leave it
+alone when you update: replacing the app never touches it (section 3).
+
+Deleting it does reset the app completely, and it is the only way to lose
+everything at once. It is not a troubleshooting step. Reinstalling the app does
+not require it, and nothing else on this page does either.
 
 ---
 

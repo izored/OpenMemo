@@ -28,7 +28,7 @@ npm run dev              # build TS + launch (uses repo source + backend/.venv)
 npm run dist             # build TS + SPA + bundle backend + electron-builder .dmg
 ```
 
-`npm run dist` must run on an Apple-Silicon Mac. See MACOS.md §5 for the
+`npm run dist` must run on an Apple-Silicon Mac. See MACOS.md §6 for the
 `CSC_IDENTITY_AUTO_DISCOVERY=false` note and build env overrides.
 
 ## Notes
