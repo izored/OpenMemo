@@ -7,6 +7,9 @@ have been a page. Now it is.
 Read the first section before you do anything else. The order matters more than
 the tools.
 
+For what openMemo keeps on its own, where it puts it, and which failures each
+copy actually covers, see [Backup and restore](BACKUP-AND-RESTORE.md).
+
 ---
 
 ## The rule that comes first
