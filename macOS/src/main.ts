@@ -38,6 +38,13 @@ import {
   WindowState,
 } from './settings-store';
 import { checkForUpdates } from './update-notifier';
+import { pinUserDataPath } from './user-data';
+
+// Before anything reads a path, and before Chromium builds its session: nail
+// the data directory to a fixed name instead of letting it follow productName.
+// See user-data.ts — a rename would otherwise open an empty library with no
+// error at all.
+pinUserDataPath();
 
 let mainWindow: BrowserWindow | null = null;
 let backend: StartedBackend | null = null;
