@@ -26,6 +26,7 @@ import { spawn } from 'node:child_process';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+import { pipeline } from 'node:stream/promises';
 import zlib from 'node:zlib';
 import { resolvePaths } from './paths';
 import { loadSettings, saveSettings } from './settings-store';
@@ -162,18 +163,23 @@ finally:
     shutil.rmtree(tmp, ignore_errors=True)
 `.trim();
 
-/** Gzip one file into place, via a .part so a crash cannot leave a half file. */
+/**
+ * Gzip one file into place, via a .part so a crash cannot leave a half file.
+ *
+ * Uses stream pipeline rather than pipe(). Hand-rolled `rd.pipe(gzip).pipe(wr)`
+ * can only ever have listeners on the two ends, and pipe() does not forward
+ * errors along the chain, so an error raised by the compressor in the middle
+ * has nobody listening. In Node that is not a rejected promise, it is an
+ * uncaughtException, and this process is the Electron main process: it takes
+ * the whole app down. Worse, the write end can still reach 'finish' first, so
+ * the truncated .part gets renamed and reported as a saved backup on the way
+ * out. Both were reproducible. pipeline() watches every stream and destroys
+ * the rest on the first error.
+ */
 async function gzipFile(src: string, dest: string): Promise<boolean> {
   const part = `${dest}.part`;
   try {
-    await new Promise<void>((resolve, reject) => {
-      const rd = fs.createReadStream(src);
-      const wr = fs.createWriteStream(part);
-      rd.on('error', reject);
-      wr.on('error', reject);
-      wr.on('finish', () => resolve());
-      rd.pipe(zlib.createGzip({ level: 6 })).pipe(wr);
-    });
+    await pipeline(fs.createReadStream(src), zlib.createGzip({ level: 6 }), fs.createWriteStream(part));
     fs.renameSync(part, dest);
     return true;
   } catch {
@@ -218,7 +224,7 @@ function looksLikeSqlite(file: string): boolean {
 }
 
 /** Write one gzipped snapshot at dest. Never throws. */
-async function snapshot(dest: string): Promise<boolean> {
+async function snapshot(dest: string, log: (line: string) => void): Promise<boolean> {
   const src = dbPath();
   if (!fs.existsSync(src)) return false;
   try {
@@ -231,6 +237,7 @@ async function snapshot(dest: string): Promise<boolean> {
   if (fs.existsSync(python) && (await run(python, ['-c', PY_BACKUP, src, dest]))) return true;
 
   // Fallback: macOS's own sqlite3 stages an intact copy, node gzips it.
+  log('[shell] Bundled python could not write the copy; trying macOS sqlite3.\n');
   const staged = path.join(os.tmpdir(), `openmemo-switch-${process.pid}.db`);
   try {
     if (await run('/usr/bin/sqlite3', [src, `.backup '${staged}'`]) && looksLikeSqlite(staged)) {
@@ -329,6 +336,23 @@ function confirmDowngrade(state: VersionState, saved: string | null): boolean {
  * the window is showing anything it is already too late to capture "before".
  */
 export async function guardVersionSwitch(log: (line: string) => void): Promise<boolean> {
+  /**
+   * Record the version, and swallow a failure to do so.
+   *
+   * saveSettings does a plain writeFileSync. Let that throw from in here and it
+   * lands in openAppWindow's catch, which puts up "OpenMemo could not start /
+   * The backend did not start" over a backend that was never even reached.
+   * A stamp that could not be written is not a reason to fail the launch: the
+   * cost is re-taking the snapshot next time, which is the safe direction.
+   */
+  const stamp = (version: string): void => {
+    try {
+      saveSettings({ lastRunVersion: version });
+    } catch (e) {
+      log(`[shell] Could not record the version stamp: ${e instanceof Error ? e.message : String(e)}\n`);
+    }
+  };
+
   let state: VersionState;
   try {
     state = detectVersionChange();
@@ -343,7 +367,7 @@ export async function guardVersionSwitch(log: (line: string) => void): Promise<b
   if (state.kind === 'same') return true;
 
   if (state.kind === 'first-run') {
-    saveSettings({ lastRunVersion: state.current });
+    stamp(state.current);
     log(`[shell] First run of OpenMemo ${state.current}.\n`);
     return true;
   }
@@ -354,7 +378,12 @@ export async function guardVersionSwitch(log: (line: string) => void): Promise<b
   const dest = snapshotPath(state);
   let saved: string | null = null;
   if (dest) {
-    if (await snapshot(dest)) {
+    // Said before the work starts, not after. On a large library the copy is
+    // the longest thing between double-clicking the icon and seeing the app,
+    // and a loading screen that says nothing for a minute reads as a hang. The
+    // loading page renders these lines live.
+    log(`[shell] Backing up your library before opening it with ${state.current}...\n`);
+    if (await snapshot(dest, log)) {
       saved = path.basename(dest);
       log(`[shell] Saved ${saved} before starting ${state.current}.\n`);
     } else {
@@ -370,23 +399,27 @@ export async function guardVersionSwitch(log: (line: string) => void): Promise<b
       log(`[shell] Quit rather than open ${state.current} over ${state.previous}.\n`);
       return false;
     }
-    saveSettings({ lastRunVersion: state.current });
+    stamp(state.current);
     return true;
   }
 
   if (!saved) {
     // Say so, but do not block. The migration runs on this boot either way, so
     // withholding the stamp would only mean failing the same way every launch.
-    void dialog.showMessageBox({
-      type: 'warning',
-      title: 'Could not back up before updating',
-      message: `OpenMemo could not save a copy of your database before updating to ${state.current}.`,
-      detail:
-        'Your library is untouched and the app will carry on. This is usually a full disk. ' +
-        'You can take a backup at any time from Settings, under Backup.',
-      buttons: ['OK'],
-    });
+    void dialog
+      .showMessageBox({
+        type: 'warning',
+        title: 'Could not back up before updating',
+        message: `OpenMemo could not save a copy of your database before updating to ${state.current}.`,
+        detail:
+          'Your library is untouched and the app will carry on. This is usually a full disk. ' +
+          'You can take a backup at any time from Settings, under Backup.',
+        buttons: ['OK'],
+      })
+      .catch(() => {
+        /* a warning that cannot be shown is not worth an unhandled rejection */
+      });
   }
-  saveSettings({ lastRunVersion: state.current });
+  stamp(state.current);
   return true;
 }
