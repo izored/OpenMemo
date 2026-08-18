@@ -8,6 +8,7 @@ import { ingestApi, collectionApi, spaceApi } from '@/lib/api';
 import { collectionEmojiOrDefault } from '@/lib/collectionEmoji';
 import { playlistShape } from '@/lib/playlistUrl';
 import { useAppStore } from '@/stores/appStore';
+import { useConfirm } from './ConfirmModal';
 import { cn } from '@/lib/utils';
 import type { Collection } from '@/types';
 
@@ -45,6 +46,7 @@ export function AddMemoPanel({ embedded = false }: { embedded?: boolean } = {}) 
   const pendingDropFiles = useAppStore((s) => s.pendingDropFiles);
   const setPendingDropFiles = useAppStore((s) => s.setPendingDropFiles);
   const bottomBarPresent = useAppStore((s) => s.bottomBarPresent);
+  const [ask, confirmModal] = useConfirm();
   const setWriterOpen = useAppStore((s) => s.setWriterOpen);
   const setAddMemoBusy = useAppStore((s) => s.setAddMemoBusy);
   const lastCreatedCollectionId = useAppStore((s) => s.lastCreatedCollectionId);
@@ -383,11 +385,11 @@ export function AddMemoPanel({ embedded = false }: { embedded?: boolean } = {}) 
     const huge = Array.from(files).filter((f) => f.size >= HUGE);
     if (huge.length) {
       const totalMb = huge.reduce((s, f) => s + f.size, 0) / (1024 * 1024);
-      const ok = window.confirm(
-        `Heads up — ${huge.length} file(s) totalling ${(totalMb / 1024).toFixed(2)} GB.\n\n` +
-        `Large uploads take a while to ingest and consume disk + RAM for embedding. ` +
-        `OpenMemo is local-first so they stay on your machine. Continue?`,
-      );
+      const ok = await ask({
+        title: `${huge.length} file${huge.length === 1 ? '' : 's'}, ${(totalMb / 1024).toFixed(2)} GB`,
+        body: 'That is a lot to ingest at once: openMemo has to read, thumbnail and embed every one of them, which takes a while and uses disk and memory while it runs. They stay on this machine either way.',
+        confirmLabel: 'Add them',
+      });
       if (!ok) return;
     }
 
@@ -452,6 +454,7 @@ export function AddMemoPanel({ embedded = false }: { embedded?: boolean } = {}) 
 
   return (
     <>
+    {confirmModal}
     <aside
       className={cn(embedded ? 'om-add-embedded' : 'om-add-panel', (open || embedded) && 'open')}
       aria-hidden={embedded ? undefined : !open}

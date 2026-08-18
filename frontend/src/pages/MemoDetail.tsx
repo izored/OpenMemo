@@ -883,6 +883,7 @@ function VideoContentPanel({ memo }: { memo: Memo }) {
 // for offline + transcription. `reference` = the memo already has a local file,
 // so this is just a "listen at the source" reference — hide the Save action.
 function AudioStreamEmbed({ memo, reference = false }: { memo: Memo; reference?: boolean }) {
+  const showNotice = useAppStore((s) => s.showNotice);
   const queryClient = useQueryClient();
   const [saving, setSaving] = useState(false);
   // Always starts collapsed, and the iframe below only exists while it is open,
@@ -905,7 +906,7 @@ function AudioStreamEmbed({ memo, reference = false }: { memo: Memo; reference?:
       await memoApi.localize(memo.id, 'audio');
       queryClient.invalidateQueries({ queryKey: ['memo', memo.id] });
     } catch (e) {
-      alert((e as Error).message || 'Failed to start download');
+      showNotice((e as Error).message || 'Could not start that download.');
     } finally {
       setSaving(false);
     }
@@ -965,6 +966,7 @@ function AudioStreamEmbed({ memo, reference = false }: { memo: Memo; reference?:
 // localize_status (driven by the page's refetchInterval) and shows progress.
 function MakeItLocalPanel({ memo, open, onToggle }: { memo: Memo; open?: boolean; onToggle?: () => void }) {
   const queryClient = useQueryClient();
+  const showNotice = useAppStore((s) => s.showNotice);
   // Audio-only sources (SoundCloud, Bandcamp, etc.) have no video track — only
   // offer the audio download. Video sources keep both options.
   const isAudio = memo.type === 'audio';
@@ -989,7 +991,7 @@ function MakeItLocalPanel({ memo, open, onToggle }: { memo: Memo; open?: boolean
       queryClient.invalidateQueries({ queryKey: ['memo', memo.id] });
     } catch (e) {
       console.error(e);
-      alert((e as Error).message || 'Failed to start download');
+      showNotice((e as Error).message || 'Could not start that download.');
     } finally {
       setStarting(false);
     }
@@ -1494,6 +1496,7 @@ export function MemoDetail() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const openThumbEdit = useAppStore((s) => s.openThumbEdit);
+  const showNotice = useAppStore((s) => s.showNotice);
   const setActiveCollection = useAppStore((s) => s.setActiveCollection);
   const isMobile = useIsMobile();
   const [isEditing, setIsEditing] = useState(false);
@@ -1627,7 +1630,7 @@ export function MemoDetail() {
       setIsEditing(false);
     } catch (e) {
       console.error(e);
-      alert('Failed to save changes');
+      showNotice('Could not save those changes.');
     } finally {
       setSaving(false);
     }
@@ -1819,7 +1822,7 @@ export function MemoDetail() {
                     }, 2500);
                   } catch (e) {
                     setRepulling(false);
-                    alert((e as Error).message || 'Could not start the re-pull');
+                    showNotice((e as Error).message || 'Could not start the re-pull.');
                   }
                 }}
                 title="Pull this memo's source again — media, caption and cover"

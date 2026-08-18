@@ -4,6 +4,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Icon } from './Icon';
 import { ingestApi, collectionApi, spaceApi } from '@/lib/api';
 import { useAppStore } from '@/stores/appStore';
+import { useConfirm } from './ConfirmModal';
 import {
   dragHasFiles,
   filesFromDataTransfer,
@@ -28,6 +29,7 @@ export function FileDropLayer() {
   const setPendingDropFiles = useAppStore((s) => s.setPendingDropFiles);
   const setAddPanelOpen = useAppStore((s) => s.setAddPanelOpen);
   const showNotice = useAppStore((s) => s.showNotice);
+  const [ask, confirmModal] = useConfirm();
 
   // Collections + Spaces power the veil label only. Cheap, already cached.
   const { data: collections = [] } = useQuery({
@@ -74,11 +76,11 @@ export function FileDropLayer() {
     // Instant branch — upload straight to the resolved bucket.
     const bytes = files.reduce((s, f) => s + f.size, 0);
     if (bytes >= HUGE) {
-      const ok = window.confirm(
-        `Heads up — ${files.length} file(s) totalling ${(bytes / (1024 * 1024 * 1024)).toFixed(2)} GB.\n\n` +
-        `Large uploads take a while to ingest and consume disk + RAM for embedding. ` +
-        `openMemo is local-first so they stay on your machine. Continue?`,
-      );
+      const ok = await ask({
+        title: `${files.length} file${files.length === 1 ? '' : 's'}, ${(bytes / (1024 * 1024 * 1024)).toFixed(2)} GB`,
+        body: 'That is a lot to ingest at once: openMemo has to read, thumbnail and embed every one of them, which takes a while and uses disk and memory while it runs. They stay on this machine either way.',
+        confirmLabel: 'Add them',
+      });
       if (!ok) return;
     }
 
@@ -199,6 +201,7 @@ export function FileDropLayer() {
 
   return (
     <>
+      {confirmModal}
       {active && (
         <div className="om-dropveil" aria-hidden>
           <div className="om-dropveil-card">

@@ -9,6 +9,7 @@ import { cn } from '@/lib/utils';
 export function FullscreenWriter() {
   const open = useAppStore((s) => s.writerOpen);
   const setOpen = useAppStore((s) => s.setWriterOpen);
+  const showNotice = useAppStore((s) => s.showNotice);
   const queryClient = useQueryClient();
   const [title, setTitle] = useState('');
   const [body, setBody] = useState('');
@@ -43,7 +44,7 @@ export function FullscreenWriter() {
       setBody('');
       setOpen(false);
     } catch {
-      alert('Failed to save note');
+      showNotice('Could not save that note.');
     } finally {
       setBusy(false);
     }

@@ -15,6 +15,7 @@ import { Icon } from '@/components/Icon';
 import { musicApi, memoApi, collectionApi } from '@/lib/api';
 import { useAudioPlayer, type AudioTrack } from '@/lib/audioPlayer';
 import { useAppStore } from '@/stores/appStore';
+import { useConfirm } from '@/components/ConfirmModal';
 import { useDndBus } from '@/lib/dndBus';
 import { cn } from '@/lib/utils';
 import type { Memo, MusicPlaylist } from '@/types';
@@ -610,6 +611,7 @@ export function MusicPage() {
   const musicModalOpen = useAppStore((s) => s.musicModalOpen);
   const openThumbEdit = useAppStore((s) => s.openThumbEdit);
   const openCoverEdit = useAppStore((s) => s.openCoverEdit);
+  const [ask, confirmModal] = useConfirm();
   const showNotice = useAppStore((s) => s.showNotice);
   const { playQueue, toggle, isActive, playing, queueSource } = useAudioPlayer();
   // True when the live queue was started from this playlist/album card.
@@ -848,12 +850,11 @@ export function MusicPage() {
   // see (bad rip, half-written files, a restore that brought back the wrong
   // ones). Confirmed because it re-downloads every track, not just the gaps.
   const redownloadEverything = async (p: MusicPlaylist) => {
-    const ok = window.confirm(
-      `Re-download all ${p.track_count} track(s) of "${p.name}"?\n\n` +
-        'Every track is pulled from its source again, including the ones already ' +
-        'on this device. Each keeps playing off its current file until the new ' +
-        'one lands.',
-    );
+    const ok = await ask({
+      title: `Re-download all ${p.track_count} track${p.track_count === 1 ? '' : 's'}?`,
+      body: `Every track in "${p.name}" is pulled from its source again, including the ones already on this device. Each keeps playing off its current file until the new one lands.`,
+      confirmLabel: 'Re-download',
+    });
     if (!ok) return;
     const queued = await downloadAll(p, 'all');
     if (queued === null) return; // request failed; the polling refetch surfaces it
@@ -968,7 +969,12 @@ export function MusicPage() {
   const unpinFromHero = async (p: MusicPlaylist) => {
     try {
       if (p.music_kind === 'hero') {
-        if (!window.confirm(`Delete the pinned card "${p.name}"?`)) return;
+        if (!(await ask({
+          title: 'Delete this pinned card?',
+          body: `"${p.name}" goes from the Music page. The tracks themselves stay in your library.`,
+          confirmLabel: 'Delete',
+          danger: true,
+        }))) return;
         await collectionApi.delete(p.id);
       } else {
         await collectionApi.update(p.id, { pinned: false });
@@ -1014,9 +1020,12 @@ export function MusicPage() {
   };
 
   const deletePlaylist = async (p: MusicPlaylist) => {
-    const ok = window.confirm(
-      `Delete the playlist "${p.name}"?\n\nIts ${p.track_count} track(s) move back to your music library. Only the playlist goes.`,
-    );
+    const ok = await ask({
+      title: `Delete "${p.name}"?`,
+      body: `Its ${p.track_count} track${p.track_count === 1 ? '' : 's'} move back to your music library. Only the playlist goes.`,
+      confirmLabel: 'Delete playlist',
+      danger: true,
+    });
     if (!ok) return;
     await collectionApi.delete(p.id);
     queryClient.invalidateQueries({ queryKey: ['music-playlists'] });
@@ -1279,6 +1288,7 @@ export function MusicPage() {
   const showHero = playlists.length > 0 || library.length > 0;
   return (
     <div className="om-bbar-page">
+    {confirmModal}
     <div className="om-music">
       {/* Same header as every page; the Music page's own add-modal (SpotiFLAC,
           uploads, playlists) opens from this action and the bottom-bar island. */}

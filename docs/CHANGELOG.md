@@ -13,11 +13,15 @@ All notable changes to OpenMemo are documented here.
 
 ### Changed
 
+- 🗨️ **No browser dialogs left anywhere.** The last of them were in the memo page, the music page, the appearance panel, the writer and both file-drop paths: re-downloading a playlist, deleting a pinned card, a failed save, a huge upload warning. Inside the Mac app each one rendered as a system sheet announcing "localhost:8099 says" and froze the window until it was dismissed. They all use openMemo's own dialog and toast now, and the ones that delete something say what goes and what stays.
+
 - 🔄 **One update check, not two.** In the Mac app the version number at the bottom of Settings ran its own check against GitHub and then told you to run `git pull`, while the app itself ran a separate check on launch and offered you the `.dmg`. Two answers to the same question, and only one of them was true. The version number now hands the whole thing to the app's own updater, so there is one check and one instruction.
 
 - 🗨️ **The destructive confirmations look like openMemo.** Resetting the workspace, restoring a backup and clearing the preview cache all went through the browser's own dialog, which inside the Mac app is a system sheet that says "localhost:8099 says" and freezes the window while it is up. They are proper openMemo dialogs now, and the two-step ones say what the second step is for instead of repeating themselves. Results and failures arrive as the same quiet toast everything else uses.
 
 ### Fixed
+
+- 🧹 **The stray + button is gone from Settings.** It was the old corner button from before the bottom bar, sitting alone on a page with no bottom bar, on a page you open to change openMemo rather than to add to it. Every other page keeps what it had; the rest of that rollout is a separate decision.
 
 - 🔌 **The Mac app says so when it has to move to another port.** It prefers 8099 and quietly walks to the next free one when something else has it. The app is fine either way, but the browser extension stores one fixed address, so the only symptom was clipping a page and having nothing arrive, with nothing anywhere to explain it. It now says which port it landed on and what to point the extension at.
 
