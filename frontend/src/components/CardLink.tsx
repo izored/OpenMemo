@@ -1,3 +1,4 @@
+import { useLayoutEffect, useRef } from 'react';
 import { Link } from 'react-router-dom';
 
 /**
@@ -18,9 +19,12 @@ import { Link } from 'react-router-dom';
  *
  * - `draggable={false}`, because the browser's native "drag a link to make a
  *   bookmark" hijacks the pointer and dnd-kit never sees the drag.
- * - The parent needs `position: relative`. `.om-card` and the tile classes
- *   already have it; a new caller must add it or the overlay escapes to the
- *   nearest positioned ancestor and covers the page.
+ * - The parent needs `position: relative`. A caller that forgets does not get a
+ *   subtly wrong card, it gets a page-sized invisible link: the overlay resolves
+ *   against the nearest positioned ancestor, so clicking anywhere navigates.
+ *   `.om-pl-card` shipped without it and every click on the Music page opened a
+ *   playlist. Reading a comment did not prevent that, so there is now a dev-time
+ *   check below that names the offending element in the console.
  *
  * The accessible name is the card's title, so a screen reader reads "Blue
  * archive, link" rather than "link".
@@ -41,8 +45,29 @@ export function CardLink({
    */
   onClick?: (e: React.MouseEvent) => void;
 }) {
+  const ref = useRef<HTMLAnchorElement>(null);
+
+  // Dev only, zero cost in production. A static parent is not a style nit here,
+  // it is a full-page click target, and it is invisible: nothing looks wrong
+  // until you click the wrong thing. Fail loudly at the point of the mistake.
+  useLayoutEffect(() => {
+    if (!import.meta.env.DEV) return;
+    const parent = ref.current?.parentElement;
+    if (!parent) return;
+    if (getComputedStyle(parent).position === 'static') {
+      const name = parent.className || parent.tagName.toLowerCase();
+      console.error(
+        `[CardLink] The parent of this link (${name}) is position: static, so the ` +
+          `link overlay escapes it and covers everything up to the nearest positioned ` +
+          `ancestor. Every click in that area will navigate to ${to}. ` +
+          `Add "position: relative" to that class.`,
+      );
+    }
+  }, [to]);
+
   return (
     <Link
+      ref={ref}
       to={to}
       className={className ? `om-cardlink ${className}` : 'om-cardlink'}
       aria-label={label}

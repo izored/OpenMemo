@@ -21,6 +21,8 @@ All notable changes to OpenMemo are documented here.
 
 ### Fixed
 
+- 🎯 **Clicking anywhere on the Music page no longer opens a playlist.** Playlist tiles carry an invisible link covering the tile, which is what makes a card ctrl-clickable like any other link. That overlay is positioned against its parent, and the playlist tile was missing the one line that makes it a parent, so the link stretched out to the nearest ancestor that was: most of the page. Everything looked normal until you clicked, and then you were in a playlist. The tile is now the anchor it was supposed to be.
+
 - 🧹 **The stray + button is gone from Settings.** It was the old corner button from before the bottom bar, sitting alone on a page with no bottom bar, on a page you open to change openMemo rather than to add to it. Every other page keeps what it had; the rest of that rollout is a separate decision.
 
 - 🔌 **The Mac app says so when it has to move to another port.** It prefers 8099 and quietly walks to the next free one when something else has it. The app is fine either way, but the browser extension stores one fixed address, so the only symptom was clipping a page and having nothing arrive, with nothing anywhere to explain it. It now says which port it landed on and what to point the extension at.

@@ -5903,6 +5903,12 @@ body.om-has-bbar .om-fab { display: none !important; }
 .om-pinhero-item:hover .om-pinhero-pin { color: var(--accent); }
 
 .om-pl-card {
+  /* position: relative is load-bearing, not cosmetic. The tile holds a
+     CardLink, which is `position: absolute; inset: 0`. Without a positioned
+     parent that overlay resolves against the nearest positioned ancestor
+     instead, which on the Music page is most of the page: every click
+     anywhere landed on whichever playlist tile rendered first. */
+  position: relative;
   flex: 0 0 168px; cursor: pointer; border-radius: var(--r-lg, 14px);
   display: flex; flex-direction: column; gap: 8px; padding: 8px;
   background: transparent; border: 1px solid transparent;
