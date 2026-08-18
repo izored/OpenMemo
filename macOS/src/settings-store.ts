@@ -32,6 +32,11 @@ export interface ShellSettings {
   windowState?: WindowState;
   /** A release version the user chose to skip in the update notifier. */
   updateSkipVersion?: string;
+  /** The app version that last opened this library. Absent before 3.12.2, and
+   *  on a genuinely fresh install. See upgrade.ts — it is what makes a version
+   *  switch detectable at all, and therefore what triggers the snapshot taken
+   *  before the backend migrates the schema. */
+  lastRunVersion?: string;
   /** When the "we have not reached Telegram" notification last appeared, as an
    *  epoch ms. Persisted rather than kept in memory so quitting and relaunching
    *  does not re-show the same warning on every single launch. */

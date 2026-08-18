@@ -38,6 +38,7 @@ import {
   WindowState,
 } from './settings-store';
 import { checkForUpdates } from './update-notifier';
+import { guardVersionSwitch } from './upgrade';
 import { pinUserDataPath } from './user-data';
 
 // Before anything reads a path, and before Chromium builds its session: nail
@@ -318,6 +319,14 @@ async function openAppWindow(): Promise<void> {
   try {
     // Reuse the running backend on window reopen; never double-spawn.
     if (!isBackendRunning()) {
+      // A new build opening an old library gets one snapshot before uvicorn
+      // starts, because the backend migrates the schema as it boots and there
+      // is no "before" to capture afterwards. Returns false only when the user
+      // met the downgrade warning and chose to quit.
+      if (!(await guardVersionSwitch(appendLog))) {
+        app.quit();
+        return;
+      }
       backend = await startBackend(appendLog);
       appendLog(`[shell] Backend up at ${backend.url}\n`);
       maybeInstallChromium(); // first-run, background, non-blocking

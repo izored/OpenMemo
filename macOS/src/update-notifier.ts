@@ -14,7 +14,7 @@ import { loadSettings, saveSettings } from './settings-store';
 const REPO = 'izored/OpenMemo';
 
 /** Semver-ish compare: >0 if a is newer than b. Ignores pre-release tags. */
-function cmpVersion(a: string, b: string): number {
+export function cmpVersion(a: string, b: string): number {
   const pa = a.replace(/^v/, '').split('.').map((n) => parseInt(n, 10) || 0);
   const pb = b.replace(/^v/, '').split('.').map((n) => parseInt(n, 10) || 0);
   for (let i = 0; i < Math.max(pa.length, pb.length); i++) {
