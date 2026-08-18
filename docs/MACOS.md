@@ -44,7 +44,52 @@ works without them, and never blocks startup):
 
 ---
 
-## 3. Point it at your Ollama
+## 3. Update to a new version
+
+**Your library is not inside the app.** It lives in
+`~/Library/Application Support/OpenMemo/`, and dropping a new `OpenMemo.app`
+into `/Applications` replaces the program and nothing else. Memos, collections,
+media, settings, your PIN, the downloaded speech model: all of it stays exactly
+where it was, and the new build picks it up on first launch.
+
+So updating is:
+
+1. **Quit OpenMemo** (Cmd-Q, not just closing the window). The backend holds
+   the database open, and swapping the app out from under a running one is
+   asking for trouble.
+2. Open the new `.dmg` and drag **OpenMemo** to **Applications**. Finder asks
+   whether to replace. Say yes.
+3. **Gatekeeper again.** A fresh download carries a fresh quarantine flag, so
+   the one-time nudge from section 2 applies to every update:
+   ```bash
+   xattr -dr com.apple.quarantine /Applications/OpenMemo.app
+   ```
+   (Right-click, then Open, works too.)
+4. Launch it. Before the backend starts, the app notices the version changed
+   and writes a compressed copy of your database to
+   `~/Library/Application Support/OpenMemo/backups/`, named
+   `preupgrade-<old>-to-<new>-<date>.db.gz`. Then it opens the library and
+   applies whatever schema changes the new version needs.
+
+The last few pre-update copies are kept. They sit alongside the daily automatic
+backups but are never removed by that rotation, so an update snapshot is still
+there weeks later.
+
+> **Do not delete `~/Library/Application Support/OpenMemo/` to "reinstall
+> clean".** That folder *is* your library. Throwing away the app is harmless.
+> Throwing away that folder is the one irreversible thing on this page.
+
+### Going back to an older version
+
+Supported, with a warning. The database only migrates forwards, so a library
+that has been opened by a newer build carries columns an older one has never
+seen. Launch an older `.dmg` over a newer library and the app says so before it
+touches anything, saves a `predowngrade-...` copy first, and offers to quit.
+Reinstalling the newer version is the safer move.
+
+---
+
+## 4. Point it at your Ollama
 
 Default is `http://localhost:11434`. To change it: **Settings → Local AI →
 Host**, or **menu bar → OpenMemo → Ollama Host…**. Both save, restart the
@@ -56,7 +101,7 @@ You can confirm the connection any time in **Settings → Local AI**.
 
 ---
 
-## 4. Where your data lives
+## 5. Where your data lives
 
 Everything writable lives outside the (read-only) app bundle, in:
 
@@ -66,7 +111,8 @@ Everything writable lives outside the (read-only) app bundle, in:
   app_settings.json  your Settings-page preferences
   chroma/            vector store
   files/             uploaded images, audio, video, thumbnails
-  backups/           automatic database snapshots
+  backups/           database snapshots: daily `openmemo-*`, plus a
+                     `preupgrade-*` written before each version change
   logs/              boot log (Settings → Security → Logs opens this)
   hf-cache/          speech-to-text model
   ms-playwright/     link-scraper Chromium
@@ -77,7 +123,7 @@ Delete that folder to reset the app completely. Back it up to keep your library.
 
 ---
 
-## 5. Build the `.dmg` from source (on a Mac)
+## 6. Build the `.dmg` from source (on a Mac)
 
 The build **must** run on an Apple-Silicon Mac — it downloads a relocatable
 arm64 Python, installs the backend's native wheels, and bundles an arm64 ffmpeg.
@@ -125,7 +171,7 @@ CSC_IDENTITY_AUTO_DISCOVERY=false npm run dist
 
 ---
 
-## 6. Dev mode (fast iteration, no packaging)
+## 7. Dev mode (fast iteration, no packaging)
 
 Run the shell against your checked-out source and the `backend/.venv`:
 
@@ -203,7 +249,7 @@ against a determined attacker with full disk access.
 
 ---
 
-## 7. Troubleshooting
+## 8. Troubleshooting
 
 | Symptom | Fix |
 |---------|-----|
@@ -216,7 +262,7 @@ against a determined attacker with full disk access.
 
 ---
 
-## 8. What's NOT here
+## 9. What's NOT here
 
 - **Intel / universal builds** — Apple-Silicon only by design.
 - **Notarization / App Store** — needs a paid Apple Developer account.
