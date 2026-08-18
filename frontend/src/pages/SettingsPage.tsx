@@ -1290,6 +1290,7 @@ export function SettingsPage() {
   };
   const [backing, setBacking] = useState<'structure' | 'essential' | 'full' | null>(null);
   const [restoring, setRestoring] = useState(false);
+  const [autoSnaps, setAutoSnaps] = useState<{ name: string; bytes: number; created_at: string }[]>([]);
   const [maxUploadMb, setMaxUploadMb] = useState<number | null>(null);
   const [maxUploadSaved, setMaxUploadSaved] = useState(false);
   const [profile, setProfile] = useState<AppSettings | null>(null);
@@ -1399,6 +1400,34 @@ export function SettingsPage() {
     }
   };
 
+  useEffect(() => {
+    void backupApi
+      .listAuto()
+      .then((r) => setAutoSnaps(r.snapshots))
+      .catch(() => setAutoSnaps([]));
+  }, []);
+
+  const handleRestoreAuto = async (name: string, when: string) => {
+    const go = await ask({
+      title: 'Restore this snapshot',
+      body: `Everything currently in openMemo is replaced by the database from ${when}. Your uploaded files are not touched.`,
+      secondary: 'A copy of your current database is saved first, so this can be walked back.',
+      confirmLabel: 'Restore it',
+      danger: true,
+    });
+    if (!go) return;
+    setRestoring(true);
+    try {
+      await backupApi.restoreAuto(name);
+      showNotice('Restore complete. Reloading.', 'info');
+      location.reload();
+    } catch (err) {
+      showNotice(`Restore failed: ${(err as Error).message}`);
+    } finally {
+      setRestoring(false);
+    }
+  };
+
   const handleBackup = async (scope: 'structure' | 'essential' | 'full') => {
     setBacking(scope);
     try {
@@ -1413,8 +1442,8 @@ export function SettingsPage() {
   const handleRestoreClick = async () => {
     const go = await ask({
       title: 'Restore from a backup',
-      body: 'Everything currently in openMemo is replaced by whatever is in the zip. This cannot be undone.',
-      secondary: 'Last chance. Your current library is overwritten the moment you pick a file.',
+      body: 'Everything currently in openMemo is replaced by whatever is in the backup you pick.',
+      secondary: 'A copy of your current database is saved to the pre-restore folder first, so this can be walked back.',
       confirmLabel: 'Choose a backup',
       danger: true,
     });
@@ -1834,6 +1863,35 @@ export function SettingsPage() {
                   </button>
                 ) : null}
               </div>
+              {autoSnaps.length > 0 ? (
+                <div className="om-setting-row">
+                  <div className="om-setting-row-text">
+                    <p>Restore a snapshot</p>
+                    <span className="mono">
+                      {autoSnaps.length} kept, newest first. Restores the database only.
+                    </span>
+                  </div>
+                  <select
+                    className="om-select"
+                    disabled={restoring}
+                    defaultValue=""
+                    onChange={(e) => {
+                      const snap = autoSnaps.find((s) => s.name === e.target.value);
+                      e.target.value = '';
+                      if (snap) void handleRestoreAuto(snap.name, new Date(snap.created_at).toLocaleString());
+                    }}
+                  >
+                    <option value="" disabled>
+                      {restoring ? 'Restoring…' : 'Pick a date…'}
+                    </option>
+                    {autoSnaps.map((s) => (
+                      <option key={s.name} value={s.name}>
+                        {new Date(s.created_at).toLocaleString()} · {(s.bytes / 1024 / 1024).toFixed(1)} MB
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              ) : null}
               <div className="om-setting-row">
                 <div className="om-setting-row-text">
                   <p>Structure backup</p>
@@ -1864,12 +1922,12 @@ export function SettingsPage() {
               <div className="om-setting-row" style={{ borderTop: '1px solid var(--border)', marginTop: 8, paddingTop: 8 }}>
                 <div className="om-setting-row-text">
                   <p>Restore from backup</p>
-                  <span className="mono">Upload a .zip — overwrites current data</span>
+                  <span className="mono">Upload a .zip or .db.gz — overwrites current data</span>
                 </div>
                 <button className="om-btn-secondary danger" onClick={handleRestoreClick} disabled={!!backing || restoring}>
                   {restoring ? 'Restoring…' : 'Restore'}
                 </button>
-                <input type="file" ref={fileInputRef} accept=".zip" style={{ display: 'none' }} onChange={handleFileSelected} />
+                <input type="file" ref={fileInputRef} accept=".zip,.gz" style={{ display: 'none' }} onChange={handleFileSelected} />
               </div>
             </SettingCard>
 

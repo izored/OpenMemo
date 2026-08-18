@@ -50,24 +50,28 @@ def _db_path() -> Path:
     return Path(settings.DATA_DIR) / "openmemo.db"
 
 
-def create_snapshot() -> Path | None:
-    """Write one gzipped database snapshot. Returns its path, or None.
+def write_snapshot(dest: Path) -> Path | None:
+    """Write one gzipped database snapshot at `dest`. Returns it, or None.
 
     Uses SQLite's own backup API rather than copying the file: the database is
-    in WAL mode and live, so a plain copy can catch it mid-write.
+    in WAL mode and live, so a plain copy misses whatever is still in the -wal
+    sidecar and silently restores to an older state than the user had.
+
+    The source is opened read-only. A read-write connection checkpoints the WAL
+    when the last handle closes, which rewrites the live openmemo.db as a side
+    effect of "taking a copy" — harmless in itself, but not something a backup
+    routine should be doing to the file it is backing up, least of all while the
+    app is serving requests against it.
     """
     src = _db_path()
     if not src.is_file():
         return None
 
-    out_dir = backup_dir()
-    out_dir.mkdir(parents=True, exist_ok=True)
-    stamp = datetime.utcnow().strftime("%Y%m%d-%H%M%S")
-    dest = out_dir / f"openmemo-{stamp}.db.gz"
+    dest.parent.mkdir(parents=True, exist_ok=True)
 
     with tempfile.TemporaryDirectory() as tmp:
         staged = Path(tmp) / "openmemo.db"
-        con = sqlite3.connect(str(src))
+        con = sqlite3.connect(f"file:{src.as_posix()}?mode=ro", uri=True)
         try:
             target = sqlite3.connect(str(staged))
             try:
@@ -77,10 +81,20 @@ def create_snapshot() -> Path | None:
         finally:
             con.close()
 
-        with open(staged, "rb") as fh, gzip.open(dest, "wb", compresslevel=6) as gz:
+        part = dest.with_name(dest.name + ".part")
+        with open(staged, "rb") as fh, gzip.open(part, "wb", compresslevel=6) as gz:
             shutil.copyfileobj(fh, gz)
+        # Publish atomically, so a process killed mid-write cannot leave a
+        # truncated file wearing the name of a finished backup.
+        part.replace(dest)
 
     return dest
+
+
+def create_snapshot() -> Path | None:
+    """The scheduled snapshot: one per run, into the rotating set."""
+    stamp = datetime.utcnow().strftime("%Y%m%d-%H%M%S")
+    return write_snapshot(backup_dir() / f"openmemo-{stamp}.db.gz")
 
 
 def prune(keep: int = KEEP) -> int:

@@ -364,6 +364,27 @@ export const backupApi = {
     a.click();
     URL.revokeObjectURL(url);
   },
+  // The automatic snapshots already on this machine. They were written every
+  // day and shown nowhere, which made a year of backups feel like none.
+  listAuto: async (): Promise<{
+    snapshots: { name: string; bytes: number; created_at: string }[];
+    keep: number;
+    total_bytes: number;
+  }> => {
+    const resp = await fetch(`${API_BASE}/backup/auto`);
+    if (!resp.ok) throw new Error('Could not list the automatic snapshots');
+    return resp.json();
+  },
+  restoreAuto: async (name: string): Promise<{ ok: boolean; scope: string }> => {
+    const resp = await fetch(`${API_BASE}/backup/auto/restore?name=${encodeURIComponent(name)}`, {
+      method: 'POST',
+    });
+    if (!resp.ok) {
+      const err = await resp.json().catch(() => ({ detail: resp.statusText }));
+      throw new Error(err.detail || 'Restore failed');
+    }
+    return resp.json();
+  },
   restore: async (file: File): Promise<{ ok: boolean; scope: string; version: string }> => {
     const form = new FormData();
     form.append('file', file);
