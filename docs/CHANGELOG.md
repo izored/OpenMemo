@@ -7,6 +7,9 @@ All notable changes to OpenMemo are documented here.
 
 <!-- Add entries here as work lands: ### Added / ### Changed / ### Fixed -->
 
+---
+## [3.12.1] - 2026-08-18
+
 ### Added
 
 - 💾 **Settings says where the automatic backups are.** openMemo has been compressing a copy of your database on a schedule since long before now, keeping the recent ones, and telling nobody. The Backup card names the folder, says plainly that it is the database and not your uploaded files, and in the Mac app there is a button to open it. Someone who has just lost something should not have to read the source to find out a snapshot exists.
