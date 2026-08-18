@@ -419,7 +419,13 @@ Step "waiting for the release workflow (up to 10 min)..."
 $release = $null
 while ((Get-Date) -lt $deadline) {
     Start-Sleep -Seconds 10
-    $json = & $gh release view $tag --json tagName, name, body, isDraft, url 2>$null
+    # No spaces in the field list. PowerShell splits on them, so gh received
+    # five positional args and failed with "accepts at most 1 arg(s)" on every
+    # poll. $LASTEXITCODE was never 0, so this loop could not see a release
+    # that was already published, burned its full 10 minutes, and skipped the
+    # body and profile-entry checks below. It did that on every release cut
+    # with this script until 2026-08-18.
+    $json = & $gh release view $tag --json tagName,name,body,isDraft,url 2>$null
     if ($LASTEXITCODE -eq 0 -and $json) { $release = $json | ConvertFrom-Json; break }
     # Surface a failed run immediately instead of waiting out the clock.
     $runState = & $gh run list --workflow=release.yml --limit 1 --json conclusion -q '.[0].conclusion' 2>$null

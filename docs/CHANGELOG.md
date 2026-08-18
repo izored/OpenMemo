@@ -7,6 +7,10 @@ All notable changes to OpenMemo are documented here.
 
 <!-- Add entries here as work lands: ### Added / ### Changed / ### Fixed -->
 
+### Fixed
+
+- 🩺 **The release script can see the release it just made.** Its last two checks, that the release body really is the changelog section and that the profile changelog got exactly one entry, had never run. The command asking GitHub for the release listed its fields with spaces after the commas, so PowerShell split them into separate arguments and the call failed every time. The script read that as "not published yet", waited out its full ten minutes on a release that had been live for two, and exited before the checks. Both are running now.
+
 ---
 ## [3.12.1] - 2026-08-18
 
