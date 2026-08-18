@@ -29,12 +29,16 @@ is bundled or fetched by the app — you don't install it yourself.
 
 1. Open the `.dmg` and drag **OpenMemo** to **Applications**.
 2. **First launch (Gatekeeper):** because the app isn't notarized, double-click
-   will say it "cannot be opened." Do one of:
-   - **Right-click → Open**, then **Open** in the dialog (only needed once), or
-   - run once in Terminal:
-     ```bash
-     xattr -dr com.apple.quarantine /Applications/OpenMemo.app
-     ```
+   will say it "cannot be opened." Clear the quarantine flag in Terminal:
+   ```bash
+   xattr -dr com.apple.quarantine /Applications/OpenMemo.app
+   ```
+   This works on every macOS version. If you would rather click:
+   - **macOS 14 and earlier:** right-click the app, choose **Open**, then
+     **Open** in the dialog.
+   - **macOS 15 (Sequoia) and later:** right-click no longer offers the
+     override. Try to open the app once, then go to **System Settings →
+     Privacy & Security**, scroll to the bottom, and press **Open Anyway**.
 3. The app opens to the loading screen, boots its backend, and shows the UI.
 
 On first run it quietly fetches two optional pieces into your data folder (it
@@ -60,40 +64,77 @@ So updating is:
 2. Open the new `.dmg` and drag **OpenMemo** to **Applications**. Finder asks
    whether to replace. Say yes.
 3. **Gatekeeper again.** A fresh download carries a fresh quarantine flag, so
-   the one-time nudge from section 2 applies to every update:
+   the step from section 2 applies to every update, not just the first install:
    ```bash
    xattr -dr com.apple.quarantine /Applications/OpenMemo.app
    ```
-   (Right-click, then Open, works too.)
 4. Launch it. Before the backend starts, the app notices the version changed
-   and writes a compressed copy of your database to
+   and saves a copy of your library to
    `~/Library/Application Support/OpenMemo/backups/`, named
-   `preupgrade-<old>-to-<new>-<date>-<time>.db.gz`. Then it opens the library
+   `preupgrade-<old>-to-<new>-<date>-<time>.zip`. Then it opens the library
    and applies whatever schema changes the new version needs.
 
-   Updating from a build older than 3.12.2 gives you
+   That `.zip` is an ordinary openMemo backup, the same thing Settings makes,
+   so you can put it back through the app. See below.
+
+   Updating from a build that predates this feature gives you
    `preupgrade-unknown-to-<new>-...`: those builds did not record their own
    version, so there is nothing to name the old side after.
 
-   If that copy cannot be written, usually a full disk, the app says so and
+   If the copy cannot be written, usually a full disk, the app says so and
    carries on rather than refusing to open. So it is a strong safety net, not
    a guarantee. Settings, under Backup, takes one on demand any time.
 
-The last few pre-update copies are kept. They sit alongside the daily automatic
-backups but are never removed by that rotation, so an update snapshot is still
-there weeks later.
+The three most recent pre-update copies are kept, and going backwards keeps its
+own three, so retreating from a bad update cannot rotate away the copy you are
+retreating to. The daily automatic backups are a separate set and neither
+rotation touches the other.
 
 > **Do not delete `~/Library/Application Support/OpenMemo/` to "reinstall
 > clean".** That folder *is* your library. Throwing away the app is harmless.
 > Throwing away that folder is the one irreversible thing on this page.
 
+### Putting a pre-update copy back
+
+The file is a normal openMemo backup, so:
+
+1. **Settings → Backup & Restore → Restore.**
+2. Pick the `preupgrade-...zip` from
+   `~/Library/Application Support/OpenMemo/backups/`. The Backup card has an
+   **Open folder** button that takes you straight there.
+3. Confirm. Everything in openMemo is replaced by what is in that file, and
+   the app reloads.
+
+It holds your memos, collections, spaces, tags and notes. It does **not** hold
+your uploaded images, audio and video: those are far larger, they are not what
+a schema migration can damage, and they stay untouched on disk through all of
+this. For a copy that includes them, use **Backup** in that same card and pick
+the full scope.
+
 ### Going back to an older version
 
 Supported, with a warning. The database only migrates forwards, so a library
 that has been opened by a newer build carries columns an older one has never
-seen. Launch an older `.dmg` over a newer library and the app says so before it
-touches anything, saves a `predowngrade-...` copy first, and offers to quit.
-Reinstalling the newer version is the safer move.
+seen. Launch an older `.dmg` over a newer library and the app saves a
+`predowngrade-...zip` copy, then says what it found and offers to quit before
+anything starts. Backing out is free, and doing it twice does not pile up
+copies: the same switch is only ever captured once. Reinstalling the newer
+version is the safer move.
+
+### If you use the PIN lock
+
+The app lock stores its PIN in your macOS login keychain, and the keychain
+identifies apps by their signature. openMemo is signed ad-hoc rather than by a
+paid Apple developer account (see section 6), so each build has a different
+signature and macOS treats an updated app as a new one. **The first launch
+after an update may ask for your login password.** Allow it, and the PIN keeps
+working.
+
+If you deny it, the lock screen will refuse the correct PIN, because the app
+can no longer read what it stored. To recover, quit openMemo and delete the
+`lockEnabled` and `lockBlob` lines from
+`~/Library/Application Support/OpenMemo/openmemo-desktop.json`. That turns the
+lock off and leaves everything else alone. Set a new PIN from Settings.
 
 ---
 
@@ -119,8 +160,10 @@ Everything writable lives outside the (read-only) app bundle, in:
   app_settings.json  your Settings-page preferences
   chroma/            vector store
   files/             uploaded images, audio, video, thumbnails
-  backups/           database snapshots: daily `openmemo-*`, plus a
-                     `preupgrade-*` written before each version change
+  backups/           library snapshots: daily `openmemo-*.db.gz`, plus
+                     `preupgrade-*.zip` / `predowngrade-*.zip` written before
+                     a version change (restorable from Settings)
+  openmemo-desktop.json  app-lock PIN, Ollama host, window size, last version
   logs/              boot log (Settings → Security → Logs opens this)
   hf-cache/          speech-to-text model
   ms-playwright/     link-scraper Chromium
