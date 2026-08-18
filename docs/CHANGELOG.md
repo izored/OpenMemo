@@ -21,6 +21,8 @@ All notable changes to OpenMemo are documented here.
 
 ### Fixed
 
+- 🧹 **The stray + button is gone from Settings.** It was the old corner button from before the bottom bar, sitting alone on a page with no bottom bar, on a page you open to change openMemo rather than to add to it. Every other page keeps what it had; the rest of that rollout is a separate decision.
+
 - 🔌 **The Mac app says so when it has to move to another port.** It prefers 8099 and quietly walks to the next free one when something else has it. The app is fine either way, but the browser extension stores one fixed address, so the only symptom was clipping a page and having nothing arrive, with nothing anywhere to explain it. It now says which port it landed on and what to point the extension at.
 
 ---

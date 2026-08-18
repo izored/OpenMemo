@@ -355,6 +355,11 @@ export function Layout() {
         // Ask Memo has its own composer at the bottom — the global New-Memo FAB
         // would just clutter that page, so it steps aside entirely there.
         if (location.pathname.startsWith('/ask')) return null;
+        // Settings is somewhere you go to change openMemo, not to add to it, and
+        // this button is the old corner FAB rather than the bottom bar's island
+        // (ADR-021). One lone V1 control on a page with no bottom bar just
+        // looked like a leftover, which is what it was.
+        if (location.pathname.startsWith('/settings')) return null;
         // On the Music page the FAB opens the dedicated music modal (SpotiFLAC,
         // uploads, playlists) instead of the generic New-Memo panel.
         const onMusic = location.pathname.startsWith('/music');
