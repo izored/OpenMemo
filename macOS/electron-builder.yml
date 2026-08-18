@@ -20,6 +20,10 @@ directories:
 # source, built SPA, and ffmpeg are added as extraResources below.
 files:
   - dist-electron/**/*
+  # Unit tests compile alongside the shell (one tsconfig). They have no business
+  # inside the asar, and node:test is not available to the packaged runtime.
+  - '!dist-electron/*.test.js'
+  - '!dist-electron/*.test.js.map'
   - static/**/*
   - package.json
 
