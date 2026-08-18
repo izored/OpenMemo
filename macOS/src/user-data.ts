@@ -37,6 +37,13 @@ export const USER_DATA_DIR_NAME = 'OpenMemo';
  *
  * Returns the path in force, which is the pinned one unless pinning failed.
  */
+let pinFailure: string | null = null;
+
+/** Why pinning failed, if it did. main.ts logs this once the boot log exists. */
+export function userDataPinFailure(): string | null {
+  return pinFailure;
+}
+
 export function pinUserDataPath(): string {
   const dir = path.join(app.getPath('appData'), USER_DATA_DIR_NAME);
   try {
@@ -47,9 +54,13 @@ export function pinUserDataPath(): string {
     // userData, but it takes that default once. Set it explicitly so the two
     // can never end up in different folders.
     app.setPath('sessionData', dir);
-  } catch {
-    // Never fatal. An unpinned app still runs — it just goes back to deriving
-    // the folder from productName, which is where it was before this existed.
+  } catch (e) {
+    // Never fatal. An unpinned app still runs, it just goes back to deriving the
+    // folder from productName, which is where it was before this existed. But
+    // it must not be silent: the fallback IS the failure mode this exists to
+    // prevent, and mkdirSync throws EEXIST if something has left a plain FILE
+    // at that path, which would be a very confusing way to lose a library.
+    pinFailure = e instanceof Error ? e.message : String(e);
   }
   return app.getPath('userData');
 }
