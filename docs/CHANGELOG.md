@@ -5,7 +5,10 @@ All notable changes to OpenMemo are documented here.
 ---
 ## [Unreleased]
 
-<!-- Add entries here as work lands: ### Added / ### Changed / ### Fixed-->
+<!-- Add entries here as work lands: ### Added / ### Changed / ### Fixed -->
+
+---
+## [3.13.0] - 2026-08-19
 
 ### Added
 
