@@ -20,6 +20,7 @@ import {
 import { spawn } from 'node:child_process';
 import path from 'node:path';
 import fs from 'node:fs';
+import { AppGate } from './app-gate';
 import {
   startBackend,
   stopBackend,
@@ -50,8 +51,10 @@ pinUserDataPath();
 let mainWindow: BrowserWindow | null = null;
 let backend: StartedBackend | null = null;
 const bootLog: string[] = [];
-// Resolver for the app-lock gate — fulfilled when the correct PIN is entered.
-let lockResolve: ((ok: boolean) => void) | null = null;
+// Owns the main window: the app-lock gate, plus a token per openAppWindow run
+// so a boot that outlived its window can never navigate the next one. See
+// app-gate.ts — that comment is the whole reason this is not a bare resolver.
+const appGate = new AppGate();
 // One silent update check per app run (not per window reopen).
 let updateChecked = false;
 // Files dropped on the Dock icon before the backend was up.
@@ -116,7 +119,7 @@ function fromMainWindow(evt: Electron.IpcMainInvokeEvent): boolean {
 
 /** True while the PIN gate is up and waiting. The bridge is dead until it clears. */
 function isLocked(): boolean {
-  return lockResolve !== null;
+  return appGate.locked;
 }
 
 /** Guard for every `openmemoShell` handler. Throws, so the renderer sees a rejection. */
@@ -146,6 +149,16 @@ function requireUnlockedMainWindow(evt: Electron.IpcMainInvokeEvent): void {
  */
 async function loadAppUrl(url: string): Promise<void> {
   if (!mainWindow) return;
+  // The PIN gate owns the window while it is up, so nothing paints the app over
+  // it: not a boot that started before the gate did, not an `openmemo://` deep
+  // link arriving with a warm backend, not a restart from Settings. A no-op
+  // rather than a throw, because every caller treats failure here as "there is
+  // nothing to show" — throwing would only reach openAppWindow's Retry/Quit
+  // dialog and blame the backend for a window that is fine.
+  if (!appGate.mayNavigate()) {
+    appendLog('[shell] Refused to load the app: the PIN gate is up.\n');
+    return;
+  }
   await mainWindow.loadURL(url);
   await mainWindow.webContents.insertCSS(`
     html, body { -webkit-app-region: no-drag; }
@@ -278,10 +291,9 @@ function createWindow(): void {
 
 /** Show the PIN lock screen and resolve once the correct PIN is entered. */
 function showLockGate(): Promise<boolean> {
-  return new Promise((resolve) => {
-    lockResolve = resolve;
-    void mainWindow?.loadFile(path.join(staticDir(), 'lock.html'));
-  });
+  const unlocked = appGate.showGate();
+  void mainWindow?.loadFile(path.join(staticDir(), 'lock.html'));
+  return unlocked;
 }
 
 /**
@@ -290,6 +302,11 @@ function showLockGate(): Promise<boolean> {
  * Dock after the window closes) → load the UI.
  */
 async function openAppWindow(): Promise<void> {
+  // Every run takes a token. The user can close the window while this one is
+  // still waiting on the backend, and the reopen starts another run that puts
+  // its own PIN gate in the new window; only the newest run may touch it. See
+  // app-gate.ts. Rechecked after every await below that can outlive a window.
+  const run = appGate.beginRun();
   if (!mainWindow) createWindow();
 
   // App lock: gate every window open behind the PIN. On first launch the
@@ -299,12 +316,16 @@ async function openAppWindow(): Promise<void> {
   if (isLockEnabled()) {
     buildMenu(true); // no DevTools, no backend restart, while the gate is up
     const unlocked = await showLockGate();
+    // Superseded: a newer run raised its own gate, and the restricted menu it
+    // installed is the correct one to leave in place.
+    if (!appGate.mayNavigate(run)) return;
     buildMenu();
     if (!unlocked) return;
   }
 
   // Show the loading screen immediately so launch never looks frozen.
   await mainWindow?.loadFile(path.join(staticDir(), 'loading.html'));
+  if (!appGate.mayNavigate(run)) return;
 
   // Pinning happens before the boot log exists, so it reports here instead.
   // Silence would be wrong: the fallback is the exact failure it prevents.
@@ -357,6 +378,10 @@ async function openAppWindow(): Promise<void> {
       }
     }
     const target = rendererOverride ?? backend!.url;
+    // Booting the backend was still worth finishing even if the window went
+    // away mid-flight — the newer run reuses it rather than spawning a second.
+    // Showing the UI is what is no longer this run's to do.
+    if (!appGate.mayNavigate(run)) return;
     await loadAppUrl(target);
     // Quietly check GitHub for a newer release, once per app run (packaged only).
     if (app.isPackaged && !updateChecked) {
@@ -366,6 +391,10 @@ async function openAppWindow(): Promise<void> {
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
     appendLog(`[shell] FAILED: ${msg}\n`);
+    // A superseded run's failure is not the live window's problem: another run
+    // owns the screen, possibly with a PIN gate on it, and Retry here would
+    // boot straight over it.
+    if (!appGate.mayNavigate(run)) return;
     const choice = dialog.showMessageBoxSync({
       type: 'error',
       title: 'OpenMemo could not start',
@@ -824,8 +853,7 @@ function registerIpc(): void {
     }
     if (verifyPin(pin)) {
       lockFails = 0;
-      lockResolve?.(true);
-      lockResolve = null;
+      appGate.unlock();
       return { ok: true };
     }
     lockFails += 1;
