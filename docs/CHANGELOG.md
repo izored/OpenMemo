@@ -5,25 +5,17 @@ All notable changes to OpenMemo are documented here.
 ---
 ## [Unreleased]
 
-<!-- Add entries here as work lands: ### Added / ### Changed / ### Fixed -->
-
-### Added
-
-- ♻️ **Restore keeps a copy of the memos it replaces.** Restoring a backup moved your uploaded files aside so a wrong restore could be walked back, and then copied straight over your database with nothing kept. So picking the wrong archive to recover one deleted memo took every memo since with it, permanently, while the photos from the same period came back fine. The database now goes into the same dated `pre-restore` folder as the media, before anything is replaced, and the app tells you where it went. Two restores in the same second get their own folders instead of the second one quietly overwriting the first one's copy.
-
-- 🕓 **The automatic snapshots are in Settings, with a date to pick.** openMemo has been compressing a copy of your database every day and keeping the recent ones. You could read that it was happening, and that was all: nothing listed them, and the Restore button could not open them. The Backup card now lists them by date and size, and restoring one is picking it from the list. No exporting, no re-uploading a file the app wrote itself.
-
-### Fixed
-
-- 📂 **Restore accepts the backups openMemo actually writes.** There were two shapes and only one of them worked. Settings hands you a `.zip`; the daily snapshots and the Mac app's pre-update copy are gzipped databases. The restore endpoint rejected those on the first line and the file picker would not even let you select them, which is how a year of daily backups could be insurance nobody could claim. Both work now, and a corrupt or oversized one is refused before your library is touched.
-
-- 🔎 **The daily snapshot no longer rewrites the database it is copying.** It opened the live database read-write, and closing that connection checkpoints the write-ahead log, so a routine whose whole job was to take a copy modified the original every time it ran, while the app was serving requests against it. It reads now. The snapshot is also written to a temporary name and moved into place, so a process killed mid-write cannot leave a truncated file wearing the name of a finished backup.
+<!-- Add entries here as work lands: ### Added / ### Changed / ### Fixed-->
 
 ### Added
 
 - 🛟 **The Mac app backs your memos up before it updates them.** Dropping a new build into Applications never touched your library, which lives in Application Support and not inside the app. What it did do was hand the old database straight to a new backend, which migrates the schema on the way up, forward only, with nothing fresh to fall back on: the automatic backups start five minutes into a run and then repeat daily, so on the one boot where a migration actually happens the newest copy on disk is from yesterday at best, and on a young library there is none at all. The app now records which version last opened your library, and when that changes it saves a copy to the backups folder before the backend is allowed to start, named for the jump it is about to make. It is an ordinary openMemo backup, so Settings can put it back: a copy you cannot restore is not a safety net. Three are kept per direction, and going backwards keeps its own three, so retreating from a bad update cannot rotate away the copy you are retreating to.
 
 - ⏪ **The Mac app warns you before it opens a library that a newer version has already touched.** The database only migrates forwards, so a library that has been through a newer build carries columns an older one has never heard of. Rather than finding that out by using the app, you get told before anything starts, with a copy saved first and the option to quit straight back out. Backing out and thinking again costs nothing: the same switch is only ever captured once, and a build that stamped itself and then failed to start is treated as the repair it is rather than as a warning you did not need.
+
+- ♻️ **Restore keeps a copy of the memos it replaces.** Restoring a backup moved your uploaded files aside so a wrong restore could be walked back, and then copied straight over your database with nothing kept. So picking the wrong archive to recover one deleted memo took every memo since with it, permanently, while the photos from the same period came back fine. The database now goes into the same dated `pre-restore` folder as the media, before anything is replaced, and the app tells you where it went. Two restores in the same second get their own folders instead of the second one quietly overwriting the first one's copy.
+
+- 🕓 **The automatic snapshots are in Settings, with a date to pick.** openMemo has been compressing a copy of your database every day and keeping the recent ones. You could read that it was happening, and that was all: nothing listed them, and the Restore button could not open them. The Backup card now lists them by date and size, and restoring one is picking it from the list. No exporting, no re-uploading a file the app wrote itself.
 
 ### Changed
 
@@ -33,9 +25,13 @@ All notable changes to OpenMemo are documented here.
 
 - 🔒 **The Mac app's PIN can no longer be walked around by closing the window while it starts.** You enter the PIN, the loading screen appears, and the backend takes a few seconds to answer. Close the window in that gap, reopen it from the Dock, and the new window asked for the PIN while the first launch was still finishing behind it. When that launch finished it loaded your library straight over the prompt, and everything was readable with no PIN entered. An `openmemo://` link could do the same thing to a locked window. Opening a window now claims it, so a launch that outlived its own window stands down instead of taking over the next one, and nothing loads over the PIN prompt while it is up.
 
-- 🩺 **The release script can see the release it just made.** Its last two checks, that the release body really is the changelog section and that the profile changelog got exactly one entry, had never run. The command asking GitHub for the release listed its fields with spaces after the commas, so PowerShell split them into separate arguments and the call failed every time. The script read that as "not published yet", waited out its full ten minutes on a release that had been live for two, and exited before the checks. Both are running now.
+- 📂 **Restore accepts the backups openMemo actually writes.** There were two shapes and only one of them worked. Settings hands you a `.zip`; the daily snapshots and the Mac app's pre-update copy are gzipped databases. The restore endpoint rejected those on the first line and the file picker would not even let you select them, which is how a year of daily backups could be insurance nobody could claim. Both work now, and a corrupt or oversized one is refused before your library is touched.
+
+- 🔎 **The daily snapshot no longer rewrites the database it is copying.** It opened the live database read-write, and closing that connection checkpoints the write-ahead log, so a routine whose whole job was to take a copy modified the original every time it ran, while the app was serving requests against it. It reads now. The snapshot is also written to a temporary name and moved into place, so a process killed mid-write cannot leave a truncated file wearing the name of a finished backup.
 
 - 📍 **The Mac app's data folder no longer depends on what the app is called.** Electron works out where to keep everything from the product name, so a rename, even a change of casing, would have quietly pointed a new build at a brand new empty folder: no memos, no settings, no PIN, and no error anywhere to explain it. The old library would still have been sitting on disk, simply invisible to the app. The folder name is stated once in the code now and never derived again.
+
+- 🩺 **The release script can see the release it just made.** Its last two checks, that the release body really is the changelog section and that the profile changelog got exactly one entry, had never run. The command asking GitHub for the release listed its fields with spaces after the commas, so PowerShell split them into separate arguments and the call failed every time. The script read that as "not published yet", waited out its full ten minutes on a release that had been live for two, and exited before the checks. Both are running now.
 
 ---
 ## [3.12.1] - 2026-08-18
