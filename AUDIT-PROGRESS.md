@@ -25,6 +25,15 @@ Legend: ✅ done and committed · 🔄 in progress · ⏳ queued · 🔒 waiting
 | ✅ `architecture-map.html` | 44 nodes, frozen 29 May, missing 43 backend modules | 99 nodes and 134 edges. Three new clusters (Mesh, Media/music/capture, Integrity/backups/locks), every backend module and every frontend page now present, plus filter chips for Mesh, Music, Phone capture, Job queue, Backups and Spaces |
 | ✅ `MEMORY.md` | 3 false decisions, stack table predating Mesh, Music, Spaces, Whisper and the job queue | Rewritten. Corrects the Tailwind claim, the `OLLAMA_HOSTS` claim and "no auth gate", and adds the traps that actually cost time |
 
+### Commits on this branch
+
+- `17c6590` docs(changelog): the stale-file sweep under [Unreleased]
+- `cdad84f` docs: architecture map covers the whole backend again
+- `b8c934c` docs: deployment, FAQ and roadmap match what shipped
+- `22ada45` docs: env example and README describe 3.13, not 3.0
+- `6fb39f0` docs: contributor docs match how the project actually runs
+- `484b95d` docs: DESIGN.md describes openMemo, not Replicate
+
 ---
 
 ## Queued
