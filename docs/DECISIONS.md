@@ -7,6 +7,92 @@ the decision, and its consequences, so a future reader knows *why*, not just
 
 ---
 
+## ADR-026: The vector store is embedded only. There is no ChromaDB server.
+
+**Date:** 2026-08-19 · **Status:** Accepted · **Relates to:** ADR-014 (a live-only vector index)
+
+### Context
+
+`docker-compose.yml` carried a `chromadb` service from the initial commit until
+3.13. The backend never used it. `backend/db/chroma_client.py` has opened a
+`chromadb.PersistentClient` against `CHROMA_PERSIST_DIR` since the first commit
+and has never been edited; there is no `HttpClient` anywhere in the repo, no
+`CHROMA_HOST`, no reference to the service name as a hostname, and no
+`proxy_pass` to it in nginx.
+
+Two independent reviews on 2026-08-19 went further and found the container was
+not merely unused but inert, and that the documentation describing it was wrong
+in a way that had already cost debugging time:
+
+- The compose file mounted `./data/chroma` to `/chroma/chroma`, the Chroma 0.x
+  default persist path. The image had moved to `/data` in the 1.x line. The
+  running server reported `persist_path: "/data"` and `Saving data to: /data`,
+  so **the mount never took effect**. The container's own database was 188KB
+  with **zero collections**, while the real store on the host was 27MB with
+  1069 embeddings and exactly one writer, the backend.
+- The two-writer corruption that `docs/INSTALL.md` warned about therefore never
+  happened. Verified rather than assumed: `pragma integrity_check` returned
+  `ok`, the migration table ended at the 0.5.x set matching the pinned
+  `chromadb==0.5.5`, and `journal_mode` was `delete` rather than WAL, so the
+  bind-mount WAL hazard did not apply to that file at all.
+- `docs/INSTALL.md` claimed the container existed "for external inspection" of
+  the vector store. It was never looking at the vector store.
+- Section 5 of `Specs/worktree-dev-setup-issues.md` recorded an unresolved 404
+  on `http://localhost:8001/api/memos`, whose `chroma-trace-id` response header
+  was read as confirming the responder was the FastAPI app. It confirmed the
+  opposite. Port 8001 was this service.
+
+What the service did carry was a real future hazard: a read-write mount of the
+live 0.5.5 store into an unpinned `:latest` image. If a later image default
+moved back to `/chroma/chroma`, a Chroma 1.x server would open the store and
+migrate it forward irreversibly, after which the pinned embedded client could no
+longer read it. Every `docker compose pull` re-rolled that die.
+
+### Decision
+
+**Remove the service. The vector store is embedded, on disk, single-writer.**
+
+Nothing replaces it. Inspecting the store means pointing a `PersistentClient` at
+`data/chroma` from a script, or copying the file and querying the copy. Never
+open the live store read-write from a second process.
+
+### Consequences
+
+- Port 8001 is free. A worktree backend bound there will no longer be shadowed.
+- One fewer image, one fewer unauthenticated published port.
+- The `:latest` migration hazard is retired permanently.
+- Applying it requires `docker compose up -d --remove-orphans`. Plain
+  `docker compose up -d` prints an orphan warning and leaves the container
+  running, and `restart: unless-stopped` survives reboots.
+- `data/chroma` is untouched by the removal, and is in no backup scope. That is
+  acceptable because it is derived: `POST /api/maintenance/reindex` rebuilds it
+  by re-embedding every live memo. It costs time, not data.
+
+### Recovery: the exact block that was removed
+
+Restoring it is `git revert` of the commit that removed it, or pasting this back
+into `docker-compose.yml` under `services:` and running `docker compose up -d`.
+Kept here verbatim so a future reader never has to dig through history.
+
+```yaml
+  chromadb:
+    image: chromadb/chroma:latest
+    ports:
+      # Loopback only: this is the vector store, unauthenticated, holding an
+      # embedding of everything in the library.
+      - "127.0.0.1:8001:8000"
+    volumes:
+      - ./data/chroma:/chroma/chroma
+    environment:
+      - ANONYMIZED_TELEMETRY=FALSE
+    restart: unless-stopped
+```
+
+Restoring it restores the mount bug and the migration hazard with it. If the
+real goal is inspecting the store, do that from a copy instead.
+
+---
+
 ## ADR-020: Phone capture goes through a Telegram relay inbox, never a direct connection to the backend
 
 **Date:** 2026-07-24 · **Status:** Accepted — building · **Builds on:** ADR-012 (user-supplied cookie jar for restricted downloads), ADR-002 (self-hosted headless Chromium), ADR-008 (never block the event loop), ADR-001 (define shared things once)

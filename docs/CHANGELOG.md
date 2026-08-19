@@ -7,6 +7,16 @@ All notable changes to OpenMemo are documented here.
 
 <!-- Add entries here as work lands: ### Added / ### Changed / ### Fixed -->
 
+### Removed
+
+- 🧹 **The ChromaDB container is gone, and it was never doing anything.** `docker-compose.yml` had carried a `chromadb` service since the first commit. The backend has never spoken to it: `backend/db/chroma_client.py` opens an embedded client against a folder on your disk, and there is no HTTP client anywhere in the codebase. Two independent reviews then found it was worse than idle. The compose file mounted your real vector store into the container at the path Chroma used to use, and the image had since moved, so the mount never took effect. The container was serving its own empty 188KB database with zero collections while your actual store, 27MB and 1069 embeddings, sat beside it with exactly one writer. Nothing was ever corrupted, and that was checked rather than assumed: the integrity check passes, the schema matches the pinned client version, and the file is not in the journal mode the bind-mount hazard needs. What it did carry was a live landmine. Your store was mounted writable into an image pinned to `latest`, so a future version that moved its path back would have opened your store and upgraded it one way, past what the app can read. That is retired now. The store itself is untouched, and applying the change needs `docker compose up -d --remove-orphans`, because plain `up -d` leaves the old container running. Written up with the exact block for restoring it in ADR-026.
+
+### Fixed
+
+- 🔎 **A 404 that was filed as unsolved was the retired container answering.** `Specs/worktree-dev-setup-issues.md` recorded a backend in a worktree returning 404 on every memo route, with a `chroma-trace-id` header on the response read as proof it really was openMemo replying. It proved the opposite. Port 8001 belonged to the ChromaDB container, the backend was on another port and had been fine the whole time, and nothing was wrong with the routes. Closed with the root cause, and the port is free now.
+
+- 📕 **The install guide stops describing a container that is not there.** It listed ChromaDB in the stack, said the container existed so you could inspect your vector store, which it never could, and carried a troubleshooting section for a lock error that could not happen the way it described. That section is now the lock that does happen: a second process opening the database while Docker serves it, which took the app down twice in August, and the one command that brings it back.
+
 ### Changed
 
 - 📐 **The design system document describes openMemo now.** `DESIGN.md` had been Replicate.com's design system since v1.6.0, dropped at the repo root as something AI coding agents could read and never replaced. Every colour, typeface and rule in it belonged to a different product, so anyone told to read it built pill-radius-everything in Replicate red. It is now written from the real sources: the token ladders in `openmemo.css`, the three variables that drive `typeset.css`, the local Satoshi faces, and what `applyTweaks()` actually writes onto `<html>`. It leads with the rule that silently breaks things, which is that the theme is a `data-theme` attribute rather than a class or a media query, so Tailwind's `dark:` variant can never match.
