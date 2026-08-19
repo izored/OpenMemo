@@ -28,6 +28,9 @@ All notable changes to OpenMemo are documented here.
 - 📌 **`MEMORY.md` no longer states three things that stopped being true.** It gave Tailwind `@layer` configuration as the styling decision, said `OLLAMA_HOSTS` must be a JSON array when a validator has accepted a plain comma-separated list for several releases, and described the app as having no auth gate at all, which skips both the macOS launch PIN and the passcode on the Hidden section.
 
 - 🧱 **The roadmap's Shipped list runs to 3.13.0.** It stopped at v3.1.0 and still had Mesh marked as in progress with nine unchecked phases, all of which shipped on 3 August.
+### Fixed
+
+- 🔤 **The profile site gets the changelog in the shape it renders.** Releases are announced to the profile repo automatically, and what got sent was the changelog section exactly as it appears here: `###` headings, bold lead-ins, an emoji on every item. That page reads a different subset, `##` headings and rows that open with a bullet, the headline in backticks and then an em dash, so every announcement from the first one to v3.13.0 arrived in a format its renderer was never going to lay out properly. Nobody saw an error because there is nothing to error on: it published, it just looked wrong. The workflow converts the section before sending it now. The GitHub release body is untouched and still the full changelog, word for word.
 
 ---
 ## [3.13.0] - 2026-08-19
