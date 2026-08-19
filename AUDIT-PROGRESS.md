@@ -17,6 +17,8 @@ Legend: ✅ done and committed · 🔄 in progress · ⏳ queued · 🔒 waiting
 | ✅ `DESIGN.md` | Replicate.com's design system, 105 days old | openMemo's real token system, read from `openmemo.css`, `typeset.css`, `fonts.css` and `appearance.ts` |
 | ✅ `CONTRIBUTING.md` | 4 instructions that fail if followed | Correct ports, the uvicorn-from-root trap, `python -m pytest`, the secret guard, `bump-version.ps1` as the whole release process |
 | ✅ `SECURITY.md` | Supported: `1.7.x` | Supported: `3.13.x`, with a line saying fixes land on the newest release rather than being backported |
+| ✅ `.env.example` | 12 vars missing, 2 defaults contradicting compose and the README | Every var `backend/config.py` reads, plus the four runtime switches (`OPENMEMO_INSTALL`, `OPENMEMO_DISABLE_TELEGRAM`, `OPENMEMO_DISABLE_JOB_WORKERS`, `OPENMEMO_MESH_PORT`) that were documented nowhere |
+| ✅ `README.md` | Content 14 days old, roadmap said v3.0 current, dev port wrong, docs list missed 20 of 33 files | Backups and offline sections added, roadmap says v3.13, dev port fixed with the two traps spelled out, full docs tree, issue links point at the current forms |
 | ✅ `MEMORY.md` | 3 false decisions, stack table predating Mesh, Music, Spaces, Whisper and the job queue | Rewritten. Corrects the Tailwind claim, the `OLLAMA_HOSTS` claim and "no auth gate", and adds the traps that actually cost time |
 
 ---
@@ -26,8 +28,6 @@ Legend: ✅ done and committed · 🔄 in progress · ⏳ queued · 🔒 waiting
 | File | Problem | Status |
 |---|---|---|
 | `architecture-map.html` | 43 backend modules missing, including all of Mesh, Music and Spaces | ⏳ |
-| `.env.example` | 12 vars missing, `EMBED_MODEL` and `DEFAULT_CHAT_MODEL` contradict compose and README | ⏳ |
-| `README.md` | Content 14 days old, misses 6 releases; roadmap says v3.0 current; dev port wrong; docs list misses 20 of 33 files | ⏳ |
 | `docs/deployment.md` | 105 days old. Documents exposing the app publicly, which the compose file now forbids. Wrong ports throughout | ⏳ |
 | `docs/faq.md` | 105 days old. Says 50MB upload cap, real default is 5GB | ⏳ |
 | `Specs/ROADMAP.md` | Shipped list stops at v3.1.0, missing 3.2 through 3.13 | ⏳ |
