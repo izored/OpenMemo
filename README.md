@@ -71,6 +71,12 @@ Step by step for two machines, including from different networks: [the pairing w
 ### 🗂️ Spaces
 Group whole areas of your life. A Space bundles Memos and collections under one cover, one color, one name. Client work, home projects, research topics. Each Space gets its own page.
 
+### 🛟 Backups You Can Actually Restore
+openMemo compresses a copy of your library on its own, daily, and keeps the recent ones. Settings lists them by date and size, and restoring one is picking it from the list. No exporting, no re-uploading a file the app wrote itself. Restoring keeps a copy of what it is about to replace, so changing your mind is a second restore rather than a loss. On the Mac, dropping in a new build saves a copy before the new backend is allowed to touch your library, named for the version jump it is about to make, because a database only migrates forwards. Open a library that a newer version already touched and it says so first, with a copy saved and the option to quit straight back out.
+
+### 📴 Works With The Internet Unplugged
+Rendering openMemo makes no network request at all. Fonts are served from your own machine, favicons are cached, and embedded players are built only when you press play instead of the moment a memo appears on screen. When the connection drops, a quiet strip appears at the top and the app keeps working on everything already on disk. It disappears when you are back.
+
 ### 🔍 Hybrid Search
 **Semantic + Full-Text.** ChromaDB finds things by *meaning*. SQLite FTS5 finds things by *exact words*. Combined, they surface what you need even when you can't describe it perfectly.
 
@@ -134,12 +140,11 @@ Any Ollama chat model works. Pick yours in Settings → Local AI, or per convers
 ### Development Mode
 
 ```bash
-# Backend
-cd backend
+# Backend — from the REPO ROOT, not backend/
 python -m venv .venv
 .venv\Scripts\activate          # Windows
-pip install -r requirements.txt
-uvicorn backend.main:app --reload --port 8000
+pip install -r backend/requirements.txt
+uvicorn backend.main:app --reload --port 8099
 
 # Frontend (new terminal)
 cd frontend
@@ -147,7 +152,11 @@ npm install
 npm run dev
 ```
 
-Open **http://localhost:3000**. See [`docs/INSTALL.md`](docs/INSTALL.md) for the full guide, troubleshooting matrix, and Ollama setup for every platform.
+Open **http://localhost:3000**.
+
+Two things that catch people out. Run uvicorn from the repo root: `backend` is a package, so importing `backend.main` needs its parent on `sys.path`. And use port **8099**, because that is what the Vite proxy targets by default; a backend on any other port means every API call fails. On Windows, `.\dev.ps1` starts both with the right ports already set.
+
+See [`docs/INSTALL.md`](docs/INSTALL.md) for the full guide, troubleshooting matrix, and Ollama setup for every platform.
 
 ---
 
@@ -182,26 +191,46 @@ Open **http://localhost:3000**. See [`docs/INSTALL.md`](docs/INSTALL.md) for the
 ```
 openmemo/
 ├── backend/              # FastAPI Python backend
-│   ├── api/              # REST routes (memos, chat, ingest, search)
-│   ├── core/             # RAG, embeddings, extractors, transcription, localize
-│   └── db/               # SQLAlchemy models, SQLite, FTS5
-├── frontend/             # React 19 + TypeScript + token CSS system
+│   ├── api/              # REST routes (memos, chat, ingest, search, music, spaces, mesh, backup)
+│   ├── core/             # RAG, embeddings, extractors, transcription, jobs, media, integrity
+│   │   └── mesh/         # Peer sync: pairing, protocol, merge, journal, keystore
+│   ├── services/         # Memo service, Telegram relay
+│   └── db/               # SQLAlchemy models, SQLite, FTS5, Chroma client
+├── frontend/             # React 19 + TypeScript + the om-* token CSS system
 │   └── src/
 │       ├── components/   # UI components
 │       ├── pages/        # Route pages
 │       ├── stores/       # Zustand state
+│       ├── styles/       # openmemo.css tokens, typeset.css, fonts.css
 │       └── lib/          # API client, utilities
 ├── chrome-extension/     # Manifest V3 browser extension
+├── macOS/                # The native Mac app: window, PIN lock, bundled backend
+├── scripts/              # Repo tooling, including the pre-commit secret checker
+├── Specs/ROADMAP.md      # The roadmap
 ├── docs/
 │   ├── INSTALL.md                  # Full installation & troubleshooting
+│   ├── MACOS.md                    # Building, installing and updating the Mac app
 │   ├── ollama.md                   # Models, retrieval, context windows
-│   ├── DECISIONS.md                # Architecture Decision Records
+│   ├── DECISIONS.md                # Architecture Decision Records index
 │   ├── ADR-022-ASK-RAG.md          # The locked Ask Memo / RAG flow
+│   ├── ADR-024-MESH.md             # Mesh design
+│   ├── ADR-025-LOCAL-FIRST.md      # What openMemo will not contact, and why
+│   ├── MESH-HANDBOOK.md            # Mesh, end to end
+│   ├── MESH-PAIRING-WALKTHROUGH.md # Pairing two machines, step by step
+│   ├── MESH-SECURITY.md            # What Mesh does before, during and after you switch it on
+│   ├── BACKUP-AND-RESTORE.md       # Automatic snapshots, archives, restoring
+│   ├── DISASTER-RECOVERY.md        # The first five minutes when data goes missing
+│   ├── AUDIO_MEMO_HANDBOOK.md      # Recording, transcription, the sidebar player
+│   ├── music-library.md            # Playlists, lossless pulls, the relay
 │   ├── make-it-local.md            # Download ladder, and how videos keep their sound
 │   ├── carousel-from-links.md      # Bundling pasted image links into one memo
+│   ├── cookies-restricted-downloads.md  # Cookie files for logged-in sources
 │   ├── memo-card-visual-system.md  # Card UI design reference
 │   ├── settings-and-appearance.md  # Settings bento + live appearance panel
+│   ├── SECURITY-personal-data.md   # The pre-commit secret guard
+│   ├── RELEASING.md                # How a release is cut and verified
 │   └── CHANGELOG.md                # Release history
+├── DESIGN.md             # The token system, and the rules that break if ignored
 └── docker-compose.yml
 ```
 
@@ -209,9 +238,9 @@ openmemo/
 
 ## Roadmap
 
-**v3.0** *(current)*: Music library with playlist import and lossless pulls, Spaces, Ask Memo with the Memos/Chat toggle and per-memo citations, native macOS app, mobile responsive pass, editable thumbnails, hidden section behind a passcode, cinematic onboarding
+**v3.13** *(current)*: Mesh two-way sync between your machines, backups that restore and that run before a Mac update, full offline operation, a native macOS app with its own settings and PIN lock, music library with playlist import and lossless pulls, Spaces, Ask Memo with the Memos/Chat toggle and per-memo citations, phone capture through a private Telegram bot, mobile responsive pass, hidden section behind a passcode, cinematic onboarding
 **Next**: Transcript-synced playback, AI-suggested collections, similar Memos, multiple views (grid/list/board)
-**Later**: Multi-user workspaces, Notion/Obsidian import, PWA offline support, plugin system
+**Later**: Multi-user workspaces, Notion/Obsidian import, PWA install, plugin system
 
 See [`Specs/ROADMAP.md`](Specs/ROADMAP.md) for the full roadmap, architectural findings, and contributor guide.
 
@@ -233,8 +262,8 @@ This project is also a learning record: a messy, practical discovery step into A
 
 Contributions are welcome. See [`CONTRIBUTING.md`](CONTRIBUTING.md) for setup, coding style, and PR guidelines.
 
-- 🐛 [Report a bug](https://github.com/izored/OpenMemo/issues/new?template=bug_report.md)
-- 💡 [Request a feature](https://github.com/izored/OpenMemo/issues/new?template=feature_request.md)
+- 🐛 [Report a bug](https://github.com/izored/OpenMemo/issues/new?template=bug_report.yml)
+- 💡 [Request a feature](https://github.com/izored/OpenMemo/issues/new?template=feature_request.yml)
 
 ---
 

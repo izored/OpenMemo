@@ -2,9 +2,83 @@
 
 Single source of truth for all planned work. Versioned milestones + unversioned backlog.
 
+> Sections below are **not** in version order. The Shipped block at the top is
+> current as of v3.13.0 (2026-08-19). Everything under a `v1.x` heading further
+> down is old planning material kept for its detail; check the Shipped block and
+> `docs/CHANGELOG.md` before assuming an item is still outstanding.
+
 ---
 
 ## ✅ Shipped
+
+### v3.13.0 — Backups that survive an update *(SHIPPED 2026-08-19)*
+
+- [x] **Backup before a Mac version change** — the app records which version last opened the library and saves a copy before the new backend may start, named for the jump. Three kept per direction, so retreating from a bad update cannot rotate away the copy you are retreating to
+- [x] **Downgrade warning** — opening a library a newer build already touched says so first, saves a copy, and offers to quit straight back out
+- [x] **Restore keeps a copy of what it replaces**
+- [x] **Automatic snapshots listed in Settings** — by date and size, restorable from the list, no export and no re-upload
+- [x] Fixed: the PIN could be walked around by closing the window during launch; restore now accepts both backup shapes; the daily snapshot no longer opens the live database read-write; the Mac data folder no longer depends on the product name
+
+### v3.12.x — The Mac app is a Mac app *(SHIPPED 2026-08-17/18)*
+
+- [x] **Runtime awareness** — one page served by three installs (Mac app, Docker, checkout) and it now knows which it is, so update instructions and data locations match reality
+- [x] **Mac settings live in Settings** — Ollama host, launch PIN, Open at Login, reachable only from the Mac app's own window
+- [x] **Telegram expiry warning** — Telegram discards undelivered messages after 24 hours; openMemo says so before that happens
+- [x] **Phone capture wakes when the Mac does**
+- [x] **No browser dialogs left anywhere** — every confirm and prompt is an openMemo surface
+- [x] **Product tour** that skips the steps it cannot point at, and keyboard hints that match the keyboard in use
+
+### v3.11.0 — Offline, and no unasked network calls *(SHIPPED 2026-08-14)*
+
+- [x] **Offline strip** — appears when the connection drops, disappears when it returns, app stays useful
+- [x] **Update checks are something you ask for**, not something opening Settings does
+
+### v3.10.0 — Every picture is a file you own *(SHIPPED 2026-08-11)*
+
+- [x] **Real links everywhere** — every card and row is an anchor, so ctrl+click opens a new tab
+- [x] **Works with the internet unplugged** — local fonts, cached favicons, click-to-load embeds
+- [x] **No remote image URLs** — a picture openMemo shows is a file on your disk, noticed while it can still be saved if it fails
+- [x] Bot default collection renamed to "Bot Inbox"; a second openMemo can no longer steal shared links
+
+### v3.9.x — Music relay, transcripts, Instagram audio *(SHIPPED 2026-08-06/09)*
+
+- [x] **The music relay is a switch, and it ships off**
+- [x] **Re-download all** on any album or playlist, and recovery for a playlist whose files went missing
+- [x] **Transcript means what was said**, not the caption under the video
+- [x] Instagram reels arrive with their sound; carousels save without erroring
+- [x] **Paste several image links, get one carousel memo**
+- [x] A database pointed somewhere other than the default no longer starts up empty
+
+### v3.8.0 — Bound to this machine *(SHIPPED 2026-08-06)*
+
+- [x] **Loopback-only binding** — the app and the vector store are no longer readable by anything else on the wifi
+- [x] **Drag the Settings cards where you want them**
+- [x] Scheduled archives removed; silent videos reported rather than "fixed"
+
+### v3.5.0 — Backups, integrity, recovery *(SHIPPED 2026-08-04)*
+
+- [x] **Automatic backups, each one verified**
+- [x] **openMemo notices when files go missing**, and a library missing its media can pull most of it back
+- [x] **A written recovery procedure** (`docs/DISASTER-RECOVERY.md`) and a search list for uploads that cannot be refetched
+- [x] Backups carry the card covers
+
+### v3.4.x — One release command *(SHIPPED 2026-08-03/04)*
+
+- [x] **`bump-version.ps1` refuses to half-finish** — every check runs before the first write, and the version can no longer drift between the six files that state it
+- [x] **Instagram health signal** plus a weekly canary check, and caption backfill
+
+### v3.3.0 — Mesh: two-way device sync *(SHIPPED 2026-08-03 — ADR-024)*
+
+All nine phases landed. Two machines hold one library, both writable, no account
+and no server, paired with a 12-word code. Structure syncs first, media is
+refetched from source rather than pushed, conflicts keep both versions, every
+sync is journalled and reversible, and the whole thing is off until two separate
+switches are on.
+
+### v3.2.0 — Instagram carousels and login *(SHIPPED 2026-07-31)*
+
+- [x] **Sidecar posts save every photo**, not just the first
+- [x] **Connect Instagram inside openMemo**, and a pre-commit guard that blocks personal data from ever being committed
 
 ### v3.1.0 — Phone Capture (Telegram relay) *(SHIPPED — PR #120 + #121, ADR-020)*
 
@@ -240,22 +314,23 @@ no user action required. All run on the existing APScheduler instance wired in
 
 ---
 
-## v3.3.0 — Mesh: two-way device sync *(IN PROGRESS — ADR-024)*
+## v3.3.0 — Mesh: two-way device sync *(SHIPPED 2026-08-03 — ADR-024)*
 
+Kept for the phase detail. Every box below shipped; see the Shipped block above.
 Design settled, phased implementation tracked in `plans/024-mesh-execution.md`.
 A MacBook and a Windows/Docker box hold one library, both writable, no account
 and no server. Paired once with a 12-word code. Off by default behind a single
 Settings toggle.
 
-- [ ] **Phase 0 — Job queue** *(not Mesh-gated; fixes a live bug)* — persistent `job_queue` with bounded concurrency, priority and retry. Today 25 `background_tasks.add_task` sites run unbounded and lose everything on restart, so importing 40 memos spawns 40 downloads.
-- [ ] **Phase 1 — Mesh flag + Settings section** — `mesh_enabled`, gating helper, triggers created on enable and dropped on disable
-- [ ] **Phase 2 — `change_log`, triggers, HLC** — tombstones for tables that hard-delete today; hybrid logical clock instead of wall-clock LWW
-- [ ] **Phase 3 — Merge engine** — pure functions, two-device simulation, every test run in both directions
-- [ ] **Phase 4 — Journal, snapshot, rollback** — every synced write logged and reversible, before the first one happens
-- [ ] **Phase 5 — Transport + protocol** — WebSocket dialed outward, metadata only. Shippable on its own.
-- [ ] **Phase 6 — Verification dialogue** — one field-diff dialog for every memo type; keep-both preselected
-- [ ] **Phase 7 — Magnets + resolver** — sync the recipe not the payload; 94% of media refetched from source, peer as backstop
-- [ ] **Phase 8 — Mesh code, discovery, pairing, roles** — BIP39 + HKDF + keychain, mDNS, QR, primary-device role incl. Telegram singleton guard
+- [x] **Phase 0 — Job queue** *(not Mesh-gated; fixes a live bug)* — persistent `job_queue` with bounded concurrency, priority and retry. Today 25 `background_tasks.add_task` sites run unbounded and lose everything on restart, so importing 40 memos spawns 40 downloads.
+- [x] **Phase 1 — Mesh flag + Settings section** — `mesh_enabled`, gating helper, triggers created on enable and dropped on disable
+- [x] **Phase 2 — `change_log`, triggers, HLC** — tombstones for tables that hard-delete today; hybrid logical clock instead of wall-clock LWW
+- [x] **Phase 3 — Merge engine** — pure functions, two-device simulation, every test run in both directions
+- [x] **Phase 4 — Journal, snapshot, rollback** — every synced write logged and reversible, before the first one happens
+- [x] **Phase 5 — Transport + protocol** — WebSocket dialed outward, metadata only. Shippable on its own.
+- [x] **Phase 6 — Verification dialogue** — one field-diff dialog for every memo type; keep-both preselected
+- [x] **Phase 7 — Magnets + resolver** — sync the recipe not the payload; 94% of media refetched from source, peer as backstop
+- [x] **Phase 8 — Mesh code, discovery, pairing, roles** — BIP39 + HKDF + keychain, mDNS, QR, primary-device role incl. Telegram singleton guard
 
 ---
 

@@ -1,259 +1,282 @@
-# Design System
+# openMemo Design System
 
-## 1. Visual Theme & Atmosphere
+The visual contract for openMemo's frontend. Source of truth is
+`frontend/src/styles/openmemo.css` (tokens, ~1000 `om-*` classes),
+`typeset.css` (rendered markdown), `fonts.css` (the local Satoshi faces) and
+`frontend/src/lib/appearance.ts` (what the Appearance panel writes onto
+`<html>` at runtime).
 
-The design personality is defined by two extreme choices: **massive display typography** (up to 128px) using the custom rb-freigeist-neue face, and **exclusively pill-shaped geometry** (9999px radius on everything). The display font is thick, bold, and confident — its heavy weight at enormous sizes creates text that feels like it's shouting with joy rather than whispering authority. Combined with basier-square for body text (a clean geometric sans) and JetBrains Mono for code, the system serves developers who want power and playfulness in equal measure.
+If this file and the CSS disagree, the CSS wins and this file is the bug.
 
-What makes Replicate distinctive is its community-powered energy. The model gallery with AI-generated images, the dotted-underline links, the green status badges, and the "Imagine what you can build" closing manifesto all create a space that feels alive and participatory — not a corporate product page but a launchpad for creative developers.
+---
 
-**Key Characteristics:**
-- Explosive orange-red-magenta gradient hero (#ea2804 brand anchor)
-- Massive display typography (128px) in heavy rb-freigeist-neue
-- Exclusively pill-shaped geometry: 9999px radius on EVERYTHING
-- High-contrast black (#202020) and white palette with red brand accent
-- Developer-community energy: model galleries, code examples, dotted-underline links
-- Green status badges (#2b9a66) for live/operational indicators
-- Bold/heavy font weights (600-700) creating maximum typographic impact
-- Playful closing manifesto: "Imagine what you can build."
+## 1. The one rule that breaks things
 
-## 2. Color Palette & Roles
+**The theme is an attribute, not a class and not a media query.**
 
-### Primary
-- **Replicate Dark** (`#202020`): The primary text color and dark surface — a near-black that's the anchor of all text and borders. Slightly warmer than pure #000.
-- **Replicate Red** (`#ea2804`): The core brand color — a vivid, saturated orange-red used in the hero gradient, accent borders, and high-signal moments.
-- **Secondary Red** (`#dd4425`): A slightly warmer variant for button borders and link hover states.
+`applyTweaks()` sets `document.documentElement.dataset.theme` to either
+`light` or `hi`. There is no `.dark` class anywhere, and
+`prefers-color-scheme` is only read once, to resolve the `system` setting into
+one of those two values.
 
-### Secondary & Accent
-- **Status Green** (`#2b9a66`): Badge/pill background for "running" or operational status indicators.
-- **GitHub Dark** (`#24292e`): A blue-tinted dark used for code block backgrounds and developer contexts.
+Consequences, all of them load-bearing:
 
-### Surface & Background
-- **Pure White** (`#ffffff`): The primary page body background.
-- **Near White** (`#fcfcfc`): Button text on dark surfaces and the lightest content.
-- **Hero Gradient**: A dramatic orange → red → magenta → pink gradient for the hero section. Transitions from warm (#ea2804 family) through hot pink.
+- Tailwind's `dark:` variant never matches. `prose dark:prose-invert`,
+  `text-white`, `bg-[#111]` and plain `prose` render broken in at least one
+  theme. This is what broke the markdown editor.
+- Any new component reads `var(--*)` tokens. The tokens are redefined per
+  theme, so a component written against them adapts for free.
+- Tailwind is being phased out. Do not add new utilities. When you touch a
+  component that still uses them, migrate it to `om-*` plus tokens.
 
-### Neutrals & Text
-- **Medium Gray** (`#646464`): Secondary body text and de-emphasized content.
-- **Warm Gray** (`#4e4e4e`): Emphasized secondary text.
-- **Mid Silver** (`#8d8d8d`): Tertiary text, footnotes.
-- **Light Silver** (`#bbbbbb`): Dotted-underline link decoration color, muted metadata.
-- **Pure Black** (`#000000`): Maximum-emphasis borders and occasional text.
+The two themes are `light` and `hi`. `hi` is the inky high-contrast dark; the
+Appearance panel calls it Dark. There is no third theme.
 
-### Gradient System
-- **Hero Blaze**: A dramatic multi-stop gradient flowing through orange (`#ea2804`) → red → magenta → hot pink. This gradient occupies the full hero section and is the most visually dominant element on the page.
-- **Dark Sections**: Deep dark (#202020) sections with white/near-white text provide contrast against the white body.
+---
 
-## 3. Typography Rules
+## 2. Accent, and why every surface moves with it
 
-### Font Family
-- **Display**: `rb-freigeist-neue`, with fallbacks: `ui-sans-serif, system-ui`
-- **Body / UI**: `basier-square`, with fallbacks: `ui-sans-serif, system-ui`
-- **Code**: `jetbrains-mono`, with fallbacks: `ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, Liberation Mono, Courier New`
+The accent is user-chosen. Default `#F4825A`. Everything else is derived from
+it at runtime:
 
-### Hierarchy
+| Variable | Derivation | Use |
+|---|---|---|
+| `--accent` | user's hex | the raw brand colour |
+| `--accent-deep` | `shade(accent, -28)` | pressed states, deep fills |
+| `--accent-soft` | `shade(accent, +28)` at `20` alpha | tints, hover washes |
+| `--accent-text` | `#1A1A1C` if luminance > 0.62, else `#FFFFFF` | text painted **on** the accent |
+| `--accent-ink` | theme-aware safe variant | accent used **as** foreground on a surface |
 
-| Role | Font | Size | Weight | Line Height | Letter Spacing | Notes |
-|------|------|------|--------|-------------|----------------|-------|
-| Display Mega | rb-freigeist-neue | 128px (8rem) | 700 | 1.00 (tight) | normal | The maximum: closing manifesto |
-| Display / Hero | rb-freigeist-neue | 72px (4.5rem) | 700 | 1.00 (tight) | -1.8px | Hero section headline |
-| Section Heading | rb-freigeist-neue | 48px (3rem) | 400–700 | 1.00 (tight) | normal | Feature section titles |
-| Sub-heading | rb-freigeist-neue | 30px (1.88rem) | 600 | 1.20 (tight) | normal | Card headings |
-| Sub-heading Sans | basier-square | 38.4px (2.4rem) | 400 | 0.83 (ultra-tight) | normal | Large body headings |
-| Feature Title | basier-square / rb-freigeist-neue | 18px (1.13rem) | 600 | 1.56 | normal | Small section titles, labels |
-| Body Large | basier-square | 20px (1.25rem) | 400 | 1.40 | normal | Intro paragraphs |
-| Body / Button | basier-square | 16–18px (1–1.13rem) | 400–600 | 1.50–1.56 | normal | Standard text, buttons |
-| Caption | basier-square | 14px (0.88rem) | 400–600 | 1.43 | -0.35px to normal | Metadata, descriptions |
-| Small / Tag | basier-square | 12px (0.75rem) | 400 | 1.33 | normal | Tags (lowercase transform) |
-| Code | jetbrains-mono | 14px (0.88rem) | 400 | 1.43 | normal | Code snippets, API examples |
-| Code Small | jetbrains-mono | 11px (0.69rem) | 400 | 1.50 | normal | Tiny code references |
+`--accent-text` and `--accent-ink` are not interchangeable. Text sitting on an
+accent-filled button takes `--accent-text`. An accent-coloured icon or waveform
+bar sitting on a normal surface takes `--accent-ink`. Reaching for raw
+`--accent` as a foreground colour makes pale accents vanish on light and dark
+accents vanish on dark.
 
-### Principles
-- **Heavy display, light body**: rb-freigeist-neue at 700 weight creates thundering headlines, while basier-square at 400 handles body text with quiet efficiency. The contrast is extreme and intentional.
-- **128px is a real size**: The closing manifesto "Imagine what you can build." uses 128px — bigger than most mobile screens. This is the design equivalent of shouting from a rooftop.
-- **Negative tracking on hero**: -1.8px letter-spacing at 72px creates dense, impactful hero text.
-- **Lowercase tags**: 12px basier-square uses `text-transform: lowercase` — an unusual choice that creates a casual, developer-friendly vibe.
-- **Weight 600 as emphasis**: When basier-square needs emphasis, it uses 600 (semibold) — never bold (700), which is reserved for rb-freigeist-neue display text.
+Surfaces are mixed with the accent at 3 to 7 percent via `color-mix(in oklab,
+...)`, which is why choosing a new accent tints the sidebar, the cards and the
+document surfaces rather than just recolouring one button. Keep the tint
+subtle. Anything above roughly 8 percent stops reading as a neutral surface.
 
-## 4. Component Stylings
+---
+
+## 3. Token ladders
+
+Both themes define the same names. Never hardcode a hex where a token exists.
+
+### Surfaces, back to front
+
+`--bg` → `--bg-rail` → `--surface` → `--surface-2` → `--surface-3` → `--elev`
+
+`--bg` is the page. `--bg-rail` is the sidebar. `--surface` through
+`--surface-3` step forward inside a card. `--elev` is for anything floating
+(modals, toasts, popovers), and pairs with `--shadow-elev`.
+
+### Text, by emphasis
+
+`--text` → `--text-2` → `--text-3` → `--text-4`
+
+Primary, secondary, tertiary, faint. In light theme the text tokens are
+deliberately **not** accent-tinted, so counts and the pinned dot stay a proper
+near-black. Do not "fix" that asymmetry.
+
+### Borders
+
+`--border` (hairline, default) and `--border-2` (emphasis, focus, hover).
+
+### Shadows
+
+`--shadow-card`, `--shadow-card-hover`, `--shadow-elev`. Each carries an inset
+highlight line as its first layer. That inset is what stops cards looking flat
+against a tinted background, so keep it when composing a new shadow.
+
+`--grain` is an inline SVG turbulence overlay at ~4 percent. It sits on large
+surfaces and is the reason flat fills do not band.
+
+---
+
+## 4. Geometry
+
+```
+--r-xs   6px     chips, tiny pills
+--r-sm  10px     buttons, inputs
+--r-md  14px     cards, textareas
+--r-lg  20px     panels
+--r-xl  28px     modals, large sheets
+--r-2xl 32px     hero surfaces
+```
+
+There is no single universal radius. Pick by element size: a 6px radius on a
+modal reads as broken, a 32px radius on a chip reads as a lozenge.
+
+`999px` is used only where something is genuinely a pill (badges, tags,
+toggles).
+
+Spacing: `--pad-card: 20px`, `--gap-card: 14px`. Page width is `--page-max:
+1180px` under `data-layout="boxed"` and unbounded under `data-layout="full"`.
+The shared `PageHeader` (`om-header`) owns the 48px top spacing, so pages must
+not add their own top padding or titles fall off the shared baseline.
+
+---
+
+## 5. Typography
+
+Satoshi, served from `/fonts` by `fonts.css`. The faces are fetched at build
+time by `scripts/fetch-fonts.mjs`. Rendering openMemo makes no font network
+request at all, and that is intentional: it is part of the local-first
+guarantee. If the woff2 files are missing the stack falls through to the system
+sans, which is legible and wrong rather than broken.
+
+| Token | Value | Use |
+|---|---|---|
+| `--font-ui` | Satoshi | all interface text |
+| `--font-display` | Satoshi (or the chosen display face) | titles, hero |
+| `--font-mono` | **Satoshi with tabular numerals** | brand meta labels, counts, timers |
+| `--font-code` | real monospace stack | markdown `code`/`pre`, code blocks |
+
+`--font-mono` is not monospace. It is the brand meta-label face. Every session
+that "fixes" it to a monospace stack breaks the meta rows. Actual code uses
+`--font-code`.
+
+Three type pairs ship, selectable in Appearance: `satoshi` (both roles
+Satoshi), `general` (General Sans), `cabinet` (Cabinet Grotesk display over
+Satoshi UI).
+
+### One type token per role
+
+All variants of a repeating component use the same size token for the same
+role. Every card title takes the card-title size, whatever the card type.
+Per-variant drift reads as a bug, not as variety.
+
+---
+
+## 6. Rendered markdown: typeset.css
+
+`typeset.css` owns everything that renders user or model markdown. `.om-prose`
+is kept as an alias of `.typeset`, so existing markup keeps working.
+
+Three variables drive the whole rhythm. Presets tune only these:
+
+```
+--typeset-size      14px      base size; headings/code/tables derive in em
+--typeset-leading   1.7       line height
+--typeset-flow      0.86em    space between blocks
+```
+
+Headings are em-derived so they follow the base size: `h1` 1.57em, `h2` 1.29em,
+`h3` 1.07em, `h4`–`h6` 0.96em, all at weight 600 with `-0.015em` tracking.
+
+Element rules use `:where()`, which is zero specificity, so any `om-*` rule or
+utility overrides them without `!important`. Keep that property when adding
+rules: write `:where(.typeset, .om-prose) foo`, never `.typeset foo`.
+
+`.om-prose-chat` is the chat preset. Add a preset by overriding the three
+variables, not by rewriting element rules.
+
+---
+
+## 7. Components
 
 ### Buttons
 
-**Dark Solid**
-- Background: Replicate Dark (`#202020`)
-- Text: Near White (`#fcfcfc`)
-- Padding: 0px 4px (extremely compact)
-- Outline: Replicate Dark 4px solid
-- Radius: pill-shaped (implied by system)
-- Maximum emphasis — dark pill on light surface
+| Class | Height | Radius | Fill | Role |
+|---|---|---|---|---|
+| `om-btn-primary` | 36px | 10px | `--text` on `--bg` | the one main action |
+| `om-btn-secondary` | 30px | 8px | `--surface-2` + `--border` | everything else |
+| `om-btn-ghost` | 36px | 10px | `--surface` + `--border` | low-emphasis, toolbars |
+| `om-btn-danger` | inherits | inherits | `#dc2626` | destructive confirm |
 
-**White Outlined**
-- Background: Pure White (`#ffffff`)
-- Text: Replicate Dark (`#202020`)
-- Border: `1px solid #202020`
-- Radius: pill-shaped
-- Clean outlined pill for secondary actions
+Primary inverts: it paints the text colour as its background. That is what
+makes it the loudest thing on the page without introducing a second brand
+colour.
 
-**Transparent Glass**
-- Background: `rgba(255, 255, 255, 0.1)` (frosted glass)
-- Text: Replicate Dark (`#202020`)
-- Padding: 6px 56px 6px 28px (asymmetric — icon/search layout)
-- Border: transparent
-- Outline: Light Silver (`#bbbbbb`) 1px solid
-- Used for search/input-like buttons
+Fixed-height buttons carry `white-space: nowrap`. A squeezed flex row once
+folded "Play all" onto two lines and spilled it out of the 36px box.
 
-### Cards & Containers
-- Background: Pure White or subtle gray
-- Border: `1px solid #202020` for prominent containment
-- Radius: pill-shaped (9999px) for badges, labels, images
-- Shadow: minimal standard shadows
-- Model gallery: grid of AI-generated image thumbnails
-- Accent border: `1px solid #ea2804` for highlighted/featured items
+### Shared classes keep symmetric padding
 
-### Inputs & Forms
-- Background: `rgba(255, 255, 255, 0.1)` (frosted glass)
-- Text: Replicate Dark (`#202020`)
-- Border: transparent with outline
-- Padding: 6px 56px 6px 28px (search-bar style)
+`om-btn-primary` is `padding: 0 14px`. The trailing-chip exception is expressed
+conditionally:
 
-### Navigation
-- Clean horizontal nav on white
-- Logo: Replicate wordmark in dark
-- Links: dark text with dotted underline on hover
-- CTA: Dark pill button
-- GitHub link and sign-in
+```css
+.om-btn-primary:has(.om-kbd-inv) { padding-right: 6px; }
+```
 
-### Image Treatment
-- AI-generated model output images in a gallery grid
-- Pill-shaped image containers (9999px)
-- Full-width gradient hero section
-- Product screenshots with dark backgrounds
+That is the pattern. Never bake a content-specific asymmetric padding into a
+shared class. Doing it once left three later buttons cramped on the right
+before anyone found the cause. If a button "looks cramped", check the shared
+class's computed padding on both sides before patching the instance.
 
-### Distinctive Components
+### Inputs
 
-**Model Gallery Grid**
-- Horizontal scrolling or grid of AI-generated images
-- Each image in a pill-shaped container
-- Model names and run counts displayed
-- The visual heart of the community platform
+`om-input`: `--surface-3`, 8px radius, 6/10 padding, 13px, border moves to
+`--border-2` on focus. `om-textarea`: `--surface`, 12px radius, 10/14 padding,
+`--font-ui`, 1.5 leading, no resize handle.
 
-**Dotted Underline Links**
-- Links use `text-decoration: underline dotted #bbbbbb`
-- A distinctive, developer-notebook aesthetic
-- Lighter and more casual than solid underlines
+Focus is a border colour change, not an outline ring.
 
-**Status Badges**
-- Status Green (`#2b9a66`) background with white text
-- Pill-shaped (9999px)
-- 14px font size
-- Indicates model availability/operational status
+---
 
-**Manifesto Section**
-- "Imagine what you can build." at 128px
-- Dark background with white text
-- Images embedded between words
-- The emotional climax of the page
+## 8. Appearance attributes on `<html>`
 
-## 5. Layout Principles
+`applyTweaks()` writes all of these. A component can branch on any of them.
 
-### Spacing System
-- Base unit: 8px
-- Scale: 1px, 2px, 4px, 6px, 8px, 10px, 12px, 16px, 24px, 32px, 48px, 64px, 96px, 160px, 192px
-- Button padding: varies widely (0px 4px to 6px 56px)
-- Section vertical spacing: very generous (96–192px)
+| Attribute | Values | Meaning |
+|---|---|---|
+| `data-theme` | `light`, `hi` | the theme |
+| `data-card` | `normal`, `minimal`, `edge` | card treatment |
+| `data-layout` | `boxed`, `full` | page max width |
+| `data-density` | `roomy` | spacing (currently always roomy) |
+| `data-bg` | `none`, image, cloud, colour | background mode |
 
-### Grid & Container
-- Fluid width with responsive constraints
-- Hero: full-width gradient with centered content
-- Model gallery: multi-column responsive grid
-- Feature sections: mixed layouts
-- Code examples: contained dark blocks
+Plus runtime variables for the background: `--bg-image`, `--bg-blur`,
+`--bg-c1..c3`, `--bg-p1x..p4y` (blob positions), `--bg-solid`, `--cloud-blur`,
+`--sky-top`, `--sky-bottom`, `--sky-stop`, `--blob-duration`,
+`--blob-play-state`.
 
-### Whitespace Philosophy
-- **Bold and generous**: Massive spacing between sections (up to 192px) creates distinct zones.
-- **Dense within galleries**: Model images are tightly packed in the grid for browsable density.
-- **The gradient IS the whitespace**: The hero gradient section occupies significant vertical space as a colored void.
+The cloud shader always paints a static sky gradient underneath the WebGPU
+canvas, so a missing or still-booting shader shows a day-appropriate sky rather
+than a blank panel. Any future canvas background does the same. Graceful
+fallback is mandatory, not optional.
 
-### Border Radius Scale
-- **Pill (9999px)**: The ONLY radius in the system. Everything interactive, every image, every badge, every label, every container uses 9999px. This is the most extreme pill-radius commitment in any major tech brand.
+---
 
-## 6. Depth & Elevation
-
-| Level | Treatment | Use |
-|-------|-----------|-----|
-| Flat (Level 0) | No shadow | White body, text blocks |
-| Bordered (Level 1) | `1px solid #202020` | Cards, buttons, containers |
-| Accent Border (Level 2) | `1px solid #ea2804` | Featured/highlighted items |
-| Gradient Hero (Level 3) | Full-width blaze gradient | Hero section, maximum visual impact |
-| Dark Section (Level 4) | Dark bg (#202020) with light text | Manifesto, footer, feature sections |
-
-**Shadow Philosophy**: Replicate relies on **borders and background color** for depth rather than shadows. The `1px solid #202020` border is the primary containment mechanism. The dramatic gradient hero and dark/light section alternation provide all the depth the design needs.
-
-## 7. Do's and Don'ts
+## 9. Do and do not
 
 ### Do
-- Use pill-shaped (9999px) radius on EVERYTHING — buttons, images, badges, containers
-- Use rb-freigeist-neue at weight 700 for display text — go big (72px+) or go home
-- Use the orange-red brand gradient for hero sections
-- Use Replicate Dark (#202020) as the primary dark — not pure black
-- Apply dotted underline decoration on text links (#bbbbbb)
-- Use Status Green (#2b9a66) for operational/success badges
-- Keep body text in basier-square at 400–600 weight
-- Use JetBrains Mono for all code content
-- Create a "manifesto" section with 128px type for emotional impact
 
-### Don't
-- Don't use any border-radius other than 9999px — the pill system is absolute
-- Don't use the brand red (#ea2804) as a surface/background color — it's for gradients and accent borders
-- Don't reduce display text below 48px on desktop — the heavy display font needs size to breathe
-- Don't use light/thin font weights on rb-freigeist-neue — 600–700 is the range
-- Don't use solid underlines on links — dotted is the signature
-- Don't add drop shadows — depth comes from borders and background color
-- Don't use warm neutrals — the gray scale is purely neutral (#202020 → #bbbbbb)
-- Don't skip the code examples — they're primary content, not decoration
-- Don't make the hero gradient subtle — it should be BOLD and vibrant
+- Read `var(--*)` tokens for every colour, radius and shadow.
+- Pick the radius from the element's size, using the `--r-*` ladder.
+- Use `--accent-text` on the accent, `--accent-ink` for accent-as-foreground.
+- Keep the inset highlight when composing a shadow.
+- Use `:where()` for anything in `typeset.css`.
+- Give music and media-first cards a full-bleed cover with the title overlaid
+  on a bottom gradient.
+- Portal any dropdown that lives inside a `BorderBeam`. `isolation: isolate`
+  plus `backdrop-filter` traps child menus. Portal to body, `position: fixed`,
+  z-index around 400.
+- Keep the mobile `@media` block **last** in `openmemo.css`. It is last so it
+  wins. Moving it silently breaks the responsive pass.
 
-## 8. Responsive Behavior
+### Do not
 
-### Breakpoints
-*No explicit breakpoints detected — likely using fluid/container-query responsive system.*
+- Do not add Tailwind utilities, and never a `dark:` variant. It cannot match.
+- Do not use a coloured left-edge bar as an active-state indicator. No
+  `border-left`, no `::before` edge accent, no `box-shadow: inset 2px 0 0`.
+  Active states are a background tint, a text-colour shift, or an icon accent.
+- Do not hardcode a hex where a token exists.
+- Do not bake asymmetric padding into a shared class.
+- Do not use a different size token per variant of the same component role.
+- Do not make an expensive or bulk action the default. The smallest action is
+  the default; the expensive one is an explicit, unchecked opt-in.
+- Do not add a page-level "add" button. Adding content goes through the global
+  FAB and New Memo panel, everywhere.
+- Do not put a separate title bar under music artwork. The cover is full-bleed.
 
-### Touch Targets
-- Pill buttons with generous padding
-- Gallery images as large touch targets
-- Navigation adequately spaced
+---
 
-### Collapsing Strategy
-- **Hero text**: 128px → 72px → 48px progressive scaling
-- **Model gallery**: Grid reduces columns
-- **Navigation**: Collapses to hamburger
-- **Manifesto**: Scales down but maintains impact
+## 10. Breakpoints
 
-### Image Behavior
-- AI-generated images scale within pill containers
-- Gallery reflows to fewer columns on narrow screens
-- Hero gradient maintained at all sizes
-
-## 9. Agent Prompt Guide
-
-### Quick Color Reference
-- Primary Text: "Replicate Dark (#202020)"
-- Page Background: "Pure White (#ffffff)"
-- Brand Accent: "Replicate Red (#ea2804)"
-- Secondary Text: "Medium Gray (#646464)"
-- Muted/Decoration: "Light Silver (#bbbbbb)"
-- Status: "Status Green (#2b9a66)"
-- Dark Surface: "Replicate Dark (#202020)"
-
-### Example Component Prompts
-- "Create a hero section with a vibrant orange-red-magenta gradient background. Headline at 72px rb-freigeist-neue weight 700, white text, -1.8px letter-spacing. Include a dark pill CTA button and a white outlined pill button."
-- "Design a model card with pill-shaped (9999px) image container, model name at 16px basier-square weight 600, run count at 14px in Medium Gray. Border: 1px solid #202020."
-- "Build a status badge: pill-shaped (9999px), Status Green (#2b9a66) background, white text at 14px basier-square."
-- "Create a manifesto section on Replicate Dark (#202020) with 'Imagine what you can build.' at 128px rb-freigeist-neue weight 700, white text. Embed small AI-generated images between the words."
-- "Design a code block: dark background (#24292e), JetBrains Mono at 14px, white text. Pill-shaped container."
-
-### Iteration Guide
-1. Everything is pill-shaped — never specify any other border-radius
-2. Display text is HEAVY — weight 700, sizes 48px+
-3. Links use dotted underline (#bbbbbb) — never solid
-4. The gradient hero is the visual anchor — make it bold
-5. Use basier-square for body, rb-freigeist-neue for display, JetBrains Mono for code
+`1024px` (sidebar becomes a drawer), `900px`, `640px`, `560px`. See ADR-009 and
+`frontend/src/lib/useBreakpoint.ts`. Owner overrides inside the mobile block are
+deliberate and are not to be "corrected".
