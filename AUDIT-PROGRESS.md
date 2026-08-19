@@ -44,13 +44,37 @@ Nothing. Every file in the audit that could be updated has been.
 
 ## Waiting on sign-off
 
-Only one item left. Everything else was signed off on 2026-08-19 and removed.
+Nothing. Every item is resolved.
 
-| Item | What it is | Why it looks dead | Status |
-|---|---|---|---|
-| `chromadb` service in `docker-compose.yml` | A ChromaDB server container | `backend/db/chroma_client.py` uses `PersistentClient` on a local path. Nothing opens an HTTP client. The container bind-mounts the same `./data/chroma` the backend writes to directly | Under independent double review before anything is touched. This is the user's live compose file, not a template |
+### Removed on sign-off, round two (2026-08-19)
 
-### Removed on sign-off
+| Item | Outcome |
+|---|---|
+| `chromadb` service in `docker-compose.yml` | Removed after two independent reviews, both read-only against the live install, both finding no argument against it. The exact block is preserved verbatim in ADR-026 for restoring |
+
+The reviews corrected this audit on one point. The original finding said the
+container bind-mounts the same `./data/chroma` the backend writes to, and called
+that a corruption surface. The mount was wired but never took effect: the image
+persists to `/data`, its own writable layer. The container held an empty 188KB
+database with zero collections. No concurrent writing ever occurred, confirmed
+by `pragma integrity_check`, the migration set matching the pinned client, and
+the store not being in WAL mode. The real argument for removal was different and
+better: a read-write mount of the live store into an unpinned `:latest` image.
+
+They also found three things this audit missed:
+
+- Section 5 of `Specs/worktree-dev-setup-issues.md` was misdiagnosed. The 404 on
+  port 8001 was the ChromaDB container, and the `chroma-trace-id` header proved
+  the opposite of what was concluded. Now closed with the root cause.
+- `docs/INSTALL.md` described the container as existing for external inspection,
+  which it never did, and documented a lock error that could not occur as
+  described. Both corrected.
+- `data/chroma` is in no backup scope. Acceptable, since it is derived and
+  rebuildable through reindex, but now stated in ADR-026 rather than assumed.
+
+
+
+### Removed on sign-off, round one
 
 | Item | Why |
 |---|---|

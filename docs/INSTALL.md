@@ -28,7 +28,7 @@ OpenMemo has **two ways to run**:
 | **Development** (`npm run dev` + `uvicorn`) | Daily development, debugging, fastest reload | `http://localhost:3000` |
 | **Docker Production** (`docker-compose up`) | Stable deployment, single-port access, reverse proxy | `http://localhost:8091` |
 
-> **Why Docker exists:** The `docker-compose.yml` bundles the full stack (backend, frontend, ChromaDB, nginx) into reproducible containers. It adds an **nginx reverse proxy on port 80** that unifies all traffic — no CORS issues, no port juggling, and SSE streaming works out of the box.
+> **Why Docker exists:** The `docker-compose.yml` bundles the full stack (backend, frontend, nginx) into reproducible containers. It adds an **nginx reverse proxy on port 80** that unifies all traffic — no CORS issues, no port juggling, and SSE streaming works out of the box.
 
 ---
 
@@ -192,7 +192,9 @@ Open **`http://localhost:8091`** in your browser.
   - `/*` → proxied to React frontend
 - **openmemo-api** → FastAPI backend (not directly exposed)
 - **openmemo-web** → React app served by nginx (not directly exposed)
-- **chromadb** → ChromaDB server on port 8001 (for external inspection; backend uses filesystem ChromaDB)
+
+There is no ChromaDB container. The vector store is embedded in the backend and
+lives on disk at `data/chroma`. Nothing listens on port 8001; see ADR-026.
 
 ### Stopping
 
@@ -357,15 +359,27 @@ If you customized nginx, ensure these lines are present.
 
 ---
 
-### "ChromaDB lock errors / database is locked"
+### "unable to open database file" / the app goes down while you are working
 
-**Symptoms:** SQLite errors mentioning locks.
+**Symptoms:** `/api/memos` returns 500, nginx serves 502, the backend logs
+`unable to open database file`. It starts the moment you run something else
+against the library and does not stop on its own.
 
-**Cause:** Running the backend natively **and** the Docker `chromadb` service simultaneously, both accessing `./data/chroma`.
+**Cause:** A second process opened `data/openmemo.db` while Docker was serving
+it. SQLite's WAL shared-memory file is not shared across a Docker bind mount, so
+a host backend pointed at the same file takes the running container down. This
+happened on 2026-08-03 and again on 2026-08-06, both times during a quick UI
+check from a second checkout.
 
 **Fix:**
-- Stop the native backend before running Docker, or vice versa
-- The `chromadb` container is for external inspection only; backend uses filesystem-based ChromaDB
+
+```bash
+docker compose restart openmemo-api
+```
+
+Then point the second process somewhere else. Never run a host backend against
+the database Docker is serving. Read it if you need to, with `?mode=ro` or from
+a copy, but never open it read-write.
 
 ---
 

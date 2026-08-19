@@ -66,15 +66,3 @@ services:
       openmemo-api:
         condition: service_healthy
     restart: unless-stopped
-
-  chromadb:
-    image: chromadb/chroma:latest
-    ports:
-      # Loopback only: this is the vector store, unauthenticated, holding an
-      # embedding of everything in the library.
-      - "127.0.0.1:8001:8000"
-    volumes:
-      - ./data/chroma:/chroma/chroma
-    environment:
-      - ANONYMIZED_TELEMETRY=FALSE
-    restart: unless-stopped

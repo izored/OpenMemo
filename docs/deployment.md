@@ -26,7 +26,10 @@ The compose file sets the environment inline, so a `.env` is optional. Copy
 | nginx | `127.0.0.1:8091` published, listens on 80 | Reverse proxy. Serves the SPA and forwards `/api` |
 | openmemo-api | 8000 internal, `8770` published for Mesh | FastAPI backend |
 | openmemo-web | 3000 internal | The built React SPA behind its own nginx |
-| chromadb | `127.0.0.1:8001` published | Present in the compose file, but the backend does not talk to it. `backend/db/chroma_client.py` uses an embedded `PersistentClient` against `CHROMA_PERSIST_DIR` on disk |
+
+There is no ChromaDB service. The backend embeds it: `backend/db/chroma_client.py`
+opens a `PersistentClient` against `CHROMA_PERSIST_DIR` on disk. A server
+container was carried until 3.13 and never used; see ADR-026.
 
 **Everything binds to `127.0.0.1` deliberately.** openMemo has no login by
 design, so "published" and "readable by anyone on the wifi" are the same

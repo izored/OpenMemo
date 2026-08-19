@@ -101,7 +101,24 @@ Then each worktree `.env` (or `.env.local`) can set `VITE_BACKEND_PORT=8001`.
 
 ---
 
-## 5. GET /api/memos returning 404 (unresolved)
+## 5. GET /api/memos returning 404 (RESOLVED 2026-08-19)
+
+**Root cause: port 8001 was never openMemo.** It was the `chromadb` service in
+`docker-compose.yml`, answering on `127.0.0.1:8001`. The `chroma-trace-id`
+header was the giveaway and was read backwards at the time: it is Chroma's own
+tracing header, so it proves the responder was **not** the FastAPI app. The
+backend was on 8099 and was fine the whole time. Nothing was wrong with the
+route, the middleware, or `redirect_slashes`.
+
+The `chromadb` service is gone as of 3.13 (see ADR-026), so port 8001 is free
+and this cannot recur. If a worktree backend ever 404s again, check which
+process actually owns the port before suspecting the routes:
+
+```powershell
+netstat -ano | Select-String ":8001"
+```
+
+Everything below is the original report, kept for the record.
 
 **What happened:** Backend starts successfully (`Application startup complete.`), health check at `/api/health` responded, but `GET http://localhost:8001/api/memos` returns `HTTP 404` with `chroma-trace-id` header (confirming it's our FastAPI app, not a different service).
 
