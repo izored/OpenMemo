@@ -2,10 +2,16 @@
 
 ## Supported Versions
 
+openMemo ships from a single line. The newest release is the supported one, and
+fixes land there rather than being backported.
+
 | Version | Supported          |
 | ------- | ------------------ |
-| 1.7.x   | :white_check_mark: |
-| < 1.7   | :x:                |
+| 3.13.x  | :white_check_mark: |
+| < 3.13  | :x:                |
+
+If you are running an older build, update before reporting: the answer to most
+reports on a stale version is a release that already fixed it.
 
 ## Reporting a Vulnerability
 
