@@ -7,6 +7,28 @@ All notable changes to OpenMemo are documented here.
 
 <!-- Add entries here as work lands: ### Added / ### Changed / ### Fixed -->
 
+### Changed
+
+- 📐 **The design system document describes openMemo now.** `DESIGN.md` had been Replicate.com's design system since v1.6.0, dropped at the repo root as something AI coding agents could read and never replaced. Every colour, typeface and rule in it belonged to a different product, so anyone told to read it built pill-radius-everything in Replicate red. It is now written from the real sources: the token ladders in `openmemo.css`, the three variables that drive `typeset.css`, the local Satoshi faces, and what `applyTweaks()` actually writes onto `<html>`. It leads with the rule that silently breaks things, which is that the theme is a `data-theme` attribute rather than a class or a media query, so Tailwind's `dark:` variant can never match.
+
+- 🧭 **The architecture map covers the whole backend again.** It was frozen on 29 May with 44 nodes. Mesh, the music library, Spaces, the job queue, phone capture, backups and the integrity checks all landed after that and none of them appeared: 43 backend modules were missing, including all seventeen under `backend/core/mesh` and every service under `backend/services`. It now carries 99 nodes and 134 edges across three new clusters, with filter chips for Mesh, Music, Phone capture, Job queue, Backups and Spaces so the overview stays readable.
+
+- 📖 **The contributor documentation matches how the project actually runs.** `CONTRIBUTING.md` had four instructions that fail if you follow them. The dev backend port has been 8099 since the Vite proxy default moved in June, so the documented `:8000` meant every API call failed. The release section described hand-writing a `RELEASE_NOTES.md` that is gitignored and does not exist, then tagging by hand, which `bump-version.ps1` has done in one guarded command since 3.4.1. It sent people to `MEMORY.md` for architecture decisions that live in `docs/DECISIONS.md`, and told them to follow existing Tailwind patterns while the codebase migrates off Tailwind. It now also says the things that were never written down anywhere: run uvicorn from the repo root, use `python -m pytest`, and turn on the pre-commit secret guard.
+
+- 🗺️ **The README describes 3.13, not 3.0.** Its file date has been misleading for months, because the release script rewrites exactly one line of it, the version badge, on every release. The last real content edit was 5 August and six releases have landed since. Backups and offline operation were missing entirely, the roadmap block still said v3.0 was current, and the project tree omitted `macOS/`, `Specs/`, `scripts/` and twenty of the thirty-three documents.
+
+- 🧾 **`.env.example` lists every setting the backend reads.** Twelve variables were missing, and the two model defaults it did carry disagreed with what `docker-compose.yml` ships. Four runtime switches were documented nowhere at all, including `OPENMEMO_DISABLE_TELEGRAM`, which any second backend must set: Telegram hands each message to exactly one caller, so a second poller does not duplicate your phone captures, it steals them.
+
+- 🚧 **The deployment guide stops telling you to publish your library.** It walked you through putting openMemo on a public hostname with a tunnel. There is no login by design, so that hands the whole library to anyone who finds the URL, and the compose file has said the opposite in a comment since 3.8.0 bound everything to loopback. Mesh is now named as the supported way to reach your library from another machine, and the tunnel instructions require authentication in front of them. The service table also stops describing the ChromaDB container as the vector database; the backend uses an embedded client and never contacts it.
+
+- ❓ **The FAQ knows about the last four months.** It advertised a 50MB upload cap when the real default is 5GB and adjustable, and said nothing about two-computer sync, phone capture, backups or offline use. It now also carries the recovery for the `unable to open database file` lockout that a stray host process causes.
+
+- 🔐 **The security policy supports the version that ships.** It claimed support for `1.7.x`, twelve minor releases back, which read as the project not supporting itself.
+
+- 📌 **`MEMORY.md` no longer states three things that stopped being true.** It gave Tailwind `@layer` configuration as the styling decision, said `OLLAMA_HOSTS` must be a JSON array when a validator has accepted a plain comma-separated list for several releases, and described the app as having no auth gate at all, which skips both the macOS launch PIN and the passcode on the Hidden section.
+
+- 🧱 **The roadmap's Shipped list runs to 3.13.0.** It stopped at v3.1.0 and still had Mesh marked as in progress with nine unchecked phases, all of which shipped on 3 August.
+
 ---
 ## [3.13.0] - 2026-08-19
 
