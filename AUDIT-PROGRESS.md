@@ -19,6 +19,9 @@ Legend: ✅ done and committed · 🔄 in progress · ⏳ queued · 🔒 waiting
 | ✅ `SECURITY.md` | Supported: `1.7.x` | Supported: `3.13.x`, with a line saying fixes land on the newest release rather than being backported |
 | ✅ `.env.example` | 12 vars missing, 2 defaults contradicting compose and the README | Every var `backend/config.py` reads, plus the four runtime switches (`OPENMEMO_INSTALL`, `OPENMEMO_DISABLE_TELEGRAM`, `OPENMEMO_DISABLE_JOB_WORKERS`, `OPENMEMO_MESH_PORT`) that were documented nowhere |
 | ✅ `README.md` | Content 14 days old, roadmap said v3.0 current, dev port wrong, docs list missed 20 of 33 files | Backups and offline sections added, roadmap says v3.13, dev port fixed with the two traps spelled out, full docs tree, issue links point at the current forms |
+| ✅ `docs/deployment.md` | 105 days old. Told you to expose the app publicly, wrong ports throughout | Correct port table, the loopback-only reason spelled out, Mesh named as the supported answer, a tunnel now requires auth in front of it |
+| ✅ `docs/faq.md` | 105 days old. Claimed a 50MB upload cap | 5GB default and how to uncap it, plus Mesh, phone capture, backups, offline, and the WAL lockout recovery |
+| ✅ `Specs/ROADMAP.md` | Shipped list stopped at v3.1.0 | 3.2 through 3.13 written into Shipped, the Mesh milestone flipped from IN PROGRESS to shipped, and a note that the lower sections are not in version order |
 | ✅ `MEMORY.md` | 3 false decisions, stack table predating Mesh, Music, Spaces, Whisper and the job queue | Rewritten. Corrects the Tailwind claim, the `OLLAMA_HOSTS` claim and "no auth gate", and adds the traps that actually cost time |
 
 ---
@@ -28,9 +31,6 @@ Legend: ✅ done and committed · 🔄 in progress · ⏳ queued · 🔒 waiting
 | File | Problem | Status |
 |---|---|---|
 | `architecture-map.html` | 43 backend modules missing, including all of Mesh, Music and Spaces | ⏳ |
-| `docs/deployment.md` | 105 days old. Documents exposing the app publicly, which the compose file now forbids. Wrong ports throughout | ⏳ |
-| `docs/faq.md` | 105 days old. Says 50MB upload cap, real default is 5GB | ⏳ |
-| `Specs/ROADMAP.md` | Shipped list stops at v3.1.0, missing 3.2 through 3.13 | ⏳ |
 
 ---
 
