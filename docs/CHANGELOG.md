@@ -7,6 +7,9 @@ All notable changes to OpenMemo are documented here.
 
 <!-- Add entries here as work lands: ### Added / ### Changed / ### Fixed -->
 
+---
+## [3.13.1] - 2026-08-19
+
 ### Removed
 
 - 🧹 **The ChromaDB container is gone, and it was never doing anything.** `docker-compose.yml` had carried a `chromadb` service since the first commit. The backend has never spoken to it: `backend/db/chroma_client.py` opens an embedded client against a folder on your disk, and there is no HTTP client anywhere in the codebase. Two independent reviews then found it was worse than idle. The compose file mounted your real vector store into the container at the path Chroma used to use, and the image had since moved, so the mount never took effect. The container was serving its own empty 188KB database with zero collections while your actual store, 27MB and 1069 embeddings, sat beside it with exactly one writer. Nothing was ever corrupted, and that was checked rather than assumed: the integrity check passes, the schema matches the pinned client version, and the file is not in the journal mode the bind-mount hazard needs. What it did carry was a live landmine. Your store was mounted writable into an image pinned to `latest`, so a future version that moved its path back would have opened your store and upgraded it one way, past what the app can read. That is retired now. The store itself is untouched, and applying the change needs `docker compose up -d --remove-orphans`, because plain `up -d` leaves the old container running. Written up with the exact block for restoring it in ADR-026.
