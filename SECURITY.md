@@ -19,7 +19,7 @@ If you discover a security vulnerability in OpenMemo, please report it responsib
 
 **Please do NOT open a public GitHub issue for security bugs.**
 
-Instead, email us at **security@openmemo.app** with:
+Instead, email us at **dev@izo.red** with:
 - A description of the vulnerability
 - Steps to reproduce
 - Potential impact

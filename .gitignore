@@ -15,8 +15,6 @@ Specs/*
 !Specs/multimedia-icon-animation.md
 !Specs/worktree-dev-setup-issues.md
 
-# Local design reference docs
-docs/DESIGN_MIGRATION.md
 .env
 secrets/
 
