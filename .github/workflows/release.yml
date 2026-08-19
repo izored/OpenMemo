@@ -143,11 +143,54 @@ jobs:
             const version = context.ref.replace('refs/tags/', '');
             const owner = context.repo.owner;
             const repoName = context.repo.repo;
+
+            // izored/izored renders this description with its own markdown
+            // subset, not GitHub's: "## " section headers, "  • " rows, the
+            // leading term backticked, then an em dash before the explanation.
+            // Dispatching the raw changelog section sent "###" headings, bold
+            // and per-item emoji straight through, so every entry up to and
+            // including v3.13.0 rendered in the wrong format. Only this
+            // dispatched copy is rewritten; the GitHub release body above
+            // stays the verbatim section.
+            const toRow = (body) => {
+              const text = body.replace(/^[^\p{L}\p{N}`*]+/u, '');
+              let term, rest;
+              const bold = text.match(/^\*\*(.+?)\*\*\s*([\s\S]*)$/);
+              if (bold) {
+                term = bold[1];
+                rest = bold[2];
+              } else {
+                const split = text.match(/^(.+?[.:!?])\s+([\s\S]*)$/);
+                if (split) { term = split[1]; rest = split[2]; }
+                else { term = text; rest = ''; }
+              }
+              term = term.replace(/\*\*/g, '').replace(/[.:!?]+\s*$/, '').trim();
+              rest = rest.replace(/\*\*/g, '').trim();
+              return rest ? '  • `' + term + '` — ' + rest : '  • `' + term + '`';
+            };
+            const toProfileFormat = (section) => {
+              const out = [];
+              for (const raw of section.split('\n')) {
+                const line = raw.trim();
+                if (!line) { out.push(''); continue; }
+                if (/^-{3,}$/.test(line)) continue;
+                if (/^#{2,6}\s*\[\d+\.\d+\.\d+\]/.test(line)) continue;
+                const heading = line.match(/^#{2,6}\s+(.*)$/);
+                if (heading) { out.push('## ' + heading[1].trim()); continue; }
+                const bullet = line.match(/^[-*+]\s+(.*)$/);
+                if (bullet) { out.push(toRow(bullet[1])); continue; }
+                out.push(line.replace(/\*\*/g, ''));
+              }
+              return out.join('\n').replace(/\n{3,}/g, '\n\n').trim();
+            };
+
             // repository_dispatch caps client_payload around 64KB — v3.0.0's
             // 108KB body was rejected outright and the profile entry silently
             // never happened. Truncate at a line boundary and link the rest.
+            // Convert first: truncating raw markdown and then converting could
+            // cut a bullet in half and leave a dangling term.
             const MAX_DESC = 55000;
-            let description = (process.env.RELEASE_BODY || '').trim()
+            let description = toProfileFormat(process.env.RELEASE_BODY || '')
               || `${version} released`;
             if (description.length > MAX_DESC) {
               const cut = description.lastIndexOf('\n', MAX_DESC);

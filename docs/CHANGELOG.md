@@ -7,6 +7,10 @@ All notable changes to OpenMemo are documented here.
 
 <!-- Add entries here as work lands: ### Added / ### Changed / ### Fixed -->
 
+### Fixed
+
+- 🔤 **The profile site gets the changelog in the shape it renders.** Releases are announced to the profile repo automatically, and what got sent was the changelog section exactly as it appears here: `###` headings, bold lead-ins, an emoji on every item. That page reads a different subset, `##` headings and rows that open with a bullet, the headline in backticks and then an em dash, so every announcement from the first one to v3.13.0 arrived in a format its renderer was never going to lay out properly. Nobody saw an error because there is nothing to error on: it published, it just looked wrong. The workflow converts the section before sending it now. The GitHub release body is untouched and still the full changelog, word for word.
+
 ---
 ## [3.13.0] - 2026-08-19
 
