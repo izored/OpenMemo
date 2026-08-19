@@ -165,7 +165,15 @@ jobs:
                 else { term = text; rest = ''; }
               }
               term = term.replace(/\*\*/g, '').replace(/[.:!?]+\s*$/, '').trim();
-              rest = rest.replace(/\*\*/g, '').trim();
+              // The changelog has had two bullet styles. Current entries end the
+              // bold term with a full stop and start straight into the prose;
+              // entries up to v2.0.x wrote "**Term** — prose", already carrying
+              // the separator this format adds. Without stripping it those rows
+              // render "` — — prose".
+              rest = rest.replace(/\*\*/g, '').trim()
+                .replace(/^[—–]\s*/, '')
+                .replace(/^[-:](\s+|$)/, '')
+                .trim();
               return rest ? '  • `' + term + '` — ' + rest : '  • `' + term + '`';
             };
             const toProfileFormat = (section) => {
