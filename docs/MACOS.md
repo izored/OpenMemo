@@ -171,7 +171,9 @@ Everything writable lives outside the (read-only) app bundle, in:
 ```
 
 That folder is your library. Copy it somewhere to keep a spare, and leave it
-alone when you update: replacing the app never touches it (section 3).
+alone when you update: replacing the app never touches it (section 3). What
+openMemo keeps on its own, and what each copy protects against, is written up
+in [Backup and restore](BACKUP-AND-RESTORE.md).
 
 Deleting it does reset the app completely, and it is the only way to lose
 everything at once. It is not a troubleshooting step. Reinstalling the app does

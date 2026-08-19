@@ -1,4 +1,5 @@
 """Backup and restore API — downloadable zip snapshots, one-click restore."""
+import gzip
 import io
 import json
 import logging
@@ -23,6 +24,74 @@ router = APIRouter(prefix="/api/backup", tags=["backup"])
 _META = "backup_meta.json"
 _DB = "openmemo.db"
 _FILES_PREFIX = "files/"
+
+# Gzip expands, so the uploaded size is not a bound on what lands in memory.
+# Generous enough for any real library, small enough to stop a decompression
+# bomb from taking the process down.
+_MAX_DB_BYTES = 4 * 1024**3
+
+_SQLITE_MAGIC = b"SQLite format 3\x00"
+
+
+def _gunzip_capped(raw: bytes) -> bytes:
+    """Decompress a gzip payload, refusing anything absurd."""
+    out = io.BytesIO()
+    try:
+        with gzip.GzipFile(fileobj=io.BytesIO(raw)) as gz:
+            while True:
+                chunk = gz.read(1024 * 1024)
+                if not chunk:
+                    break
+                out.write(chunk)
+                if out.tell() > _MAX_DB_BYTES:
+                    raise HTTPException(
+                        status_code=413, detail="That backup is too large to restore"
+                    )
+    except (OSError, EOFError):
+        raise HTTPException(status_code=400, detail="That .gz file is corrupt")
+    return out.getvalue()
+
+
+def _read_payload(raw: bytes) -> tuple[str, bytes, zipfile.ZipFile | None, list[str]]:
+    """Understand either kind of backup this app produces.
+
+    Two formats exist, and only one of them used to be restorable. Settings
+    hands you a zip (metadata plus the database, plus media for a full scope).
+    The automatic daily snapshots, and the copy the Mac app takes before an
+    update, are written straight to disk as gzipped SQLite. Those were real
+    backups that the restore endpoint rejected at the first line and the file
+    picker would not even let you select, which made a year of daily snapshots
+    look like insurance and behave like nothing.
+
+    Returns (scope, database bytes, the zip if there was one, its names).
+    """
+    if raw[:2] == b"\x1f\x8b":
+        # A bare gzipped database. It carries no metadata, and it never holds
+        # media, so it restores exactly like a structure-scope archive.
+        return "structure", _gunzip_capped(raw), None, []
+
+    try:
+        zf = zipfile.ZipFile(io.BytesIO(raw))
+    except zipfile.BadZipFile:
+        raise HTTPException(
+            status_code=400, detail="Not an OpenMemo backup (expected a .zip or a .db.gz)"
+        )
+
+    names = zf.namelist()
+    if _META not in names:
+        raise HTTPException(
+            status_code=400,
+            detail="Missing backup_meta.json — not an OpenMemo backup",
+        )
+    if _DB not in names:
+        raise HTTPException(status_code=400, detail="Backup is missing the database file")
+
+    try:
+        meta = json.loads(zf.read(_META))
+    except Exception:
+        raise HTTPException(status_code=400, detail="Backup metadata is unreadable")
+
+    return meta.get("scope", "structure"), zf.read(_DB), zf, names
 
 
 def _upload_paths() -> tuple[list[Path], int]:
@@ -158,21 +227,14 @@ async def inspect_backup(file: UploadFile = File(...)):
     irreversible part, not after.
     """
     raw = await file.read()
-    try:
-        zf = zipfile.ZipFile(io.BytesIO(raw))
-    except zipfile.BadZipFile:
-        raise HTTPException(status_code=400, detail="Not a valid zip file")
+    scope, db_bytes, zf, names = _read_payload(raw)
+    meta = {}
+    if zf is not None:
+        try:
+            meta = json.loads(zf.read(_META))
+        except Exception:
+            meta = {}
 
-    names = zf.namelist()
-    if _META not in names:
-        raise HTTPException(status_code=400, detail="Missing backup_meta.json — not an OpenMemo backup")
-
-    try:
-        meta = json.loads(zf.read(_META))
-    except Exception:
-        raise HTTPException(status_code=400, detail="Backup metadata is unreadable")
-
-    scope = meta.get("scope", "structure")
     archive_files = [n for n in names if n.startswith(_FILES_PREFIX) and not n.endswith("/")]
 
     files_dir = Path(settings.FILES_DIR)
@@ -188,37 +250,51 @@ async def inspect_backup(file: UploadFile = File(...)):
         "scope": scope,
         "created_at": meta.get("created_at"),
         "app_version": meta.get("app_version"),
-        "has_database": _DB in names,
+        "has_database": bool(db_bytes),
         "media_in_archive": len(archive_files),
         "media_currently_stored": current,
         # The honest headline for a confirmation dialog.
-        "will_replace_database": _DB in names,
+        "will_replace_database": bool(db_bytes),
         "will_move_aside": current if (scope == "full" and archive_files) else 0,
     }
 
 
+def _free_quarantine_dir() -> Path:
+    """A pre-restore folder that is not already in use.
+
+    The stamp is per second, so two restores in the same second would land in
+    the same folder and the second would overwrite the first one's copy of the
+    database. Silently destroying the safety copy is the exact failure this
+    whole path exists to prevent, so the name gets a suffix rather than a
+    collision.
+    """
+    root = Path(settings.DATA_DIR) / "pre-restore"
+    stamp = datetime.utcnow().strftime("%Y%m%d-%H%M%S")
+    candidate = root / stamp
+    n = 2
+    while candidate.exists():
+        candidate = root / f"{stamp}-{n}"
+        n += 1
+    return candidate
+
+
 @router.post("/restore")
 async def restore_backup(file: UploadFile = File(...)):
-    """Restore from an uploaded backup zip. Replaces the database and (for full
-    backups) all uploaded files. This operation is irreversible."""
-    raw = await file.read()
+    """Restore from an uploaded backup. Accepts either the .zip that Settings
+    produces or a .db.gz snapshot. Replaces the database and, for a full
+    archive, the uploaded files."""
+    return await _perform_restore(await file.read())
 
-    try:
-        zf = zipfile.ZipFile(io.BytesIO(raw))
-    except zipfile.BadZipFile:
-        raise HTTPException(status_code=400, detail="Not a valid zip file")
 
-    names = zf.namelist()
-    if _META not in names:
-        raise HTTPException(
-            status_code=400,
-            detail="Missing backup_meta.json — not an OpenMemo backup",
-        )
-    if _DB not in names:
-        raise HTTPException(status_code=400, detail="Backup is missing the database file")
-
-    meta = json.loads(zf.read(_META))
-    scope = meta.get("scope", "structure")
+async def _perform_restore(raw: bytes) -> dict:
+    """The restore itself, shared by the upload and on-disk-snapshot routes."""
+    scope, db_bytes, zf, names = _read_payload(raw)
+    meta: dict = {}
+    if zf is not None:
+        try:
+            meta = json.loads(zf.read(_META))
+        except Exception:
+            meta = {}
 
     db_path = Path(settings.DATA_DIR) / "openmemo.db"
     files_dir = Path(settings.FILES_DIR)
@@ -239,14 +315,42 @@ async def restore_backup(file: UploadFile = File(...)):
                     raise HTTPException(status_code=400, detail="Backup contains an unsafe file path")
                 safe_entries.append((name, dest))
 
+    # Everything this restore displaces goes in one dated folder, so a wrong
+    # restore is one folder to walk back rather than a scavenger hunt.
+    qdir = _free_quarantine_dir()
+
     # Write restored DB to a temp file first, then atomically replace.
     with tempfile.TemporaryDirectory() as tmp:
         tmp_db = Path(tmp) / "openmemo.db"
-        tmp_db.write_bytes(zf.read(_DB))
+        tmp_db.write_bytes(db_bytes)
 
         # Validate SQLite magic bytes before touching the live database.
-        if tmp_db.read_bytes()[:16] != b"SQLite format 3\x00":
+        if tmp_db.read_bytes()[:16] != _SQLITE_MAGIC:
             raise HTTPException(status_code=400, detail="Database file is not a valid SQLite database")
+
+        # Keep what we are about to overwrite.
+        #
+        # The media path below has moved files aside rather than deleting them
+        # since the incident that cost this project 435 of them, on the
+        # principle that a recovery tool should not be the most destructive
+        # button in the app. The database never got the same treatment: it was
+        # copied straight over. So restoring a January backup to recover one
+        # deleted memo took every memo since January with it, permanently,
+        # while the photos from the same period came back fine.
+        #
+        # Named pre-restore-*, which the rotation in core/autobackup.py does not
+        # match, because a safety copy a routine can delete on a schedule is not
+        # a safety copy.
+        try:
+            from backend.core.autobackup import write_snapshot
+
+            saved = write_snapshot(qdir / "openmemo.db.gz")
+            if saved:
+                log.warning("restore: previous database saved to %s", saved)
+        except Exception:
+            # A library with no database yet is the ordinary case here, and a
+            # first-ever restore must not be blocked by having nothing to keep.
+            log.warning("restore: could not save the previous database", exc_info=True)
 
         # Release all pooled connections before replacing the file.
         from backend.db.database import engine
@@ -325,8 +429,6 @@ async def restore_backup(file: UploadFile = File(...)):
             # restore of the wrong archive is undoable.
             existing = [p for p in files_dir.iterdir() if p.name != "thumbs"]
             if existing:
-                stamp = datetime.utcnow().strftime("%Y%m%d-%H%M%S")
-                qdir = Path(settings.DATA_DIR) / "pre-restore" / stamp
                 qdir.mkdir(parents=True, exist_ok=True)
                 for item in existing:
                     try:
@@ -357,6 +459,9 @@ async def restore_backup(file: UploadFile = File(...)):
         "ok": True,
         "scope": scope,
         "version": meta.get("app_version"),
+        # Where the database we replaced went. Present even for a structure
+        # restore, which moves no media at all.
+        "previous_database": str(qdir / "openmemo.db.gz") if (qdir / "openmemo.db.gz").exists() else None,
         # Where the replaced media went, so the UI can say it and a wrong
         # restore can be walked back.
         "quarantine": quarantine,
@@ -374,6 +479,35 @@ async def list_auto_backups():
         "keep": KEEP,
         "total_bytes": sum(s["bytes"] for s in snaps),
     }
+
+
+@router.post("/auto/restore")
+async def restore_auto_backup(name: str = Query(..., description="Snapshot filename")):
+    """Restore one of the automatic snapshots, without a round trip through the
+    user's file manager.
+
+    These live on this machine, in a folder the app already owns. Making people
+    locate them in Finder and upload them back into the app that wrote them is
+    the reason a year of daily backups could feel like no backups at all.
+    """
+    from backend.core.autobackup import backup_dir
+
+    # The name comes from the client, so it is matched against the directory
+    # listing rather than joined onto a path. Nothing outside that folder, and
+    # nothing that is not a snapshot, can be named.
+    directory = backup_dir()
+    try:
+        candidates = {p.name for p in directory.iterdir() if p.is_file()}
+    except OSError:
+        candidates = set()
+    if name not in candidates or not name.endswith(".db.gz"):
+        raise HTTPException(status_code=404, detail="No such snapshot")
+
+    target = directory / name
+    if target.resolve().parent != directory.resolve():
+        raise HTTPException(status_code=400, detail="No such snapshot")
+
+    return await _perform_restore(target.read_bytes())
 
 
 @router.post("/auto")
