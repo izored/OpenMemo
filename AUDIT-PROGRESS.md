@@ -22,15 +22,14 @@ Legend: ✅ done and committed · 🔄 in progress · ⏳ queued · 🔒 waiting
 | ✅ `docs/deployment.md` | 105 days old. Told you to expose the app publicly, wrong ports throughout | Correct port table, the loopback-only reason spelled out, Mesh named as the supported answer, a tunnel now requires auth in front of it |
 | ✅ `docs/faq.md` | 105 days old. Claimed a 50MB upload cap | 5GB default and how to uncap it, plus Mesh, phone capture, backups, offline, and the WAL lockout recovery |
 | ✅ `Specs/ROADMAP.md` | Shipped list stopped at v3.1.0 | 3.2 through 3.13 written into Shipped, the Mesh milestone flipped from IN PROGRESS to shipped, and a note that the lower sections are not in version order |
+| ✅ `architecture-map.html` | 44 nodes, frozen 29 May, missing 43 backend modules | 99 nodes and 134 edges. Three new clusters (Mesh, Media/music/capture, Integrity/backups/locks), every backend module and every frontend page now present, plus filter chips for Mesh, Music, Phone capture, Job queue, Backups and Spaces |
 | ✅ `MEMORY.md` | 3 false decisions, stack table predating Mesh, Music, Spaces, Whisper and the job queue | Rewritten. Corrects the Tailwind claim, the `OLLAMA_HOSTS` claim and "no auth gate", and adds the traps that actually cost time |
 
 ---
 
 ## Queued
 
-| File | Problem | Status |
-|---|---|---|
-| `architecture-map.html` | 43 backend modules missing, including all of Mesh, Music and Spaces | ⏳ |
+Nothing. Every file in the audit that could be updated has been.
 
 ---
 

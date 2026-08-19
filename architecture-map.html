@@ -110,16 +110,20 @@
 
 const COLORS = {
   client:'#4ea1ff', entry:'#4ea1ff', route:'#7bd389', service:'#c792ea',
-  db:'#ffb86b', external:'#ff6b9d', critical:'#ff3860'
+  db:'#ffb86b', external:'#ff6b9d', critical:'#ff3860',
+  mesh:'#00d4a8', mediac:'#ffd166', safety:'#ff8fa3'
 };
 
 const clusters = [
-  { id:'client',   label:'Client · React SPA',  x:20,   y:50,  w:250, h:780, color:'client'  },
-  { id:'entry',    label:'Server Entry',        x:300,  y:50,  w:250, h:530, color:'entry'    },
-  { id:'route',    label:'API Routes',          x:580,  y:50,  w:250, h:870, color:'route'    },
-  { id:'core',     label:'Core · Services',     x:860,  y:50,  w:250, h:1185,color:'service'  },
-  { id:'data',     label:'Data Stores',         x:1140, y:50,  w:250, h:640, color:'db'       },
-  { id:'external', label:'External APIs',       x:1420, y:50,  w:250, h:500, color:'external' },
+  { id:'client',   label:'Client · React SPA',  x:20,   y:50,   w:250, h:1110, color:'client'  },
+  { id:'entry',    label:'Server Entry',        x:300,  y:50,   w:250, h:650,  color:'entry'    },
+  { id:'route',    label:'API Routes',          x:580,  y:50,   w:250, h:1010, color:'route'    },
+  { id:'core',     label:'Core · Services',     x:860,  y:50,   w:250, h:1260, color:'service'  },
+  { id:'data',     label:'Data Stores',         x:1140, y:50,   w:250, h:660,  color:'db'       },
+  { id:'external', label:'External APIs',       x:1420, y:50,   w:250, h:910,  color:'external' },
+  { id:'mesh',     label:'Mesh · peer sync',    x:20,   y:1360, w:530, h:730,  color:'mesh'     },
+  { id:'mediac',   label:'Media · music · capture', x:580, y:1360, w:530, h:730, color:'mediac' },
+  { id:'safety',   label:'Integrity · backups · locks', x:1140, y:1360, w:530, h:290, color:'safety' },
 ];
 
 // N(id, cluster, label, sub, x, y, w, h, color, opts)
@@ -134,7 +138,7 @@ const nodes = [
     role:'Declares the 5 client routes inside a single <Layout> shell.',
     plain:'The switchboard for the website. Decides which screen to show for each web address.',
     path:'frontend/src/App.tsx:12',
-    notes:['Routes: / , /collections , /memo/:id , /ask , /settings','Exactly 5 routes — no dead or unrouted screens'],
+    notes:['Routes: / , /collections , /memo/:id , /ask , /music , /spaces , /space/:id , /hidden , /settings','Nine routed screens, no dead or unrouted ones'],
     tag:['overview','all'] }),
   N('layout','client','Layout.tsx','sidebar + outlet',40,164,NW,NH,'client',{
     role:'App shell: push-sidebar + <Outlet> for the active page.',
@@ -158,19 +162,19 @@ const nodes = [
     role:'Bento-grid settings: stats, theme toggle, backup/restore, maintenance.',
     plain:'The settings screen — appearance, storage stats, backups, and danger-zone reset.',
     path:'frontend/src/pages/SettingsPage.tsx',
-    notes:['Owns the manual dark-mode toggle (.dark class)','Calls backupApi / maintenanceApi / settingsApi'],
+    notes:['Theme is the data-theme attribute on <html> (light | hi), never a .dark class','Cards are draggable and their order is remembered','Calls backupApi / maintenanceApi / settingsApi / meshApi'],
     tag:['settings','all'] }),
   N('app-store','client','appStore.ts','Zustand UI state',40,460,NW,NH,'client',{
     role:'Zustand store: sidebar, filters, active collection, theme, chatModel.',
     plain:'A small in-browser memory holding UI preferences like the chosen chat model and theme.',
     path:'frontend/src/stores/appStore.ts',
-    notes:['UI-only state; data lives in TanStack Query cache','Persists theme to localStorage key openmemo_settings','bgColor was removed — never re-add'],
+    notes:['UI-only state; data lives in TanStack Query cache','Persists theme to localStorage key openmemo_settings','applyTweaks() writes the appearance vars onto <html>'],
     tag:['overview','chat','all'] }),
   N('ask-panel','client','AskMemoPanel.tsx','chat + SSE reader',40,560,NW,NH,'client',{
     role:'Chat UI: sends query, reads the SSE stream, renders tokens + source chips.',
     plain:'The chat box. You type a question and it shows the answer streaming in word-by-word.',
     path:'frontend/src/components/AskMemoPanel.tsx:44',
-    notes:['Parses "data: " SSE lines for sources/token/done','Reuses chatModel from appStore','line 126: still uses Tailwind prose (theming bug)'],
+    notes:['Parses "data: " SSE lines for sources/token/done','Reuses chatModel from appStore','Rendered markdown goes through typeset.css (.om-prose), not Tailwind prose'],
     tag:['overview','chat','all'], critical:true }),
   N('api-client','client','lib/api.ts','fetch wrappers',40,634,NW,NH,'client',{
     role:'Single source for every fetch call — memo/ingest/collection/chat/search/...',
@@ -401,6 +405,342 @@ const nodes = [
     path:'extractor.py:191',
     notes:['https://www.google.com/s2/favicons?domain=...&sz=32'],
     tag:['ingest','media','all'] }),
+
+  /* ---------- CLIENT · pages added since 3.2 ---------- */
+  N('music-page','client','MusicPage.tsx','playlists + queue',40,708,NW,NH,'client',{
+    role:'The music library: playlists, albums, per-track state, play queue.',
+    plain:'The music page. Playlists you imported, and the tracks inside them.',
+    path:'frontend/src/pages/MusicPage.tsx',
+    notes:['Full-bleed cover art with the title overlaid, never a separate title bar','Shares one audio element with the sidebar player'],
+    tag:['overview','music','media','all'] }),
+  N('spaces-page','client','SpacesPage.tsx','all spaces',40,782,NW,NH,'client',{
+    role:'Index of every Space, each with its cover, colour and counts.',
+    plain:'The screen listing the big areas of your life you have grouped things under.',
+    path:'frontend/src/pages/SpacesPage.tsx',
+    notes:['ADR-020'],
+    tag:['overview','spaces','all'] }),
+  N('space-page','client','SpacePage.tsx','one space',40,856,NW,NH,'client',{
+    role:'A single Space: its memos, its collections, its filters.',
+    plain:'One area of your life, with everything filed under it.',
+    path:'frontend/src/pages/SpacePage.tsx',
+    notes:['Covers sync before their contents, so a Space never appears artwork-less'],
+    tag:['spaces','all'] }),
+  N('hidden-page','client','HiddenPage.tsx','passcode gate',40,930,NW,NH,'client',{
+    role:'The hidden section, behind a passcode gate.',
+    plain:'A private area you unlock with a code.',
+    path:'frontend/src/pages/HiddenPage.tsx',
+    notes:['One of the two deliberate exceptions to no-login: this and the macOS launch PIN'],
+    tag:['settings','all'] }),
+  N('ask-page','client','AskMemoPage.tsx','full-page Ask',40,1004,NW,NH,'client',{
+    role:'Full-page Ask Memo with history, mode toggle and the composer dock.',
+    plain:'The big question-and-answer screen for your whole library.',
+    path:'frontend/src/pages/AskMemoPage.tsx',
+    notes:['Memos mode cites sources; Chat mode never touches the library','ADR-022 locks the retrieval flow'],
+    tag:['overview','chat','all'] }),
+
+  N('collections-page','client','CollectionsPage.tsx','all collections',40,1078,NW,NH,'client',{
+    role:'Index of every collection, with covers, emoji, counts and drop targets.',
+    plain:'The screen listing the folders you have filed memos into.',
+    path:'frontend/src/pages/CollectionsPage.tsx',
+    notes:['Cards are drop targets for dnd-kit drags coming off the dashboard'],
+    tag:['overview','all'] }),
+
+  /* ---------- ENTRY ---------- */
+  N('install','entry','install.py','which install is this',320,544,NW,NH,'entry',{
+    role:'Resolves macos | docker | dev so the UI shows the right copy and paths.',
+    plain:'Works out whether openMemo is the Mac app, the Docker stack, or a code checkout.',
+    path:'backend/core/install.py:33',
+    notes:['OPENMEMO_INSTALL wins, then /.dockerenv, then inference','A wrong answer hands a Mac user Docker update instructions'],
+    tag:['overview','settings','all'] }),
+  N('headless','entry','headless.py','browser fetches',320,618,NW,NH,'entry',{
+    role:'Headless browser fetch for pages a plain request cannot read.',
+    plain:'Opens a page like a real browser would, for sites that block simple downloads.',
+    path:'backend/core/headless.py',
+    notes:['Second rung of the Instagram resolution ladder'],
+    tag:['ingest','media','all'] }),
+
+  /* ---------- ROUTES ---------- */
+  N('music-router','route','music.py','playlists + tracks',600,836,NW,NH,'route',{
+    role:'Playlist import, per-track download, re-download, cover edits, queue state.',
+    plain:'The part of the server the music page talks to.',
+    path:'backend/api/music.py',
+    notes:['Playlist ingest defaults to just-this-one; downloading is an unchecked opt-in'],
+    tag:['music','media','all'] }),
+  N('spaces-router','route','spaces.py','space CRUD',600,910,NW,NH,'route',{
+    role:'Spaces: create, edit, cover, colour, membership.',
+    plain:'The part of the server that stores your Spaces.',
+    path:'backend/api/spaces.py',
+    notes:['ADR-020','Isolation covered by test_spaces_isolation.py'],
+    tag:['spaces','all'] }),
+  N('mesh-router','route','mesh.py','pair · sync · journal',600,984,NW,NH,'route',{
+    role:'Mesh control surface: enable, pair, device list, conflicts, journal, leave.',
+    plain:'The settings screen for syncing with your other computer talks to this.',
+    path:'backend/api/mesh.py',
+    notes:['GET /api/settings must never return mesh_secret; that leak was fixed in 3.6.0'],
+    tag:['mesh','all'], critical:true }),
+
+  /* ---------- CORE ---------- */
+  N('jobs','core','jobs.py','durable queue',880,1154,NW,NH,'service',{
+    role:'Persistent job queue: bounded concurrency, priority, retry, resumable.',
+    plain:'The waiting list of background work, which survives a restart.',
+    path:'backend/core/jobs.py',
+    notes:['Replaced 25 unbounded background_tasks sites that lost everything on restart','OPENMEMO_DISABLE_JOB_WORKERS=1 skips the pool; the test suite sets it'],
+    tag:['overview','ingest','jobs','all'], critical:true }),
+  N('job-handlers','core','job_handlers.py','one handler per kind',880,1228,NW,NH,'service',{
+    role:'Registers the handler for each job type the queue can run.',
+    plain:'Says what to actually do for each kind of queued task.',
+    path:'backend/core/job_handlers.py',
+    notes:['Routing covered by test_job_routing.py'],
+    tag:['ingest','jobs','all'] }),
+
+  /* ---------- DATA ---------- */
+  N('backups','data','data/backups/','daily snapshots',1140,634,NW,NH,'db',{
+    role:'Compressed database snapshots, rotated, restorable from Settings.',
+    plain:'The automatic copies of your library, kept by date.',
+    path:'docs/BACKUP-AND-RESTORE.md',
+    notes:['Listed in Settings by date and size since 3.13.0','A macOS version change writes one before the new backend may start'],
+    tag:['backup','settings','all'] }),
+
+  /* ---------- EXTERNAL ---------- */
+  N('telegram','external','Telegram Bot API','polled outbound',1440,522,NW,NH,'external',{
+    role:'Your private bot. openMemo polls it; nothing is exposed inbound.',
+    plain:'The phone share sheet drops links into a bot, and your computer collects them.',
+    path:'backend/services/telegram_relay.py',
+    notes:['Undelivered messages are discarded after 24 hours; openMemo warns first','Telegram hands each message to exactly one caller, so a second poller steals captures'],
+    tag:['capture','all'] }),
+  N('gallery-dl','external','gallery-dl','Instagram media',1440,596,NW,NH,'external',{
+    role:'Fetches Instagram post media that yt-dlp cannot reach.',
+    plain:'The tool that pulls photos and reels off Instagram.',
+    path:'backend/core/instagram.py',
+    notes:['Top rung of the resolution ladder when a cookie file is present'],
+    tag:['ingest','media','all'] }),
+  N('apple-music','external','Apple Music','playlist metadata',1440,670,NW,NH,'external',{
+    role:'Playlist and track metadata for an Apple Music link.',
+    plain:'Where the track list comes from when you paste an Apple Music playlist.',
+    path:'backend/core/apple_music.py',
+    tag:['music','all'] }),
+  N('spotify','external','Spotify','playlist metadata',1440,744,NW,NH,'external',{
+    role:'Playlist and track metadata for a Spotify link.',
+    plain:'Where the track list comes from when you paste a Spotify playlist.',
+    path:'backend/core/playlist.py',
+    tag:['music','all'] }),
+  N('qobuz-relay','external','Music relay','lossless audio',1440,818,NW,NH,'external',{
+    role:'Community relay that returns the lossless file, matched by ISRC.',
+    plain:'A shared service that hands back the high quality audio file.',
+    path:'backend/core/music_relay.py',
+    notes:['Off by default since 3.9.0; a switch, not an assumption','Audio is sourced by ISRC, not from Spotify or Apple themselves','A hobbyist single point of failure; treat an outage as expected'],
+    tag:['music','all'] }),
+
+  /* ---------- MESH ---------- */
+  N('mesh-server','mesh','server.py','the listener',40,1400,NW,NH,'mesh',{
+    role:'The sync listener. Serves exactly one thing, on its own port.',
+    plain:'The door your other computer knocks on. Nothing else answers there.',
+    path:'backend/core/mesh/server.py:37',
+    notes:['Loopback only until Reachable on my network is switched on','OPENMEMO_MESH_PORT overrides 8770, which is what the convergence check needs'],
+    tag:['mesh','all'], critical:true }),
+  N('mesh-client','mesh','client.py','dials outward',40,1474,NW,NH,'mesh',{
+    role:'Outbound half of the sync conversation.',
+    plain:'The part that reaches out to your other computer.',
+    path:'backend/core/mesh/client.py',
+    tag:['mesh','all'] }),
+  N('mesh-protocol','mesh','protocol.py','the wire format',40,1548,NW,NH,'mesh',{
+    role:'Message shapes and versioning for everything on the wire.',
+    plain:'The agreed language the two computers speak.',
+    path:'backend/core/mesh/protocol.py',
+    notes:['Contract pinned by test_mesh_contract.py'],
+    tag:['mesh','all'] }),
+  N('mesh-session','mesh','session.py','encrypted channel',40,1622,NW,NH,'mesh',{
+    role:'Establishes the AES-256 session both sides sign into.',
+    plain:'Scrambles everything sent, using a key only your two computers hold.',
+    path:'backend/core/mesh/session.py',
+    tag:['mesh','all'] }),
+  N('mesh-pairing','mesh','pairing.py','12 word code',40,1696,NW,NH,'mesh',{
+    role:'Pairing handshake from a BIP39 code or a scanned QR.',
+    plain:'How the two machines first agree they belong together.',
+    path:'backend/core/mesh/pairing.py',
+    notes:['Guardrails in test_mesh_pairing_guardrails.py','Both failure modes were silent by design until 3.6.0 made them explain themselves'],
+    tag:['mesh','all'] }),
+  N('mesh-keystore','mesh','keystore.py','OS vault',40,1770,NW,NH,'mesh',{
+    role:'Stores the root secret in the operating system vault.',
+    plain:'Keeps the pairing secret in the Mac keychain or Windows account encryption, not a settings file.',
+    path:'backend/core/mesh/keystore.py',
+    notes:['Moved out of app settings in 3.6.0, where the settings API had been returning it in full'],
+    tag:['mesh','all'], critical:true }),
+  N('mesh-secret','mesh','secret.py','key derivation',40,1844,NW,NH,'mesh',{
+    role:'HKDF derivation of every per-purpose key from the root secret.',
+    plain:'Turns one secret into the several keys the sync needs.',
+    path:'backend/core/mesh/secret.py',
+    tag:['mesh','all'] }),
+  N('mesh-discovery','mesh','discovery.py','mDNS on the LAN',40,1918,NW,NH,'mesh',{
+    role:'Finds the paired device on the local network.',
+    plain:'How the machines spot each other at home without you typing an address.',
+    path:'backend/core/mesh/discovery.py',
+    notes:['The shout does not leave your network, which is why the magnet tier exists'],
+    tag:['mesh','all'] }),
+  N('mesh-magnet','mesh','magnet.py','fetch the recipe',40,1992,NW,NH,'mesh',{
+    role:'Syncs how to obtain media rather than the bytes, with the peer as backstop.',
+    plain:'Sends the recipe, not the 25 GB. Most media is refetched from where it came from.',
+    path:'backend/core/mesh/magnet.py',
+    notes:['This is why a joined laptop is usable in seconds instead of after a two hour bar'],
+    tag:['mesh','all'] }),
+  N('mesh-merge','mesh','merge.py','conflict resolution',300,1400,NW,NH,'mesh',{
+    role:'Pure merge functions, tested in both directions.',
+    plain:'Decides what happens when the same thing changed on both machines.',
+    path:'backend/core/mesh/merge.py',
+    notes:['Keep-both is the default; nothing is overwritten behind your back'],
+    tag:['mesh','all'], critical:true }),
+  N('mesh-apply','mesh','apply.py','writes the result',300,1474,NW,NH,'mesh',{
+    role:'Applies a merged change set to the local database.',
+    plain:'Puts the agreed result into your library.',
+    path:'backend/core/mesh/apply.py',
+    tag:['mesh','all'] }),
+  N('mesh-journal','mesh','journal.py','every sync, reversible',300,1548,NW,NH,'mesh',{
+    role:'Logs every synced write with the reason it decided what it did.',
+    plain:'A written record of each sync, and any of them can be undone.',
+    path:'backend/core/mesh/journal.py',
+    notes:['Written before the first sync happens, not bolted on after'],
+    tag:['mesh','all'] }),
+  N('mesh-changelog','mesh','changelog.py','change log + tombstones',300,1622,NW,NH,'mesh',{
+    role:'Row-level change log, including deletions.',
+    plain:'Records what changed, including what you deleted.',
+    path:'backend/core/mesh/changelog.py',
+    notes:['Without tombstones, a deleted collection came straight back from the other machine'],
+    tag:['mesh','all'] }),
+  N('mesh-rowstore','mesh','rowstore.py','row access',300,1696,NW,NH,'mesh',{
+    role:'Reads and writes the rows the sync engine works on.',
+    plain:'The layer that fetches and stores individual records for syncing.',
+    path:'backend/core/mesh/rowstore.py',
+    tag:['mesh','all'] }),
+  N('mesh-sync-state','mesh','sync_state.py','where we got to',300,1770,NW,NH,'mesh',{
+    role:'Per-peer sync position, so a resume does not start over.',
+    plain:'Remembers how far the last sync got.',
+    path:'backend/core/mesh/sync_state.py',
+    tag:['mesh','all'] }),
+  N('mesh-clock','mesh','clock.py','hybrid logical clock',300,1844,NW,NH,'mesh',{
+    role:'HLC ordering instead of wall-clock last-write-wins.',
+    plain:'Orders changes correctly even when the two clocks disagree.',
+    path:'backend/core/mesh/clock.py',
+    tag:['mesh','all'] }),
+  N('mesh-gate','mesh','_gate.py','off unless enabled',300,1918,NW,NH,'mesh',{
+    role:'The gate every Mesh path passes. Disabled costs a fresh install nothing.',
+    plain:'While Mesh is off, none of this runs at all.',
+    path:'backend/core/mesh/_gate.py',
+    notes:['Covered by test_mesh_gate.py'],
+    tag:['mesh','all'] }),
+
+  /* ---------- MEDIA · MUSIC · CAPTURE ---------- */
+  N('instagram','mediac','instagram.py','resolution ladder',600,1400,NW,NH,'mediac',{
+    role:'Three tier ladder: gallery-dl with cookies, then headless, then crawler.',
+    plain:'Gets Instagram posts, trying the best quality route first.',
+    path:'backend/core/instagram.py',
+    notes:['A reel is served as separate video and audio streams; muxing them is why reels used to arrive silent'],
+    tag:['ingest','media','capture','all'], critical:true }),
+  N('instagram-login','mediac','instagram_login.py','cookie session',600,1474,NW,NH,'mediac',{
+    role:'Holds the Instagram session so posts can be read at full resolution.',
+    plain:'Signing in so photos arrive uncropped instead of small and cropped.',
+    path:'backend/core/instagram_login.py',
+    tag:['ingest','media','all'] }),
+  N('playlist','mediac','playlist.py','playlist import',600,1548,NW,NH,'mediac',{
+    role:'Parses a playlist link into tracks, dedupes against what exists.',
+    plain:'Turns a pasted playlist link into a real list of songs.',
+    path:'backend/core/playlist.py',
+    notes:['Bulk download is an unchecked opt-in; a preselected whole playlist once started 100 downloads unasked'],
+    tag:['music','all'] }),
+  N('spotiflac','mediac','spotiflac.py','lossless match',600,1622,NW,NH,'mediac',{
+    role:'Matches a track to its lossless file by ISRC, with a search fallback.',
+    plain:'Finds the high quality version of a song.',
+    path:'backend/core/spotiflac.py',
+    notes:['The search fallback is why covers and karaoke versions used to land as the real song'],
+    tag:['music','all'] }),
+  N('apple-music-mod','mediac','apple_music.py','Apple playlists',600,1696,NW,NH,'mediac',{
+    role:'Reads an Apple Music playlist into tracks.',
+    plain:'Understands Apple Music links.',
+    path:'backend/core/apple_music.py',
+    tag:['music','all'] }),
+  N('music-relay','mediac','music_relay.py','relay session',600,1770,NW,NH,'mediac',{
+    role:'Talks to the lossless relay, including the one-off verification challenge.',
+    plain:'Handles the shared service that returns the audio file.',
+    path:'backend/core/music_relay.py',
+    notes:['The callback lands at /session-grant, a path the relay fixes; nginx forwards it explicitly','428 means no session was sent, 401 means it was rejected'],
+    tag:['music','all'] }),
+  N('transcribe','mediac','transcribe.py','faster-whisper',600,1844,NW,NH,'mediac',{
+    role:'Local speech to text, GPU or CPU, dozens of languages.',
+    plain:'Turns what was said into searchable text, on your machine.',
+    path:'backend/core/transcribe.py',
+    notes:['WHISPER_MODEL small is the CPU sweet spot; large-v3 wants a GPU','Transcripts sync as text, so joining a Mesh never re-runs this'],
+    tag:['media','audio','all'] }),
+  N('transcript','mediac','transcript.py','captions first',600,1918,NW,NH,'mediac',{
+    role:'Pulls the source captions when they exist, falls back to Whisper.',
+    plain:'Uses the video own subtitles when there are any, which is instant.',
+    path:'backend/core/transcript.py',
+    notes:['Transcript means what was said, not the caption written under the video'],
+    tag:['media','audio','all'] }),
+  N('audio-meta','mediac','audio_meta.py','tags + artwork',600,1992,NW,NH,'mediac',{
+    role:'Reads and writes audio metadata and embedded cover art.',
+    plain:'The title, artist and artwork inside an audio file.',
+    path:'backend/core/audio_meta.py',
+    tag:['music','media','all'] }),
+  N('localize-media','mediac','localize_media.py','make it local',860,1400,NW,NH,'mediac',{
+    role:'Downloads a linked video or audio and rewrites the memo to the local file.',
+    plain:'Pulls the media down so the memo survives the original being taken offline.',
+    path:'backend/core/localize_media.py',
+    notes:['Checks every video for sound, on every host'],
+    tag:['media','ingest','all'] }),
+  N('pictures','mediac','pictures.py','every image is a file',860,1474,NW,NH,'mediac',{
+    role:'Guarantees a displayed picture is a file on disk, never a remote URL.',
+    plain:'Saves the picture itself instead of pointing at someone else server.',
+    path:'backend/core/pictures.py',
+    notes:['Instagram serves images from signed links that expire, so a remote URL is a broken card later','Invariant held by test_picture_invariant.py'],
+    tag:['media','ingest','all'], critical:true }),
+  N('sniff-media','mediac','sniff_media.py','what is this file',860,1548,NW,NH,'mediac',{
+    role:'Identifies each returned file by content, not by extension.',
+    plain:'Reads a file to see what it really is.',
+    path:'backend/core/sniff_media.py',
+    notes:['Without it, gallery-dl parked an MP4 in the thumbnail slot'],
+    tag:['media','ingest','all'] }),
+  N('favicons-mod','mediac','favicons.py','cached locally',860,1622,NW,NH,'mediac',{
+    role:'Fetches and caches source icons so the app draws without a network call.',
+    plain:'Keeps the little site icons on your disk.',
+    path:'backend/core/favicons.py',
+    notes:['One of the three things that quietly needed a connection just to draw the app'],
+    tag:['media','offline','all'] }),
+
+  /* ---------- INTEGRITY · BACKUPS · LOCKS ---------- */
+  N('autobackup','safety','autobackup.py','daily snapshot',1160,1400,NW,NH,'safety',{
+    role:'Compresses and rotates a copy of the database on a schedule.',
+    plain:'Makes the automatic daily copy of your library.',
+    path:'backend/core/autobackup.py',
+    notes:['Opens the live database read-only; opening it read-write used to rewrite the file it was copying'],
+    tag:['backup','all'], critical:true }),
+  N('integrity','safety','integrity.py','files still there',1160,1474,NW,NH,'safety',{
+    role:'Checks that what the database claims is on disk actually is.',
+    plain:'Notices when your files have gone missing.',
+    path:'backend/core/integrity.py',
+    notes:['Written after 435 media files were deleted and the app served pages normally for nine days'],
+    tag:['backup','media','all'] }),
+  N('canary','safety','canary.py','weekly probe',1160,1548,NW,NH,'safety',{
+    role:'Re-checks a couple of known posts so a broken saver is noticed early.',
+    plain:'A small weekly test, so a problem shows up before you hit it.',
+    path:'backend/core/canary.py',
+    notes:['The reel bug hid for six weeks because nothing ever failed loudly'],
+    tag:['ingest','all'] }),
+  N('host-lock','safety','host_lock.py','one poller only',1420,1400,NW,NH,'safety',{
+    role:'Claims the right to poll Telegram, so only one process ever does.',
+    plain:'Stops a second copy of openMemo stealing your phone captures.',
+    path:'backend/core/host_lock.py',
+    notes:['A dev backend once won six captures and saved them into the dev database, invisible in the real app'],
+    tag:['capture','all'], critical:true }),
+  N('telegram-relay','safety','telegram_relay.py','phone capture',1420,1474,NW,NH,'safety',{
+    role:'Polls the bot, files each message like a paste, replies with a receipt.',
+    plain:'Collects what you shared from your phone and files it.',
+    path:'backend/services/telegram_relay.py:635',
+    notes:['Two independent guards: OPENMEMO_DISABLE_TELEGRAM and the host lock','The 60 minute cadence is deliberate, not a bug'],
+    tag:['capture','all'] }),
+  N('service-base','safety','services/base.py','service scaffolding',1420,1548,NW,NH,'safety',{
+    role:'Shared base for the long-running services.',
+    plain:'Common wiring the background services share.',
+    path:'backend/services/base.py',
+    tag:['all'] }),
 ];
 
 const edges = [
@@ -480,6 +820,87 @@ const edges = [
   { from:'proxy-image', to:'ingest-router', kind:'normal', label:'_download_thumb', tag:['media','ingest','all'] },
   { from:'models', to:'sqlite',           kind:'db', label:'tables', tag:['overview','all'] },
   { from:'database', to:'sqlite',         kind:'db', label:'engine', tag:['overview','all'] },
+
+  /* ---- routes added since 3.2 ---- */
+  { from:'main-app', to:'music-router',  kind:'mount', label:'include', tag:['music','all'] },
+  { from:'main-app', to:'spaces-router', kind:'mount', label:'include', tag:['spaces','all'] },
+  { from:'main-app', to:'mesh-router',   kind:'mount', label:'include', tag:['mesh','all'] },
+  { from:'music-page', to:'api-client',  kind:'normal', label:'musicApi', tag:['music','all'] },
+  { from:'spaces-page', to:'api-client', kind:'normal', label:'spacesApi', tag:['spaces','all'] },
+  { from:'collections-page', to:'api-client', kind:'normal', label:'collectionsApi', tag:['overview','all'] },
+  { from:'space-page', to:'api-client',  kind:'normal', label:'spacesApi', tag:['spaces','all'] },
+  { from:'ask-page', to:'api-client',    kind:'critical', label:'chatApi.stream', tag:['overview','chat','all'] },
+  { from:'api-client', to:'music-router', kind:'api', label:'/api/music', tag:['music','all'] },
+  { from:'api-client', to:'spaces-router', kind:'api', label:'/api/spaces', tag:['spaces','all'] },
+  { from:'api-client', to:'mesh-router', kind:'api', label:'/api/mesh', tag:['mesh','all'] },
+  { from:'spaces-router', to:'models',   kind:'db', label:'spaces', tag:['spaces','all'] },
+
+  /* ---- background work ---- */
+  { from:'ingest-router', to:'jobs',     kind:'critical', label:'enqueue', tag:['overview','ingest','jobs','all'] },
+  { from:'jobs', to:'job-handlers',      kind:'normal', label:'dispatch', tag:['ingest','jobs','all'] },
+  { from:'job-handlers', to:'embedder',  kind:'normal', label:'embed job', tag:['ingest','jobs','all'] },
+  { from:'job-handlers', to:'localize-media', kind:'normal', label:'download job', tag:['media','jobs','all'] },
+  { from:'job-handlers', to:'transcribe', kind:'normal', label:'transcribe job', tag:['audio','jobs','all'] },
+  { from:'jobs', to:'models',            kind:'db', label:'job_queue', tag:['jobs','all'] },
+
+  /* ---- media and music ---- */
+  { from:'music-router', to:'playlist',  kind:'normal', label:'import', tag:['music','all'] },
+  { from:'playlist', to:'spotify',       kind:'api', label:'track list', tag:['music','all'] },
+  { from:'music-router', to:'apple-music-mod', kind:'normal', label:'apple link', tag:['music','all'] },
+  { from:'apple-music-mod', to:'apple-music', kind:'api', label:'track list', tag:['music','all'] },
+  { from:'music-router', to:'spotiflac', kind:'normal', label:'match by ISRC', tag:['music','all'] },
+  { from:'spotiflac', to:'music-relay',  kind:'normal', label:'request file', tag:['music','all'] },
+  { from:'music-relay', to:'qobuz-relay', kind:'api', label:'session + fetch', tag:['music','all'] },
+  { from:'music-router', to:'audio-meta', kind:'normal', label:'tags + art', tag:['music','all'] },
+  { from:'ingest-router', to:'instagram', kind:'normal', label:'ig post', tag:['ingest','media','all'] },
+  { from:'instagram', to:'instagram-login', kind:'normal', label:'cookies', tag:['ingest','all'] },
+  { from:'instagram', to:'gallery-dl',   kind:'api', label:'tier 1', tag:['ingest','media','all'] },
+  { from:'instagram', to:'headless',     kind:'normal', label:'tier 2', tag:['ingest','media','all'] },
+  { from:'instagram', to:'sniff-media',  kind:'normal', label:'what came back', tag:['media','all'] },
+  { from:'localize-media', to:'yt-dlp',  kind:'api', label:'fetch media', tag:['media','all'] },
+  { from:'localize-media', to:'video',   kind:'normal', label:'mux + poster', tag:['media','all'] },
+  { from:'ingest-router', to:'pictures', kind:'critical', label:'own the image', tag:['media','ingest','all'] },
+  { from:'extractor', to:'favicons-mod', kind:'normal', label:'cache icon', tag:['ingest','media','all'] },
+  { from:'favicons-mod', to:'favicons',  kind:'api', label:'first fetch only', tag:['ingest','media','all'] },
+  { from:'transcript', to:'transcribe',  kind:'normal', label:'fallback', tag:['audio','media','all'] },
+  { from:'memo-detail', to:'transcript', kind:'normal', label:'transcript tab', tag:['audio','media','all'] },
+
+  /* ---- phone capture ---- */
+  { from:'telegram-relay', to:'telegram', kind:'api', label:'getUpdates', tag:['capture','all'] },
+  { from:'telegram-relay', to:'host-lock', kind:'critical', label:'claim, or stand down', tag:['capture','all'] },
+  { from:'telegram-relay', to:'ingest-router', kind:'normal', label:'file like a paste', tag:['capture','ingest','all'] },
+  { from:'main-app', to:'telegram-relay', kind:'mount', label:'start service', tag:['capture','all'] },
+
+  /* ---- mesh ---- */
+  { from:'mesh-router', to:'mesh-gate',  kind:'critical', label:'enabled?', tag:['mesh','all'] },
+  { from:'mesh-router', to:'mesh-pairing', kind:'normal', label:'pair', tag:['mesh','all'] },
+  { from:'mesh-pairing', to:'mesh-keystore', kind:'critical', label:'store root secret', tag:['mesh','all'] },
+  { from:'mesh-keystore', to:'mesh-secret', kind:'normal', label:'derive keys', tag:['mesh','all'] },
+  { from:'mesh-router', to:'mesh-server', kind:'normal', label:'listen', tag:['mesh','all'] },
+  { from:'mesh-server', to:'mesh-session', kind:'normal', label:'AES-256', tag:['mesh','all'] },
+  { from:'mesh-client', to:'mesh-session', kind:'normal', label:'AES-256', tag:['mesh','all'] },
+  { from:'mesh-session', to:'mesh-protocol', kind:'normal', label:'frames', tag:['mesh','all'] },
+  { from:'mesh-client', to:'mesh-discovery', kind:'normal', label:'find peer', tag:['mesh','all'] },
+  { from:'mesh-protocol', to:'mesh-merge', kind:'critical', label:'resolve', tag:['mesh','all'] },
+  { from:'mesh-merge', to:'mesh-apply', kind:'critical', label:'write', tag:['mesh','all'] },
+  { from:'mesh-apply', to:'mesh-journal', kind:'normal', label:'log + undo', tag:['mesh','all'] },
+  { from:'mesh-apply', to:'mesh-rowstore', kind:'db', label:'rows', tag:['mesh','all'] },
+  { from:'mesh-changelog', to:'mesh-clock', kind:'normal', label:'HLC order', tag:['mesh','all'] },
+  { from:'mesh-changelog', to:'models', kind:'db', label:'change_log', tag:['mesh','all'] },
+  { from:'mesh-apply', to:'mesh-sync-state', kind:'normal', label:'resume point', tag:['mesh','all'] },
+  { from:'mesh-magnet', to:'localize-media', kind:'normal', label:'refetch, do not push', tag:['mesh','media','all'] },
+  { from:'mesh-router', to:'host-lock', kind:'normal', label:'primary polls Telegram', tag:['mesh','capture','all'] },
+
+  /* ---- integrity and backups ---- */
+  { from:'main-app', to:'autobackup',    kind:'mount', label:'schedule', tag:['backup','all'] },
+  { from:'autobackup', to:'sqlite',      kind:'db', label:'read-only copy', tag:['backup','all'] },
+  { from:'autobackup', to:'backups',     kind:'db', label:'rotate', tag:['backup','all'] },
+  { from:'backup-router', to:'backups',  kind:'db', label:'list + restore', tag:['backup','settings','all'] },
+  { from:'maintenance-router', to:'integrity', kind:'normal', label:'library check', tag:['backup','media','all'] },
+  { from:'integrity', to:'models',       kind:'db', label:'claimed paths', tag:['backup','all'] },
+  { from:'canary', to:'instagram',       kind:'normal', label:'weekly probe', tag:['ingest','all'] },
+  { from:'main-app', to:'install',       kind:'mount', label:'which install', tag:['overview','settings','all'] },
+  { from:'settings-page', to:'install',  kind:'normal', label:'right copy + paths', tag:['settings','all'] },
 ];
 
 /* ---- ROADMAP fixes (open items mapped to nodes) ---- */
@@ -527,7 +948,7 @@ const KNOWN_BUGS = {
 const SVGNS='http://www.w3.org/2000/svg';
 const svg=document.getElementById('svg');
 const nodeById=Object.fromEntries(nodes.map(n=>[n.id,n]));
-const VBW=1720, VBH=1260;
+const VBW=1720, VBH=2180;
 
 // adjacency
 const adj={}; nodes.forEach(n=>adj[n.id]={in:[],out:[]});
@@ -540,6 +961,12 @@ const chipDefs=[
   {id:'ingest',label:'Ingest'},
   {id:'search',label:'Search'},
   {id:'media',label:'Media / Files'},
+  {id:'music',label:'Music'},
+  {id:'mesh',label:'Mesh sync'},
+  {id:'capture',label:'Phone capture'},
+  {id:'jobs',label:'Job queue'},
+  {id:'backup',label:'Backups'},
+  {id:'spaces',label:'Spaces'},
   {id:'settings',label:'Settings'},
   {id:'dead',label:'Dead code'},
   {id:'all',label:'Show all wires'},
