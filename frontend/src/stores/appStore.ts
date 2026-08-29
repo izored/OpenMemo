@@ -120,6 +120,14 @@ interface AppState {
   pendingDropFiles: File[] | null;
   setPendingDropFiles: (files: File[] | null) => void;
 
+  // The same prefill handoff for a drag out of a BROWSER (OPNMMO-0052). A link
+  // or an image dragged from a web page carries no File at all, only strings,
+  // so it lands here instead: `urls` prefills the Link tab (one per line, which
+  // is the multi-link shape the tab already understands), and `text` prefills
+  // the Note tab when the drag was a selection rather than a link.
+  pendingDropLinks: { urls: string[]; text: string } | null;
+  setPendingDropLinks: (payload: { urls: string[]; text: string } | null) => void;
+
   // True while a page renders the bottom bar (ADR-021). The bottom bar owns the
   // New-Memo / Add-music flow through its IslandFab, so the GLOBAL corner panels
   // (AddMemoPanel, MusicAddModal) step aside and render null to avoid doubling.
@@ -260,6 +268,9 @@ export const useAppStore = create<AppState>((set) => ({
 
   pendingDropFiles: null,
   setPendingDropFiles: (files) => set({ pendingDropFiles: files }),
+
+  pendingDropLinks: null,
+  setPendingDropLinks: (payload) => set({ pendingDropLinks: payload }),
 
   bottomBarPresent: false,
   setBottomBarPresent: (present) => set({ bottomBarPresent: present }),

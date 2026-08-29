@@ -45,6 +45,9 @@ export function AddMemoPanel({ embedded = false }: { embedded?: boolean } = {}) 
   // Files handed off from the global FileDropLayer's prefill branch (ADR-023).
   const pendingDropFiles = useAppStore((s) => s.pendingDropFiles);
   const setPendingDropFiles = useAppStore((s) => s.setPendingDropFiles);
+  // Links / text dragged out of a browser (OPNMMO-0052).
+  const pendingDropLinks = useAppStore((s) => s.pendingDropLinks);
+  const setPendingDropLinks = useAppStore((s) => s.setPendingDropLinks);
   const bottomBarPresent = useAppStore((s) => s.bottomBarPresent);
   const [ask, confirmModal] = useConfirm();
   const setWriterOpen = useAppStore((s) => s.setWriterOpen);
@@ -233,6 +236,24 @@ export function AddMemoPanel({ embedded = false }: { embedded?: boolean } = {}) 
     setPendingDropFiles(null);
     // eslint-disable-next-line react-hooks/set-state-in-effect -- consume the one-shot handoff slice
   }, [pendingDropFiles, setPendingDropFiles]);
+
+  // The same handoff for a browser drag: links go to the Link tab (one per
+  // line — the multi-link shape it already parses), a dragged selection with no
+  // link in it goes to the Note tab. Replace, never append, for the same
+  // StrictMode / two-instance reason as the file handoff above.
+  useEffect(() => {
+    if (!pendingDropLinks) return;
+    const { urls, text } = pendingDropLinks;
+    if (urls.length) {
+      setTab('link');
+      setUrl(urls.join('\n'));
+    } else if (text) {
+      setTab('note');
+      setNote(text);
+    }
+    setPendingDropLinks(null);
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- consume the one-shot handoff slice
+  }, [pendingDropLinks, setPendingDropLinks]);
 
   // Drop the staged set whenever the panel closes without saving, so reopening
   // never shows files left over from a cancelled drop.
