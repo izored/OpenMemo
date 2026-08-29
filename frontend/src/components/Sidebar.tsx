@@ -28,11 +28,15 @@ function CollectionRow({
   onEdit: (e: React.MouseEvent) => void;
 }) {
   const { isOver, setNodeRef } = useDroppable({ id: `col-${col.id}` });
+  // Dimmed, not removed: a collection kept out of the dashboard feed is still
+  // the fastest way to open it (OPNMMO-0053).
+  const dashHidden = !!col.hidden_from_dashboard;
   return (
     <button
       ref={setNodeRef}
-      className={cn('om-coll', pinned && 'pinned', active && 'active', isOver && 'drop-over')}
+      className={cn('om-coll', pinned && 'pinned', active && 'active', isOver && 'drop-over', dashHidden && 'dash-hidden')}
       onClick={onSelect}
+      title={dashHidden ? `${col.name} — hidden from the dashboard feed` : undefined}
     >
       <span
         className="om-coll-dot"

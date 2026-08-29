@@ -32,6 +32,8 @@ export function AddCollectionModal() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [confirmDelete, setConfirmDelete] = useState(false);
+  // Keep this collection's memos out of the All-Memos feed (OPNMMO-0053).
+  const [hiddenFromDashboard, setHiddenFromDashboard] = useState(false);
   const pickerRef = useRef<HTMLDivElement>(null);
 
   const isEditing = !!editingCollection;
@@ -44,12 +46,14 @@ export function AddCollectionModal() {
       setEmojiManual(true);
       setDescription(editingCollection.description || '');
       setColor(editingCollection.color || '#D97706');
+      setHiddenFromDashboard(!!editingCollection.hidden_from_dashboard);
     } else {
       setName('');
       setEmoji('📁');
       setEmojiManual(false);
       setDescription('');
       setColor('#D97706');
+      setHiddenFromDashboard(false);
     }
     setError('');
     setConfirmDelete(false);
@@ -104,12 +108,14 @@ export function AddCollectionModal() {
       if (isEditing && editingCollection) {
         await collectionApi.update(editingCollection.id, {
           name: name.trim(), emoji, description: description.trim() || null, color,
+          hidden_from_dashboard: hiddenFromDashboard,
         });
       } else {
         const created = await collectionApi.create({
           // A collection created while inside a Space belongs to that Space
           // (ADR-020); otherwise it lands in the main library.
           name: name.trim(), emoji, description: description.trim() || undefined, color,
+          hidden_from_dashboard: hiddenFromDashboard,
           workspace_id: activeSpace || undefined,
         });
         // Let an open surface (AddMemoPanel) auto-select the new collection so
@@ -117,6 +123,7 @@ export function AddCollectionModal() {
         if (created?.id) setLastCreatedCollectionId(created.id);
       }
       queryClient.invalidateQueries({ queryKey: ['collections'] });
+      queryClient.invalidateQueries({ queryKey: ['memos'] });
       close();
     } catch (e) {
       setError((e as Error).message || 'Failed to save collection');
@@ -208,6 +215,27 @@ export function AddCollectionModal() {
               ))}
             </div>
           </div>
+
+          {/* Keep a noisy bucket out of the feed without hiding the collection
+              itself (OPNMMO-0053). It stays in the sidebar, on the Collections
+              page and in search; only All Memos stops listing its memos. */}
+          <label className="om-switch-row om-coll-hide-row">
+            <input
+              type="checkbox"
+              className="om-switch-input"
+              checked={hiddenFromDashboard}
+              onChange={(e) => setHiddenFromDashboard(e.target.checked)}
+            />
+            <span className="om-switch"><span className="om-switch-dot" /></span>
+            <span className="om-switch-label">
+              <span>
+                Hide from the dashboard
+                <em className="om-coll-hide-hint">
+                  Its memos stop showing in All Memos. Opening the collection still shows everything.
+                </em>
+              </span>
+            </span>
+          </label>
 
           {/* Submit */}
           <button

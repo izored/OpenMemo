@@ -186,6 +186,20 @@ async def list_memos(
         query = query.where(
             ~((func.coalesce(Memo.playlist_born, False) == True) & Memo.id.in_(playlist_members))  # noqa: E712
         )
+    # "Hide from dashboard" collections (OPNMMO-0053): a memo that sits in one
+    # of them is dropped from the All-Memos feed and its type tabs. Opening the
+    # collection (collection_id set) still shows everything, and so do search,
+    # the liked queue and the passcode-gated hidden section - this is a
+    # decluttering switch for a noisy bucket, not a second privacy gate.
+    # A memo in BOTH a hidden collection and a normal one is hidden: the user
+    # filed it in the bucket they asked to keep out of the way.
+    if not collection_id and not hidden and not liked:
+        dashboard_hidden_members = (
+            select(memo_collections.c.memo_id)
+            .join(Collection, Collection.id == memo_collections.c.collection_id)
+            .where(Collection.hidden_from_dashboard == True)  # noqa: E712
+        )
+        query = query.where(~Memo.id.in_(dashboard_hidden_members))
     if liked:
         query = query.where(Memo.liked == True)  # noqa: E712
     if type and type != "all":

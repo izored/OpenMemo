@@ -285,7 +285,7 @@ export const collectionApi = {
   // Space's id to list only its collections.
   list: (workspace_id?: string) =>
     fetchJSON<any[]>(`/collections${workspace_id ? `?workspace_id=${encodeURIComponent(workspace_id)}` : ''}`),
-  create: (data: { name: string; emoji?: string; description?: string; color?: string; kind?: 'standard' | 'playlist'; music_kind?: 'album' | 'playlist' | 'hero'; pinned?: boolean; workspace_id?: string }) =>
+  create: (data: { name: string; emoji?: string; description?: string; color?: string; kind?: 'standard' | 'playlist'; music_kind?: 'album' | 'playlist' | 'hero'; pinned?: boolean; hidden_from_dashboard?: boolean; workspace_id?: string }) =>
     fetchJSON<{ id: string }>('/collections', { method: 'POST', body: JSON.stringify(data) }),
   update: (id: string, data: any) =>
     fetchJSON<any>(`/collections/${id}`, { method: 'PUT', body: JSON.stringify(data) }),

@@ -104,6 +104,13 @@ async def lifespan(app: FastAPI):
             for col in ("kind", "source_url", "music_kind", "cover_ext"):
                 if col not in cnames:
                     await db.execute(_sql_text(f"ALTER TABLE collections ADD COLUMN {col} VARCHAR"))
+            # "Hide from dashboard" (OPNMMO-0053): keeps a high-volume
+            # collection's memos out of the All-Memos feed without hiding the
+            # collection itself. Additive, idempotent, defaults to 0.
+            if "hidden_from_dashboard" not in cnames:
+                await db.execute(_sql_text(
+                    "ALTER TABLE collections ADD COLUMN hidden_from_dashboard BOOLEAN DEFAULT 0"
+                ))
             await db.execute(_sql_text(
                 "UPDATE collections SET kind = 'standard' WHERE kind IS NULL"
             ))

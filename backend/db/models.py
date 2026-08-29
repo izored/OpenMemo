@@ -176,6 +176,13 @@ class Collection(Base):
     color = Column(String, default="#D97706")
     pinned = Column(Boolean, default=False)
     sort_order = Column(Integer, default=0)
+    # Keep this collection's memos out of the main dashboard feed (OPNMMO-0053).
+    # The collection itself stays everywhere else - sidebar, Collections page,
+    # search, every picker - and opening it still shows everything. It is a
+    # decluttering switch for high-volume buckets (a shopping wishlist, a
+    # research dump), not a privacy feature: `Memo.hidden` is the passcode-gated
+    # one. NULL rows predate the column and mean False.
+    hidden_from_dashboard = Column(Boolean, default=False)
     # Collection sub-kind (ADR-015): 'standard' = a normal user collection;
     # 'playlist' = a music playlist (Music page only — hidden from the
     # collections page, sidebar, and every collection picker by the API's

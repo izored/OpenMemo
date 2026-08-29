@@ -97,6 +97,10 @@ export interface Collection {
   source_url?: string | null;
   pinned: boolean;
   sort_order: number;
+  /** Keep this collection's memos out of the All-Memos feed (OPNMMO-0053).
+   *  The collection stays in the sidebar, the Collections page and search;
+   *  only the dashboard feed drops it. Not a privacy gate - `Memo.hidden` is. */
+  hidden_from_dashboard?: boolean;
   created_at: string;
 }
 

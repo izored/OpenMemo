@@ -276,6 +276,14 @@ input, textarea { font: inherit; color: inherit; }
   transition: background .15s, color .15s;
   text-align: left;
 }
+/* Kept out of the dashboard feed (OPNMMO-0053) — still listed and still
+   clickable, just visibly quieter than the collections that do show up. */
+.om-coll.dash-hidden .om-coll-name { color: var(--text-4); }
+.om-coll.dash-hidden .om-coll-dot { opacity: 0.4; }
+.om-coll.dash-hidden .om-coll-emoji { opacity: 0.55; }
+.om-coll.dash-hidden:hover .om-coll-name,
+.om-coll.dash-hidden.active .om-coll-name { color: var(--text-2); }
+
 .om-coll:hover { background: var(--surface-2); color: var(--text); }
 .om-coll.active { background: var(--surface-2); color: var(--text); }
 /* Drop target while dragging a memo over a collection. Full inset ring + soft
@@ -2225,6 +2233,15 @@ input, textarea { font: inherit; color: inherit; }
   transition: opacity .15s;
 }
 .om-btn-full:disabled { opacity: 0.4; cursor: not-allowed; }
+/* "Hide from the dashboard" switch in the collection modal (OPNMMO-0053). The
+   hint sits under the label so the switch never has to explain itself twice. */
+.om-coll-hide-row { align-items: flex-start; }
+.om-coll-hide-row .om-switch { margin-top: 1px; }
+.om-coll-hide-hint {
+  display: block; margin-top: 3px;
+  font-size: 11px; font-style: normal; line-height: 1.45; color: var(--text-4);
+}
+
 .om-coll-danger { padding-top: 14px; margin-top: 2px; border-top: 1px solid var(--border); }
 .om-btn-danger-ghost {
   width: 100%; padding: 10px; border-radius: 99px;
