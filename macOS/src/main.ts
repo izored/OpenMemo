@@ -139,13 +139,19 @@ function requireUnlockedMainWindow(evt: Electron.IpcMainInvokeEvent): void {
  * region too, leaving the window stuck in place, AND the traffic-light buttons
  * overlapped the sidebar's top (the "openMemo" logo / the hamburger).
  *
- * Fix (macOS shell only, injected here so the web app is untouched):
- *  1. Inset the sidebar head below the traffic lights so nothing collides.
+ * Fix:
+ *  1. The inset itself now lives in the WEB APP's stylesheet, keyed off
+ *     `data-shell="mac"` (main.tsx stamps it from `openmemoShell.platform`).
+ *     insertCSS does not survive a renderer reload — Settings restarts the
+ *     backend and reloads the window — so an injected inset kept disappearing
+ *     and the lights landed back on the logo. The rule injected below is only
+ *     the fallback for an older bundled frontend that does not stamp the root.
  *  2. Make the sidebar head a drag region, with its buttons no-drag. Children
  *     paint above their parent, so the header's now-empty top band drags the
  *     window while the logo / collapse / search buttons stay fully clickable.
  *     Scoping the region to a real container (not a full-width overlay) means it
- *     can never swallow a click anywhere else in the UI.
+ *     can never swallow a click anywhere else in the UI. Re-applied on every
+ *     `did-finish-load` for the same reload reason.
  */
 async function loadAppUrl(url: string): Promise<void> {
   if (!mainWindow) return;
@@ -160,16 +166,28 @@ async function loadAppUrl(url: string): Promise<void> {
     return;
   }
   await mainWindow.loadURL(url);
-  await mainWindow.webContents.insertCSS(`
-    html, body { -webkit-app-region: no-drag; }
-    /* Clear the macOS traffic lights, then let the header band move the window. */
-    .om-sidebar-head { padding-top: 26px; -webkit-app-region: drag; }
-    .om-sidebar.collapsed .om-sidebar-head { padding-top: 26px; }
-    .om-sidebar-head button,
-    .om-sidebar-head a,
-    .om-sidebar-head input,
-    .om-sidebar-head [role="button"] { -webkit-app-region: no-drag; }
-  `);
+  await applyShellChrome(mainWindow.webContents);
+}
+
+/** Window-drag region + the legacy traffic-light inset. Idempotent. */
+async function applyShellChrome(wc: Electron.WebContents): Promise<void> {
+  try {
+    await wc.insertCSS(`
+      html, body { -webkit-app-region: no-drag; }
+      /* Fallback only: a frontend that stamps data-shell="mac" owns the inset
+         itself (and picks a value that actually clears the lights). */
+      :root:not([data-shell="mac"]) .om-sidebar-head { padding-top: 34px; }
+      :root:not([data-shell="mac"]) .om-sidebar.collapsed .om-sidebar-head { padding-top: 34px; }
+      /* Let the header band move the window. */
+      .om-sidebar-head { -webkit-app-region: drag; }
+      .om-sidebar-head button,
+      .om-sidebar-head a,
+      .om-sidebar-head input,
+      .om-sidebar-head [role="button"] { -webkit-app-region: no-drag; }
+    `);
+  } catch {
+    /* a window torn down mid-load must not take the app with it */
+  }
 }
 
 function appendLog(line: string): void {
@@ -198,6 +216,10 @@ function createWindow(): void {
     minHeight: 600,
     backgroundColor: '#0b0b0f',
     titleBarStyle: 'hiddenInset',
+    // Pin the lights instead of inheriting whatever hiddenInset picks per macOS
+    // version: the sidebar reserves a fixed 34 px band for them, and that only
+    // holds if their geometry is known. y is the TOP of the button row.
+    trafficLightPosition: { x: 16, y: 16 },
     show: false,
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
@@ -208,6 +230,13 @@ function createWindow(): void {
   if (saved?.maximized) mainWindow.maximize();
 
   mainWindow.once('ready-to-show', () => mainWindow?.show());
+
+  // A renderer reload (Settings -> restart backend, a deep link, an SPA reload)
+  // throws away everything insertCSS put in the document. Re-apply, or the
+  // window silently loses its only drag region.
+  mainWindow.webContents.on('did-finish-load', () => {
+    if (mainWindow) void applyShellChrome(mainWindow.webContents);
+  });
 
   // Remember size/position for next launch (store the normal bounds, not the
   // maximized ones, plus the maximized flag).

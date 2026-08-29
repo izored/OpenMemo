@@ -213,6 +213,18 @@ input, textarea { font: inherit; color: inherit; }
   height: 100dvh; overflow: hidden;
   position: relative; z-index: 2;
 }
+/* macOS shell only (main.tsx stamps data-shell="mac" on <html>): the window is
+   frameless (titleBarStyle 'hiddenInset'), so the close/minimise/zoom buttons
+   float over whatever the page paints top-left — which is the "openMemo" mark.
+   Growing the HEAD (rather than the rail) reserves the band AND keeps it inside
+   the element the shell marks as the window-drag region, so the empty strip
+   still moves the window. Everything below the head shifts down with it.
+   Both selectors outrank the shorthand `padding` on the base rules, which is
+   what the shell's own injected CSS could not do reliably: insertCSS does not
+   survive a renderer reload, so the inset kept vanishing. */
+:root[data-shell="mac"] .om-sidebar-head { padding-top: var(--mac-titlebar-inset, 34px); }
+:root[data-shell="mac"] .om-sidebar.collapsed .om-sidebar-head { padding-top: var(--mac-titlebar-inset, 34px); }
+
 /* The ONLY scrollable zone: the Collections list. Search / nav / Pinned / the
    Collections header all stay fixed above it. Owns the flexible space so the
    bottom zone (player + foot) sits at the bottom naturally (even when collapsed,
