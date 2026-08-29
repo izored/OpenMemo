@@ -271,6 +271,20 @@ _CF_BODY_MARKERS = [
 ]
 
 
+def _looks_like_bot_wall(raw_html: str) -> bool:
+    """Interactive human-verification wall in a plain-fetch response.
+
+    Reuses the headless detector so the plain and rendered paths agree on what
+    a wall is. Returning True routes the URL to `_minimal_link`, which tries a
+    real browser once and then files the honest link card."""
+    try:
+        from backend.core.headless import _looks_like_bot_wall as _wall
+
+        return _wall(raw_html)
+    except Exception:
+        return False
+
+
 def _is_cf_challenge(parsed: dict | None, raw_html: str) -> bool:
     """Return True if the parsed result or raw HTML looks like a CF challenge."""
     if parsed is not None:
@@ -325,7 +339,11 @@ async def extract_url(url: str) -> dict:
             # OR to a CF challenge page, to the headless path.
             if resp.status_code == 200:
                 parsed = _parse_html(resp.text, str(resp.url), url, domain)
-                if parsed is not None and not _is_cf_challenge(parsed, resp.text):
+                if (
+                    parsed is not None
+                    and not _is_cf_challenge(parsed, resp.text)
+                    and not _looks_like_bot_wall(resp.text)
+                ):
                     return parsed
         except Exception:
             pass
@@ -999,6 +1017,31 @@ async def _fetch_og_meta(url: str, user_agent: str | None = None) -> dict:
     }
 
 
+def _bot_wall_memo(url: str, domain: str) -> dict:
+    """A link memo for a page guarded by an interactive human-verification wall.
+
+    Saved as a plain, honest bookmark rather than a scrape of the CAPTCHA. The
+    description is the instruction, because that is the only place the user
+    reads: openMemo cannot finish a slider puzzle, the extension does not have
+    to (the tab it reads is already past it)."""
+    return {
+        "title": url,
+        "description": (
+            f"Saved as a link -- {domain} answered with a human-verification puzzle "
+            "(slider / rotate / press-and-hold), which no automated fetch can finish. "
+            "To capture the page itself, open it in your browser, clear the puzzle, "
+            "then save it with the openMemo extension."
+        ),
+        "content_text": url,
+        "source_url": url,
+        "source_domain": domain,
+        "source_favicon": None,
+        "thumbnail_path": "",
+        "type": "link",
+        "resolve_tier": "blocked:bot-wall",
+    }
+
+
 async def _minimal_link(url: str, domain: str | None = None) -> dict:
     """Resolve a memo for a URL the plain fetch could not read -- hardest path last.
 
@@ -1020,6 +1063,13 @@ async def _minimal_link(url: str, domain: str | None = None) -> dict:
         from backend.core.headless import render_page
 
         rendered = await render_page(url, want_main_image=is_photo)
+        # An interactive puzzle (Temu, DataDome, PerimeterX) rendered instead of
+        # the page. Its DOM parses perfectly well — into a memo titled "Verify"
+        # with the CAPTCHA's own artwork as the thumbnail. Stop here and file an
+        # honest link card instead (OPNMMO-0054); the browser extension reads
+        # the page out of the user's already-solved tab.
+        if rendered and rendered.get("bot_wall"):
+            return _bot_wall_memo(url, domain)
         if rendered and rendered.get("html"):
             parsed = _parse_html(rendered["html"], url, url, domain)
             main_img = rendered.get("main_image")

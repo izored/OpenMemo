@@ -24,6 +24,14 @@ file plays normally.
 - `core/localize_media.py` — `_cookie_args()` returns `--cookies <path>` when present,
   spliced into `_run_ytdlp` + `_get_thumbnail_url`. One provider-agnostic point (ADR-001):
   every video/audio host benefits, not just YouTube.
+- `core/headless.py` — `_netscape_cookies_for(domain)` reads the SAME jar, narrows it to
+  the domain being rendered (and its parent, so `shop.example.com` picks up cookies scoped
+  to `.example.com`) and converts it to Playwright cookie dicts. One upload therefore
+  serves downloads AND page rendering: a site that only opens up for a signed-in session
+  renders for openMemo the way it does in the user's own browser. Applied AFTER the
+  headless module's own per-domain jar so a real session wins over a cached `cf_clearance`.
+  A `0` expiry (Netscape for "session cookie") becomes Playwright's `-1`; passing `0`
+  through would hand it an already-expired cookie.
 - `db/models.py` + `main.py` — new `Memo.localize_error` (Text) captured in `api/ingest.py`
   on failure, cleared on retry (`api/memos.py`) and success. Additive PRAGMA migration.
 
