@@ -51,6 +51,34 @@ Both paths call the same function (`backend/core/headless.py`
 `_looks_like_bot_wall`), so they can never disagree and bounce a URL between
 them. Covered by `backend/tests/test_bot_wall_detection.py`.
 
+## Temu specifically: most of it needs no browser at all
+
+Probed against real saved links on 2026-08-29. A plain HTTP fetch of a Temu
+**slug** product page (`temu.com/<region>/<slug>-g-<id>.html`) came back HTTP
+200 with the full document, no puzzle, on 3 of 3 tried. The wall is not on every
+request; it is rate and session dependent, and the page was reachable cold.
+
+What was missing was never the page. It was the image:
+
+- Temu sets `og:title`, `og:description`, `og:type=product` and `og:url`.
+- Temu sets **no `og:image`**, and no JSON-LD.
+- The hero photo is in the HTML anyway, as the preloaded LCP image:
+  `<link rel="preload" as="image" fetchpriority="high" href="https://img.kwcdn.com/product/...">`
+- That CDN URL fetches straight: HTTP 200, `image/webp`, 800x800, no challenge.
+
+So the fix was a missing image rule, not a bot-wall problem. openMemo now falls
+back to a page's preloaded hero whenever it publishes no `og:image`, preferring
+`fetchpriority="high"` and then the widest variant when the CDN encodes a width.
+The rule is host-agnostic, and it pays off on any client-rendered storefront
+that renders its product shot in JavaScript.
+
+### The one shape that still needs the extension
+
+`temu.com/goods.html?goods_id=...` is a client-side router page. It carries no
+`og:image`, no canonical pointing at the slug URL, no CDN image and sometimes no
+`og:title` either. There is nothing server-side to read. Those links save as
+bookmarks; use the extension if you want the content.
+
 ## What actually gets the page
 
 ### 1. The browser extension (this is the answer)
