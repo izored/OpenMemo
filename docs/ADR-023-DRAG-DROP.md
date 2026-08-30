@@ -28,11 +28,11 @@ Window-level listeners (`dragenter` / `dragover` / `dragleave` / `drop`) do two 
 
 Drop reads where you already are instead of dumping everything into one blind inbox.
 
-- **Tier 1 — page default (this ADR / first increment).** Dropping anywhere on the page uses that page's ambient context, resolved from the store (`activeSpace`, `activeCollection`) and the route:
+- **Tier 1 — page default (this ADR / first increment).** Dropping anywhere on the page uses that page's ambient context, resolved from the store (`activeSpace`, `activeCollection`) and the route. Since 3.14.1 both of those slices are re-derived FROM the route (`/space/:id`, `/collection/:id`, `/space/:id/collection/:collectionId`), so the drop target and the address bar can no longer disagree:
 
   | Where you are | Drop lands in |
   |---|---|
-  | Inside a collection (dashboard filter, Space view) | that collection |
+  | Inside a collection (`/collection/:id`, or a Space's) | that collection |
   | Inside a Space (no collection open) | that Space |
   | Music page | audio → album / playlist ingest |
   | Bare library, Spaces list, Collections list, memo detail, Ask | library (via the prefill panel — see §4) |

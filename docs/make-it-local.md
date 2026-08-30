@@ -194,6 +194,12 @@ the post, downloads again through the ladder above, and rebuilds the cover. The
 old file is left in place until the new one lands, so a failed re-pull costs
 nothing.
 
+Since 3.14.0 the re-resolve step runs for **every** host. It used to be gated on
+instagram.com, which quietly made re-pull mean "re-download the file" everywhere
+else. The download is also skipped when the source has no media stream to fetch,
+so re-pulling an article or a shopping link repairs its title and cover instead of
+parking a "No video formats found" error on it.
+
 Settings → Library integrity reports a `silent_videos` count. It is a number to
 look at, not an alarm: it cannot tell a broken download from a clip that was
 posted muted.
