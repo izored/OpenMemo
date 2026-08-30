@@ -101,6 +101,7 @@ Living checklist. I tick items as they merge and date each entry. `[ ]` todo, `[
 
 ### Phase 2 — Sidebar + navigation  ✅ done 2026-06-17
 - [x] `Space` type + `activeSpace` store state. NOT persisted: the route is the source of truth (SpacePage re-derives it from the URL). Persisting it made the sidebar show a Space open while the library rendered.
+  - **2026-08-30.** Collections finally got the same treatment. `activeCollection` was also unpersisted on the same reasoning, but no route ever carried it, so a refresh inside a collection landed on the bare dashboard. `/collection/:id` and `/space/:id/collection/:collectionId` now exist and both pages re-derive the slice from the param, exactly as this line describes for Spaces.
 - [x] `spaceApi` in `lib/api.ts`; `workspace_id` threaded into memos list / pinned / collections / stats / ingest (url, note, file). Search already defaulted to the library.
 - [x] Sidebar Spaces section + `+` create + a "view all" shortcut to `/spaces`
 - [x] Accordion behavior: opening a Space expands its collections; the library Collections **collapse (not hide)** to a header with a chevron, so they stay reachable
