@@ -18,6 +18,11 @@ def client():
         yield c
 
 
+async def _never(*a, **kw):
+    """A stand-in for the media downloader that fails the test if it is called."""
+    raise AssertionError("this memo has no media stream and must never reach yt-dlp")
+
+
 def _memo(client, **fields) -> str:
     body = {"type": "video", "title": f"repull {uuid.uuid4().hex[:6]}", **fields}
     resp = client.post("/api/memos", json=body)
@@ -147,3 +152,175 @@ class TestAPictureMemoIsNotHandedToTheVideoDownloader:
         await ingest.repull_memo_task(memo_id, "video")
 
         assert called == [(memo_id, "video")]
+
+
+class TestReResolveRunsForEveryHost:
+    """Re-pull used to re-resolve only instagram.com.
+
+    Every other host skipped straight to yt-dlp, which quietly redefined
+    "re-pull this memo" as "re-download the file" for the whole rest of the
+    web. A Temu link whose card was blank got a red error chip and never got
+    the second look that would have filled it in. ADR-001: one rule, no
+    per-host branches.
+    """
+
+    async def test_a_non_instagram_link_is_re_resolved(self, client, monkeypatch):
+        from backend.api import ingest
+        from backend.db.database import AsyncSessionLocal
+        from backend.db.models import Memo
+
+        memo_id = str(uuid.uuid4())
+        async with AsyncSessionLocal() as db:
+            db.add(Memo(id=memo_id, type="link", title="Temu",
+                        source_url="https://www.temu.com/be/a-lamp-g-1.html"))
+            await db.commit()
+
+        seen = []
+
+        async def fake_extract(url, *a, **kw):
+            seen.append(url)
+            return {"title": "A very nice lamp - Temu",
+                    "description": "warm white",
+                    "thumbnail_path": "https://img.kwcdn.com/product/open/x-goods.jpeg"}
+
+        monkeypatch.setattr("backend.core.extractor.extract_url", fake_extract)
+        monkeypatch.setattr(ingest, "localize_memo_task", _never)
+
+        await ingest.repull_memo_task(memo_id, "video")
+
+        assert seen == ["https://www.temu.com/be/a-lamp-g-1.html"]
+        async with AsyncSessionLocal() as db:
+            memo = await db.get(Memo, memo_id)
+            assert memo.title == "A very nice lamp - Temu"
+            assert memo.thumbnail_path == "https://img.kwcdn.com/product/open/x-goods.jpeg"
+
+    async def test_a_plain_link_never_reaches_yt_dlp(self, client, monkeypatch):
+        """The skip used to be spelled `type == "image"`, so an article or a
+        shopping link still walked into "No video formats found"."""
+        from backend.api import ingest
+        from backend.db.database import AsyncSessionLocal
+        from backend.db.models import Memo
+
+        memo_id = str(uuid.uuid4())
+        async with AsyncSessionLocal() as db:
+            db.add(Memo(id=memo_id, type="link", title="Temu",
+                        source_url="https://www.temu.com/be/a-lamp-g-1.html",
+                        localize_status="error",
+                        localize_error="yt-dlp failed: No video formats found!"))
+            await db.commit()
+
+        async def nothing(url, *a, **kw):
+            return {}
+
+        monkeypatch.setattr("backend.core.extractor.extract_url", nothing)
+        monkeypatch.setattr(ingest, "localize_memo_task", _never)
+
+        await ingest.repull_memo_task(memo_id, "video")
+
+        async with AsyncSessionLocal() as db:
+            memo = await db.get(Memo, memo_id)
+            # The stale error from the old behaviour is cleared, not reapplied.
+            assert memo.localize_status is None
+            assert memo.localize_error is None
+
+    async def test_a_title_the_user_wrote_is_never_overwritten(self, client, monkeypatch):
+        from backend.api import ingest
+        from backend.db.database import AsyncSessionLocal
+        from backend.db.models import Memo
+
+        memo_id = str(uuid.uuid4())
+        async with AsyncSessionLocal() as db:
+            db.add(Memo(id=memo_id, type="link", title="Lamp for the hallway",
+                        source_url="https://www.temu.com/be/a-lamp-g-1.html"))
+            await db.commit()
+
+        async def fake_extract(url, *a, **kw):
+            return {"title": "A very nice lamp - Temu", "thumbnail_path": ""}
+
+        monkeypatch.setattr("backend.core.extractor.extract_url", fake_extract)
+        monkeypatch.setattr(ingest, "localize_memo_task", _never)
+
+        await ingest.repull_memo_task(memo_id, "video")
+
+        async with AsyncSessionLocal() as db:
+            assert (await db.get(Memo, memo_id)).title == "Lamp for the hallway"
+
+    async def test_an_existing_cover_is_left_alone(self, client, monkeypatch):
+        """Step 1 fills a GAP and never replaces a cover that is already there.
+
+        The cover here is a remote URL, deliberately: a LOCAL path with no file
+        behind it is a BROKEN cover, and clearing that is step 3's documented
+        job, which would mask what this test is actually about."""
+        from backend.api import ingest
+        from backend.db.database import AsyncSessionLocal
+        from backend.db.models import Memo
+
+        memo_id = str(uuid.uuid4())
+        async with AsyncSessionLocal() as db:
+            db.add(Memo(id=memo_id, type="link", title="Temu",
+                        source_url="https://www.temu.com/be/a-lamp-g-1.html",
+                        thumbnail_path="https://cdn/already-mine.jpg"))
+            await db.commit()
+
+        async def fake_extract(url, *a, **kw):
+            return {"title": "", "thumbnail_path": "https://cdn/other.jpg"}
+
+        monkeypatch.setattr("backend.core.extractor.extract_url", fake_extract)
+        monkeypatch.setattr(ingest, "localize_memo_task", _never)
+
+        await ingest.repull_memo_task(memo_id, "video")
+
+        async with AsyncSessionLocal() as db:
+            assert (await db.get(Memo, memo_id)).thumbnail_path == "https://cdn/already-mine.jpg"
+
+    async def test_a_resolver_failure_is_survivable(self, client, monkeypatch):
+        """A dead source must leave the memo as it was, not half-written."""
+        from backend.api import ingest
+        from backend.db.database import AsyncSessionLocal
+        from backend.db.models import Memo
+
+        memo_id = str(uuid.uuid4())
+        async with AsyncSessionLocal() as db:
+            db.add(Memo(id=memo_id, type="link", title="Temu",
+                        source_url="https://www.temu.com/be/a-lamp-g-1.html"))
+            await db.commit()
+
+        async def boom(url, *a, **kw):
+            raise RuntimeError("network is gone")
+
+        monkeypatch.setattr("backend.core.extractor.extract_url", boom)
+        monkeypatch.setattr(ingest, "localize_memo_task", _never)
+
+        await ingest.repull_memo_task(memo_id, "video")
+
+        async with AsyncSessionLocal() as db:
+            assert (await db.get(Memo, memo_id)).title == "Temu"
+
+
+class TestPlaceholderTitle:
+    """One rule for "did a human choose this title", asked of any host."""
+
+    def test_the_two_legacy_instagram_cases_still_read_as_placeholders(self):
+        from backend.api.ingest import _is_placeholder_title
+
+        assert _is_placeholder_title("Instagram post", "u", "instagram.com")
+        assert _is_placeholder_title("Instagram", "u", "instagram.com")
+
+    def test_it_generalises_to_hosts_nobody_hardcoded(self):
+        from backend.api.ingest import _is_placeholder_title
+
+        assert _is_placeholder_title("Temu", "u", "temu.com")
+        assert _is_placeholder_title("temu.com", "u", "temu.com")
+        assert _is_placeholder_title("Reddit thread", "u", "reddit.com")
+
+    def test_empty_and_the_bare_url_are_placeholders(self):
+        from backend.api.ingest import _is_placeholder_title
+
+        assert _is_placeholder_title("", "https://x/y", "x.com")
+        assert _is_placeholder_title("https://x/y", "https://x/y", "x.com")
+
+    def test_a_real_title_is_not_a_placeholder(self):
+        from backend.api.ingest import _is_placeholder_title
+
+        assert not _is_placeholder_title("premium slow rebound - Temu Belgium", "u", "temu.com")
+        assert not _is_placeholder_title("Lamp for the hallway", "u", "temu.com")

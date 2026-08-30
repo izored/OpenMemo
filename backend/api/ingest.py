@@ -2615,6 +2615,37 @@ async def ingest_from_extension(
     return {"id": memo.id, "title": memo.title, "status": "saved"}
 
 
+def _is_placeholder_title(title: str | None, url: str, domain: str) -> bool:
+    """Is this a title nobody chose, and therefore safe to replace?
+
+    Re-pull must never overwrite words the user wrote. The old test for that was
+    a literal `in ("Instagram post", "Instagram")`, which protected Instagram
+    memos and silently refused to fix the title of every other host's, because
+    "Temu" was not on the list. This asks the same question generically:
+
+      - empty
+      - the raw URL, which is what a failed resolve leaves behind
+      - the bare domain or its first label ("temu.com", "Temu")
+      - that label plus a generic noun ("Instagram post", "Reddit thread")
+
+    Anything else is treated as the user's, and left alone (ADR-001: one rule,
+    no per-host branches).
+    """
+    t = (title or "").strip()
+    if not t:
+        return True
+    if t == (url or "").strip():
+        return True
+    bare = (domain or "").lstrip(".").casefold()
+    if not bare:
+        return False
+    label = bare.split(".")[0]
+    generic = {bare, label} | {
+        f"{label} {noun}" for noun in ("post", "photo", "video", "page", "thread", "link")
+    }
+    return t.casefold() in generic
+
+
 async def repull_memo_task(memo_id: str, mode: str):
     """Fetch a memo's source again and apply everything that comes back.
 
@@ -2643,53 +2674,94 @@ async def repull_memo_task(memo_id: str, mode: str):
         url = memo.source_url
         was_type = (memo.type or "").lower()
 
-    # 1. Instagram is the one host where re-resolving is worth more than the
-    # download: only the resolver knows a post is a carousel, or what its
-    # caption says. Everything else gets what yt-dlp gives it.
-    if "instagram.com" in urlparse(url).netloc:
-        try:
-            from backend.core.extractor import _instagram_resolve
+    # 1. Re-resolve the source. EVERY host, not one (ADR-001).
+    #
+    # This step used to run only for instagram.com, on the reasoning that it is
+    # the host where resolving yields more than a file. True, and beside the
+    # point: the resolver is where a title, a description and a cover come from
+    # on every host, so gating it on one domain quietly redefined "re-pull this
+    # memo" as "re-download the file" for the entire rest of the web. A Temu
+    # link whose card was blank got the yt-dlp treatment and a red error chip,
+    # and never got the second look that would have fixed it.
+    #
+    # Instagram is now a TIER INSIDE this step rather than a gate on it: its
+    # resolver is still preferred there because it alone returns a carousel.
+    domain = urlparse(url).netloc.lstrip("www.")
+    resolved: dict = {}
+    try:
+        from backend.core.extractor import (
+            _instagram_resolve,
+            detect_url_type,
+            extract_url,
+            extract_video,
+        )
 
+        if "instagram.com" in urlparse(url).netloc:
             resolved = await _instagram_resolve(url, "instagram.com")
-            gallery = resolved.get("gallery") or []
-            async with AsyncSessionLocal() as db:
-                memo = await db.get(Memo, memo_id)
-                if memo:
-                    memo.resolve_tier = resolved.get("resolve_tier") or memo.resolve_tier
-                    title = (resolved.get("title") or "").strip()
-                    # Never overwrite a title the user may have written.
-                    if title and (memo.title or "") in ("Instagram post", "Instagram"):
-                        memo.title = title
-                        memo.description = resolved.get("description") or memo.description
-                        memo.content_text = resolved.get("content_text") or memo.content_text
-                    if len(gallery) > 1:
-                        memo.gallery = gallery
-                        memo.thumbnail_path = gallery[0]["url"]
-                    memo.updated_at = datetime.utcnow()
-                    await db.commit()
-            if len(gallery) > 1:
-                await cache_gallery(memo_id)
-        except Exception as e:
-            log.info("repull: instagram re-resolve failed for %s: %r", memo_id, e)
+        elif detect_url_type(url) == "video":
+            resolved = await extract_video(url)
+        else:
+            resolved = await extract_url(url)
+    except Exception as e:
+        log.info("repull: re-resolve failed for %s: %r", memo_id, e)
+
+    gallery = (resolved.get("gallery") or []) if resolved else []
+    if resolved:
+        async with AsyncSessionLocal() as db:
+            memo = await db.get(Memo, memo_id)
+            if memo:
+                memo.resolve_tier = resolved.get("resolve_tier") or memo.resolve_tier
+                title = (resolved.get("title") or "").strip()
+                # Never overwrite words the user may have written themselves.
+                # The old test for that was a literal list of two Instagram
+                # strings; `_is_placeholder_title` asks the same question of any
+                # host without knowing which host it is talking to.
+                if title and _is_placeholder_title(memo.title, url, domain):
+                    memo.title = title
+                    memo.description = resolved.get("description") or memo.description
+                    memo.content_text = resolved.get("content_text") or memo.content_text
+                # A cover the memo never had. Only ever fills a gap: a
+                # thumbnail already on the memo is left exactly as it is, and
+                # step 3 is what repairs a broken one.
+                thumb = (resolved.get("thumbnail_path") or "").strip()
+                if thumb and not (memo.thumbnail_path or "").strip():
+                    memo.thumbnail_path = thumb
+                if len(gallery) > 1:
+                    memo.gallery = gallery
+                    memo.thumbnail_path = gallery[0]["url"]
+                memo.updated_at = datetime.utcnow()
+                await db.commit()
+        if len(gallery) > 1:
+            await cache_gallery(memo_id)
 
     # 2. The download. Sets localize_status itself, done | error.
     #
-    # Unless there is nothing to download. A photo post has no media stream, so
-    # handing it to yt-dlp buys one guaranteed "No video formats found" and a
-    # red error chip on a memo whose pictures are perfectly fine. Repairing the
-    # six rotted carousels marked all six failed for exactly this reason. The
-    # pictures ARE the content here, and step 1 already fetched them.
+    # Unless there is nothing to download, which is a question about the SOURCE
+    # and not about the memo's type. Handing a page with no media stream to
+    # yt-dlp buys one guaranteed "No video formats found" and a red error chip
+    # on a memo whose only problem was a missing cover. That skip used to be
+    # spelled `type == "image"`, which covered the photo carousels that
+    # prompted it and nothing else, so every article and shopping link still
+    # walked into the same error.
+    #
+    # The generic question: is this a known video host, or did the resolve just
+    # hand us a video stream? If neither, there is no media here to fetch.
     async with AsyncSessionLocal() as db:
         memo = await db.get(Memo, memo_id)
-        pictures_only = bool(memo) and (memo.type or "").lower() == "image"
-        if pictures_only:
+        has_media = bool(memo) and (
+            (memo.type or "").lower() in ("video", "audio")
+            or detect_url_type(url) == "video"
+            or bool((resolved or {}).get("video_url"))
+        )
+        no_media = bool(memo) and not has_media
+        if no_media:
             memo.localize_status = None
             memo.localize_error = None
             memo.updated_at = datetime.utcnow()
             await db.commit()
 
-    if pictures_only:
-        log.info("repull: %s is a picture memo, skipping the media download", memo_id)
+    if no_media:
+        log.info("repull: %s has no media stream to download, skipping yt-dlp", memo_id)
     else:
         try:
             await localize_memo_task(memo_id, mode)
