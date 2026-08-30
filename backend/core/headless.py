@@ -282,14 +282,27 @@ def _netscape_cookies_for(domain: str) -> list:
 
     out: list = []
     for line in raw.splitlines():
-        line = line.strip()
-        if not line or line.startswith("#"):
+        # rstrip, never strip: a trailing TAB is a real field (a cookie with an
+        # empty value), and stripping it drops the line to six fields and
+        # silently discards the cookie.
+        line = line.rstrip("\r\n")
+        if not line.strip():
+            continue
+        # Every exporter writes httpOnly cookies as `#HttpOnly_<domain>\t...`,
+        # which is a DATA line wearing a comment's clothes. Skipping it as a
+        # comment throws away exactly the cookies that matter here: a login
+        # session is httpOnly almost by definition.
+        http_only = False
+        if line.startswith("#HttpOnly_"):
+            line = line[len("#HttpOnly_"):]
+            http_only = True
+        elif line.lstrip().startswith("#"):
             continue
         f = line.split("\t")
         if len(f) < 7:
             continue
         cdomain, _flag, path, secure, expires, name, value = f[:7]
-        bare = cdomain.lstrip(".")
+        bare = cdomain.strip().lstrip(".")
         if bare not in suffixes:
             continue
         try:
@@ -299,9 +312,10 @@ def _netscape_cookies_for(domain: str) -> list:
         out.append({
             "name": name,
             "value": value,
-            "domain": cdomain,
+            "domain": cdomain.strip(),
             "path": path or "/",
-            "secure": secure.upper() == "TRUE",
+            "secure": secure.strip().upper() == "TRUE",
+            "httpOnly": http_only,
             # 0 in a Netscape jar means "session cookie"; Playwright wants -1.
             "expires": exp if exp > 0 else -1,
         })
