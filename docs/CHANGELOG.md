@@ -7,6 +7,10 @@ All notable changes to OpenMemo are documented here.
 
 <!-- Add entries here as work lands: ### Added / ### Changed / ### Fixed -->
 
+### Fixed
+
+- 🔗 **A collection you are looking at survives a refresh, and has its own link.** Opening a collection only set a flag in memory while the address bar still said you were on the dashboard. Refresh, and the flag was gone and so were you, back on All Memos. It also meant a collection could not be bookmarked, could not be sent to yourself, and the browser's back button skipped straight past it. Spaces never had this problem, because a Space puts its id in the address; collections now work the same way, at `/collection/<id>` and `/space/<id>/collection/<id>`. Reload where you are and you stay there.
+
 ---
 ## [3.14.0] - 2026-08-30
 
@@ -17,8 +21,6 @@ All notable changes to OpenMemo are documented here.
 - 🙈 **Hide a collection from the dashboard.** A bucket you fill fast, a shopping wishlist, a research dump, a link pile, used to flood All Memos and bury everything else. Edit the collection and turn on "Hide from the dashboard" and its memos stop appearing in the feed and its type tabs. Nothing else changes: the collection stays in the sidebar, on the Collections page and in every picker, search still finds its memos, and opening it shows all of them. It is a decluttering switch, not a second privacy gate; the passcode-gated Hidden section is still the place for things you do not want on screen at all. A collection kept out of the feed reads slightly dimmer in the sidebar so you can tell at a glance which ones are quiet. Off by default, and reversible from the same switch.
 
 ### Fixed
-
-- 🔗 **A collection you are looking at survives a refresh, and has its own link.** Opening a collection only set a flag in memory while the address bar still said you were on the dashboard. Refresh, and the flag was gone and so were you, back on All Memos. It also meant a collection could not be bookmarked, could not be sent to yourself, and the browser's back button skipped straight past it. Spaces never had this problem, because a Space puts its id in the address; collections now work the same way, at `/collection/<id>` and `/space/<id>/collection/<id>`. Reload where you are and you stay there.
 
 - 🔁 **Re-pull works on every site, not just Instagram.** The button that says "fetch this memo's source again" only ever re-read the source on instagram.com. Everywhere else it skipped straight to the video downloader, which quietly turned "re-pull this memo" into "re-download the file" for the entire rest of the web: a shopping link with a blank card got handed to yt-dlp, came back "No video formats found", and wore a red error chip instead of getting the second look that would have fixed it. Now every host is re-read. Instagram keeps its own resolver, because it is the only one that can tell you a post is a carousel, but it is one option inside the step rather than the gate on whether the step happens at all. Two smaller versions of the same mistake went with it: the check for "is this title still a placeholder, or did you write it yourself" was a hardcoded list of two Instagram strings, so a memo titled "Temu" could never be corrected, and the rule for skipping the downloader was "is this a photo memo" rather than "is there anything here to download". Titles you wrote are still never touched, and a cover you already have is still never replaced.
 
