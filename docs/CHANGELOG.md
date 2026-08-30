@@ -7,6 +7,9 @@ All notable changes to OpenMemo are documented here.
 
 <!-- Add entries here as work lands: ### Added / ### Changed / ### Fixed -->
 
+---
+## [3.14.0] - 2026-08-30
+
 ### Added
 
 - 🪟 **Drag a link straight out of your browser.** Dropping a file from Finder or Explorer has always worked. Dropping a link, a picture or a selection from a web page did nothing, and worse than nothing: openMemo only ever looked for files on a drag, so the browser took the event back and navigated the whole app away from itself to the URL you dropped. Browser drags carry no file at all, only text, and all three shapes are handled now. A dragged link is saved as a link. A dragged picture uses the image itself rather than the page it sits on, which is the difference between saving the photo and saving the gallery around it. A dragged selection with no link in it opens the New Memo panel on the Note tab with the text already in place. Everything else about the drop is unchanged: land on a collection or a Space and it saves there instantly, land on the bare dashboard and the panel opens so you can pick a home first. Several picture links at once become one carousel memo, the same as pasting them. Dragging a card around inside openMemo still does what it always did, because a drag that starts inside the app is never treated as an import.
