@@ -51,33 +51,47 @@ Both paths call the same function (`backend/core/headless.py`
 `_looks_like_bot_wall`), so they can never disagree and bounce a URL between
 them. Covered by `backend/tests/test_bot_wall_detection.py`.
 
-## Temu specifically: most of it needs no browser at all
+## Temu specifically: it does not serve the same page twice
 
-Probed against real saved links on 2026-08-29. A plain HTTP fetch of a Temu
-**slug** product page (`temu.com/<region>/<slug>-g-<id>.html`) came back HTTP
-200 with the full document, no puzzle, on 3 of 3 tried. The wall is not on every
-request; it is rate and session dependent, and the page was reachable cold.
+Probed against real saved links on 2026-08-29 and again on 2026-08-30, and the
+two runs disagreed. That disagreement is the finding.
 
-What was missing was never the page. It was the image:
+**Run one.** A plain HTTP fetch of a Temu slug product page
+(`temu.com/<region>/<slug>-g-<id>.html`) came back HTTP 200 with the full
+document on 3 of 3 tried. No puzzle. Temu set `og:title`, `og:description`,
+`og:type=product` and `og:url`, and no `og:image` at all, but the hero photo was
+in the HTML as the preloaded LCP image:
 
-- Temu sets `og:title`, `og:description`, `og:type=product` and `og:url`.
-- Temu sets **no `og:image`**, and no JSON-LD.
-- The hero photo is in the HTML anyway, as the preloaded LCP image:
-  `<link rel="preload" as="image" fetchpriority="high" href="https://img.kwcdn.com/product/...">`
-- That CDN URL fetches straight: HTTP 200, `image/webp`, 800x800, no challenge.
+```
+<link rel="preload" as="image" fetchpriority="high"
+      href="https://img.kwcdn.com/product/open/...-goods.jpeg?imageView2/2/w/1300/q/90/format/webp">
+```
 
-So the fix was a missing image rule, not a bot-wall problem. openMemo now falls
-back to a page's preloaded hero whenever it publishes no `og:image`, preferring
-`fetchpriority="high"` and then the widest variant when the CDN encodes a width.
-The rule is host-agnostic, and it pays off on any client-rendered storefront
-that renders its product shot in JavaScript.
+That CDN URL fetched straight: HTTP 200, `image/webp`, 800x800, no challenge.
 
-### The one shape that still needs the extension
+**Run two, next day, same URLs.** HTTP 200 again, same size, and no product
+anywhere in it. No `og:image`, no preload link, no `img.kwcdn.com/product`
+reference. Only site chrome: the favicon and the navigation icons. Rendering the
+same page in the built-in browser with JavaScript running found no product image
+either, and reported `bot_wall: False`, so it was not a puzzle. The page simply
+arrived without its product.
 
-`temu.com/goods.html?goods_id=...` is a client-side router page. It carries no
-`og:image`, no canonical pointing at the slug URL, no CDN image and sometimes no
-`og:title` either. There is nothing server-side to read. Those links save as
-bookmarks; use the extension if you want the content.
+### What that means
+
+The preloaded-hero fallback is real, host-agnostic and worth having: any page
+that names its own hero gets picked up now, and Temu does that some of the time.
+It is not a fix for Temu, because Temu is not consistent enough to be fixed this
+way. Treat a Temu cover as a coin flip on the server side.
+
+**The extension is the reliable route**, and for the same reason as the CAPTCHA
+case: it reads the tab you are already looking at, where the product has
+rendered, instead of asking the server to render it again.
+
+### The shape that never works server-side
+
+`temu.com/goods.html?goods_id=...` is a client-side router page. No `og:image`,
+no canonical pointing at the slug URL, no CDN image, sometimes no `og:title`.
+There is nothing server-side to read on any run.
 
 ## What actually gets the page
 

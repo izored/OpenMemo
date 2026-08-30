@@ -110,8 +110,9 @@ Then point that host process somewhere else.
 
 ## A site keeps asking me to solve a puzzle and the memo comes back empty
 
-Temu, and shops guarded the same way, answer anything automated with a slider or
-rotate CAPTCHA. Nothing openMemo runs can finish one, so it files the link as a
+Temu, and shops guarded the same way, sometimes answer anything automated with a
+slider or rotate CAPTCHA, and sometimes just serve a page with the product
+missing from it. Nothing openMemo runs can finish one, so it files the link as a
 plain bookmark and says so instead of saving the puzzle page as if it were the
 product. To capture the real page, solve the puzzle in your own browser and save
 it with the browser extension: the extension reads the tab you already got
