@@ -213,6 +213,18 @@ input, textarea { font: inherit; color: inherit; }
   height: 100dvh; overflow: hidden;
   position: relative; z-index: 2;
 }
+/* macOS shell only (main.tsx stamps data-shell="mac" on <html>): the window is
+   frameless (titleBarStyle 'hiddenInset'), so the close/minimise/zoom buttons
+   float over whatever the page paints top-left — which is the "openMemo" mark.
+   Growing the HEAD (rather than the rail) reserves the band AND keeps it inside
+   the element the shell marks as the window-drag region, so the empty strip
+   still moves the window. Everything below the head shifts down with it.
+   Both selectors outrank the shorthand `padding` on the base rules, which is
+   what the shell's own injected CSS could not do reliably: insertCSS does not
+   survive a renderer reload, so the inset kept vanishing. */
+:root[data-shell="mac"] .om-sidebar-head { padding-top: var(--mac-titlebar-inset, 34px); }
+:root[data-shell="mac"] .om-sidebar.collapsed .om-sidebar-head { padding-top: var(--mac-titlebar-inset, 34px); }
+
 /* The ONLY scrollable zone: the Collections list. Search / nav / Pinned / the
    Collections header all stay fixed above it. Owns the flexible space so the
    bottom zone (player + foot) sits at the bottom naturally (even when collapsed,
@@ -276,6 +288,14 @@ input, textarea { font: inherit; color: inherit; }
   transition: background .15s, color .15s;
   text-align: left;
 }
+/* Kept out of the dashboard feed (OPNMMO-0053) — still listed and still
+   clickable, just visibly quieter than the collections that do show up. */
+.om-coll.dash-hidden .om-coll-name { color: var(--text-4); }
+.om-coll.dash-hidden .om-coll-dot { opacity: 0.4; }
+.om-coll.dash-hidden .om-coll-emoji { opacity: 0.55; }
+.om-coll.dash-hidden:hover .om-coll-name,
+.om-coll.dash-hidden.active .om-coll-name { color: var(--text-2); }
+
 .om-coll:hover { background: var(--surface-2); color: var(--text); }
 .om-coll.active { background: var(--surface-2); color: var(--text); }
 /* Drop target while dragging a memo over a collection. Full inset ring + soft
@@ -2225,6 +2245,15 @@ input, textarea { font: inherit; color: inherit; }
   transition: opacity .15s;
 }
 .om-btn-full:disabled { opacity: 0.4; cursor: not-allowed; }
+/* "Hide from the dashboard" switch in the collection modal (OPNMMO-0053). The
+   hint sits under the label so the switch never has to explain itself twice. */
+.om-coll-hide-row { align-items: flex-start; }
+.om-coll-hide-row .om-switch { margin-top: 1px; }
+.om-coll-hide-hint {
+  display: block; margin-top: 3px;
+  font-size: 11px; font-style: normal; line-height: 1.45; color: var(--text-4);
+}
+
 .om-coll-danger { padding-top: 14px; margin-top: 2px; border-top: 1px solid var(--border); }
 .om-btn-danger-ghost {
   width: 100%; padding: 10px; border-radius: 99px;

@@ -28,6 +28,17 @@ Anti-detection layers (Cloudflare / Turnstile):
   6. Richer headers — sec-ch-ua client hints present in real Chrome. Sec-Fetch-*
      is left to Chromium: those values are per-request, and forcing navigation
      values onto subresources makes strict sites (Meta) serve an empty body.
+  7. The user's own cookie jar — the Netscape cookies.txt uploaded in Settings
+     (shared with yt-dlp) is loaded for the domain being rendered. A site whose
+     wall only lifts for a signed-in session (Temu, marketplaces) then renders
+     for us exactly as it does in the user's browser.
+
+What this deliberately does NOT do: solve a puzzle. Temu, DataDome, PerimeterX
+and Akamai serve an interactive slider/rotate CAPTCHA that a real person has to
+finish. Rather than saving that interstitial as if it were the page, a wall is
+DETECTED and reported (`bot_wall`) so the caller can file the link honestly and
+point the user at the browser extension, which reads the page out of their own
+already-solved tab.
 """
 import asyncio
 import json
@@ -198,6 +209,118 @@ _CF_MARKERS = [
     "jschl-answer",
 ]
 
+# Interactive anti-bot walls — a puzzle a HUMAN has to finish (slide the piece,
+# rotate the image, press and hold). Unlike a Cloudflare JS challenge these do
+# not self-resolve no matter how long we wait, so detecting one is the whole
+# point: it turns "openMemo saved a memo titled 'Verify'" into "openMemo says
+# this site wants a puzzle, save it with the extension instead".
+# Matched case-insensitively against the settled DOM.
+_BOT_WALL_MARKERS = [
+    # Temu / Akamai / generic slider + rotate puzzles
+    "px-captcha",
+    "slidercaptcha",
+    "slide to verify",
+    "drag the slider",
+    "rotate the image",
+    "press &amp; hold",
+    "press and hold",
+    "verify you are human",
+    "verify you are a human",
+    "are you a robot",
+    "please verify to continue",
+    "unusual traffic from your",
+    # Vendor fingerprints
+    "datadome",
+    "captcha-delivery.com",
+    "perimeterx",
+    "_px_captcha",
+    "geetest",
+    "hcaptcha",
+    "/akam/",
+    "aka-cdn",
+    # Temu's own wall
+    "anti_content",
+    "verification-page",
+]
+
+
+def _looks_like_bot_wall(html: str) -> bool:
+    """True when the settled DOM is an interactive human-verification puzzle.
+
+    Deliberately requires the page to ALSO be content-thin: an ordinary product
+    page that merely loads hCaptcha for its review form would otherwise be
+    written off as a wall. A real wall is a near-empty document."""
+    if not html:
+        return False
+    low = html.lower()
+    if not any(m in low for m in _BOT_WALL_MARKERS):
+        return False
+    # A wall is a stub. 120 KB of markup means the real page rendered and the
+    # marker came from a widget somewhere on it.
+    return len(html) < 120_000
+
+
+def _netscape_cookies_for(domain: str) -> list:
+    """The user's uploaded cookies.txt, narrowed to `domain`, as Playwright dicts.
+
+    Same jar yt-dlp uses (Settings -> Cookies), so one upload serves downloads
+    AND rendering. Silent no-op when no jar exists; a malformed line is skipped
+    rather than failing the render."""
+    try:
+        from backend.core.app_settings import cookies_present, get_cookies_path
+
+        if not cookies_present():
+            return []
+        raw = get_cookies_path().read_text(encoding="utf-8", errors="ignore")
+    except Exception:
+        return []
+
+    host = domain.lstrip(".")
+    # "shop.temu.com" should also pick up cookies scoped to ".temu.com".
+    parts = host.split(".")
+    suffixes = {host} | {".".join(parts[i:]) for i in range(len(parts) - 1)}
+
+    out: list = []
+    for line in raw.splitlines():
+        # rstrip, never strip: a trailing TAB is a real field (a cookie with an
+        # empty value), and stripping it drops the line to six fields and
+        # silently discards the cookie.
+        line = line.rstrip("\r\n")
+        if not line.strip():
+            continue
+        # Every exporter writes httpOnly cookies as `#HttpOnly_<domain>\t...`,
+        # which is a DATA line wearing a comment's clothes. Skipping it as a
+        # comment throws away exactly the cookies that matter here: a login
+        # session is httpOnly almost by definition.
+        http_only = False
+        if line.startswith("#HttpOnly_"):
+            line = line[len("#HttpOnly_"):]
+            http_only = True
+        elif line.lstrip().startswith("#"):
+            continue
+        f = line.split("\t")
+        if len(f) < 7:
+            continue
+        cdomain, _flag, path, secure, expires, name, value = f[:7]
+        bare = cdomain.strip().lstrip(".")
+        if bare not in suffixes:
+            continue
+        try:
+            exp = int(expires)
+        except ValueError:
+            exp = 0
+        out.append({
+            "name": name,
+            "value": value,
+            "domain": cdomain.strip(),
+            "path": path or "/",
+            "secure": secure.strip().upper() == "TRUE",
+            "httpOnly": http_only,
+            # 0 in a Netscape jar means "session cookie"; Playwright wants -1.
+            "expires": exp if exp > 0 else -1,
+        })
+    return out
+
 
 async def _walk_slides(page, max_slides: int) -> list:
     """Page a slideshow and return each stage image in order.
@@ -305,7 +428,10 @@ async def render_page(
     """Render `url` in a stealth browser, passing Cloudflare/JS challenges.
 
     Returns {"html": str, "screenshot": bytes|None, "main_image": str|None,
-    "slides": list[str]} or None on failure. `main_image` is the largest
+    "slides": list[str], "bot_wall": bool} or None on failure. `bot_wall` is
+    True when the settled DOM is an interactive human-verification puzzle
+    (Temu, DataDome, PerimeterX): the HTML is real, but it is the wall, not the
+    page, and no amount of waiting changes that. `main_image` is the largest
     rendered image — preferred on photo pages where og:image is a scraper
     placeholder.
 
@@ -357,6 +483,16 @@ async def render_page(
             except Exception:
                 pass
 
+        # The user's own jar (Settings -> Cookies) last, so a real signed-in
+        # session wins over whatever we cached ourselves. This is what gets a
+        # session-gated marketplace to render for us at all.
+        user_cookies = _netscape_cookies_for(domain)
+        if user_cookies:
+            try:
+                await ctx.add_cookies(user_cookies)
+            except Exception:
+                pass
+
         page = await ctx.new_page()
         await page.goto(url, wait_until="domcontentloaded", timeout=timeout_ms)
 
@@ -399,6 +535,12 @@ async def render_page(
 
         html = await page.content()
 
+        # An interactive puzzle never self-resolves. Say so instead of handing
+        # back the interstitial as if it were the page.
+        bot_wall = _looks_like_bot_wall(html)
+        if bot_wall:
+            print(f"[headless] interactive bot wall on {domain} — no automated pass")
+
         # Persist cookies — saves cf_clearance for next request to this domain.
         try:
             cookies = await ctx.cookies()
@@ -429,6 +571,7 @@ async def render_page(
             "screenshot": shot,
             "main_image": main_image,
             "slides": slides,
+            "bot_wall": bot_wall,
         }
 
     except Exception as e:

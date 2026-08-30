@@ -107,3 +107,23 @@ docker compose restart openmemo-api
 ```
 
 Then point that host process somewhere else.
+
+## A site keeps asking me to solve a puzzle and the memo comes back empty
+
+Temu, and shops guarded the same way, answer anything automated with a slider or
+rotate CAPTCHA. Nothing openMemo runs can finish one, so it files the link as a
+plain bookmark and says so instead of saving the puzzle page as if it were the
+product. To capture the real page, solve the puzzle in your own browser and save
+it with the browser extension: the extension reads the tab you already got
+through, so the wall never enters into it. Uploading your cookies in Settings
+also helps for sites whose wall only lifts for a signed-in session. Full detail
+in [bot-walls-and-captchas.md](bot-walls-and-captchas.md).
+
+## A collection is drowning my dashboard
+
+Edit the collection and turn on **Hide from the dashboard**. Its memos stop
+appearing in All Memos and the type tabs. The collection stays in the sidebar,
+on the Collections page and in every picker, search still finds its memos, and
+opening the collection shows all of them. It is for decluttering a bucket you
+fill fast, not for privacy: the passcode-gated Hidden section is still the place
+for things you do not want on screen at all.

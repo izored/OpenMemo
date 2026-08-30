@@ -2,7 +2,7 @@ import React from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { Link } from 'react-router-dom';
 import { isPlainClick } from '@/lib/nav';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useDroppable } from '@dnd-kit/core';
 import { motion } from 'framer-motion';
 import { Icon } from './Icon';
@@ -28,11 +28,15 @@ function CollectionRow({
   onEdit: (e: React.MouseEvent) => void;
 }) {
   const { isOver, setNodeRef } = useDroppable({ id: `col-${col.id}` });
+  // Dimmed, not removed: a collection kept out of the dashboard feed is still
+  // the fastest way to open it (OPNMMO-0053).
+  const dashHidden = !!col.hidden_from_dashboard;
   return (
     <button
       ref={setNodeRef}
-      className={cn('om-coll', pinned && 'pinned', active && 'active', isOver && 'drop-over')}
+      className={cn('om-coll', pinned && 'pinned', active && 'active', isOver && 'drop-over', dashHidden && 'dash-hidden')}
       onClick={onSelect}
+      title={dashHidden ? `${col.name} — hidden from the dashboard feed` : undefined}
     >
       <span
         className="om-coll-dot"
@@ -73,6 +77,32 @@ export function Sidebar() {
     setTweak,
   } = useAppStore();
   const isMobile = useIsMobile();
+  const queryClient = useQueryClient();
+
+  // The "openMemo" mark is the way home, and — when you are already home — the
+  // way to pull the feed fresh. Collapse/expand lives on the chevron beside it
+  // (and on the hamburger the mark becomes once the rail is collapsed), so the
+  // mark itself never has two jobs at once.
+  const onBrandClick = () => {
+    if (sidebarCollapsed && !isMobile) {
+      toggleSidebarCollapsed();
+      return;
+    }
+    const atDashboard = location.pathname === '/' && !activeCollection && !activeSpace;
+    setActiveCollection(null);
+    setActiveSpace(null);
+    if (atDashboard) {
+      // Same route, so navigate() would be a no-op. Drop the cached pages
+      // instead: the infinite feed, the collection list and the counts all
+      // refetch and the grid repaints from the top.
+      queryClient.invalidateQueries({ queryKey: ['memos'] });
+      queryClient.invalidateQueries({ queryKey: ['collections'] });
+      queryClient.invalidateQueries({ queryKey: ['stats'] });
+    } else {
+      navigate('/');
+    }
+    if (isMobile) setSidebarOpen(false);
+  };
 
   // Two explicit themes only — the old "System" option is gone (dark mode is
   // manually toggled, never auto-applied; see CLAUDE.md).
@@ -246,17 +276,14 @@ export function Sidebar() {
       <div className="om-sidebar-head">
         <button
           className="om-brand"
-          onClick={() => {
-            // On mobile the drawer header logo goes home (ADR-009 #3); on
-            // desktop it keeps the collapse/expand toggle.
-            if (isMobile) {
-              navigate('/');
-              setSidebarOpen(false);
-            } else {
-              toggleSidebarCollapsed();
-            }
-          }}
-          title={isMobile ? 'Go home' : sidebarCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+          onClick={onBrandClick}
+          title={
+            sidebarCollapsed && !isMobile
+              ? 'Expand sidebar'
+              : location.pathname === '/' && !activeCollection && !activeSpace
+                ? 'Refresh the dashboard'
+                : 'Go to the dashboard'
+          }
         >
           {sidebarCollapsed && !isMobile
             ? <Icon name="menu" size={18} style={{ color: 'var(--text-3)' }} />

@@ -87,8 +87,74 @@ def _schema_image(jsonld: list[dict]) -> str:
     return ""
 
 
+def _preload_image(soup: BeautifulSoup) -> str:
+    """The hero image a page PRELOADS, for pages that publish no og:image.
+
+    A storefront or SPA renders its product shot client-side, so the server
+    HTML carries no og:image and no `<img>` worth scoring - but it does carry
+    `<link rel="preload" as="image" fetchpriority="high" href="...">` for the
+    very photo the page is about, because preloading the LCP image is how a
+    page wins Core Web Vitals. That link is in the plain-fetch HTML, needs no
+    browser, and points at a CDN that serves it without a challenge.
+
+    Temu is the case that found this: og:title, og:description and og:type are
+    all set, og:image never is, so every saved product came back as a bare
+    card. The rule is host-agnostic on purpose (ADR-001) - any page that
+    preloads its hero hands us the same thing.
+
+    Prefers fetchpriority="high", then the widest variant when the CDN encodes
+    a width in the URL, so `.../x.jpeg?imageView2/2/w/1300` beats the `w/500`
+    thumbnail sitting next to it.
+    """
+    hi: list[str] = []
+    rest: list[str] = []
+    for link in soup.find_all("link"):
+        rel = link.get("rel") or []
+        # `rel` is a multi-valued attribute, so bs4 hands back a list.
+        rels = [rel] if isinstance(rel, str) else list(rel)
+        if not any(r.lower() == "preload" for r in rels):
+            continue
+        # HTML parsers lowercase attribute names: fetchPriority -> fetchpriority.
+        if (link.get("as") or "").lower() != "image":
+            continue
+        href = (link.get("href") or "").strip()
+        if not href or href.startswith("data:"):
+            continue
+        (hi if (link.get("fetchpriority") or "").lower() == "high" else rest).append(href)
+
+    for group in (hi, rest):
+        if group:
+            return max(group, key=_url_width_hint)
+    return ""
+
+
+# A width encoded in an image URL, only in the shapes that unambiguously mean
+# "width": `/w/1300`, `?width=1300`, `&w=1300`, and the `_1300x` prefix of a
+# `_1300x1300` pair. Deliberately narrow - matching any number after a slash
+# would read an id out of `/product/12345/x.jpg` as a width.
+_WIDTH_IN_URL = re.compile(r"(?:\bw(?:idth)?[/=](\d{2,5})|_(\d{2,5})x\d)", re.I)
+
+
+def _url_width_hint(url: str) -> int:
+    """Largest number that unambiguously reads as a pixel width in `url`, else 0.
+
+    Used only to rank several preloaded variants of the SAME picture against
+    each other, so a wrong answer costs a smaller thumbnail, never a wrong
+    image."""
+    best = 0
+    for m in _WIDTH_IN_URL.finditer(url):
+        raw = m.group(1) or m.group(2)
+        try:
+            n = int(raw)
+        except (TypeError, ValueError):
+            continue
+        if 16 <= n <= 8192:
+            best = max(best, n)
+    return best
+
+
 def _pick_image(soup: BeautifulSoup, jsonld: list[dict], base_url: str) -> str:
-    """Defuddle image priority: og:image → twitter:image → schema → link → hero <img>."""
+    """Image priority: og:image → twitter:image → schema → link → preloaded hero → largest <img>."""
     candidates = [
         _meta(soup, "property", "og:image"),
         _meta(soup, "property", "og:image:url"),
@@ -100,6 +166,9 @@ def _pick_image(soup: BeautifulSoup, jsonld: list[dict], base_url: str) -> str:
     link_img = soup.find("link", rel=re.compile(r"image_src", re.I))
     if link_img and link_img.get("href"):
         candidates.append(link_img["href"])
+    # Before the hero-<img> guess: a preloaded LCP image is the page telling us
+    # which picture it is about, where scoring rendered <img> tags cannot.
+    candidates.append(_preload_image(soup))
 
     for c in candidates:
         if c and c.strip():
@@ -271,6 +340,20 @@ _CF_BODY_MARKERS = [
 ]
 
 
+def _looks_like_bot_wall(raw_html: str) -> bool:
+    """Interactive human-verification wall in a plain-fetch response.
+
+    Reuses the headless detector so the plain and rendered paths agree on what
+    a wall is. Returning True routes the URL to `_minimal_link`, which tries a
+    real browser once and then files the honest link card."""
+    try:
+        from backend.core.headless import _looks_like_bot_wall as _wall
+
+        return _wall(raw_html)
+    except Exception:
+        return False
+
+
 def _is_cf_challenge(parsed: dict | None, raw_html: str) -> bool:
     """Return True if the parsed result or raw HTML looks like a CF challenge."""
     if parsed is not None:
@@ -325,7 +408,11 @@ async def extract_url(url: str) -> dict:
             # OR to a CF challenge page, to the headless path.
             if resp.status_code == 200:
                 parsed = _parse_html(resp.text, str(resp.url), url, domain)
-                if parsed is not None and not _is_cf_challenge(parsed, resp.text):
+                if (
+                    parsed is not None
+                    and not _is_cf_challenge(parsed, resp.text)
+                    and not _looks_like_bot_wall(resp.text)
+                ):
                     return parsed
         except Exception:
             pass
@@ -986,6 +1073,9 @@ async def _fetch_og_meta(url: str, user_agent: str | None = None) -> dict:
         or _meta("og:image:secure_url")
         or _meta("twitter:image", "name")
         or _meta("twitter:image:src", "name")
+        # No og:image at all is normal on a client-rendered storefront; the
+        # preloaded hero is the picture the page is actually about.
+        or _preload_image(soup)
     )
     # og:video presence distinguishes a video page from a photo page on hosts
     # where both carry og:image (Instagram — a reel's og:image is its poster).
@@ -996,6 +1086,31 @@ async def _fetch_og_meta(url: str, user_agent: str | None = None) -> dict:
         "description": description,
         "thumbnail_path": thumbnail,
         "video_url": video_url,
+    }
+
+
+def _bot_wall_memo(url: str, domain: str) -> dict:
+    """A link memo for a page guarded by an interactive human-verification wall.
+
+    Saved as a plain, honest bookmark rather than a scrape of the CAPTCHA. The
+    description is the instruction, because that is the only place the user
+    reads: openMemo cannot finish a slider puzzle, the extension does not have
+    to (the tab it reads is already past it)."""
+    return {
+        "title": url,
+        "description": (
+            f"Saved as a link -- {domain} answered with a human-verification puzzle "
+            "(slider / rotate / press-and-hold), which no automated fetch can finish. "
+            "To capture the page itself, open it in your browser, clear the puzzle, "
+            "then save it with the openMemo extension."
+        ),
+        "content_text": url,
+        "source_url": url,
+        "source_domain": domain,
+        "source_favicon": None,
+        "thumbnail_path": "",
+        "type": "link",
+        "resolve_tier": "blocked:bot-wall",
     }
 
 
@@ -1020,6 +1135,13 @@ async def _minimal_link(url: str, domain: str | None = None) -> dict:
         from backend.core.headless import render_page
 
         rendered = await render_page(url, want_main_image=is_photo)
+        # An interactive puzzle (Temu, DataDome, PerimeterX) rendered instead of
+        # the page. Its DOM parses perfectly well — into a memo titled "Verify"
+        # with the CAPTCHA's own artwork as the thumbnail. Stop here and file an
+        # honest link card instead (OPNMMO-0054); the browser extension reads
+        # the page out of the user's already-solved tab.
+        if rendered and rendered.get("bot_wall"):
+            return _bot_wall_memo(url, domain)
         if rendered and rendered.get("html"):
             parsed = _parse_html(rendered["html"], url, url, domain)
             main_img = rendered.get("main_image")

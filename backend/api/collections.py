@@ -53,6 +53,8 @@ class CollectionCreate(BaseModel):
     pinned: Optional[bool] = None
     # Playlists: the source playlist URL they were ingested from.
     source_url: Optional[str] = None
+    # Create it already out of the All-Memos feed (OPNMMO-0053).
+    hidden_from_dashboard: Optional[bool] = False
     workspace_id: Optional[str] = None
 
 
@@ -63,6 +65,8 @@ class CollectionUpdate(BaseModel):
     color: Optional[str] = None
     pinned: Optional[bool] = None
     sort_order: Optional[int] = None
+    # Keep this collection's memos out of the All-Memos feed (OPNMMO-0053).
+    hidden_from_dashboard: Optional[bool] = None
 
 
 @router.get("")
@@ -105,6 +109,7 @@ async def list_collections(
             "cover_url": collection_cover_url(c),
             "pinned": c.pinned,
             "sort_order": c.sort_order,
+            "hidden_from_dashboard": bool(getattr(c, "hidden_from_dashboard", False)),
             "created_at": c.created_at.isoformat(),
         }
         for c in collections
@@ -124,6 +129,7 @@ async def create_collection(data: CollectionCreate, db: AsyncSession = Depends(g
         kind=data.kind if data.kind in ("standard", "playlist") else "standard",
         music_kind=data.music_kind if data.music_kind in ("album", "playlist", "hero") else None,
         pinned=bool(data.pinned),
+        hidden_from_dashboard=bool(data.hidden_from_dashboard),
         source_url=data.source_url,
     )
     db.add(collection)
@@ -154,9 +160,15 @@ async def update_collection(
         collection.pinned = data.pinned
     if data.sort_order is not None:
         collection.sort_order = data.sort_order
-    
+    if data.hidden_from_dashboard is not None:
+        collection.hidden_from_dashboard = bool(data.hidden_from_dashboard)
+
     await db.commit()
-    return {"id": collection.id, "status": "updated"}
+    return {
+        "id": collection.id,
+        "hidden_from_dashboard": bool(collection.hidden_from_dashboard),
+        "status": "updated",
+    }
 
 
 @router.delete("/{collection_id}")

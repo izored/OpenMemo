@@ -264,6 +264,15 @@ OPENMEMO_RENDERER_URL=http://localhost:3000 npm --prefix macOS run dev
   through in 20, it says so on the Settings card and in a notification.
 - **Drop files on the Dock icon** (or Finder → Open With → OpenMemo) and
   they're ingested as memos directly.
+- **Drop onto the window too, from Finder or from a browser.** Dragging a file
+  out of Finder has always worked. Since 3.14 you can also drag a link, a
+  picture or a highlighted paragraph straight out of a Safari or Chrome window
+  onto openMemo. Release over a collection and it saves there; release on the
+  bare dashboard and the New Memo panel opens so you pick a home first.
+- **The window buttons stay clear of the sidebar.** The window is frameless, so
+  close/minimise/zoom float over the page. The sidebar reserves a band for them,
+  and the empty strip beside the openMemo mark is a drag region: grab it to move
+  the window.
 - **`openmemo://` links** open the app — e.g. `openmemo://memo/<id>` jumps to a
   memo, `openmemo://settings` to Settings.
 - **Open at Login** — in the OpenMemo menu, or Settings → Security.
