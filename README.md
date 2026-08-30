@@ -26,6 +26,8 @@ Articles in bookmarks you'll never re-read. Notes scattered across 4 apps. PDFs 
 
 Drop a PDF. Paste a URL. Jot a quick note. Record a voice memo. The Chrome Extension captures any webpage in one click. On your phone, share any post to your private Telegram bot and it lands in openMemo by itself.
 
+Dropping works from either direction. Drag files in from Finder or Explorer, or drag a link, a picture or a highlighted paragraph straight out of a browser window. Land on a collection and it saves there on release; land on the bare dashboard and openMemo asks where it goes first.
+
 ---
 
 ## What's Inside
@@ -40,7 +42,7 @@ Get the transcript of any video without losing the video. One click pulls the so
 Point it at any video or audio link (YouTube, Vimeo, podcast hosts, direct media files, anything yt-dlp can fetch) and openMemo pulls the media down and keeps it. A Memo survives the original being taken offline. Or convert a long video into an audio-only copy when you just want the podcast.
 
 ### 📚 Smart Collections
-Organise Memos into themed collections with emoji icons and descriptions. Drag and drop cards directly into collections. Scope your AI chat to a single project or topic.
+Organise Memos into themed collections with emoji icons and descriptions. Drag and drop cards directly into collections. Scope your AI chat to a single project or topic. A collection you fill fast, a shopping wishlist or a research dump, can be hidden from the dashboard so it stops burying everything else, while staying in the sidebar and in search.
 
 ### 🔌 Chrome Extension
 One-click save from any webpage. Site-specific extractors pull clean article text, video metadata, and source attribution automatically.
