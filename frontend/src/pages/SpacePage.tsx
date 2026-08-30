@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { useParams } from 'react-router-dom';
+import { useNavigate, useParams } from 'react-router-dom';
 import { useQuery, useInfiniteQuery, useQueryClient, keepPreviousData } from '@tanstack/react-query';
 import { motion } from 'framer-motion';
 import { MemoGrid } from '@/components/MemoGrid';
@@ -24,7 +24,8 @@ function parsePosY(s?: string | null): number {
 }
 
 export function SpacePage() {
-  const { id = '' } = useParams();
+  const { id = '', collectionId } = useParams();
+  const navigate = useNavigate();
   const queryClient = useQueryClient();
   const coverInputRef = useRef<HTMLInputElement>(null);
   const bandRef = useRef<HTMLDivElement>(null);
@@ -44,6 +45,13 @@ export function SpacePage() {
   useEffect(() => {
     if (id && activeSpace !== id) setActiveSpace(id);
   }, [id, activeSpace, setActiveSpace]);
+
+  // The open collection is part of the route too, for the same reason: without
+  // it a refresh inside a Space collection fell back to the Space's home.
+  useEffect(() => {
+    const next = collectionId || null;
+    if (activeCollection !== next) setActiveCollection(next);
+  }, [collectionId, activeCollection, setActiveCollection]);
 
   const { data: space } = useQuery({
     queryKey: ['space', id],
@@ -216,7 +224,7 @@ export function SpacePage() {
             <h1 className="om-space-name">{space?.name || 'Space'}</h1>
             <p className="om-space-sub">
               {activeColl ? (
-                <>Filed under <b>{activeColl.name}</b> · <button className="om-link-btn" onClick={() => setActiveCollection(null)}>show all</button></>
+                <>Filed under <b>{activeColl.name}</b> · <button className="om-link-btn" onClick={() => navigate(`/space/${id}`)}>show all</button></>
               ) : (
                 space?.description || 'A separate place for a bigger project.'
               )}

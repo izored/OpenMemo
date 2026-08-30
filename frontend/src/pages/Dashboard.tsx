@@ -1,5 +1,5 @@
 import { useMemo, useRef, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useParams } from 'react-router-dom';
 import { useQuery, useInfiniteQuery, keepPreviousData } from '@tanstack/react-query';
 import { MemoGrid } from '@/components/MemoGrid';
 import { BottomBar } from '@/components/BottomBar';
@@ -23,6 +23,16 @@ export function Dashboard() {
     addPanelOpen,
   } = useAppStore();
   const addMemoBusy = useAppStore((s) => s.addMemoBusy);
+
+  // The route owns which collection is open, exactly as /space/:id owns which
+  // Space is (ADR-020). The store slice is the working copy every other surface
+  // reads; this keeps it in step, which is what makes a refresh land back in the
+  // collection instead of on the bare dashboard.
+  const { id: routeCollection } = useParams();
+  useEffect(() => {
+    const next = routeCollection || null;
+    if (activeCollection !== next) setActiveCollection(next);
+  }, [routeCollection, activeCollection, setActiveCollection]);
 
   // Apply saved tab order without drag-to-reorder (DnD re-added in next iteration).
   const orderedFilters = useMemo(() => {
@@ -136,10 +146,9 @@ export function Dashboard() {
           active={activeFilter}
           onChange={(id) => {
             setActiveFilter(id);
-            if (activeCollection) {
-              setActiveCollection(null);
-              navigate('/');
-            }
+            // Navigate rather than clearing the flag: the route is what holds
+            // the open collection now, so only leaving the route leaves it.
+            if (activeCollection) navigate('/');
           }}
         />
       </BottomBar>

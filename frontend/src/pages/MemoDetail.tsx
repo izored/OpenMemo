@@ -1497,7 +1497,6 @@ export function MemoDetail() {
   const queryClient = useQueryClient();
   const openThumbEdit = useAppStore((s) => s.openThumbEdit);
   const showNotice = useAppStore((s) => s.showNotice);
-  const setActiveCollection = useAppStore((s) => s.setActiveCollection);
   const isMobile = useIsMobile();
   const [isEditing, setIsEditing] = useState(false);
   const [noteContent, setNoteContent] = useState('');
@@ -1956,7 +1955,7 @@ export function MemoDetail() {
                     <button
                       key={c.id}
                       className="om-meta-coll"
-                      onClick={() => { setActiveCollection(c.id); navigate('/'); }}
+                      onClick={() => navigate(`/collection/${c.id}`)}
                       title={`View “${c.name}”`}
                     >
                       <span className="om-meta-coll-emoji">{full?.emoji || '📁'}</span>

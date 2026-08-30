@@ -228,9 +228,10 @@ export function Sidebar() {
     navigate(path, path === '/ask' ? { state: { newChat: Date.now() } } : undefined);
   };
   const selectCollection = (id: string) => {
-    setActiveCollection(id);
     setActiveSpace(null);
-    navigate('/');
+    // The route carries the collection now, so a refresh stays put. Dashboard
+    // syncs the store slice from the param.
+    navigate(`/collection/${id}`);
   };
   // Tapping a Space always opens it (its collections drop down, the library
   // sections retract). It never closes back to the dashboard — leaving a Space
@@ -244,8 +245,7 @@ export function Sidebar() {
   };
   const selectSpaceCollection = (spaceId: string, collId: string) => {
     setActiveSpace(spaceId);
-    setActiveCollection(collId);
-    navigate(`/space/${spaceId}`);
+    navigate(`/space/${spaceId}/collection/${collId}`);
     if (isMobile) setSidebarOpen(false);
   };
   // Open the open Space's own hidden section (ADR-020). Stays inside the Space.
