@@ -104,7 +104,7 @@ function CollCard({ c, total, recent, coverImg, editMode, onOpen, onEdit, onPin 
 export function CollectionsPage() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
-  const { setActiveCollection, setCollectionModalOpen, setEditingCollection } = useAppStore();
+  const { setCollectionModalOpen, setEditingCollection } = useAppStore();
   const [editMode, setEditMode] = useState(false);
 
   const { data: serverCollections = [] } = useQuery({
@@ -128,8 +128,9 @@ export function CollectionsPage() {
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 6 } }));
 
   const open = (id: string) => {
-    setActiveCollection(id);
-    navigate('/');
+    // The collection lives in the URL, so this view is bookmarkable and a
+    // refresh stays inside it.
+    navigate(`/collection/${id}`);
   };
   const edit = (c: Collection) => {
     setEditingCollection(c);

@@ -7,6 +7,10 @@ All notable changes to OpenMemo are documented here.
 
 <!-- Add entries here as work lands: ### Added / ### Changed / ### Fixed -->
 
+### Fixed
+
+- 🔗 **A collection you are looking at survives a refresh, and has its own link.** Opening a collection only set a flag in memory while the address bar still said you were on the dashboard. Refresh, and the flag was gone and so were you, back on All Memos. It also meant a collection could not be bookmarked, could not be sent to yourself, and the browser's back button skipped straight past it. Spaces never had this problem, because a Space puts its id in the address; collections now work the same way, at `/collection/<id>` and `/space/<id>/collection/<id>`. Reload where you are and you stay there.
+
 ---
 ## [3.14.0] - 2026-08-30
 
