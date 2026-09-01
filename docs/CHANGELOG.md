@@ -7,6 +7,9 @@ All notable changes to OpenMemo are documented here.
 
 <!-- Add entries here as work lands: ### Added / ### Changed / ### Fixed -->
 
+---
+## [3.14.2] - 2026-09-01
+
 ### Fixed
 
 - 🧵 **A post is saved as the post, not as the feed around it.** A six photo Threads post came back as a video memo playing a 1.4 MB clip that belonged to a different author, with Meta's cookie policy as its text. Three separate mistakes stacked up on one post. Threads is on the list of video sites, so a post there was stamped "video" from the address alone, without anything ever checking whether the post held a video; this one held none at all. The download helper then went looking for a clip on the page and found one, because a Threads permalink is one post sitting on top of a feed of Related threads, and it played every video it could see. And the page it read was not the post but Meta's cookie screen, which is what a fresh browser gets served first, so the memo's body became a list of Learn more links.
