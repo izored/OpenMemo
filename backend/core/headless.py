@@ -64,7 +64,8 @@ _unavailable = False  # latch: once Chromium fails to start, stop retrying
 # Largest visible content image — unchanged from original.
 _LARGEST_IMAGE_JS = """() => {
   let best = null, bestArea = 0;
-  for (const img of document.images) {
+  const root = document.querySelector('[data-om-scope]') || document;
+  for (const img of root.querySelectorAll('img')) {
     const r = img.getBoundingClientRect();
     const src = img.currentSrc || img.src;
     if (!src || src.startsWith('data:')) continue;
@@ -83,7 +84,8 @@ _LARGEST_IMAGE_JS = """() => {
 _STAGE_IMAGE_JS = """() => {
   let best = null, bestArea = 0;
   const W = window.innerWidth, H = window.innerHeight;
-  for (const img of document.images) {
+  const root = document.querySelector('[data-om-scope]') || document;
+  for (const img of root.querySelectorAll('img')) {
     const r = img.getBoundingClientRect();
     const src = img.currentSrc || img.src;
     if (!src || src.startsWith('data:')) continue;
@@ -109,12 +111,178 @@ _NEXT_SLIDE_JS = """() => {
     'div[role="button"][aria-label="Next"]',
     '[aria-label="Next"]',
   ];
+  const root = document.querySelector('[data-om-scope]') || document;
   for (const s of sels) {
-    const el = document.querySelector(s);
+    const el = root.querySelector(s);
     if (el) { el.click(); return true; }
   }
   return false;
 }"""
+
+# ---------------------------------------------------------------------------
+# Post scoping. A permalink page is not just the post: Threads, Instagram and
+# Reddit all wrap it in a feed of OTHER posts ("Related threads"), and every
+# host-blind reader here - largest image, stage image, play-every-video - is
+# happy to answer with a neighbour's media. That is exactly how a six-photo
+# Threads carousel was saved as somebody else's video clip.
+#
+# The fix needs no per-site selectors. The post's own subtree is the LARGEST
+# ancestor of its own permalink anchor that still links to no OTHER permalink
+# of the same shape. Walk up from the anchor, stop at the first ancestor that
+# pulls in a foreign permalink, and tag what is left as `data-om-scope`. Every
+# reader below then works inside that tag when it exists.
+_SCOPE_POST_JS = r"""([wantPrefix, kind]) => {
+  const norm = (h) => {
+    try { return new URL(h, location.origin).pathname.replace(/\/+$/, ''); }
+    catch (_) { return ''; }
+  };
+  document.querySelectorAll('[data-om-scope]').forEach(
+    (e) => e.removeAttribute('data-om-scope'));
+  const want = (wantPrefix || '').replace(/\/+$/, '');
+  if (!want || !kind) return false;
+  // Ours: the permalink itself, and anything BELOW it. Reddit spells one post
+  // as both /r/x/comments/abc and /r/x/comments/abc/a_long_title/, and a
+  // comment deep-link sits below that again — all the same post, so the test
+  // is a prefix, never string equality.
+  const mine = (p) => p === want || p.startsWith(want + '/');
+  const anchors = Array.from(document.querySelectorAll('a[href]'));
+  // A post links to itself from several places - the timestamp, a "Thread"
+  // label, a view counter. Some of those sit in a tiny corner of the post, so
+  // expanding the FIRST one found can scope to a two-word fragment. Expand
+  // every self-link and keep the richest result.
+  const selves = anchors.filter((a) => mine(norm(a.getAttribute('href'))));
+  if (!selves.length) return false;
+  // Somebody else's post: an anchor carrying the same kind token that is not
+  // ours. `kind` comes from the URL, so nothing here knows which site it is on.
+  const foreign = (el) => Array.from(el.querySelectorAll('a[href]')).some((a) => {
+    const p = norm(a.getAttribute('href'));
+    return p && !mine(p) && p.includes('/' + kind + '/');
+  });
+  let best = null, bestScore = -1;
+  for (const self of selves) {
+    let node = self, top = null;
+    for (let i = 0; i < 24 && node.parentElement; i++) {
+      node = node.parentElement;
+      if (foreign(node)) break;
+      top = node;
+    }
+    if (!top) continue;
+    const media = Array.from(top.querySelectorAll('img, video')).filter((e) => {
+      const r = e.getBoundingClientRect();
+      return r.width >= 120 && r.height >= 120;
+    }).length;
+    // Media count dominates; text length only breaks ties.
+    const score = media * 1000 + Math.min((top.innerText || '').length, 999);
+    if (score > bestScore) { bestScore = score; best = top; }
+  }
+  if (!best) return false;
+  best.setAttribute('data-om-scope', '1');
+  return true;
+}"""
+
+# Nudge every horizontal strip inside the scope through its full width. A
+# carousel that mounts its slides lazily has nothing to read until the strip has
+# been scrolled; one that mounts them all costs a few assignments.
+_SCROLL_CAROUSEL_JS = """() => {
+  const root = document.querySelector('[data-om-scope]');
+  if (!root) return 0;
+  const strips = Array.from(root.querySelectorAll('*')).filter(
+    (e) => e.scrollWidth > e.clientWidth + 40 && e.clientWidth > 40);
+  let steps = 0;
+  for (const s of strips) {
+    const stride = Math.max(80, s.clientWidth);
+    for (let x = 0; x <= s.scrollWidth; x += stride) { s.scrollLeft = x; steps++; }
+    s.scrollLeft = 0;
+  }
+  return steps;
+}"""
+
+# Every piece of media the scoped post owns, in document order, stills and
+# clips together. A carousel is read by ENUMERATING the scope, not by pressing
+# Next: Threads lays its slides out in a horizontal strip with no Next control
+# at all, so the click-driven walk below sees exactly one slide and stops.
+_SCOPE_MEDIA_JS = r"""() => {
+  const root = document.querySelector('[data-om-scope]');
+  if (!root) return [];
+  // The widest entry in srcset, not currentSrc. A carousel slide renders at
+  // thumbnail size, so currentSrc hands back the 320 px rendition while the
+  // same element advertises the 3072 px original one attribute away. Saving
+  // the thumbnail is how a "kept forever" copy quietly becomes unusable.
+  const widest = (img) => {
+    const ss = img.getAttribute('srcset') || '';
+    let best = '', bestW = -1;
+    for (const part of ss.split(/,(?=https?:)/)) {
+      const bits = part.trim().split(/[ \t]+/);
+      if (!bits[0]) continue;
+      const w = parseInt((bits[1] || '').replace(/[^0-9]/g, ''), 10) || 0;
+      if (w > bestW) { bestW = w; best = bits[0]; }
+    }
+    return best || img.currentSrc || img.src || '';
+  };
+  // Same photo, different rendition = different URL. Key on the CDN path so a
+  // slide cannot land twice under two size params.
+  const key = (u) => { try { return new URL(u, location.href).pathname; } catch (_) { return u; } };
+  const seen = new Set(), out = [];
+  for (const el of root.querySelectorAll('img, video')) {
+    const r = el.getBoundingClientRect();
+    // Avatars, reaction glyphs and spacer pixels. A slide is never this small.
+    if (r.width < 120 || r.height < 120) continue;
+    let u = '', type = 'image', poster = '';
+    if (el.tagName === 'VIDEO') {
+      const src = el.currentSrc || el.src || '';
+      poster = el.poster || '';
+      u = src || poster;
+      type = src ? 'video' : 'image';
+    } else {
+      u = widest(el);
+    }
+    if (!u || u.startsWith('data:')) continue;
+    const k = key(u);
+    if (seen.has(k)) continue;
+    seen.add(k);
+    out.push({ url: u, type: type, poster: poster });
+  }
+  return out;
+}"""
+
+# The scoped post's own text - author line, caption, counters. Read instead of
+# the whole document so a neighbour's caption can never become this memo's.
+_SCOPE_TEXT_JS = """() => {
+  const root = document.querySelector('[data-om-scope]');
+  return root ? (root.innerText || '').trim() : '';
+}"""
+
+# Cookie-consent interstitial. DECLINE only - the optional-cookie buttons are
+# listed in preference order and "Allow all" is deliberately absent, so the
+# worst this can do is refuse tracking on the user's behalf. Meta serves this
+# screen INSTEAD of the post to a cold browser profile, which is how a Threads
+# memo came to hold Meta's cookie policy as its content.
+_DISMISS_CONSENT_JS = """() => {
+  const wanted = [
+    'decline optional cookies',
+    'only allow essential cookies',
+    'allow essential cookies',
+    'essential cookies only',
+    'necessary cookies only',
+    'reject optional cookies',
+    'reject non-essential',
+    'reject all',
+    'decline all',
+  ];
+  const nodes = Array.from(
+    document.querySelectorAll('button, [role="button"], a[role="link"], a'));
+  for (const want of wanted) {
+    for (const el of nodes) {
+      const label = (el.innerText || el.getAttribute('aria-label') || '')
+        .trim().toLowerCase();
+      if (label && label.includes(want)) {
+        try { el.click(); return want; } catch (_) {}
+      }
+    }
+  }
+  return '';
+}"""
+
 
 # IIFE injected via add_init_script — runs before any page JS so Cloudflare's
 # synchronous fingerprint check sees patched values.
@@ -260,6 +428,71 @@ def _looks_like_bot_wall(html: str) -> bool:
     return len(html) < 120_000
 
 
+# Cookie-consent interstitial. Meta serves this screen INSTEAD of a Threads or
+# Instagram post to a cold browser profile: the DOM parses beautifully, into a
+# memo whose body is Meta's cookie policy and whose "content" is a list of
+# Learn more links. Verified on a live Threads carousel 2026-09-01.
+#
+# Two marker classes, both required. A page that DESCRIBES cookies (a real
+# cookie policy, a privacy page) trips the descriptive list only; an actual
+# consent gate also carries its own decision buttons in the body text.
+_CONSENT_ACTION_MARKERS = [
+    "decline optional cookies",
+    "allow all cookies",
+    "accept all cookies",
+    "reject all cookies",
+    "only allow essential cookies",
+    "allow essential cookies",
+    "manage cookie preferences",
+    "decline optional",
+]
+_CONSENT_TOPIC_MARKERS = [
+    "allow the use of cookies",
+    "we use cookies and similar technologies",
+    "your cookie choices",
+    "cookies from other companies",
+    "about cookies",
+    "why do we use cookies",
+]
+
+
+def _looks_like_consent_wall(text: str) -> bool:
+    """True when this text is a cookie-consent gate rather than the page.
+
+    Reads the EXTRACTED TEXT, not the raw HTML: a consent screen on a
+    client-rendered site ships megabytes of bundle around a few hundred words
+    of policy, so the size test that catches a bot wall says nothing here. What
+    identifies it is the pairing - the copy explains cookies AND the body
+    carries its own accept/decline buttons - inside a document far too short to
+    be the article it is standing in front of."""
+    if not text:
+        return False
+    low = text.lower()
+    if len(low) > 15000:
+        return False
+    if not any(m in low for m in _CONSENT_ACTION_MARKERS):
+        return False
+    return any(m in low for m in _CONSENT_TOPIC_MARKERS)
+
+
+async def _dismiss_consent(page) -> str:
+    """Click a consent dialog's DECLINE control, if one is on the page.
+
+    Returns the label matched, or "". Never accepts: the button list is
+    decline-only by construction, so the page either continues with optional
+    cookies refused or is left exactly as it was."""
+    try:
+        clicked = await page.evaluate(_DISMISS_CONSENT_JS)
+    except Exception:
+        return ""
+    if clicked:
+        try:
+            await page.wait_for_timeout(1200)
+        except Exception:
+            pass
+    return clicked or ""
+
+
 def _netscape_cookies_for(domain: str) -> list:
     """The user's uploaded cookies.txt, narrowed to `domain`, as Playwright dicts.
 
@@ -354,6 +587,45 @@ async def _walk_slides(page, max_slides: int) -> list:
     return slides
 
 
+async def _scope_post(page, permalink: str) -> bool:
+    """Tag the subtree belonging to `permalink` as `data-om-scope`, if found.
+
+    The URL shapes live in `core/permalinks` so no reader here parses one. A URL
+    that is not a post permalink scopes nothing and the page is read whole,
+    which is the old behaviour and the safe way to fail."""
+    from backend.core.permalinks import post_scope
+
+    scope = post_scope(permalink)
+    if not scope:
+        return False
+    try:
+        return bool(
+            await page.evaluate(_SCOPE_POST_JS, [scope["prefix"], scope["kind"]])
+        )
+    except Exception:
+        return False
+
+
+async def _collect_post_media(page, max_slides: int) -> list:
+    """Every still and clip the scoped post owns, in document order.
+
+    Enumeration, not paging. A Threads carousel has no Next control at all - it
+    is a horizontal strip with all six slides mounted side by side - so the
+    click-driven walk reads one slide and calls it a single-image post. Scroll
+    each strip through its width first, in case the slides mount lazily, then
+    read what the scope holds."""
+    try:
+        await page.evaluate(_SCROLL_CAROUSEL_JS)
+        await page.wait_for_timeout(900)
+    except Exception:
+        pass
+    try:
+        items = await page.evaluate(_SCOPE_MEDIA_JS) or []
+    except Exception:
+        return []
+    return [i for i in items if isinstance(i, dict) and i.get("url")][:max_slides]
+
+
 def _cookie_path(domain: str) -> Path:
     safe = domain.replace(":", "_").replace("/", "_")
     return _COOKIE_DIR / f"{safe}.json"
@@ -424,6 +696,7 @@ async def render_page(
     want_main_image: bool = False,
     want_gallery: bool = False,
     max_slides: int = 20,
+    scope_permalink: str | None = None,
 ) -> Optional[dict]:
     """Render `url` in a stealth browser, passing Cloudflare/JS challenges.
 
@@ -440,6 +713,19 @@ async def render_page(
     single-image page costs nothing extra. Reading the STAGE each step rather
     than scraping every image on the page is what keeps a post's own slides
     apart from the unrelated large images around it.
+
+    `scope_permalink` narrows EVERYTHING to the post that permalink names -
+    slides, largest image, and the text - by tagging its subtree before any
+    reader runs. A permalink page is a post surrounded by a feed of other
+    posts, and without this the readers here answer with whatever neighbour
+    happened to be biggest. It also switches the gallery from click-to-page to
+    enumerate-the-scope, which is the only thing that reads a carousel laid out
+    as a horizontal strip. Adds `post_media` (ordered {url,type,poster} for the
+    post's own stills and clips), `post_text`, and `scoped`.
+
+    `consent_wall` is True when the settled DOM is a cookie-consent gate rather
+    than the page. A decline control is clicked first, so this only stays True
+    when the gate had no decline path we could take.
     """
     domain = urlparse(url).netloc.lstrip("www.")
 
@@ -496,14 +782,39 @@ async def render_page(
         page = await ctx.new_page()
         await page.goto(url, wait_until="domcontentloaded", timeout=timeout_ms)
 
+        # A consent gate is served INSTEAD of the page, so it has to go before
+        # anything reads the DOM. Decline-only, host-agnostic, no-op when there
+        # is no dialog.
+        consent_dismissed = await _dismiss_consent(page)
+
+        # Narrow to the post before any reader runs. Everything below - the
+        # slides, the largest image, the text - then describes THIS post rather
+        # than the feed of other posts wrapped around it.
+        scoped = False
+        post_media: list = []
+        post_text = ""
+
         # Page the slideshow FIRST, while the page is still interactive. Sites
         # that gate content (Instagram's login dialog) throw up a modal a few
         # seconds in that covers the slides and swallows the clicks, so the
         # settle-and-scroll sequence below has to happen after this, not before.
         slides: list = []
-        if want_gallery:
+        if want_gallery or scope_permalink:
             await page.wait_for_timeout(2500)
-            slides = await _walk_slides(page, max_slides)
+            if scope_permalink:
+                scoped = await _scope_post(page, scope_permalink)
+                if scoped:
+                    post_media = await _collect_post_media(page, max_slides)
+                    try:
+                        post_text = await page.evaluate(_SCOPE_TEXT_JS) or ""
+                    except Exception:
+                        post_text = ""
+            # Enumerating the scope already answered the question; only fall
+            # back to clicking Next when it did not (no scope, or an empty one).
+            if want_gallery and not post_media:
+                slides = await _walk_slides(page, max_slides)
+        if post_media:
+            slides = [m["url"] for m in post_media if m.get("type") == "image"]
 
         # Wait for OG meta to appear (fast path when challenge already passed).
         try:
@@ -541,6 +852,18 @@ async def render_page(
         if bot_wall:
             print(f"[headless] interactive bot wall on {domain} — no automated pass")
 
+        # A consent gate that survived the decline click. Read from the RENDERED
+        # text, because the gate ships the site's whole JS bundle around a few
+        # hundred words of cookie policy and no size test can see that.
+        consent_wall = False
+        try:
+            body_text = await page.evaluate("() => document.body ? document.body.innerText : ''")
+        except Exception:
+            body_text = ""
+        if _looks_like_consent_wall(body_text or ""):
+            consent_wall = True
+            print(f"[headless] cookie-consent gate still up on {domain}")
+
         # Persist cookies — saves cf_clearance for next request to this domain.
         try:
             cookies = await ctx.cookies()
@@ -572,6 +895,11 @@ async def render_page(
             "main_image": main_image,
             "slides": slides,
             "bot_wall": bot_wall,
+            "consent_wall": consent_wall,
+            "consent_dismissed": consent_dismissed,
+            "scoped": scoped,
+            "post_media": post_media,
+            "post_text": post_text,
         }
 
     except Exception as e:

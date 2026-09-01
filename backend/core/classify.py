@@ -28,6 +28,26 @@ def _ext_from_url(url: str) -> str:
         return ""
 
 
+# Hosts with a dedicated resolver (core/extractor._instagram_resolve,
+# core/threads.resolve_threads). Any OTHER social permalink is covered by the
+# generic scoped path in extract_video, which reads the post the same way.
+_RESOLVER_HOSTS = ("instagram.com", "threads.com", "threads.net")
+
+
+def _type_already_resolved(url: str) -> bool:
+    """True when something already read the POST, not just the domain.
+
+    `detect_url_type` knows only the host, and a host is not evidence: every
+    reddit.com URL is not a video, every threads.com URL is not a video. When a
+    resolver or the scoped render has looked inside the post, its answer wins."""
+    low = (url or "").lower()
+    if any(h in low for h in _RESOLVER_HOSTS):
+        return True
+    from backend.core.permalinks import is_post_permalink
+
+    return is_post_permalink(url)
+
+
 def derive_memo_type(memo) -> str:
     """Return the canonical type for a memo from its strongest signal.
 
@@ -58,10 +78,13 @@ def derive_memo_type(memo) -> str:
             current = (getattr(memo, "type", None) or "").lower()
             if current in ("image", "audio"):
                 return current
-            # Instagram's resolver is authoritative (core/extractor._instagram_resolve).
-            # A "link" from it is the deliberate graceful needs-login bookmark — keep
-            # it a link, don't let the video-host default drag it back to a dead video.
-            if current == "link" and "instagram.com" in (source_url or "").lower():
+            # Something already looked at the POST rather than the domain, so
+            # its verdict outranks the domain default. For Instagram a "link" is
+            # the graceful needs-login bookmark; on Threads, Reddit or X it is a
+            # text post, which is most of what those networks carry. Letting the
+            # video-host default drag either one back turns it into a dead video
+            # card that the downloader then tries, and fails, to fill.
+            if current == "link" and _type_already_resolved(source_url):
                 return "link"
             from backend.core.extractor import _url_media_hint, is_audio_host
             # Audio-only host (SoundCloud/Bandcamp/Mixcloud/…) is audio, never

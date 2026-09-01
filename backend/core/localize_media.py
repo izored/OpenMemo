@@ -69,6 +69,18 @@ def _strip_byte_range(url: str) -> str:
     return urlunsplit(parts._replace(query=urlencode(kept)))
 
 
+def _post_permalink(url: str) -> str | None:
+    """`url` when it names a single post, else None.
+
+    Only a permalink is worth scoping: a channel page or a homepage has no
+    single post to narrow to. The shapes live in `core/permalinks`, shared with
+    the renderer, so the two never disagree about what a post URL looks like."""
+    from backend.core.permalinks import post_scope
+
+    scope = post_scope(url)
+    return scope["url"] if scope else None
+
+
 def _has_audio_stream(path: Path) -> bool | None:
     """Does this file carry sound? None when ffprobe cannot answer.
 
@@ -584,7 +596,12 @@ async def _localize_via_sniff(url: str, workspace_id: str) -> dict:
     from the sniffer's other candidates and muxed in before returning."""
     from backend.core.sniff_media import sniff_media
 
-    info = await sniff_media(url)
+    # Scope the capture to the post this URL names. A permalink page is one post
+    # inside a feed of other posts, and "the biggest clip on the wire" happily
+    # answers with a neighbour's — which is how a six-photo Threads carousel was
+    # localized as a stranger's video (2026-08-30). A URL that is not a post
+    # permalink scopes to nothing and behaves exactly as before.
+    info = await sniff_media(url, scope_permalink=_post_permalink(url))
     if not info or not info.get("media_url"):
         raise LocalizeError("No downloadable media stream found on the page")
 
