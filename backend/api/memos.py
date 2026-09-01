@@ -32,8 +32,8 @@ router = APIRouter(prefix="/api/memos", tags=["memos"])
 # many systems (returns None / octet-stream for .flac, .opus, .weba), and the
 # browser's <audio> element refuses to play a non-audio Content-Type. Forcing a
 # correct audio/* type makes lossless (FLAC/WAV) and recorded (WebM/Opus) memos
-# play and seek. FileResponse already emits Accept-Ranges + handles Range, so
-# seeking works for free.
+# play and seek. Range handling is ours (see get_memo_file), not the
+# framework's, so seeking works the same on every Starlette version.
 _AUDIO_MIME = {
     ".mp3": "audio/mpeg", ".wav": "audio/wav", ".m4a": "audio/mp4",
     ".aac": "audio/aac", ".ogg": "audio/ogg", ".oga": "audio/ogg",
@@ -448,14 +448,42 @@ async def get_memo_file(
         return FileResponse(str(p), media_type=media_type, filename=filename)
 
     file_size = p.stat().st_size
-    rng = _parse_range(request.headers.get("range", ""), file_size)
+    range_header = request.headers.get("range", "")
+    rng = _parse_range(range_header, file_size)
 
-    if rng is None:
-        # Full file — still advertise range support so players enable seeking.
+    if rng is None and not range_header:
+        # No Range at all — full file, but still advertise range support so
+        # players enable seeking.
         return FileResponse(
             str(p),
             media_type=media_type,
             headers={"Accept-Ranges": "bytes"},
+        )
+
+    if rng is None:
+        # A Range we can't satisfy: malformed, or a first-byte-pos past EOF.
+        # RFC 9110 recommends 416 here, but it also lets a server ignore Range
+        # entirely, and 416 is the worse answer for the only clients we have.
+        # Every consumer is a native <audio>/<video> element (nothing in the
+        # frontend reads Content-Range), and those treat a 416 as a fatal load
+        # error — a dead player needing a reload — while they handle a plain
+        # 200 fine, because any server may ignore Range. The case that reaches
+        # here in practice is a player whose cached size is stale after a memo's
+        # file was replaced by a smaller one; serving the file is exactly the
+        # recovery it needs.
+        #
+        # This is streamed by us rather than handed to FileResponse on purpose.
+        # Starlette >= 0.45 parses Range inside FileResponse and answers 416
+        # (400 for a malformed one), so delegating would make this route's
+        # behaviour depend on a transitive pin instead of on this file.
+        return StreamingResponse(
+            _stream_file_range(p, 0, file_size - 1),
+            status_code=200,
+            media_type=media_type,
+            headers={
+                "Accept-Ranges": "bytes",
+                "Content-Length": str(file_size),
+            },
         )
 
     start, end = rng
