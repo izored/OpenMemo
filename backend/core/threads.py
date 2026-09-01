@@ -31,15 +31,13 @@ dead-ends.
 from __future__ import annotations
 
 import logging
-import re
 from urllib.parse import urlparse, urlunparse
+
+from backend.core.social import apply_media, classify_media
 
 log = logging.getLogger(__name__)
 
 _HOSTS = ("threads.com", "threads.net")
-
-# /@user/post/<code> — the permalink shape. /share/<code>/ is a redirect to one.
-_PERMALINK_RE = re.compile(r"/@[^/]+/post/[A-Za-z0-9_-]+", re.I)
 
 # Which tier answered. Mirrors the Instagram ladder so Settings can see a host
 # quietly degrade (plan 026).
@@ -66,15 +64,12 @@ def canonical_permalink(url: str, og_url: str = "") -> str:
     the scope pass has nothing to match against — `og:url` from the crawler
     fetch is what turns it back into a permalink. Falls back to the URL as given
     (minus its tracking query) when there is no better answer."""
+    from backend.core.permalinks import post_scope
+
     for candidate in (og_url, url):
-        if not candidate:
-            continue
-        try:
-            parts = urlparse(candidate)
-        except Exception:
-            continue
-        if _PERMALINK_RE.search(parts.path or ""):
-            return urlunparse(parts._replace(query="", fragment=""))
+        scope = post_scope(candidate) if candidate else None
+        if scope:
+            return scope["url"]
     try:
         parts = urlparse(url)
         return urlunparse(parts._replace(query="", fragment=""))
@@ -82,44 +77,22 @@ def canonical_permalink(url: str, og_url: str = "") -> str:
         return url
 
 
-def classify(post_media: list, og_video: str) -> str:
-    """The memo type for a Threads post, from what the POST actually holds.
+def classify(post_media: list, og_video: str, *, scoped: bool = False,
+             post_text: str = "") -> str:
+    """The memo type for a Threads post, from what the POST holds.
 
-    `post_media` is the scoped render's answer, so it is authoritative: a clip
-    inside the post makes it a video, stills make it an image, and a post with
-    no media of its own is a link — a text post, which is most of Threads.
-    The domain is never a signal here; treating "threads.com" as proof of video
-    is the bug this module exists to remove."""
-    if any((m or {}).get("type") == "video" for m in post_media or []):
-        return "video"
-    if post_media:
-        return "image"
-    return "video" if og_video else "link"
-
-
-def _slides(post_media: list) -> list | None:
-    """The gallery for a multi-item post, or None for a single item.
-
-    Mirrors the Instagram sidecar shape ({url, type}) so the memo page and the
-    lightbox render a Threads carousel with no viewer changes. An all-video post
-    keeps no gallery: expiring CDN mp4 URLs are not renderable slides — the same
-    rule `_instagram_resolve` applies to a sidecar of reels."""
-    items = [m for m in (post_media or []) if (m or {}).get("url")]
-    if len(items) < 2:
-        return None
-    if all(m.get("type") == "video" for m in items):
-        return None
-    return [{"url": m["url"], "type": m.get("type") or "image"} for m in items]
-
-
-def _cover(post_media: list) -> str:
-    """The card image: the first slide, or a video's poster frame."""
-    if not post_media:
-        return ""
-    first = post_media[0]
-    if first.get("type") == "video":
-        return first.get("poster") or first.get("url") or ""
-    return first.get("url") or ""
+    Threads falls back to `link` rather than `video`, unlike the generic path:
+    tier 1 has already confirmed the post exists and carries no `og:video`, so
+    "no media" here means a text post, which is most of Threads. The domain is
+    never a signal; treating "threads.com" as proof of video is the bug this
+    module exists to remove."""
+    return classify_media(
+        post_media,
+        og_video=og_video,
+        scoped=scoped,
+        post_text=post_text,
+        fallback="link",
+    )
 
 
 async def resolve_threads(url: str, domain: str, fav: str | None = None) -> dict:
@@ -156,6 +129,8 @@ async def resolve_threads(url: str, domain: str, fav: str | None = None) -> dict
     # photos rather than one, and that the clip further down the page belongs to
     # somebody else.
     post_media: list = []
+    scoped = False
+    post_text = ""
     try:
         from backend.core.headless import render_page
 
@@ -163,6 +138,8 @@ async def resolve_threads(url: str, domain: str, fav: str | None = None) -> dict
             permalink, want_main_image=True, scope_permalink=permalink
         ) or {}
         post_media = rendered.get("post_media") or []
+        scoped = bool(rendered.get("scoped"))
+        post_text = rendered.get("post_text") or ""
         if rendered.get("consent_wall") and not post_media:
             # The gate outlasted the decline click. The OpenGraph tags above are
             # still real, so the memo keeps its title and caption — what must
@@ -170,16 +147,13 @@ async def resolve_threads(url: str, domain: str, fav: str | None = None) -> dict
             log.info("threads: consent gate blocked the render for %s", permalink)
         if post_media:
             base["resolve_tier"] = THREADS_TIER_SCOPED
-            base["thumbnail_path"] = _cover(post_media)
-            gallery = _slides(post_media)
-            if gallery:
-                base["gallery"] = gallery
+            apply_media(base, post_media)
         elif rendered.get("main_image"):
             base["thumbnail_path"] = rendered["main_image"]
     except Exception as e:
         log.info("threads: scoped render failed for %s: %s", permalink, e)
 
-    base["type"] = classify(post_media, og_video)
+    base["type"] = classify(post_media, og_video, scoped=scoped, post_text=post_text)
 
     # og:image on Threads is a GENERATED link-preview card — a 1200x628
     # composite with the author's name burnt into it, not the post's picture.

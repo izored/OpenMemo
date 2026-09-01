@@ -18,7 +18,6 @@ already required by the extractor / video-thumbnail paths.
 """
 import asyncio
 import logging
-import re
 import shutil
 import subprocess
 import uuid
@@ -70,20 +69,16 @@ def _strip_byte_range(url: str) -> str:
     return urlunsplit(parts._replace(query=urlencode(kept)))
 
 
-# Post-permalink shapes: the URL is ONE item, not a feed. Only these are worth
-# scoping — a channel page or a homepage has no single post to narrow to, and
-# passing one would just fail to match and cost a wasted lookup.
-_PERMALINK_RE = re.compile(
-    r"/(?:@[^/]+/)?(?:post|p|reel|reels|tv|status)/[A-Za-z0-9_-]+", re.I
-)
-
-
 def _post_permalink(url: str) -> str | None:
-    """`url` when it names a single post, else None."""
-    try:
-        return url if _PERMALINK_RE.search(urlparse(url or "").path or "") else None
-    except Exception:
-        return None
+    """`url` when it names a single post, else None.
+
+    Only a permalink is worth scoping: a channel page or a homepage has no
+    single post to narrow to. The shapes live in `core/permalinks`, shared with
+    the renderer, so the two never disagree about what a post URL looks like."""
+    from backend.core.permalinks import post_scope
+
+    scope = post_scope(url)
+    return scope["url"] if scope else None
 
 
 def _has_audio_stream(path: Path) -> bool | None:

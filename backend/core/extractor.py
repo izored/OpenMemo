@@ -639,6 +639,8 @@ async def extract_video(url: str) -> dict:
     # fails and the fallback stamps every post `video` from the DOMAIN alone —
     # including a six-photo carousel. The resolver reads what the POST holds
     # (core/threads), scoped so a neighbouring post's clip is never the answer.
+    from backend.core.permalinks import post_scope
+    from backend.core.social import apply_media, classify_media
     from backend.core.threads import is_threads_url, resolve_threads
 
     if is_threads_url(url):
@@ -680,14 +682,37 @@ async def extract_video(url: str) -> dict:
         pass
 
     # yt-dlp failed (private, login-required, unsupported, or a non-video item).
-    # Instagram is handled earlier via _instagram_resolve and never reaches here.
-    result = await _minimal_link(url, domain)
+    # Instagram and Threads are handled earlier by their own resolvers and never
+    # reach here. What DOES reach here is every other social permalink: a Reddit
+    # text post, an X photo, a TikTok photo-mode post. All of them used to be
+    # stamped `video` from the domain, because the domain is on the video list.
+    #
+    # So scope the render to the post and let what the post holds decide. One
+    # browser pass, shared with the scrape below it (ADR "scope is the memo
+    # type, not the one provider").
+    scope = post_scope(url)
+    result = await _minimal_link(
+        url, domain, scope_permalink=scope["url"] if scope else None
+    )
+    post_media = result.pop("_post_media", None) or []
+    post_text = result.pop("_post_text", "") or ""
+    scoped = bool(result.pop("_scoped", False))
+
     # A photo post on a video host must not become a video memo. Downgrade to
     # image only when the URL path clearly says photo; an audio-only host stays
     # audio (SoundCloud/Bandcamp probe failures must not dead-end as "video" —
-    # ADR-005); otherwise keep video (the item may be a private/region-locked
-    # video we just couldn't pull).
-    result["type"] = _url_media_hint(url) or ("audio" if is_audio_host(url) else "video")
+    # ADR-005). Otherwise the scoped post answers, and when it could not be
+    # scoped the fallback is still `video` — the item may be a private or
+    # region-locked video we simply could not pull, and guessing `link` there
+    # would lose a real one.
+    result["type"] = _url_media_hint(url) or (
+        "audio" if is_audio_host(url)
+        else classify_media(
+            post_media, scoped=scoped, post_text=post_text, fallback="video"
+        )
+    )
+    if result["type"] in ("image", "video"):
+        apply_media(result, post_media)
     return result
 
 
@@ -1143,13 +1168,21 @@ def _bot_wall_memo(url: str, domain: str) -> dict:
     }
 
 
-async def _minimal_link(url: str, domain: str | None = None) -> dict:
+async def _minimal_link(
+    url: str, domain: str | None = None, scope_permalink: str | None = None
+) -> dict:
     """Resolve a memo for a URL the plain fetch could not read -- hardest path last.
 
     Chain: headless browser (renders past Cloudflare/JS challenges, returns full
     title + image + content) -> direct OpenGraph scrape (cheap, for pages that
     only needed a browser UA) -> a `preview_unavailable` card so a save never
-    dead-ends. No Microlink / third-party API."""
+    dead-ends. No Microlink / third-party API.
+
+    `scope_permalink` narrows the render to the post that permalink names and
+    hands back what the POST holds under `_post_media` / `_post_text` /
+    `_scoped`. One render answers both questions -- what does this page say, and
+    which media on it is actually this post's -- so a caller does not pay for a
+    second browser pass to find out."""
     from urllib.parse import urlparse as _up
     if not domain:
         domain = _up(url).netloc.lstrip("www.")
@@ -1163,7 +1196,9 @@ async def _minimal_link(url: str, domain: str | None = None) -> dict:
     try:
         from backend.core.headless import render_page
 
-        rendered = await render_page(url, want_main_image=is_photo)
+        rendered = await render_page(
+            url, want_main_image=is_photo, scope_permalink=scope_permalink
+        )
         # An interactive puzzle (Temu, DataDome, PerimeterX) rendered instead of
         # the page. Its DOM parses perfectly well — into a memo titled "Verify"
         # with the CAPTCHA's own artwork as the thumbnail. Stop here and file an
@@ -1204,6 +1239,10 @@ async def _minimal_link(url: str, domain: str | None = None) -> dict:
             if parsed is not None:
                 if is_photo and main_img:
                     parsed["thumbnail_path"] = main_img
+                # Private keys -- the caller pops these before a memo is built.
+                parsed["_post_media"] = rendered.get("post_media") or []
+                parsed["_post_text"] = rendered.get("post_text") or ""
+                parsed["_scoped"] = bool(rendered.get("scoped"))
                 return parsed
     except Exception:
         pass

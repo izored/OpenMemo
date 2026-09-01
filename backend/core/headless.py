@@ -131,30 +131,32 @@ _NEXT_SLIDE_JS = """() => {
 # of the same shape. Walk up from the anchor, stop at the first ancestor that
 # pulls in a foreign permalink, and tag what is left as `data-om-scope`. Every
 # reader below then works inside that tag when it exists.
-_SCOPE_POST_JS = r"""(wantPath) => {
+_SCOPE_POST_JS = r"""([wantPrefix, kind]) => {
   const norm = (h) => {
     try { return new URL(h, location.origin).pathname.replace(/\/+$/, ''); }
     catch (_) { return ''; }
   };
   document.querySelectorAll('[data-om-scope]').forEach(
     (e) => e.removeAttribute('data-om-scope'));
-  const want = (wantPath || '').replace(/\/+$/, '');
-  if (!want) return false;
-  // The token before the id - post / p / reel / status / comments. Derived from
-  // the URL we were given, so nothing here knows which site it is on.
-  const segs = want.split('/').filter(Boolean);
-  const kind = segs.length >= 2 ? segs[segs.length - 2] : '';
-  if (!kind) return false;
+  const want = (wantPrefix || '').replace(/\/+$/, '');
+  if (!want || !kind) return false;
+  // Ours: the permalink itself, and anything BELOW it. Reddit spells one post
+  // as both /r/x/comments/abc and /r/x/comments/abc/a_long_title/, and a
+  // comment deep-link sits below that again — all the same post, so the test
+  // is a prefix, never string equality.
+  const mine = (p) => p === want || p.startsWith(want + '/');
   const anchors = Array.from(document.querySelectorAll('a[href]'));
   // A post links to itself from several places - the timestamp, a "Thread"
   // label, a view counter. Some of those sit in a tiny corner of the post, so
   // expanding the FIRST one found can scope to a two-word fragment. Expand
   // every self-link and keep the richest result.
-  const selves = anchors.filter((a) => norm(a.getAttribute('href')) === want);
+  const selves = anchors.filter((a) => mine(norm(a.getAttribute('href'))));
   if (!selves.length) return false;
+  // Somebody else's post: an anchor carrying the same kind token that is not
+  // ours. `kind` comes from the URL, so nothing here knows which site it is on.
   const foreign = (el) => Array.from(el.querySelectorAll('a[href]')).some((a) => {
     const p = norm(a.getAttribute('href'));
-    return p && p !== want && p.includes('/' + kind + '/');
+    return p && !mine(p) && p.includes('/' + kind + '/');
   });
   let best = null, bestScore = -1;
   for (const self of selves) {
@@ -586,10 +588,20 @@ async def _walk_slides(page, max_slides: int) -> list:
 
 
 async def _scope_post(page, permalink: str) -> bool:
-    """Tag the subtree belonging to `permalink` as `data-om-scope`, if found."""
+    """Tag the subtree belonging to `permalink` as `data-om-scope`, if found.
+
+    The URL shapes live in `core/permalinks` so no reader here parses one. A URL
+    that is not a post permalink scopes nothing and the page is read whole,
+    which is the old behaviour and the safe way to fail."""
+    from backend.core.permalinks import post_scope
+
+    scope = post_scope(permalink)
+    if not scope:
+        return False
     try:
-        path = urlparse(permalink).path or ""
-        return bool(await page.evaluate(_SCOPE_POST_JS, path))
+        return bool(
+            await page.evaluate(_SCOPE_POST_JS, [scope["prefix"], scope["kind"]])
+        )
     except Exception:
         return False
 

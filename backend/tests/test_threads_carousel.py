@@ -12,9 +12,9 @@ that comes out of those inputs.
 import pytest
 
 from backend.core.headless import _looks_like_consent_wall
+from backend.core.social import slides as _slides
 from backend.core.threads import (
     THREADS_TIER_SCOPED,
-    _slides,
     canonical_permalink,
     classify,
     is_threads_url,
