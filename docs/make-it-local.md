@@ -148,8 +148,56 @@ The order exists because no single downloader handles every host.
 | # | Tier | Used for | Notes |
 |---|---|---|---|
 | 0 | Instagram guest media-info API | `instagram.com` only | Returns `video_versions[]`, ordinary progressive MP4s with the audio already muxed in. Highest resolution wins. |
-| 1 | Network sniffer (`core/sniff_media.py`) | Threads, Instagram, and as a universal fallback | Loads the page in the headless browser, watches every network response, downloads the media directly with the Referer the browser used. |
+| 1 | Network sniffer (`core/sniff_media.py`) | Threads, Instagram, and as a universal fallback | Loads the page in the headless browser, watches every network response, downloads the media directly with the Referer the browser used. Scoped to the post, so it cannot capture a neighbouring post's clip. |
 | 2 | yt-dlp | Everything else | Also the fallback whenever a tier above fails. |
+
+### The other failure mode: the post next door
+
+A permalink page is not a post. It is one post sitting on top of a feed of other
+posts, and the sniffer's own strategy is "play what is here and take the biggest
+media response". On a Threads photo carousel that produced a memo holding a
+1.4 MB clip belonging to a completely different author, filed under a caption
+that had nothing to do with it.
+
+Since 3.14.2 every reader that looks at a page can be scoped to the post first.
+
+1. **`core/permalinks` says which URLs name one post.** It returns a `prefix`
+   (the path down to the post id, slug and query dropped) and a `kind` token
+   (`post`, `p`, `status`, `comments`, `video`). Threads, Reddit, X, Instagram,
+   TikTok, Bluesky and Facebook are one list; anything not on it is simply not
+   scoped, which is the old whole-page behaviour.
+2. **`headless.render_page(scope_permalink=…)` finds the post's subtree.** It
+   walks out from the post's own permalink anchor and stops at the first
+   ancestor that links to a *different* permalink of the same kind. What is left
+   is the post. Nothing in that walk knows which site it is on.
+3. **Every reader then works inside the tag.** Largest image, stage image,
+   gallery, text, and the sniffer's play-every-video pass.
+4. **A scoped post with no player of its own answers "nothing to download".**
+   Rather than handing back whatever else the page loaded. A scope that comes
+   back *empty* is not trusted for that, so a page the walk could not read keeps
+   the old, unscoped pick.
+
+Two things fall out of the same pass. A carousel is read by **enumerating** the
+scope rather than by clicking Next, which is the only thing that works on
+Threads, where the slides are a horizontal strip with no Next control at all.
+And slides are taken from the widest `srcset` entry rather than `currentSrc`,
+because a carousel renders at thumbnail size and `currentSrc` hands back the
+320 px rendition of a 3072 px photograph.
+
+`core/social` then types the post from what it holds: a clip inside the post
+makes it a video, stills make it an image with a gallery, and a scope with text
+and no media is a text post. The domain is never a signal. Every `reddit.com`
+URL is not a video, and every `threads.com` URL is not a video.
+
+### Cookie-consent gates
+
+Meta serves a cookie screen *instead of* a Threads or Instagram post to a cold
+browser profile. It parses perfectly, into a memo whose body is the cookie
+policy and whose content is a list of "Learn more" links. The renderer now
+clicks a **decline** control before reading anything, on every host, and
+recognises the gate if it survives the click so it is never parsed as the page.
+The button list is decline-only by construction: there is no label in it that
+can match an "Allow all" or "Accept" button.
 
 ### The silent-video failure mode
 

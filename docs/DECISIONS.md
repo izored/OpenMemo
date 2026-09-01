@@ -7,6 +7,89 @@ the decision, and its consequences, so a future reader knows *why*, not just
 
 ---
 
+## ADR-027: A permalink page is scoped to its post before anything reads it
+
+**Date:** 2026-09-01 · **Status:** Accepted · **Relates to:** ADR-001 (changes are systematic across a memo type), ADR-002 (self-hosted headless Chromium)
+
+### Context
+
+Saving `threads.com/@medallomami_/post/Dcq6Ff4DHeR`, a post of six photographs,
+produced a `video` memo playing a 1.4 MB mp4 that belonged to a different
+author, with Meta's cookie-consent screen as its body text. Three distinct
+failures, and it is worth naming all three because they had one cause.
+
+1. **Typed from the domain.** `threads.com` is in `_VIDEO_DOMAINS`, so
+   `detect_url_type` said "video". yt-dlp has no Threads extractor, so the
+   fallback in `extract_video` stamped `type = "video"` unconditionally. Nothing
+   in that path ever asked whether the post held a video. This one held none:
+   the live page has zero `<video>` elements.
+2. **The clip came from the post next door.** A permalink page is one post
+   sitting on top of a feed of other posts. `sniff_media` scrolled every
+   `<video>` on the page into view and played it, then took the largest media
+   response. The mp4 belonged to a post in the "Related threads" list.
+3. **The body was a cookie gate.** A cold browser profile is served Meta's
+   consent screen instead of the post. It parses cleanly, into a memo whose
+   content is the cookie policy and a list of "Learn more" links.
+
+Every reader in the codebase that answers "what is on this page" — largest
+image, stage image, play-every-video, extract-the-text — was operating on the
+whole document. On a permalink page that is the wrong document.
+
+### Decision
+
+**Before anything reads a permalink page, narrow it to the post.**
+
+Three pieces, none of them host-specific:
+
+- **`core/permalinks`** turns a URL into `{prefix, kind}`. `prefix` is the path
+  through the post id, with the slug and query dropped, because Reddit spells
+  one post as both `/r/x/comments/abc` and `/r/x/comments/abc/a_title/` and the
+  match has to be a prefix test. `kind` is the token before the id (`post`,
+  `p`, `status`, `comments`, `video`), which is what makes "another post's
+  link" detectable without knowing the site.
+- **`headless.render_page(scope_permalink=…)`** walks out from the post's own
+  permalink anchor and stops at the first ancestor that links to a *different*
+  permalink of the same kind, then tags what is left `data-om-scope`. Every
+  reader queries that tag when it exists. A post links to itself from several
+  places, so every self-link is expanded and the richest result kept.
+- **`core/social`** types the post from what the scope holds: a player inside
+  the post is a video, stills are an image with a gallery, a scope carrying text
+  and no media is a text post.
+
+Two rules that fall out of this and are load-bearing:
+
+- **A carousel is enumerated, not paged.** Threads lays its slides out in a
+  horizontal strip with no Next control, so the click-driven walk that works on
+  Instagram reads one slide and stops. Enumerating the scope reads all six.
+- **Slides come from the widest `srcset` entry, not `currentSrc`.** A carousel
+  renders at thumbnail size, so `currentSrc` is the 320 px rendition of a
+  3072 px photograph. Keeping a copy forever and keeping a preview forever are
+  not the same feature.
+
+Separately, and applying to every host rather than only these: a cookie-consent
+gate is **declined** before the page is read, and detected rather than parsed if
+it survives the click. The label list is decline-only by construction, so the
+mechanism cannot accept a banner on the user's behalf.
+
+### Consequences
+
+- Adding a network is one regex in `_SHAPES`. Threads, Reddit, X, Instagram,
+  TikTok, Bluesky and Facebook are covered by one list, per ADR-001: the scope
+  is the memo type, not the provider that prompted the work.
+- **Failure direction is the old behaviour.** A URL that is not a permalink is
+  not scoped. A scope that comes back empty is not trusted, so a page the walk
+  could not read keeps the unscoped pick, and `classify_media` still answers
+  `video` when it has learned nothing. A private or region-locked video is never
+  downgraded to a bookmark because the render failed.
+- A resolver's verdict now outranks the domain in `derive_memo_type`, so the
+  background sorter cannot drag a Reddit text post back to `video`.
+- The scope walk is DOM-shape dependent and will drift when a network
+  restructures its markup. It fails to `scoped = False`, which is visible in the
+  memo (a post typed from the domain again) rather than silent.
+- Existing memos are not rewritten. Re-pull repairs one.
+
+---
+
 ## ADR-026: The vector store is embedded only. There is no ChromaDB server.
 
 **Date:** 2026-08-19 · **Status:** Accepted · **Relates to:** ADR-014 (a live-only vector index)

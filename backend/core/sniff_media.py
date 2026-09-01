@@ -30,6 +30,8 @@ from backend.core.headless import (
     _LARGEST_IMAGE_JS,
     _load_cookies,
     _save_cookies,
+    _dismiss_consent,
+    _scope_post,
 )
 
 # A media response we are willing to download directly. Progressive containers
@@ -92,8 +94,26 @@ def _is_audio_ctype(ctype: str) -> bool:
 # actually starts; the muted retry stays as the fallback for the case where it
 # does not, since a silent capture still beats no capture.
 _PLAY_AND_PROBE_JS = """() => {
-  const out = { srcs: [], poster: '' };
-  const vids = Array.from(document.querySelectorAll('video'));
+  const out = { srcs: [], poster: '', scoped: false, count: 0, imgs: 0, textLen: 0 };
+  // Only the post's own players. Unscoped this played EVERY video on the page,
+  // scrolling each one into view to make it start - which on a permalink page
+  // means the "Related posts" feed underneath. That is how a Threads photo
+  // carousel was saved as a stranger's video clip.
+  const root = document.querySelector('[data-om-scope]');
+  out.scoped = !!root;
+  const vids = Array.from((root || document).querySelectorAll('video'));
+  out.count = vids.length;
+  // Evidence that the scope really is the post, and not an empty wrapper the
+  // walk happened to stop on. "No video in scope" only means "no video" when
+  // the scope holds something; otherwise the unscoped behaviour is safer than
+  // reporting a reel as having no media.
+  if (root) {
+    out.imgs = Array.from(root.querySelectorAll('img')).filter((el) => {
+      const r = el.getBoundingClientRect();
+      return r.width >= 120 && r.height >= 120;
+    }).length;
+    out.textLen = (root.innerText || '').trim().length;
+  }
   for (const v of vids) {
     try { v.scrollIntoView({block: 'center'}); } catch (_) {}
     try {
@@ -138,6 +158,7 @@ async def sniff_media(
     timeout_ms: int = 45000,
     settle_ms: int = 10000,
     want_image: bool = False,
+    scope_permalink: str | None = None,
 ) -> Optional[dict]:
     """Load `url` in the stealth browser and return the best media it saw, or None.
 
@@ -167,6 +188,13 @@ async def sniff_media(
     a video?" and "if not, what is the picture?" — the Instagram resolver needs
     exactly that, and paying for two browser passes to learn it is wasteful.
     Callers that only want a download keep guarding on `media_url`.
+
+    `scope_permalink` restricts the capture to the post that permalink names.
+    A permalink page is one post inside a feed of other posts, and "the biggest
+    media response on the wire" cheerfully answers with a NEIGHBOUR's clip - a
+    six-photo Threads carousel came back as somebody else's video that way. With
+    a scope in hand, a post holding no player of its own answers `media_url=None`
+    rather than handing over whatever else the page happened to load.
     """
     domain = urlparse(url).netloc.lstrip("www.")
     page_origin = f"{urlparse(url).scheme}://{urlparse(url).netloc}/"
@@ -225,15 +253,57 @@ async def sniff_media(
 
         await page.goto(url, wait_until="domcontentloaded", timeout=timeout_ms)
 
+        # A cookie gate is served instead of the page; decline it before looking
+        # for a player, or the only thing on the wire is Meta's policy screen.
+        await _dismiss_consent(page)
+
+        # Narrow to the post itself. Everything after this - which players get
+        # played, which still is "the" image - then belongs to THIS post.
+        scoped = False
+        if scope_permalink:
+            await page.wait_for_timeout(1500)
+            scoped = await _scope_post(page, scope_permalink)
+
         # Nudge a lazily-mounted player into requesting its media.
         try:
             await page.wait_for_selector("video", timeout=8000)
         except Exception:
             pass
+        probe = {}
         try:
-            await page.evaluate(_PLAY_AND_PROBE_JS)
+            probe = await page.evaluate(_PLAY_AND_PROBE_JS) or {}
         except Exception:
-            pass
+            probe = {}
+
+        # The post is scoped, it holds real content, and none of that content is
+        # a player. Everything the network still delivers belongs to a
+        # neighbouring post, so there is nothing here to download — say so
+        # instead of grabbing the biggest stranger. A scope that came back empty
+        # is not trusted for this: falling through to the old, unscoped pick is
+        # far better than telling a caller a reel has no video.
+        scope_has_content = bool(probe.get("imgs") or probe.get("textLen"))
+        if scoped and scope_has_content and not probe.get("count"):
+            print(f"[sniff_media] {url} carries no video of its own")
+            main_image = None
+            if want_image:
+                try:
+                    main_image = await page.evaluate(_LARGEST_IMAGE_JS)
+                except Exception:
+                    main_image = None
+            try:
+                og_only = await page.evaluate(_OG_MEDIA_JS) or {}
+            except Exception:
+                og_only = {}
+            return {
+                "media_url": None,
+                "kind": None,
+                "referer": page_origin,
+                "user_agent": _BROWSER_UA,
+                "content_type": "",
+                "thumbnail_url": og_only.get("image") or None,
+                "main_image": main_image,
+                "candidates": [],
+            }
 
         # Let media requests fire. Break early once a real progressive file
         # lands — but on a DASH host the video and the audio representation are
