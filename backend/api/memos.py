@@ -142,7 +142,7 @@ async def list_memos(
     query = select(Memo, content_preview).options(
         load_only(
             Memo.id, Memo.type, Memo.title, Memo.description,
-            Memo.source_url, Memo.source_domain, Memo.source_favicon,
+            Memo.source_url, Memo.source_domain, Memo.source_favicon, Memo.resolve_tier,
             Memo.thumbnail_path, Memo.gallery, Memo.file_path, Memo.ai_summary, Memo.notes,
             Memo.sort_order, Memo.pinned, Memo.liked, Memo.hidden, Memo.card_size,
             Memo.audio_kind, Memo.audio_artist, Memo.audio_album, Memo.is_processed,
@@ -244,6 +244,11 @@ async def list_memos(
                 "source_url": m.source_url,
                 "source_domain": m.source_domain,
                 "source_favicon": m.source_favicon,
+                # Which resolver tier produced this memo. A ladder degrades
+                # silently - every tier returns something - so the tier has to
+                # travel with the memo or a fallback save is indistinguishable
+                # from a good one (plan 026).
+                "resolve_tier": m.resolve_tier,
                 "thumbnail_path": m.thumbnail_path,
                 # Carousel: the whole ordered gallery so a card can badge "1/N".
                 "gallery": m.gallery,
@@ -317,6 +322,7 @@ async def get_memo(memo_id: str, db: AsyncSession = Depends(get_db)):
         "source_url": memo.source_url,
         "source_domain": memo.source_domain,
         "source_favicon": memo.source_favicon,
+        "resolve_tier": memo.resolve_tier,
         "file_path": memo.file_path,
         "thumbnail_path": memo.thumbnail_path,
         "gallery": memo.gallery,
