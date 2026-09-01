@@ -18,6 +18,7 @@ already required by the extractor / video-thumbnail paths.
 """
 import asyncio
 import logging
+import re
 import shutil
 import subprocess
 import uuid
@@ -67,6 +68,22 @@ def _strip_byte_range(url: str) -> str:
     if len(kept) == len(parse_qsl(parts.query, keep_blank_values=True)):
         return url
     return urlunsplit(parts._replace(query=urlencode(kept)))
+
+
+# Post-permalink shapes: the URL is ONE item, not a feed. Only these are worth
+# scoping — a channel page or a homepage has no single post to narrow to, and
+# passing one would just fail to match and cost a wasted lookup.
+_PERMALINK_RE = re.compile(
+    r"/(?:@[^/]+/)?(?:post|p|reel|reels|tv|status)/[A-Za-z0-9_-]+", re.I
+)
+
+
+def _post_permalink(url: str) -> str | None:
+    """`url` when it names a single post, else None."""
+    try:
+        return url if _PERMALINK_RE.search(urlparse(url or "").path or "") else None
+    except Exception:
+        return None
 
 
 def _has_audio_stream(path: Path) -> bool | None:
@@ -584,7 +601,12 @@ async def _localize_via_sniff(url: str, workspace_id: str) -> dict:
     from the sniffer's other candidates and muxed in before returning."""
     from backend.core.sniff_media import sniff_media
 
-    info = await sniff_media(url)
+    # Scope the capture to the post this URL names. A permalink page is one post
+    # inside a feed of other posts, and "the biggest clip on the wire" happily
+    # answers with a neighbour's — which is how a six-photo Threads carousel was
+    # localized as a stranger's video (2026-08-30). A URL that is not a post
+    # permalink scopes to nothing and behaves exactly as before.
+    info = await sniff_media(url, scope_permalink=_post_permalink(url))
     if not info or not info.get("media_url"):
         raise LocalizeError("No downloadable media stream found on the page")
 

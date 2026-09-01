@@ -354,6 +354,17 @@ def _looks_like_bot_wall(raw_html: str) -> bool:
         return False
 
 
+def _looks_like_consent_gate(text: str) -> bool:
+    """Cookie-consent gate in extracted text. Shares the headless detector so
+    the rendered and plain paths agree on what a gate is."""
+    try:
+        from backend.core.headless import _looks_like_consent_wall
+
+        return _looks_like_consent_wall(text)
+    except Exception:
+        return False
+
+
 def _is_cf_challenge(parsed: dict | None, raw_html: str) -> bool:
     """Return True if the parsed result or raw HTML looks like a CF challenge."""
     if parsed is not None:
@@ -623,6 +634,15 @@ async def extract_video(url: str) -> dict:
     # instead of a dead video card.
     if "instagram.com" in domain:
         return await _instagram_resolve(url, domain)
+
+    # Threads has no yt-dlp extractor, so without this the generic path below
+    # fails and the fallback stamps every post `video` from the DOMAIN alone —
+    # including a six-photo carousel. The resolver reads what the POST holds
+    # (core/threads), scoped so a neighbouring post's clip is never the answer.
+    from backend.core.threads import is_threads_url, resolve_threads
+
+    if is_threads_url(url):
+        return await resolve_threads(url, domain)
 
     try:
         result = subprocess.run(
@@ -970,7 +990,12 @@ async def _instagram_resolve(url: str, domain: str) -> dict:
     try:
         from backend.core.sniff_media import sniff_media
 
-        probe = await sniff_media(url, want_image=True) or {}
+        # Scoped to the post: an Instagram permalink page carries a grid of
+        # OTHER posts, and an unscoped sniff will happily report a neighbour's
+        # reel as this photo post's video.
+        probe = await sniff_media(
+            url, want_image=True, scope_permalink=canonical_source_url(url)
+        ) or {}
         sniff_image = probe.get("thumbnail_url") or probe.get("main_image") or ""
         if probe.get("media_url"):
             return {
@@ -1086,6 +1111,10 @@ async def _fetch_og_meta(url: str, user_agent: str | None = None) -> dict:
         "description": description,
         "thumbnail_path": thumbnail,
         "video_url": video_url,
+        # The canonical permalink. A share-sheet link (threads.com/share/<code>)
+        # carries no author and no post id, and this is the only place the real
+        # one is handed over without following the redirect a second time.
+        "og_url": _meta("og:url"),
     }
 
 
@@ -1144,6 +1173,16 @@ async def _minimal_link(url: str, domain: str | None = None) -> dict:
             return _bot_wall_memo(url, domain)
         if rendered and rendered.get("html"):
             parsed = _parse_html(rendered["html"], url, url, domain)
+            # A cookie-consent gate parses perfectly — into a memo whose body is
+            # the site's cookie policy and whose title is the site's name. A
+            # Threads carousel arrived that way on 2026-08-30. Drop the parse and
+            # let the OpenGraph scrape below answer instead; Meta serves real
+            # tags to a link-preview crawler with no gate in front of them.
+            if parsed is not None and _looks_like_consent_gate(
+                parsed.get("content_text") or ""
+            ):
+                print(f"[extract] {domain} served a cookie-consent gate, not the page")
+                parsed = None
             main_img = rendered.get("main_image")
             if parsed is None and is_photo and main_img:
                 # Photo page with no usable OG/text in the rendered DOM (FB/IG

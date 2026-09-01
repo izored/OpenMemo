@@ -7,6 +7,14 @@ All notable changes to OpenMemo are documented here.
 
 <!-- Add entries here as work lands: ### Added / ### Changed / ### Fixed -->
 
+### Fixed
+
+- 🧵 **A Threads carousel is saved as the photos it is, not as somebody else's video.** A six photo Threads post came back as a video memo playing a 1.4 MB clip that belonged to a different author, with Meta's cookie policy as its text. Three separate mistakes stacked up on one post. Threads is on the list of video sites, so a post there was stamped "video" from the address alone, without anything ever checking whether the post held a video; this one held none at all. The download helper then went looking for a clip on the page and found one, because a Threads permalink is one post sitting on top of a feed of Related threads, and it played every video it could see. And the page it read was not the post but Meta's cookie screen, which is what a fresh browser gets served first, so the memo's body became a list of Learn more links.
+
+  All three come down to the same thing: nothing was scoping the read to the post. openMemo now finds the post's own part of the page before it reads anything, by walking out from the post's own link until the moment another post's link appears, so the pictures, the cover and the text all come from the post you saved. A carousel is read by enumerating that region rather than by pressing Next, which is what Threads needs, because Threads lays its slides out in a strip with no Next button and the old approach saw one slide and stopped. Slides are taken at full resolution rather than at the thumbnail size the page happens to display, so what is kept is the photograph and not a 320 pixel preview of it. The type now follows what the post holds: photos make it a photo memo with every slide in the gallery, a clip in the post makes it a video, and a text post stays a text post instead of a dead video card. And a cookie banner is declined before anything is read, on every site rather than just this one, with the gate recognised and skipped if it survives the click. Nothing here is Threads specific except knowing where the caption lives.
+
+  The same scoping applies to Instagram, which has the neighbouring posts problem for the same reason. Existing memos are not rewritten; re-pull one to fix it.
+
 ---
 ## [3.14.1] - 2026-08-30
 

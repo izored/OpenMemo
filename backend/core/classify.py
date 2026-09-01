@@ -28,6 +28,18 @@ def _ext_from_url(url: str) -> str:
         return ""
 
 
+# Hosts whose post-level resolver decides the type (core/extractor._instagram_resolve,
+# core/threads.resolve_threads). These read what the post holds; `detect_url_type`
+# only reads the domain, and the domain is not evidence of anything.
+_RESOLVER_HOSTS = ("instagram.com", "threads.com", "threads.net")
+
+
+def _has_own_resolver(url: str) -> bool:
+    """True when a post-level resolver already classified this URL's host."""
+    low = (url or "").lower()
+    return any(h in low for h in _RESOLVER_HOSTS)
+
+
 def derive_memo_type(memo) -> str:
     """Return the canonical type for a memo from its strongest signal.
 
@@ -58,10 +70,13 @@ def derive_memo_type(memo) -> str:
             current = (getattr(memo, "type", None) or "").lower()
             if current in ("image", "audio"):
                 return current
-            # Instagram's resolver is authoritative (core/extractor._instagram_resolve).
-            # A "link" from it is the deliberate graceful needs-login bookmark — keep
-            # it a link, don't let the video-host default drag it back to a dead video.
-            if current == "link" and "instagram.com" in (source_url or "").lower():
+            # A host with its own resolver has already looked at the POST, not
+            # just the domain, so its verdict outranks the domain default. For
+            # Instagram a "link" is the graceful needs-login bookmark; for
+            # Threads it is a text post, which is most of Threads. Letting the
+            # video-host default drag either one back turns it into a dead video
+            # card that the downloader then tries, and fails, to fill.
+            if current == "link" and _has_own_resolver(source_url):
                 return "link"
             from backend.core.extractor import _url_media_hint, is_audio_host
             # Audio-only host (SoundCloud/Bandcamp/Mixcloud/…) is audio, never
