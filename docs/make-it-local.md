@@ -159,7 +159,7 @@ media response". On a Threads photo carousel that produced a memo holding a
 1.4 MB clip belonging to a completely different author, filed under a caption
 that had nothing to do with it.
 
-Since 3.14.2 every reader that looks at a page can be scoped to the post first.
+Every reader that looks at a page can now be scoped to the post first.
 
 1. **`core/permalinks` says which URLs name one post.** It returns a `prefix`
    (the path down to the post id, slug and query dropped) and a `kind` token
