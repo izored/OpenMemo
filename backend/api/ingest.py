@@ -2646,6 +2646,73 @@ def _is_placeholder_title(title: str | None, url: str, domain: str) -> bool:
     return t.casefold() in generic
 
 
+def _is_consent_text(text: str) -> bool:
+    """True when a memo's body is a cookie-consent screen rather than the page."""
+    try:
+        from backend.core.headless import _looks_like_consent_wall
+
+        return _looks_like_consent_wall(text)
+    except Exception:
+        return False
+
+
+def _apply_resolved_type(memo, resolved: dict, gallery: list) -> None:
+    """Let a re-pull correct a memo that was filed as the wrong TYPE.
+
+    Re-pull could already fix a title, a cover and a gallery, but never the
+    type — so a memo mistyped by an older resolver stayed mistyped no matter how
+    many times it was re-pulled. That is the whole repair path for the posts
+    that were typed from their domain: a Threads photo carousel filed as
+    `video`, a Reddit text post filed as `video`.
+
+    Two guards, and they are the reason this is safe:
+
+    * The resolver has to be talking about the POST. A resolved type is only
+      trusted when the resolve returned media of its own (a gallery) or the memo
+      holds no downloaded file to contradict it. A resolver that fell back to a
+      bare link card cannot demote a working video.
+    * A stale media file is DETACHED, not deleted. `derive_memo_type` reads
+      `file_path` first, so leaving an mp4 attached to a memo the source says is
+      photographs means the background sorter re-files it as video and undoes
+      the repair on the next pass. The bytes stay on disk for the integrity
+      report to account for; only the reference goes."""
+    new_type = (resolved.get("type") or "").strip().lower()
+    if not new_type or new_type == (memo.type or "").lower():
+        return
+    has_file = bool((memo.file_path or "").strip())
+    # A carousel of stills is unambiguous evidence about what the post is.
+    carousel = len(gallery) > 1 and any(
+        (s or {}).get("type") != "video" for s in gallery
+    )
+    # Whose opinion is this? A post-level resolver read the post and its answer
+    # counts. A generic scrape of an ordinary page did not: `extract_url` calls
+    # almost everything a "link", and letting that demote a memo somebody filed
+    # as video would turn re-pull into a way to lose a video.
+    from backend.core.permalinks import is_post_permalink
+
+    authoritative = (
+        carousel
+        or bool(resolved.get("resolve_tier"))
+        or is_post_permalink(memo.source_url or "")
+    )
+    if not authoritative:
+        return
+    # The guard is about DEMOTION only. Promoting a memo to video or audio
+    # keeps its file and takes nothing away, so it needs no extra evidence;
+    # taking a downloaded file off a memo does.
+    if has_file and new_type not in ("video", "audio") and not carousel:
+        return
+    if has_file and new_type not in ("video", "audio"):
+        log.info(
+            "repull: %s is %s, detaching the %s that no longer belongs to it",
+            memo.id, new_type, memo.file_path,
+        )
+        memo.file_path = None
+        memo.localize_status = None
+        memo.localize_error = None
+    memo.type = new_type
+
+
 async def repull_memo_task(memo_id: str, mode: str):
     """Fetch a memo's source again and apply everything that comes back.
 
@@ -2720,6 +2787,19 @@ async def repull_memo_task(memo_id: str, mode: str):
                     memo.title = title
                     memo.description = resolved.get("description") or memo.description
                     memo.content_text = resolved.get("content_text") or memo.content_text
+                # A body that is a cookie-consent screen is not writing anyone
+                # wants to keep, and the title guard above will not touch it:
+                # the title alongside it is perfectly real. Meta serves that
+                # screen instead of the post to a cold browser profile, so a
+                # memo saved before the gate was handled holds the cookie policy
+                # forever unless re-pull is allowed to overwrite exactly this.
+                fresh_text = (resolved.get("content_text") or "").strip()
+                if fresh_text and _is_consent_text(memo.content_text or ""):
+                    memo.content_text = fresh_text
+                    memo.content_raw = resolved.get("content_raw") or ""
+                    memo.description = (
+                        resolved.get("description") or memo.description
+                    )
                 # A cover the memo never had. Only ever fills a gap: a
                 # thumbnail already on the memo is left exactly as it is, and
                 # step 3 is what repairs a broken one.
@@ -2729,6 +2809,7 @@ async def repull_memo_task(memo_id: str, mode: str):
                 if len(gallery) > 1:
                     memo.gallery = gallery
                     memo.thumbnail_path = gallery[0]["url"]
+                _apply_resolved_type(memo, resolved, gallery)
                 memo.updated_at = datetime.utcnow()
                 await db.commit()
         if len(gallery) > 1:
@@ -2748,10 +2829,20 @@ async def repull_memo_task(memo_id: str, mode: str):
     # hand us a video stream? If neither, there is no media here to fetch.
     async with AsyncSessionLocal() as db:
         memo = await db.get(Memo, memo_id)
+        # `detect_url_type` answers from the DOMAIN, so on a video host it says
+        # "video" for a photo carousel and a text post alike, and the download
+        # then fails with a red chip on a memo whose media never existed. When
+        # the resolve actually read the post and came back with something that
+        # is not media, that outranks the host. A resolve that produced nothing
+        # leaves the old behaviour exactly as it was.
+        resolved_type = ((resolved or {}).get("type") or "").strip().lower()
         has_media = bool(memo) and (
             (memo.type or "").lower() in ("video", "audio")
-            or detect_url_type(url) == "video"
             or bool((resolved or {}).get("video_url"))
+            or (
+                detect_url_type(url) == "video"
+                and resolved_type not in ("image", "link", "note")
+            )
         )
         no_media = bool(memo) and not has_media
         if no_media:
