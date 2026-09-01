@@ -115,6 +115,39 @@ def test_an_unsatisfiable_range_falls_back_to_the_whole_file(client):
     assert r.content == payload
 
 
+def test_a_malformed_range_also_serves_the_whole_file(client):
+    payload = b"abc" * 100
+    memo_id = _make_video_memo(payload)
+
+    r = client.get(f"/api/memos/{memo_id}/file", headers={"Range": "bytes=abc-def"})
+
+    assert r.status_code == 200
+    assert r.content == payload
+
+
+def test_a_range_request_never_reaches_the_frameworks_own_handling(client, monkeypatch):
+    """No Range-bearing request may be handed to FileResponse.
+
+    Starlette >= 0.45 parses Range inside FileResponse itself: an unsatisfiable
+    one becomes 416, a malformed one 400. This route promises a 200 with the
+    whole file for both (a 416 kills a native player; a 200 does not), so the
+    promise has to be kept by this route rather than by whichever Starlette the
+    pin happens to resolve to. Delegating would make the answer flip on a
+    dependency bump with nothing here to catch it.
+    """
+    payload = b"abc" * 100
+    memo_id = _make_video_memo(payload)
+
+    def _boom(*args, **kwargs):
+        raise AssertionError("Range request delegated to FileResponse")
+
+    monkeypatch.setattr(memos_api, "FileResponse", _boom)
+
+    for header in ("bytes=99999-", "bytes=abc-def", "bytes=-0", "bytes=0-9"):
+        r = client.get(f"/api/memos/{memo_id}/file", headers={"Range": header})
+        assert r.status_code in (200, 206), header
+
+
 # --- the actual bug -------------------------------------------------------
 
 CLIENTS = 10
