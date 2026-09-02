@@ -776,6 +776,22 @@ input, textarea { font: inherit; color: inherit; }
   user-select: none;
   -webkit-user-select: none;
 }
+/* A card is dragged with @dnd-kit, which is pointer-driven. An <img> is
+   natively draggable, so a fast pointer can trip the browser's own HTML5 image
+   drag before dnd-kit's 8px activation threshold is met. That drag takes the
+   pointer away, dnd-kit never sees the gesture, and releasing it navigates
+   the tab to the image URL, so the app vanishes and only a reload brings it
+   back. `draggable={false}` on each <img> is the portable half of the fix;
+   this is the belt to that pair of braces, and it covers every draggable child
+   of a card surface at once (tiles, playlist rows, sidebar art). */
+.om-card [draggable="true"],
+.om-card img,
+.om-card a,
+.om-masonry-cell img,
+.om-pl-card img,
+.om-mtile img {
+  -webkit-user-drag: none;
+}
 .om-card:active { cursor: grabbing; }
 .om-card-hover:hover { transform: translateY(-2px); box-shadow: var(--shadow-card-hover); border-color: var(--border-2); }
 

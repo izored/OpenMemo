@@ -237,65 +237,90 @@ export function FileDropLayer() {
     // and carries no DataTransfer at all, so it never reaches this code.)
     let internal = false;
 
-    // What is being dragged, or null for "not ours".
-    const kindOf = (dt: DataTransfer | null): DragKind | null => {
+    // A drag shape this layer recognises, whoever started it. Cancelling is
+    // decided from THIS, never from `kindOf`. See `onOver`.
+    const shapeOf = (dt: DataTransfer | null): DragKind | null => {
       if (dragHasFiles(dt)) return 'files';
-      if (!internal && dragHasText(dt)) return 'links';
+      if (dragHasText(dt)) return 'links';
       return null;
+    };
+
+    // What is being dragged for INGEST purposes, or null for "not ours".
+    const kindOf = (dt: DataTransfer | null): DragKind | null => {
+      const shape = shapeOf(dt);
+      return shape === 'links' && internal ? null : shape;
     };
 
     const onStart = () => { internal = true; };
 
+    // Nothing arrived for a beat, so the drag is over even though the event
+    // that says so never came. `dragleave` is missed outright when the pointer
+    // leaves the window fast enough, and `dragend` only fires for a drag that
+    // started here. Between them the veil could stay up over a live app with
+    // no way down but a reload. `dragover` repeats every few frames while a
+    // drag is over the window, so silence is the reliable end-of-drag signal.
+    let idle: ReturnType<typeof setTimeout> | null = null;
+    const clearIdle = () => { if (idle) { clearTimeout(idle); idle = null; } };
+    const armIdle = () => {
+      clearIdle();
+      idle = setTimeout(() => { depth = 0; setActive(false); }, 400);
+    };
+
     const onEnter = (e: DragEvent) => {
+      if (!shapeOf(e.dataTransfer)) return;
+      e.preventDefault();
       const k = kindOf(e.dataTransfer);
       if (!k) return;
-      e.preventDefault();
-      if (suppressed()) return;
+      // Depth is counted for every drag we would ingest and dropped only by the
+      // matching leave, so the two stay symmetric. `suppressed()` gates the
+      // veil alone: gating the count too let a panel opening mid-drag strand it
+      // above zero, and a count that never returns to zero is a stuck veil.
       depth++;
-      if (depth === 1) {
-        // A link drag has no item count worth showing — the payload is
-        // unreadable until drop, by spec.
-        const items = k === 'files' ? e.dataTransfer?.items : null;
-        setCount(items ? Array.from(items).filter((it) => it.kind === 'file').length : 0);
-        setKind(k);
-        setTarget(resolve());
-        setActive(true);
-      }
+      if (depth !== 1 || suppressed()) return;
+      // A link drag has no item count worth showing, since the payload is
+      // unreadable until drop, by spec.
+      const items = k === 'files' ? e.dataTransfer?.items : null;
+      setCount(items ? Array.from(items).filter((it) => it.kind === 'file').length : 0);
+      setKind(k);
+      setTarget(resolve());
+      setActive(true);
     };
 
     const onOver = (e: DragEvent) => {
-      if (!kindOf(e.dataTransfer)) return;
-      // preventDefault on dragover is REQUIRED or the drop never fires and the
-      // browser handles it itself — opening the file, or navigating the whole
-      // app to the dropped URL. copy cursor signals "will be added".
+      const shape = shapeOf(e.dataTransfer);
+      if (!shape) return;
+      // preventDefault on dragover is REQUIRED, and it is required for drags we
+      // will NOT ingest too. `drop` only fires on an element that accepted the
+      // drag here; skip this and the browser keeps the gesture and performs its
+      // own default, which for the image or link a memo card was carrying means
+      // navigating the tab clean out of the app. That is the blank page a fast
+      // card drag used to leave behind: dnd-kit lost the race to the browser's
+      // native image drag, and openMemo then let the browser have it.
       e.preventDefault();
-      if (e.dataTransfer) e.dataTransfer.dropEffect = 'copy';
+      if (e.dataTransfer) e.dataTransfer.dropEffect = kindOf(e.dataTransfer) ? 'copy' : 'none';
+      if (kindOf(e.dataTransfer)) armIdle();
     };
 
     const onLeave = (e: DragEvent) => {
       if (!kindOf(e.dataTransfer)) return;
-      if (suppressed()) return;
       // dragleave fires per descendant; only hide once the pointer has truly
       // left the window (depth back to zero).
       depth = Math.max(0, depth - 1);
-      if (depth === 0) setActive(false);
+      if (depth === 0) { clearIdle(); setActive(false); }
     };
 
     const onDrop = (e: DragEvent) => {
+      const shape = shapeOf(e.dataTransfer);
       const k = kindOf(e.dataTransfer);
-      // An internal drag still has to be stopped: letting it through navigates
-      // the app to the href that was dragged.
-      if (!k) {
-        if (internal) e.preventDefault();
-        internal = false;
-        return;
-      }
-      // Always stop the browser from opening/navigating to what was dropped.
-      e.preventDefault();
+      // Stop the browser from opening or navigating to whatever was released,
+      // an internal drag included, since that is the one that would land on our
+      // own file route and take the app down with it.
+      if (shape) e.preventDefault();
       depth = 0;
       internal = false;
+      clearIdle();
       setActive(false);
-      if (suppressed()) return;
+      if (!k || suppressed()) return;
       const t = resolve();
       if (k === 'files') {
         void dispatch(filesFromDataTransfer(e.dataTransfer), t);
@@ -306,7 +331,7 @@ export function FileDropLayer() {
     };
 
     // Some browsers fire a final dragend without a matching dragleave.
-    const onEnd = () => { depth = 0; internal = false; setActive(false); };
+    const onEnd = () => { depth = 0; internal = false; clearIdle(); setActive(false); };
 
     window.addEventListener('dragstart', onStart);
     window.addEventListener('dragenter', onEnter);
@@ -321,6 +346,7 @@ export function FileDropLayer() {
       window.removeEventListener('dragleave', onLeave);
       window.removeEventListener('drop', onDrop);
       window.removeEventListener('dragend', onEnd);
+      clearIdle();
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps -- handlers read live state via ctxRef / getState; bind once.
   }, []);
