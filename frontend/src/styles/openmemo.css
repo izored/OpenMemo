@@ -6649,8 +6649,31 @@ button.om-add-link { background: none; border: 0; padding: 0; cursor: pointer; f
   font-size: 14px; line-height: 1; width: 18px; text-align: center;
   font-family: "Apple Color Emoji", "Segoe UI Emoji", "Noto Color Emoji", sans-serif;
 }
-.om-space-group.open > .om-space-row {
+/* The Space you are IN reads as selected. Being merely EXPANDED does not:
+   since the dropdown became something the user pins open (so a memo can be
+   dragged onto a Space collection from the dashboard), "open" and "current"
+   stopped being the same thing, and filling every expanded row would claim you
+   are inside several Spaces at once. */
+.om-space-row.active {
   background: var(--surface-2); color: var(--text); font-weight: 500;
+}
+/* The caret owns expansion and nothing else, so it needs its own hit area and
+   must not look like part of the label. */
+.om-space-caret {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 18px; height: 18px; margin-right: -4px;
+  border-radius: 5px; cursor: pointer;
+  color: var(--text-4);
+  transition: background .15s, color .15s;
+}
+.om-space-caret:hover { background: var(--surface-3, var(--surface-2)); color: var(--text-2); }
+/* A drop target outranks the selected fill: while a memo is over this row, the
+   only thing worth saying is "let go here". */
+.om-space-row.drop-over,
+.om-space-coll.drop-over {
+  background: var(--accent-soft);
+  color: var(--text);
+  box-shadow: inset 0 0 0 1px var(--accent);
 }
 /* The open Space's collections drop in beneath it, set in slightly. */
 .om-space-collections {

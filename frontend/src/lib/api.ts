@@ -40,6 +40,15 @@ export const memoApi = {
   update: (id: string, data: any) => fetchJSON<any>(`/memos/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
   setRecency: (id: string, recency_at: string) =>
     fetchJSON<{ id: string; recency_at: string }>(`/memos/${id}/recency`, { method: 'PUT', body: JSON.stringify({ recency_at }) }),
+  // File a memo into a Space, into one of its collections, or back into the
+  // library. A Space is a workspace, not a label (ADR-020), so this is a MOVE:
+  // the memo leaves wherever it was. Pass workspace_id undefined to bring it
+  // home, which is the same call in the other direction.
+  move: (id: string, workspace_id?: string, collection_id?: string) =>
+    fetchJSON<{ id: string; workspace_id: string; collection_id: string | null; moved: boolean }>(
+      `/memos/${id}/move`,
+      { method: 'POST', body: JSON.stringify({ workspace_id: workspace_id ?? null, collection_id: collection_id ?? null }) },
+    ),
   pin: (id: string, pinned: boolean) => fetchJSON<{ id: string; pinned: boolean }>(`/memos/${id}/pin`, { method: 'PUT', body: JSON.stringify({ pinned }) }),
   like: (id: string, liked: boolean) => fetchJSON<{ id: string; liked: boolean }>(`/memos/${id}/like`, { method: 'PUT', body: JSON.stringify({ liked }) }),
   hide: (id: string, hidden: boolean) => fetchJSON<{ id: string; hidden: boolean }>(`/memos/${id}/hide`, { method: 'PUT', body: JSON.stringify({ hidden }) }),

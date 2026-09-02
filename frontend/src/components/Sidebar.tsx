@@ -2,7 +2,7 @@ import React from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { Link } from 'react-router-dom';
 import { isPlainClick } from '@/lib/nav';
-import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { useQueries, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useDroppable } from '@dnd-kit/core';
 import { motion } from 'framer-motion';
 import { Icon } from './Icon';
@@ -13,6 +13,81 @@ import { useIsMobile } from '@/lib/useBreakpoint';
 import { modKey } from '@/lib/install';
 import type { Collection, Space } from '@/types';
 import { cn } from '@/lib/utils';
+
+// Which Spaces the user has dropped down. Survives a reload; per browser.
+const EXPANDED_SPACES_KEY = 'om.sidebar.expandedSpaces';
+
+/** A Space row you can drop a memo onto.
+ *
+ *  Dropping here MOVES the memo into the Space. A Space is a workspace, not a
+ *  label (ADR-020), so there is no version of this that leaves a copy behind,
+ *  and the row says so on hover rather than letting the memo's disappearance
+ *  from the dashboard come as a surprise. */
+function SpaceRow({
+  space,
+  open,
+  active,
+  onOpen,
+  onToggle,
+}: {
+  space: Space;
+  open: boolean;
+  active: boolean;
+  onOpen: () => void;
+  onToggle: (e: React.MouseEvent) => void;
+}) {
+  const { isOver, setNodeRef } = useDroppable({ id: `space-${space.id}` });
+  return (
+    <button
+      ref={setNodeRef}
+      className={cn('om-coll om-space-row', active && 'active', isOver && 'drop-over')}
+      onClick={onOpen}
+      title={`${space.name} — drop a memo here to move it into this Space`}
+    >
+      <span className="om-space-row-emoji">{space.emoji || '🗂️'}</span>
+      <span className="om-coll-name">{space.name}</span>
+      <span
+        className="om-coll-count om-space-caret"
+        onClick={onToggle}
+        role="button"
+        aria-label={open ? `Collapse ${space.name}` : `Expand ${space.name}`}
+        title={open ? 'Collapse' : 'Show collections'}
+      >
+        <Icon name={open ? 'chevronDown' : 'chevronRight'} size={12} />
+      </span>
+    </button>
+  );
+}
+
+/** A collection inside a Space, as a drop target.
+ *
+ *  Its droppable id carries the Space too: the drop has to know which workspace
+ *  to move the memo into, and a collection id on its own does not say. */
+function SpaceCollectionRow({
+  spaceId,
+  col,
+  active,
+  onSelect,
+}: {
+  spaceId: string;
+  col: Collection;
+  active: boolean;
+  onSelect: () => void;
+}) {
+  const { isOver, setNodeRef } = useDroppable({ id: `spacecol-${spaceId}:${col.id}` });
+  return (
+    <button
+      ref={setNodeRef}
+      className={cn('om-coll om-space-coll', active && 'active', isOver && 'drop-over')}
+      onClick={onSelect}
+      title={`${col.name} — drop a memo here to move it into this Space`}
+    >
+      <span className="om-coll-dot" style={{ background: col.color || 'var(--text-4)' }} />
+      <span className="om-coll-name">{col.name}</span>
+      <span className="om-coll-emoji">{col.emoji || '·'}</span>
+    </button>
+  );
+}
 
 function CollectionRow({
   col,
@@ -182,13 +257,54 @@ export function Sidebar() {
     queryKey: ['spaces'],
     queryFn: spaceApi.list,
   });
-  // The open Space's own collections (accordion dropdown). Only fetched while a
-  // Space is active.
-  const { data: spaceCollections = [] } = useQuery({
-    queryKey: ['collections', activeSpace],
-    queryFn: () => collectionApi.list(activeSpace || undefined),
-    enabled: !!activeSpace,
+  // Which Spaces have their collections dropped down. Expansion used to BE
+  // navigation: the list appeared only for the Space you had open, so from the
+  // dashboard there was no Space collection on screen at all — and therefore
+  // nothing to drag a memo onto. It is now a set the user owns, kept in
+  // localStorage so a reload does not silently re-collapse the sidebar.
+  const [expandedSpaces, setExpandedSpaces] = React.useState<string[]>(() => {
+    try {
+      const raw = localStorage.getItem(EXPANDED_SPACES_KEY);
+      const parsed = raw ? JSON.parse(raw) : [];
+      return Array.isArray(parsed) ? parsed.filter((x) => typeof x === 'string') : [];
+    } catch {
+      return [];
+    }
   });
+  React.useEffect(() => {
+    try {
+      localStorage.setItem(EXPANDED_SPACES_KEY, JSON.stringify(expandedSpaces));
+    } catch {
+      // A private window with storage blocked still gets a working sidebar.
+    }
+  }, [expandedSpaces]);
+  const toggleSpace = React.useCallback((id: string) => {
+    setExpandedSpaces((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
+  }, []);
+  // The Space you are IN is always shown open, whether or not it is pinned open,
+  // so opening a Space still reveals it and the old behaviour is intact.
+  const openSpaceIds = React.useMemo(
+    () => (activeSpace && !expandedSpaces.includes(activeSpace)
+      ? [...expandedSpaces, activeSpace]
+      : expandedSpaces),
+    [expandedSpaces, activeSpace],
+  );
+
+  // One query per open Space. `useQueries` rather than a single call because a
+  // collection list is per workspace, and more than one Space can be open now.
+  const spaceCollQueries = useQueries({
+    queries: openSpaceIds.map((id) => ({
+      queryKey: ['collections', id],
+      queryFn: () => collectionApi.list(id),
+    })),
+  });
+  const collectionsBySpace = React.useMemo(() => {
+    const out: Record<string, Collection[]> = {};
+    openSpaceIds.forEach((id, i) => {
+      out[id] = (spaceCollQueries[i]?.data as Collection[] | undefined) || [];
+    });
+    return out;
+  }, [openSpaceIds, spaceCollQueries]);
   const { data: pinnedMemos = [] } = useQuery({
     queryKey: ['memos', 'pinned'],
     queryFn: () => memoApi.listPinned(),
@@ -371,51 +487,49 @@ export function Sidebar() {
                     <span>Create your first Space</span>
                   </button>
                 )}
-                {(spaces as Space[]).map((s) => {
-                  const open = activeSpace === s.id;
+                {(spaces as Space[]).map((sp) => {
+                  const open = openSpaceIds.includes(sp.id);
+                  const active = activeSpace === sp.id;
+                  const cols = collectionsBySpace[sp.id] || [];
                   return (
-                    <div key={s.id} className={cn('om-space-group', open && 'open')}>
-                      <button
-                        className={cn('om-coll om-space-row', open && 'active')}
-                        onClick={() => openSpace(s.id)}
-                        title={s.name}
-                      >
-                        <span className="om-space-row-emoji">{s.emoji || '🗂️'}</span>
-                        <span className="om-coll-name">{s.name}</span>
-                        <Icon name={open ? 'chevronDown' : 'chevronRight'} size={12} className="om-coll-count" />
-                      </button>
+                    <div key={sp.id} className={cn('om-space-group', open && 'open')}>
+                      <SpaceRow
+                        space={sp}
+                        open={open}
+                        active={active}
+                        onOpen={() => openSpace(sp.id)}
+                        onToggle={(e) => { e.stopPropagation(); toggleSpace(sp.id); }}
+                      />
                       {open && (
                         <div className="om-space-collections" onMouseLeave={hideSpaceReveal}>
-                          {spaceCollections.length === 0 && (
+                          {cols.length === 0 && (
                             <span className="om-space-empty mono">No collections yet</span>
                           )}
-                          {(spaceCollections as Collection[]).map((c) => (
-                            <button
+                          {cols.map((c) => (
+                            <SpaceCollectionRow
                               key={c.id}
-                              className={cn('om-coll om-space-coll', activeCollection === c.id && 'active')}
-                              onClick={() => selectSpaceCollection(s.id, c.id)}
-                            >
-                              <span className="om-coll-dot" style={{ background: c.color || 'var(--text-4)' }} />
-                              <span className="om-coll-name">{c.name}</span>
-                              <span className="om-coll-emoji">{c.emoji || '·'}</span>
-                            </button>
+                              spaceId={sp.id}
+                              col={c}
+                              active={active && activeCollection === c.id}
+                              onSelect={() => selectSpaceCollection(sp.id, c.id)}
+                            />
                           ))}
                           <button
                             className="om-space-add-coll"
-                            onClick={() => { setEditingCollection(null); setCollectionModalOpen(true); }}
+                            onClick={() => { setActiveSpace(sp.id); setEditingCollection(null); setCollectionModalOpen(true); }}
                             onMouseEnter={startSpaceReveal}
                             onMouseLeave={cancelSpaceReveal}
-                            title={`New collection in ${s.name}`}
+                            title={`New collection in ${sp.name}`}
                           >
                             <Icon name="plus" size={11} />
                             <span>New collection</span>
                           </button>
                           {/* Quiet dwell-to-reveal hidden entry for THIS Space. */}
-                          {spaceHiddenRevealed && (
+                          {spaceHiddenRevealed && active && (
                             <button
                               className="om-space-add-coll om-space-hidden-reveal mono"
-                              onClick={() => openSpaceHidden(s.id)}
-                              title={`Open the hidden section in ${s.name}`}
+                              onClick={() => openSpaceHidden(sp.id)}
+                              title={`Open the hidden section in ${sp.name}`}
                             >
                               <Icon name="eye" size={11} />
                               <span>hidden</span>
