@@ -71,7 +71,7 @@ The only build work is the front end: the per-Space reveal gesture and the works
 
 ## Getting an existing memo into a Space
 
-Until 3.14.3 there was no way. Memos could only be *created* inside a Space
+There was no way. Memos could only be *created* inside a Space
 (`workspace_id` on the ingest call); nothing moved one that already existed, so
 anything saved to the library before a Space was made was stuck there.
 
