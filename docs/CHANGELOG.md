@@ -7,6 +7,14 @@ All notable changes to OpenMemo are documented here.
 
 <!-- Add entries here as work lands: ### Added / ### Changed / ### Fixed -->
 
+### Added
+
+- 🗂️ **Drag a memo from the dashboard straight into a Space, or into one of its collections.** There was no way to do this at all. A memo could be created inside a Space, but anything already in your library was stuck there, which quietly meant a Space was only useful if you had thought of it before you started saving. Drag a card onto a Space row, or onto a collection inside it, and it files there. The same drop targets that already worked for library collections, one gesture for both.
+
+  Be clear about what it does, because it is not a label: a Space is a separate area, so the memo **moves**. It leaves the dashboard. Nothing is copied. That also means it is reversible in the obvious way, by dragging it back out, and the collections it belonged to in the library are let go on the way in, since a collection lives in one area and cannot show something that has left it. The file itself travels with the memo rather than being left behind in the old area's folder.
+
+- 🔽 **Keep a Space's collections dropped down whenever you want.** The list used to appear only for the Space you had open, which meant opening a Space to see it, which meant leaving the dashboard. So the one place you would want to drag a memo from was the one place the targets were invisible. The caret on a Space row now expands and collapses it on its own without going anywhere, several can be open at once, and the choice survives a reload. Clicking the Space itself still opens it as before, and the Space you are inside still shows its collections without being asked.
+
 ---
 ## [3.14.2] - 2026-09-01
 

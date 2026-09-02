@@ -19,7 +19,7 @@ from pydantic import BaseModel
 from backend.config import settings
 from backend.core.job_handlers import queue_task
 from backend.db.database import get_db, AsyncSessionLocal
-from backend.db.models import Memo, Collection, Tag, memo_collections, memo_tags
+from backend.db.models import Memo, Collection, Tag, Workspace, memo_collections, memo_tags
 from backend.core.security import sanitize_workspace_id
 from backend.core.classify import has_transcript
 from backend.core.file_paths import resolve_memo_path
@@ -541,6 +541,145 @@ async def transcribe_memo(
 class LocalizeRequest(BaseModel):
     mode: str = "video"  # video | audio (audio = explicit video→audio conversion)
     quality: int = 1080  # video height cap: 720 | 1080 | 1440 | 2160 (OPNMMO-0022)
+
+
+class MoveRequest(BaseModel):
+    """Where a memo should live. Both fields may be null.
+
+    `workspace_id` null (or "default") means the main library, which is what
+    makes this reversible: the same endpoint that files a memo into a Space
+    brings it back out.
+    """
+    workspace_id: Optional[str] = None
+    collection_id: Optional[str] = None
+
+
+def _workspace_dir_of(stored: str | None) -> str | None:
+    """The workspace folder a stored file_path sits in, if it has one."""
+    if not stored:
+        return None
+    parts = Path(str(stored).replace("\\", "/")).parts
+    for i, seg in enumerate(parts):
+        if seg == "files" and i + 2 < len(parts):
+            return parts[i + 1]
+    return None
+
+
+def _relocate_media(memo: Memo, target_ws: str) -> None:
+    """Move a memo's media file into its new workspace folder, best effort.
+
+    Media is stored per workspace (`files/<workspace>/<uuid>.mp4`); thumbnails
+    are not, they share one `files/thumbs`. Leaving the file behind still plays,
+    because `file_path` is stored on the memo and resolved from it. It is moved
+    anyway because deleting a Space deletes its memos by `workspace_id` and never
+    touches files, so a memo filed into a Space while its bytes sat in the
+    library folder would leave an orphan nothing accounts for.
+
+    Every failure here is swallowed: a memo that moved but kept its old path is
+    correct and playable, and is a far better outcome than a half-failed move.
+    """
+    current = resolve_memo_path(memo.file_path)
+    if current is None or not current.is_file():
+        return
+    if _workspace_dir_of(memo.file_path) == target_ws:
+        return
+    try:
+        dest_dir = Path(settings.FILES_DIR) / target_ws
+        dest_dir.mkdir(parents=True, exist_ok=True)
+        dest = dest_dir / current.name
+        if dest.exists():
+            dest = dest_dir / f"{uuid.uuid4()}{current.suffix}"
+        current.replace(dest)
+        memo.file_path = f"files/{target_ws}/{dest.name}"
+    except Exception as e:
+        logger.warning("move: could not relocate media for %s: %s", memo.id, e)
+
+
+@router.post("/{memo_id}/move")
+async def move_memo(
+    memo_id: str,
+    body: MoveRequest,
+    db: AsyncSession = Depends(get_db),
+):
+    """Move a memo into a Space, into one of its collections, or back home.
+
+    A Space is a workspace, not a label (ADR-020), so filing a memo into one is
+    a MOVE: it leaves the main library and stops appearing on the dashboard.
+    That is the honest shape of the underlying data, and it is why this is one
+    endpoint in both directions rather than an "add to Space".
+
+    Collection memberships that belong to the workspace being left are dropped.
+    A collection lives in exactly one workspace, so keeping those rows would
+    leave a Space memo listed inside a library collection that can no longer
+    show it.
+    """
+    memo = await db.get(Memo, memo_id)
+    if not memo:
+        raise HTTPException(status_code=404, detail="Memo not found")
+
+    target_ws = sanitize_workspace_id(body.workspace_id) if body.workspace_id else "default"
+    if target_ws != "default":
+        ws = await db.get(Workspace, target_ws)
+        if not ws or ws.kind != "space":
+            raise HTTPException(status_code=404, detail="Space not found")
+
+    # A target collection has to live in the workspace being moved into,
+    # otherwise the memo lands somewhere that cannot list it.
+    target_coll: Optional[Collection] = None
+    if body.collection_id:
+        target_coll = await db.get(Collection, body.collection_id)
+        if not target_coll:
+            raise HTTPException(status_code=404, detail="Collection not found")
+        coll_ws = target_coll.workspace_id or "default"
+        if coll_ws != target_ws:
+            raise HTTPException(
+                status_code=400,
+                detail="That collection is not in the destination Space.",
+            )
+
+    moved = (memo.workspace_id or "default") != target_ws
+    if moved:
+        # Drop memberships of collections in the workspace being left.
+        stale = (
+            await db.execute(
+                select(memo_collections.c.collection_id)
+                .join(Collection, Collection.id == memo_collections.c.collection_id)
+                .where(memo_collections.c.memo_id == memo_id)
+                .where(func.coalesce(Collection.workspace_id, "default") != target_ws)
+            )
+        ).scalars().all()
+        if stale:
+            await db.execute(
+                memo_collections.delete()
+                .where(memo_collections.c.memo_id == memo_id)
+                .where(memo_collections.c.collection_id.in_(stale))
+            )
+        _relocate_media(memo, target_ws)
+        memo.workspace_id = target_ws
+
+    if target_coll:
+        already = (
+            await db.execute(
+                select(memo_collections.c.memo_id)
+                .where(memo_collections.c.memo_id == memo_id)
+                .where(memo_collections.c.collection_id == target_coll.id)
+            )
+        ).first()
+        if not already:
+            await db.execute(
+                memo_collections.insert().values(
+                    memo_id=memo_id, collection_id=target_coll.id
+                )
+            )
+
+    memo.updated_at = datetime.utcnow()
+    await db.commit()
+    return {
+        "id": memo_id,
+        "workspace_id": target_ws,
+        "collection_id": target_coll.id if target_coll else None,
+        "moved": moved,
+    }
 
 
 @router.post("/{memo_id}/localize")

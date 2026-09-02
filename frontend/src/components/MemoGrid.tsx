@@ -99,6 +99,15 @@ function MasonryCell({
   );
 }
 
+/** Droppable ids that belong to the sidebar rather than to the grid.
+ *
+ *  The reorder preview keys off "am I hovering another card", so every sidebar
+ *  target has to be excluded by name. Missing one means dragging a memo towards
+ *  a Space silently reshuffles the dashboard behind it. */
+function isSidebarTarget(id: string): boolean {
+  return id.startsWith('col-') || id.startsWith('space-') || id.startsWith('spacecol-');
+}
+
 export function MemoGrid({ memos: serverMemos, transitionKey }: MemoGridProps) {
   const queryClient = useQueryClient();
   const tweaks = useAppStore((s) => s.tweaks);
@@ -131,7 +140,9 @@ export function MemoGrid({ memos: serverMemos, transitionKey }: MemoGridProps) {
     const { active, over } = event;
     if (!over || active.id === over.id) return;
     const overId = String(over.id);
-    if (overId.startsWith('col-')) return;
+    // Every sidebar drop target, not just library collections. Hovering a Space
+    // row while dragging must not start reshuffling the grid underneath.
+    if (isSidebarTarget(overId)) return;
     if (overId === lastOverIdRef.current) return;
     lastOverIdRef.current = overId;
     const oldIndex = dragOrderRef.current.findIndex((m) => m.id === active.id);
@@ -145,9 +156,12 @@ export function MemoGrid({ memos: serverMemos, transitionKey }: MemoGridProps) {
     const { active, over } = event;
     lastOverIdRef.current = null;
 
-    if (over && String(over.id).startsWith('col-')) {
+    const overId = over ? String(over.id) : '';
+
+    // A library collection: a membership, so the memo stays where it is.
+    if (overId.startsWith('col-')) {
       setActiveId(null);
-      const collectionId = String(over.id).replace('col-', '');
+      const collectionId = overId.replace('col-', '');
       collectionApi
         .addMemo(collectionId, String(active.id))
         .then(() => {
@@ -155,6 +169,32 @@ export function MemoGrid({ memos: serverMemos, transitionKey }: MemoGridProps) {
           queryClient.invalidateQueries({ queryKey: ['memos'] });
         })
         .catch((e) => console.error('Failed to add memo to collection:', e));
+      return;
+    }
+
+    // A Space, or a collection inside one. A Space is a workspace rather than a
+    // label (ADR-020), so this MOVES the memo: it leaves the library and the
+    // dashboard. The grid drops it immediately for that reason — waiting for
+    // the refetch would leave the card sitting somewhere it no longer belongs.
+    if (overId.startsWith('space-') || overId.startsWith('spacecol-')) {
+      setActiveId(null);
+      const memoId = String(active.id);
+      const [spaceId, collectionId] = overId.startsWith('spacecol-')
+        ? overId.replace('spacecol-', '').split(':')
+        : [overId.replace('space-', ''), undefined];
+      setLocalMemos((prev) => prev.filter((m) => m.id !== memoId));
+      memoApi
+        .move(memoId, spaceId, collectionId)
+        .then(() => {
+          queryClient.invalidateQueries({ queryKey: ['memos'] });
+          queryClient.invalidateQueries({ queryKey: ['collections'] });
+          queryClient.invalidateQueries({ queryKey: ['spaces'] });
+        })
+        .catch((e) => {
+          console.error('Failed to move memo into the Space:', e);
+          // Put it back: a failed move must not look like a successful one.
+          setLocalMemos(serverMemos);
+        });
       return;
     }
 

@@ -69,16 +69,70 @@ The behavior, surface by surface:
 
 The only build work is the front end: the per-Space reveal gesture and the workspace-scoped hidden route/page. The data layer is done.
 
+## Getting an existing memo into a Space
+
+Until 3.14.3 there was no way. Memos could only be *created* inside a Space
+(`workspace_id` on the ingest call); nothing moved one that already existed, so
+anything saved to the library before a Space was made was stuck there.
+
+### It is a move, not a label
+
+A Space is a Workspace, and memos are isolated by `workspace_id`. There is no
+shape of this feature that leaves a copy on the dashboard, and pretending
+otherwise would be the worst version: a memo that looks filed but is not.
+`POST /api/memos/{id}/move` says so plainly and takes both directions —
+`workspace_id: null` means the library, so the call that files a memo away is
+the call that brings it home. A move you cannot undo is a delete with extra
+steps.
+
+Three consequences the endpoint owns rather than leaves to the caller:
+
+- **Library collection memberships are dropped.** A collection lives in exactly
+  one workspace, so keeping those rows would list a Space memo inside a library
+  collection that can never show it.
+- **A target collection must be in the destination Space.** Otherwise the memo
+  lands somewhere that cannot list it. That is a 400, not a silent orphan.
+- **The media file follows.** Media is stored per workspace
+  (`files/<workspace>/…`); thumbnails are not, they share one `files/thumbs`.
+  Deleting a Space deletes its memos by `workspace_id` and never touches files,
+  so a memo filed into a Space while its bytes stayed in the library folder
+  would leave an orphan nothing accounts for. The relocation is best effort: a
+  memo that moved but kept its old path is still correct and still plays, which
+  beats a half-failed move.
+
+### The gesture is a drag, not a menu
+
+This ADR originally guessed at a "Move to Space" menu item. Drag is better here
+because the sidebar is already the drop surface for filing a memo into a library
+collection, and one gesture that files into either is less to learn than two
+that do nearly the same thing. Space rows and Space collection rows are now
+`useDroppable` targets alongside library collections, and the drop ring is the
+same inset ring (never a left-edge strip).
+
+### Which forced the dropdown to stop being navigation
+
+A Space's collection list used to render only for the Space you had **open**,
+which meant opening it — and therefore leaving the dashboard. So from the
+dashboard there was no Space collection anywhere on screen, and nothing to drag
+onto. Expansion is now a set the user owns, kept in `localStorage`, toggled by a
+caret that does not navigate:
+
+- The caret expands or collapses; the row body still opens the Space.
+- The Space you are **in** always renders expanded, so the old behaviour is
+  intact.
+- Several Spaces can be expanded at once, so the sidebar needs one collections
+  query per open Space (`useQueries`) rather than one for the active one.
+- `.om-space-row.active` carries the selected fill, not `.open`. Filling every
+  expanded row would claim you are inside several Spaces at once.
+
 ## Open questions
 - **Per-Space hidden passcode** (a Space that locks separately from the library, or hides its very existence from the sidebar until unlocked). Deferred: v1 uses one global passcode for every hidden section.
 - Per-Space chat model / appearance overrides, or inherit global? (Default: inherit for v1.)
-- Moving an existing memo from the library into a Space, and back. (Likely a "Move to Space" action on the memo, post-v1.)
 - Manual ordering of Spaces in the sidebar (drag). `sort_order` exists; wiring deferred.
 - Export format for the pre-delete backup: reuse the existing `/api/export` shape, scoped to the Space.
-- Per-Space chat model / appearance overrides, or inherit global? (Default: inherit for v1.)
-- Moving an existing memo from the library into a Space, and back. (Likely a "Move to Space" action on the memo, post-v1.)
-- Manual ordering of Spaces in the sidebar (drag). `sort_order` exists; wiring deferred.
-- Export format for the pre-delete backup: reuse the existing `/api/export` shape, scoped to the Space.
+
+Resolved: **moving an existing memo into a Space, and back** — see below. The
+answer turned out not to be a menu action.
 
 ---
 
