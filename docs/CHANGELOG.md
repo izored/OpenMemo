@@ -7,6 +7,20 @@ All notable changes to OpenMemo are documented here.
 
 <!-- Add entries here as work lands: ### Added / ### Changed / ### Fixed -->
 
+### Added
+
+- 🖼️ **A PDF card shows the first page of the PDF.** Every document memo used to get the same drawn placeholder, a little stack of grey lines, so on a wall of cards a lease, nine invoices and a boarding pass were indistinguishable and finding one meant reading nine titles. The first page of a document is usually the most recognisable thing about it, letterhead, title, date, so it is now the cover. New uploads get one automatically, the same way a video gets a frame.
+
+  The page is anchored to the top of the card rather than centred. A portrait page cropped to a landscape card has to lose something, and the half worth keeping is always the head.
+
+  PDFs you saved before this have no cover yet, because unlike the viewer, which draws from the file when you open it, a cover is a real image that has to exist first. One request builds them all:
+
+  ```
+  curl -X POST http://localhost:8091/api/maintenance/backfill-pdf-thumbs
+  ```
+
+  Add `?dry_run=true` to see what it would do first, or `?force=true` to redo covers that already exist. It finds PDFs by their file extension rather than by memo type, since `.docx` and `.epub` are filed as documents too and neither can be drawn, and it reaches inside Spaces, whose cards were just as blank. A PDF that is encrypted, truncated or simply will not draw is counted and skipped, never fatal, and keeps the placeholder it already had.
+
 ---
 ## [3.16.0] - 2026-09-02
 

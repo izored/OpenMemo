@@ -46,6 +46,8 @@ Drop a PDF in and the memo page shows the document, not a transcript of it. Real
 
 It is drawn by openMemo rather than handed to the browser's own viewer, so it wears whatever theme you are in, and the paper inside the frame stays white because a document's own ink is not ours to tint. Everything it needs to draw, down to the character maps for non-Latin scripts, is served from your own machine. A PDF renders with the network unplugged.
 
+On the dashboard, a PDF's card is its first page rather than a generic document icon, so a lease does not look like nine invoices.
+
 ### 📚 Smart Collections
 Organise Memos into themed collections with emoji icons and descriptions. Drag and drop cards directly into collections. Scope your AI chat to a single project or topic. A collection you fill fast, a shopping wishlist or a research dump, can be hidden from the dashboard so it stops burying everything else, while staying in the sidebar and in search.
 

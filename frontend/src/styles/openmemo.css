@@ -1471,6 +1471,17 @@ input, textarea { font: inherit; color: inherit; }
 
 /* Document card */
 .om-doc-frame { background: var(--surface-3); aspect-ratio: 4 / 3; padding: 22px; display: flex; align-items: center; justify-content: center; }
+/* A PDF card shows its real page one instead of the drawn stack. The inset the
+   placeholder needs would frame the page like a picture, so it goes when a page
+   is present. Anchored to the TOP rather than centred: a 4/3 crop of a portrait
+   page has to lose something, and the half that identifies a document (title,
+   letterhead, date) is always the head of it. */
+.om-doc-frame.has-page { padding: 0; }
+.om-doc-page-img {
+  width: 100%; height: 100%;
+  object-fit: cover; object-position: center top;
+  display: block;
+}
 .om-input { background: var(--surface-3); color: var(--text); border: 1px solid var(--border);
             border-radius: 8px; padding: 6px 10px; font-size: 13px; outline: none; width: 100%; }
 .om-input:focus { border-color: var(--border-2); }

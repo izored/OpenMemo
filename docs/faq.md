@@ -51,6 +51,17 @@ own machine. Nothing about the document you opened leaves it.
 Other document types (DOCX, XLSX, EPUB, CSV, plain text) still show their
 extracted text. Only PDF has a page renderer today.
 
+A PDF's card also shows its first page instead of a generic document icon. New
+uploads get that automatically. PDFs saved before the feature existed need one
+pass to build theirs, because a cover is a stored image rather than something
+drawn on demand:
+
+```
+curl -X POST http://localhost:8091/api/maintenance/backfill-pdf-thumbs
+```
+
+`?dry_run=true` previews it, `?force=true` redoes covers that already exist.
+
 ## How do I change the LLM model?
 
 Pull it with Ollama (`ollama pull llama3.1:8b`), then pick it in

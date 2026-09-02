@@ -87,6 +87,100 @@ async def backfill_video_thumbnails(db: AsyncSession = Depends(get_db)):
     return {"processed": processed, "skipped_existing": skipped, "failed": failed, "total_videos": len(rows)}
 
 
+@router.post("/backfill-pdf-thumbs")
+async def backfill_pdf_thumbnails(
+    dry_run: bool = False,
+    force: bool = False,
+    db: AsyncSession = Depends(get_db),
+):
+    """Give every stored PDF the page-one cover that new uploads now get.
+
+    The viewer needs no backfill, because it draws from the file on disk at the
+    moment you open the memo. A cover does: it is a real JPEG that has to exist
+    before a card can show it, so a PDF saved before this shipped has nothing to
+    render and keeps the drawn placeholder until this runs.
+
+    Selected by extension, not by `Memo.type`: a .pdf, a .docx and an .epub are
+    all "document" and only the first can be rasterized. Crosses every
+    workspace on purpose, since Spaces hold memos too and their cards are just
+    as blank (ADR-020 isolates reads by workspace, and a maintenance sweep is
+    not one of those reads).
+
+    `dry_run` reports what it would do and writes nothing. `force` re-renders
+    covers that already exist, for when a render was bad rather than missing.
+    """
+    from sqlalchemy import select, or_, func
+    from datetime import datetime
+    from backend.core.pdf_thumb import extract_pdf_thumbnail, pdfium_available
+    from backend.core.file_paths import resolve_memo_path
+
+    if not pdfium_available():
+        raise HTTPException(
+            status_code=503,
+            detail="pypdfium2 is not installed, so PDF covers cannot be rendered",
+        )
+
+    thumbs_dir = Path(settings.FILES_DIR) / "thumbs"
+    if not dry_run:
+        thumbs_dir.mkdir(parents=True, exist_ok=True)
+
+    rows = (
+        await db.execute(
+            select(Memo).where(
+                Memo.file_path.isnot(None),
+                or_(
+                    func.lower(Memo.file_path).like("%.pdf"),
+                    func.lower(Memo.title).like("%.pdf"),
+                ),
+            )
+        )
+    ).scalars().all()
+
+    rendered, skipped_existing, missing_file, failed = 0, 0, 0, 0
+    would: list[str] = []
+
+    for memo in rows:
+        target = thumbs_dir / f"{memo.id}.jpg"
+
+        # Already covered: a stored path AND the file behind it. One without the
+        # other is exactly the broken-cover case this is here to repair.
+        if not force and memo.thumbnail_path and target.is_file():
+            skipped_existing += 1
+            continue
+
+        real_path = resolve_memo_path(memo.file_path) if memo.file_path else None
+        if not real_path or not Path(real_path).is_file():
+            missing_file += 1
+            continue
+
+        if dry_run:
+            would.append(memo.title or memo.id)
+            continue
+
+        if await extract_pdf_thumbnail(real_path, target):
+            memo.thumbnail_path = f"/api/files/thumb/{memo.id}.jpg"
+            memo.updated_at = datetime.utcnow()
+            rendered += 1
+        else:
+            failed += 1
+
+    if not dry_run:
+        await db.commit()
+
+    result = {
+        "total_pdfs": len(rows),
+        "rendered": rendered,
+        "skipped_existing": skipped_existing,
+        "missing_file": missing_file,
+        "failed": failed,
+        "dry_run": dry_run,
+    }
+    if dry_run:
+        result["would_render"] = len(would)
+        result["titles"] = would[:50]
+    return result
+
+
 def _dir_size(path: Path) -> int:
     if not path.exists():
         return 0
