@@ -41,6 +41,7 @@ OpenMemo is a local-first AI knowledge base. Everything runs on your machine —
 | Database | SQLite (via aiosqlite) |
 | Vector DB | ChromaDB (local persistent) |
 | LLM/Embed | Ollama (local) |
+| PDF rendering | pdf.js (`pdfjs-dist`), bundled and self-hosted |
 | Reverse Proxy | nginx |
 
 ## Data Flow
@@ -58,7 +59,8 @@ OpenMemo is a local-first AI knowledge base. Everything runs on your machine —
 - **Single-tenant default** — one auto-created user + workspace
 - **File ownership check** — `/api/files/{path}` verifies the memo exists before serving
 - **Async everywhere** — ChromaDB ops wrapped in `asyncio.to_thread()`
-- **CSS variable theming** — light/dark via `html.dark` class + CSS custom properties
+- **CSS variable theming** — themes are driven by a `data-theme` **attribute** on `<html>` (`light` / `dark` / `hi`), not a `.dark` class and not `prefers-color-scheme`. Every surface, radius and shadow is a `var(--*)` token redefined per theme in `styles/openmemo.css`. This is why Tailwind's `dark:` variant never matches here and why third-party stylesheets that ship their own `prefers-color-scheme` blocks are not imported wholesale
+- **A PDF memo renders its pages, not just its extracted text**: `frontend/src/components/PdfViewer.tsx`, lazy-loaded so its ~440 kB chunk only reaches a PDF memo. Drawn on our own canvas rather than in an `<iframe>`: the browser's built-in viewer ignores the theme, and nginx's CSP lists `frame-src https:` with no `'self'`, so it would be blocked in the container anyway. Three things keep it offline (ADR-025): the worker is imported through Vite so it emits as a same-origin asset, `scripts/copy-pdfjs-assets.mjs` copies pdf.js's CMaps, standard fonts, wasm decoders and ICC profiles into `public/pdfjs/` at build time (they default to a CDN otherwise), and `frontend/nginx.conf` maps `.mjs`, which nginx's bundled `mime.types` does not, so the worker is not served as `application/octet-stream` and refused by `nosniff`
 - **yt-dlp self-updates on container start, not hard-pinned** — YouTube changes its player every few weeks and breaks older yt-dlp builds; image rebuilds happen far less often, so a hard pin guarantees the "Make it local" / YouTube ingest paths rot between rebuilds. Instead `requirements.txt` floor-pins (`yt-dlp>=2025.1.0`) and the backend Dockerfile entrypoint runs `pip install --upgrade yt-dlp` on each start (best-effort; failures are ignored when offline, and the whole step is skippable via `YTDLP_AUTOUPDATE=0`). Trade-off accepted: a few seconds of startup latency + nondeterministic yt-dlp version, in exchange for downloads that keep working without waiting on an image rebuild. The floor pin keeps a known-good baseline for offline/air-gapped deploys.
 
 ## Mesh (two-way device sync)
