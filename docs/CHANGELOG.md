@@ -7,6 +7,9 @@ All notable changes to OpenMemo are documented here.
 
 <!-- Add entries here as work lands: ### Added / ### Changed / ### Fixed -->
 
+---
+## [3.16.0] - 2026-09-02
+
 ### Added
 
 - 📄 **A PDF you upload now opens as the PDF.** Until now openMemo pulled the text out of it and showed you that: a wall of paragraphs with the layout, the tables, the figures and the signatures thrown away. For anything designed rather than typed, a statement, a boarding pass, a lease, a paper, that is not the document, it is a transcript of the document, and you had to download the file to see what you actually saved. The memo page now renders the real pages, with page numbers, next and previous, zoom, fit to width, rotate, theater mode for full width, and open or download for when you want it outside the app. Pages load as you scroll and are let go when they leave, so a four hundred page report opens as fast as a one page receipt.
