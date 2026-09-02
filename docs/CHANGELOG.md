@@ -7,6 +7,9 @@ All notable changes to OpenMemo are documented here.
 
 <!-- Add entries here as work lands: ### Added / ### Changed / ### Fixed -->
 
+---
+## [3.15.0] - 2026-09-02
+
 ### Added
 
 - 🗂️ **Drag a memo from the dashboard straight into a Space, or into one of its collections.** There was no way to do this at all. A memo could be created inside a Space, but anything already in your library was stuck there, which quietly meant a Space was only useful if you had thought of it before you started saving. Drag a card onto a Space row, or onto a collection inside it, and it files there. The same drop targets that already worked for library collections, one gesture for both.
