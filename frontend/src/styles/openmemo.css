@@ -1879,6 +1879,89 @@ input, textarea { font: inherit; color: inherit; }
 .om-file-content    { background: var(--surface-2); border: 1px solid var(--border);
                       border-radius: var(--r-lg); padding: 18px 22px; margin-bottom: 24px;
                       overflow-x: auto; }
+
+/* ─ PDF viewer (OPNMMO-0054) ─────────────────────────────────────────────
+   The frame is ours, the page inside it is the document's. A PDF page carries
+   its own paper colour and its own ink, so it stays white in every theme:
+   tinting it would be editing the document, not the app. Everything around it
+   is tokens, so the viewer belongs to whatever theme is on. */
+.om-pdf {
+  position: relative;
+  display: flex; flex-direction: column;
+  border: 1px solid var(--border); border-radius: var(--r-lg);
+  background: var(--surface-2);
+  overflow: hidden;
+  max-width: 720px; width: 100%;
+  margin-bottom: 24px;
+  transition: max-width .25s cubic-bezier(.2,.7,.2,1);
+}
+.om-pdf.theater { max-width: none; }
+.om-pdf-bar {
+  display: flex; align-items: center; gap: 12px;
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--border);
+  background: var(--surface);
+}
+.om-pdf-bar-group { display: flex; align-items: center; gap: 2px; }
+.om-pdf-bar-end { margin-left: auto; }
+.om-pdf-btn {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 30px; height: 30px; border-radius: var(--r-xs);
+  color: var(--text-2); background: transparent; border: 0;
+  cursor: pointer; transition: background .15s, color .15s;
+}
+.om-pdf-btn:hover { background: var(--surface-3); color: var(--text); }
+.om-pdf-btn:disabled { opacity: .35; cursor: default; }
+.om-pdf-btn:disabled:hover { background: transparent; color: var(--text-2); }
+.om-pdf-count { font-size: 12px; color: var(--text-3); padding: 0 4px; min-width: 56px; text-align: center; }
+.om-pdf-zoom {
+  font-size: 12px; color: var(--text-2); background: transparent; border: 0;
+  padding: 0 8px; height: 30px; min-width: 52px; border-radius: var(--r-xs);
+  cursor: pointer; transition: background .15s, color .15s;
+}
+.om-pdf-zoom:hover { background: var(--surface-3); color: var(--text); }
+.om-pdf-zoom.is-fit { color: var(--accent-ink); }
+/* The reading surface. Its own scroller rather than the page's, so the toolbar
+   stays put and a 400-page document does not stretch the memo page to the moon. */
+.om-pdf-scroll {
+  padding: 24px; overflow: auto;
+  max-height: 78vh;
+  background: var(--bg-rail);
+  display: flex; flex-direction: column; align-items: center; gap: 20px;
+  overscroll-behavior: contain;
+}
+.om-pdf.theater .om-pdf-scroll { max-height: 86vh; }
+.om-pdf-page {
+  position: relative; flex: none;
+  background: #fff;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.24), 0 8px 24px rgba(0,0,0,0.18);
+  border-radius: 2px;
+  /* Placeholder size until the canvas paints, so the scrollbar is honest. */
+  min-height: 120px; min-width: 90px;
+}
+.om-pdf-canvas { display: block; opacity: 0; transition: opacity .18s ease; }
+.om-pdf-canvas.is-painted { opacity: 1; }
+.om-pdf-page-num {
+  position: absolute; inset: 0;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 13px; color: rgba(26,23,20,0.30);
+}
+.om-pdf-loading {
+  display: flex; align-items: center; justify-content: center; gap: 10px;
+  padding: 48px 0; color: var(--text-3);
+}
+/* The Suspense fallback wears both classes (it stands in for the whole frame,
+   not just its body), so the frame's column direction has to be undone or the
+   spinner sits above its own label. */
+.om-pdf.om-pdf-loading { flex-direction: row; }
+.om-pdf-error {
+  align-items: flex-start; gap: 12px; padding: 22px;
+}
+@media (max-width: 720px) {
+  .om-pdf-scroll { padding: 12px; max-height: 70vh; }
+  .om-pdf-bar { flex-wrap: wrap; gap: 6px; }
+  .om-pdf-bar-end { margin-left: 0; }
+}
 @media (max-width: 720px) {
   .om-doc-report-grid { grid-template-columns: minmax(0, 1fr); }
 }

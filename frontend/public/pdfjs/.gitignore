@@ -1,0 +1,6 @@
+# Copied out of node_modules at build time by scripts/copy-pdfjs-assets.mjs.
+# Not committed: they are a build artefact of the pinned pdfjs-dist version, and
+# committing 3.8 MB that npm already has is how a copy goes stale. Runtime is
+# offline either way.
+*
+!.gitignore

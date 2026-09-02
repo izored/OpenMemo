@@ -161,3 +161,19 @@ export function mediaSrc(memo: Memo): string | null {
   if (memo.type === 'image' && memo.file_path) return `/api/memos/${memo.id}/file`;
   return null;
 }
+
+/**
+ * Is this memo a PDF openMemo holds on disk?
+ *
+ * Decided from the stored file, not from `memo.type`. A .pdf upload is
+ * categorized as "document" (backend/core/security/upload.py), which is also
+ * what a .docx, an .epub and a .csv get, and the text extraction that follows
+ * flattens all of them into the same wall of paragraphs. Only the extension
+ * says which of those we can actually render as pages. The title is the
+ * fallback because that is where the original filename lives.
+ */
+export function isPdf(memo: Memo): boolean {
+  if (!memo.file_path) return false;
+  const name = (memo.file_path || '').toLowerCase();
+  return name.endsWith('.pdf') || (memo.title || '').toLowerCase().endsWith('.pdf');
+}
