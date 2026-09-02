@@ -66,6 +66,13 @@ const PdfViewer = lazy(() =>
   import('@/components/PdfViewer').then((m) => ({ default: m.PdfViewer })),
 );
 
+// CodeMirror plus a language grammar, on the same terms: only a code memo pays
+// for it, and each grammar is its own chunk so a Python file never downloads
+// the Rust parser.
+const CodeViewer = lazy(() =>
+  import('@/components/CodeViewer').then((m) => ({ default: m.CodeViewer })),
+);
+
 // A signal to seek the open player (embed iframe or local <video>). The nonce
 // lets the same timestamp fire repeated seeks (OPNMMO-0042).
 type SeekSignal = { sec: number; nonce: number };
@@ -1714,6 +1721,10 @@ export function MemoDetail() {
   const videoEmbedKind = videoEmbed ? videoEmbedShape.kind : 'video';
   const isWebType = memo.type === 'article' || memo.type === 'link';
   const isPdfMemo = isPdf(memo);
+  // A code memo is only ever an uploaded source file, never a typed note, so
+  // there is always a real file behind it to show and to download.
+  const codeText = memo.type === 'code' ? (memo.content_text || '') : '';
+  const showCodeViewer = !isEditing && memo.type === 'code' && !!codeText.trim();
 
   // Tool rail (OPNMMO-0042): AI Summary + Make-it-local + future tools hug the
   // content column on desktop. On mobile the rail is hidden — except an already
@@ -2241,10 +2252,35 @@ export function MemoDetail() {
               </Suspense>
             )}
 
+            {/* An uploaded source file renders as code, not as a markdown
+                fenced block. The old path lost the highlighting, the line
+                numbers and any way to search inside the file, which is most of
+                what makes an 800-line upload readable at all. */}
+            {showCodeViewer && (
+              <Suspense
+                fallback={
+                  <div className="om-code om-pdf-loading">
+                    <Loader2 size={18} className="om-spin" />
+                    <span className="om-detail-desc">Loading the viewer…</span>
+                  </div>
+                }
+              >
+                <CodeViewer
+                  code={codeText}
+                  filename={memo.title}
+                  downloadHref={memo.file_path ? `/api/memos/${memo.id}/file?download=1` : undefined}
+                  theater={theater}
+                  onTheaterChange={setTheater}
+                />
+              </Suspense>
+            )}
+
             {/* Document / code content — on its own surface card so the file
                 content sits in a panel instead of floating on the page bg
-                (OPNMMO-0047). */}
-            {(memo.type === 'document' || memo.type === 'code') && !isEditing && memo.content_text && (
+                (OPNMMO-0047). Code that reached the viewer above is done here;
+                what falls through is a document, or a code memo with nothing in
+                it to show. */}
+            {(memo.type === 'document' || memo.type === 'code') && !isEditing && memo.content_text && !showCodeViewer && (
               isPdfMemo ? (
                 <div style={{ marginBottom: '24px' }}>
                   <button

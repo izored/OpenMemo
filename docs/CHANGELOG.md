@@ -9,6 +9,14 @@ All notable changes to OpenMemo are documented here.
 
 ### Added
 
+- 💻 **An uploaded source file now reads like code.** A `code` memo went through the markdown pipeline as a plain fenced block: one flat colour, no line numbers, and no way to search inside it. That is fine for three lines quoted in a note and close to useless for the 800-line file you actually saved, which is the only thing that ever becomes a code memo. The detail page now opens it in a real viewer: syntax highlighting with the language worked out from the filename, line numbers, find inside the file, a wrap toggle for long lines, copy the whole thing, download the original, and the same theater mode the PDF and video get.
+
+  The colours are the app's own tokens rather than a packaged editor theme. Every ready-made one hardcodes a light or a dark palette, which is exactly the class of bug that made the markdown editor unreadable in one theme, so the viewer follows whichever theme you are in, high contrast included.
+
+  It is read-only twice over, on purpose: the document rejects edits and the editable layer is removed entirely, so no caret appears and no phone keyboard opens on something you cannot type into. Editing a file in place is a separate job.
+
+  A file whose extension has no grammar still opens with line numbers and search, just uncoloured, rather than refusing. Uppercase names work too, which they did not at first: `REPORT.SQL` off a Windows machine matched nothing and rendered grey until a test caught it.
+
 - 🖼️ **A PDF card shows the first page of the PDF.** Every document memo used to get the same drawn placeholder, a little stack of grey lines, so on a wall of cards a lease, nine invoices and a boarding pass were indistinguishable and finding one meant reading nine titles. The first page of a document is usually the most recognisable thing about it, letterhead, title, date, so it is now the cover. New uploads get one automatically, the same way a video gets a frame.
 
   The page is anchored to the top of the card rather than centred. A portrait page cropped to a landscape card has to lose something, and the half worth keeping is always the head.

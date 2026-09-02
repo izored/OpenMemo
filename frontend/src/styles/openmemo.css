@@ -92,6 +92,53 @@
   --audio-frame-bg: #2e2e32;
 }
 
+/* Syntax colours for the code viewer (CodeViewer.tsx).
+   Tokens rather than a stock CodeMirror theme: every ready-made one hardcodes
+   hex for a light or a dark background, which would fight [data-theme] exactly
+   the way Tailwind's dark: variant does. Defined once per theme here, so the
+   viewer follows the app instead of carrying its own palette. Dark is the
+   default block, the same as every other token above. */
+:root {
+  --code-keyword:  #C792EA;
+  --code-name:     #E5E1D8;
+  --code-function: #82AAFF;
+  --code-constant: #F78C6C;
+  --code-type:     #FFCB6B;
+  --code-operator: #89DDFF;
+  --code-string:   #C3E88D;
+  --code-comment:  rgba(245,242,236,0.42);
+  --code-invalid:  #FF5370;
+  --code-active-line: rgba(255,255,255,0.035);
+  --code-selection:   color-mix(in srgb, var(--accent) 26%, transparent);
+}
+[data-theme="light"] {
+  --code-keyword:  #8B36B0;
+  --code-name:     #24292F;
+  --code-function: #1B5FCC;
+  --code-constant: #B8501B;
+  --code-type:     #8A6100;
+  --code-operator: #0B7285;
+  --code-string:   #216E27;
+  --code-comment:  rgba(26,23,20,0.48);
+  --code-invalid:  #C0341D;
+  --code-active-line: rgba(20,18,14,0.035);
+  --code-selection:   color-mix(in srgb, var(--accent) 24%, transparent);
+}
+[data-theme="hi"] {
+  /* High contrast: pure-black ground, so every hue is pushed to full. */
+  --code-keyword:  #E58CFF;
+  --code-name:     #FFFFFF;
+  --code-function: #7FB2FF;
+  --code-constant: #FFA46B;
+  --code-type:     #FFD866;
+  --code-operator: #7FE3FF;
+  --code-string:   #9CFF8D;
+  --code-comment:  rgba(255,255,255,0.58);
+  --code-invalid:  #FF6B7F;
+  --code-active-line: rgba(255,255,255,0.07);
+  --code-selection:   color-mix(in srgb, var(--accent) 34%, transparent);
+}
+
 /* Density */
 [data-density="compact"] { --pad-card: 14px; --gap-card: 10px; }
 [data-density="comfy"]   { --pad-card: 20px; --gap-card: 14px; }
@@ -1972,6 +2019,57 @@ input, textarea { font: inherit; color: inherit; }
   .om-pdf-scroll { padding: 12px; max-height: 70vh; }
   .om-pdf-bar { flex-wrap: wrap; gap: 6px; }
   .om-pdf-bar-end { margin-left: 0; }
+}
+
+/* Code viewer (CodeViewer.tsx). Same frame language as the PDF viewer, because
+   they are the same idea: a file openMemo holds, shown as itself, in a panel
+   the app owns. Colours come from the --code-* tokens near the top. */
+.om-code {
+  position: relative;
+  display: flex; flex-direction: column;
+  border: 1px solid var(--border); border-radius: var(--r-lg);
+  background: var(--surface-2);
+  overflow: hidden;
+  max-width: 720px; width: 100%;
+  margin-bottom: 24px;
+  transition: max-width .25s cubic-bezier(.2,.7,.2,1);
+}
+.om-code.theater { max-width: none; }
+.om-code-bar {
+  display: flex; align-items: center; gap: 12px;
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--border);
+  background: var(--surface);
+}
+.om-code-bar-group { display: flex; align-items: center; gap: 6px; }
+.om-code-bar-end { margin-left: auto; gap: 2px; }
+.om-code-lang {
+  font-size: 11px; letter-spacing: .06em; text-transform: uppercase;
+  color: var(--text-2); padding-left: 4px;
+}
+.om-code-lines { font-size: 11px; color: var(--text-4); }
+.om-code-btn {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 30px; height: 30px; border-radius: var(--r-xs);
+  color: var(--text-2); background: transparent; border: 0;
+  cursor: pointer; transition: background .15s, color .15s;
+}
+.om-code-btn:hover { background: var(--surface-3); color: var(--text); }
+.om-code-btn.is-on { background: var(--surface-3); color: var(--accent-ink); }
+.om-code-btn.is-done { color: var(--accent-ink); }
+.om-code-scroll {
+  max-height: 70vh; overflow: auto;
+  background: var(--bg-rail);
+  overscroll-behavior: contain;
+}
+.om-code.theater .om-code-scroll { max-height: 84vh; }
+/* CodeMirror sizes itself to its content; the scroll lives on our container so
+   the toolbar stays put and the gutter cannot drift away from its lines. */
+.om-code-scroll .cm-editor { height: auto; }
+@media (max-width: 720px) {
+  .om-code-scroll { max-height: 60vh; }
+  .om-code-bar { flex-wrap: wrap; gap: 6px; }
+  .om-code-bar-end { margin-left: 0; }
 }
 @media (max-width: 720px) {
   .om-doc-report-grid { grid-template-columns: minmax(0, 1fr); }
