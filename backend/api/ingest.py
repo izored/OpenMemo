@@ -2364,6 +2364,7 @@ async def process_file_memo(memo_id: str, file_path: str, memo_type: str):
     content anywhere in the ingestion path.
     """
     from backend.core.extractor import extract_pdf, extract_docx, extract_image
+    from backend.core.pdf_thumb import extract_pdf_thumbnail
     from backend.core.video import extract_video_thumbnail
 
     async with AsyncSessionLocal() as db:
@@ -2379,6 +2380,20 @@ async def process_file_memo(memo_id: str, file_path: str, memo_type: str):
             thumb_name = f"{memo_id}.jpg"
             thumb_target = THUMBS_DIR / thumb_name
             if await extract_video_thumbnail(file_path, thumb_target):
+                memo.thumbnail_path = f"/api/files/thumb/{thumb_name}"
+                memo.updated_at = datetime.utcnow()
+                await db.commit()
+
+        # PDF → page one becomes the card's cover, the same way a video's first
+        # frame does. Keyed off the extension rather than memo_type, because a
+        # .pdf, a .docx and a .csv are all "document" and only one of them can
+        # be drawn. Best-effort throughout: no renderer, an encrypted file or a
+        # page that will not draw all leave the memo on its drawn placeholder.
+        if Path(file_path).suffix.lower() == ".pdf":
+            THUMBS_DIR.mkdir(parents=True, exist_ok=True)
+            thumb_name = f"{memo_id}.jpg"
+            thumb_target = THUMBS_DIR / thumb_name
+            if await extract_pdf_thumbnail(file_path, thumb_target):
                 memo.thumbnail_path = f"/api/files/thumb/{thumb_name}"
                 memo.updated_at = datetime.utcnow()
                 await db.commit()

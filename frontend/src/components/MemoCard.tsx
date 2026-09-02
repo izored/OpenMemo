@@ -473,6 +473,10 @@ export function MemoCard({ memo, dragHandleProps, lightboxGroup }: CardProps) {
   const [videoOrient, setVideoOrient] = React.useState<'landscape' | 'portrait'>('landscape');
   const [videoAR, setVideoAR] = React.useState<number | null>(null);
   const [confirmDeleteOpen, setConfirmDeleteOpen] = React.useState(false);
+  // A document cover can be stored and still not be on disk (a half-restored
+  // backup, a thumb cleared by hand). Fall back to the drawn stack rather than
+  // to a broken image, which is what hiding the <img> would leave behind.
+  const [coverFailed, setCoverFailed] = React.useState(false);
 
   const showInLightbox = () => {
     const group = lightboxGroup && lightboxGroup.length ? lightboxGroup : [memo];
@@ -706,11 +710,25 @@ export function MemoCard({ memo, dragHandleProps, lightboxGroup }: CardProps) {
   }
 
   // ── Document ──
+  // A PDF carries a rendered page one as its cover (backend/core/pdf_thumb.py),
+  // so the card shows the actual document. Every other document type, and any
+  // PDF whose cover has not been backfilled yet, keeps the drawn page stack:
+  // identical placeholders on a wall of cards are what this replaces.
   if (memo.type === 'document') {
+    const pageCover = coverFailed ? null : mediaSrc(memo);
     return (
       <>
       <Chrome memo={memo} dragHandleProps={dragHandleProps} onDelete={handleDelete} onPin={handlePin} onOpen className="om-card-doc" confirmOverlay={confirmOverlay}>
-        <div className="om-doc-frame">
+        <div className={cn('om-doc-frame', pageCover && 'has-page')}>
+          {pageCover ? (
+            <img
+              draggable={false}
+              src={pageCover}
+              alt=""
+              className="om-doc-page-img"
+              onError={() => setCoverFailed(true)}
+            />
+          ) : (
           <div className="om-doc-stack">
             <span className="om-doc-page" />
             <span className="om-doc-page" />
@@ -721,6 +739,7 @@ export function MemoCard({ memo, dragHandleProps, lightboxGroup }: CardProps) {
               <span className="om-doc-line" style={{ width: '80%' }} />
             </span>
           </div>
+          )}
         </div>
         <div className="om-card-body">
           <h3 className="om-card-title">{memo.title}</h3>

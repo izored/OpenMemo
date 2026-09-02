@@ -7,6 +7,32 @@ All notable changes to OpenMemo are documented here.
 
 <!-- Add entries here as work lands: ### Added / ### Changed / ### Fixed -->
 
+### Changed
+
+- 🙏 **The thanks list names everything openMemo actually leans on.** Settings had a Built with card listing twelve projects, which was flattering to openMemo and unfair to everyone missing from it. It is 43 now, and it is the real set: the tools that read your files, the ones that fetch them, the ones that transcribe and embed them, and the ones holding the whole thing up. FFmpeg pulls the frame off every video card and was not credited. Whisper writes every transcript and was not credited. Same list in the README, grouped by what each one does, with the type foundry named too. If a project is listed and would rather be described differently, or not listed at all, an issue changes it.
+
+### Added
+
+- 💻 **An uploaded source file now reads like code.** A `code` memo went through the markdown pipeline as a plain fenced block: one flat colour, no line numbers, and no way to search inside it. That is fine for three lines quoted in a note and close to useless for the 800-line file you actually saved, which is the only thing that ever becomes a code memo. The detail page now opens it in a real viewer: syntax highlighting with the language worked out from the filename, line numbers, find inside the file, a wrap toggle for long lines, copy the whole thing, download the original, and the same theater mode the PDF and video get.
+
+  The colours are the app's own tokens rather than a packaged editor theme. Every ready-made one hardcodes a light or a dark palette, which is exactly the class of bug that made the markdown editor unreadable in one theme, so the viewer follows whichever theme you are in, high contrast included.
+
+  It is read-only twice over, on purpose: the document rejects edits and the editable layer is removed entirely, so no caret appears and no phone keyboard opens on something you cannot type into. Editing a file in place is a separate job.
+
+  A file whose extension has no grammar still opens with line numbers and search, just uncoloured, rather than refusing. Uppercase names work too, which they did not at first: `REPORT.SQL` off a Windows machine matched nothing and rendered grey until a test caught it.
+
+- 🖼️ **A PDF card shows the first page of the PDF.** Every document memo used to get the same drawn placeholder, a little stack of grey lines, so on a wall of cards a lease, nine invoices and a boarding pass were indistinguishable and finding one meant reading nine titles. The first page of a document is usually the most recognisable thing about it, letterhead, title, date, so it is now the cover. New uploads get one automatically, the same way a video gets a frame.
+
+  The page is anchored to the top of the card rather than centred. A portrait page cropped to a landscape card has to lose something, and the half worth keeping is always the head.
+
+  PDFs you saved before this have no cover yet, because unlike the viewer, which draws from the file when you open it, a cover is a real image that has to exist first. One request builds them all:
+
+  ```
+  curl -X POST http://localhost:8091/api/maintenance/backfill-pdf-thumbs
+  ```
+
+  Add `?dry_run=true` to see what it would do first, or `?force=true` to redo covers that already exist. It finds PDFs by their file extension rather than by memo type, since `.docx` and `.epub` are filed as documents too and neither can be drawn, and it reaches inside Spaces, whose cards were just as blank. A PDF that is encrypted, truncated or simply will not draw is counted and skipped, never fatal, and keeps the placeholder it already had.
+
 ---
 ## [3.16.0] - 2026-09-02
 
