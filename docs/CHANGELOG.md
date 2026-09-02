@@ -7,6 +7,10 @@ All notable changes to OpenMemo are documented here.
 
 <!-- Add entries here as work lands: ### Added / ### Changed / ### Fixed -->
 
+### Changed
+
+- 🙏 **The thanks list names everything openMemo actually leans on.** Settings had a Built with card listing twelve projects, which was flattering to openMemo and unfair to everyone missing from it. It is 43 now, and it is the real set: the tools that read your files, the ones that fetch them, the ones that transcribe and embed them, and the ones holding the whole thing up. FFmpeg pulls the frame off every video card and was not credited. Whisper writes every transcript and was not credited. Same list in the README, grouped by what each one does, with the type foundry named too. If a project is listed and would rather be described differently, or not listed at all, an issue changes it.
+
 ### Added
 
 - 💻 **An uploaded source file now reads like code.** A `code` memo went through the markdown pipeline as a plain fenced block: one flat colour, no line numbers, and no way to search inside it. That is fine for three lines quoted in a note and close to useless for the 800-line file you actually saved, which is the only thing that ever becomes a code memo. The detail page now opens it in a real viewer: syntax highlighting with the language worked out from the filename, line numbers, find inside the file, a wrap toggle for long lines, copy the whole thing, download the original, and the same theater mode the PDF and video get.

@@ -278,7 +278,69 @@ Contributions are welcome. See [`CONTRIBUTING.md`](CONTRIBUTING.md) for setup, c
 
 ## Credits & Open Source
 
-openMemo stands on the shoulders of incredible open-source projects: MDXEditor, Ollama, ChromaDB, faster-whisper, yt-dlp, TanStack Query, Zustand, Lucide, dnd-kit, FastAPI, React, Vite, Tailwind CSS.
+openMemo is mostly other people's work. Every project below is free and open source, written by someone who gave it away, and there is no version of this app that exists without them. The same list is in **Settings**, where hovering a name tells you what it does here.
+
+**The app itself**
+[React](https://react.dev) ·
+[Vite](https://vitejs.dev) ·
+[TypeScript](https://www.typescriptlang.org) ·
+[React Router](https://reactrouter.com) ·
+[TanStack Query](https://tanstack.com/query) ·
+[Zustand](https://github.com/pmndrs/zustand) ·
+[Motion](https://motion.dev) ·
+[dnd-kit](https://dndkit.com) ·
+[Radix UI](https://www.radix-ui.com) ·
+[Lucide](https://lucide.dev) ·
+[Lenis](https://lenis.darkroom.engineering) ·
+[date-fns](https://date-fns.org) ·
+[Tailwind CSS](https://tailwindcss.com)
+
+**Reading what you saved**
+[MDXEditor](https://mdxeditor.dev) ·
+[pdf.js](https://mozilla.github.io/pdf.js/) ·
+[PDFium](https://pdfium.googlesource.com/pdfium/) via [pypdfium2](https://github.com/pypdfium2-team/pypdfium2) ·
+[CodeMirror](https://codemirror.net) ·
+[react-markdown](https://github.com/remarkjs/react-markdown) ·
+[pypdf](https://github.com/py-pdf/pypdf) ·
+[python-docx](https://github.com/python-openxml/python-docx) ·
+[openpyxl](https://foss.heptapod.net/openpyxl/openpyxl) ·
+[Pillow](https://python-pillow.org)
+
+**Getting things in**
+[yt-dlp](https://github.com/yt-dlp/yt-dlp) ·
+[gallery-dl](https://github.com/mikf/gallery-dl) ·
+[FFmpeg](https://ffmpeg.org) ·
+[Playwright](https://playwright.dev) ·
+[Beautiful Soup](https://www.crummy.com/software/BeautifulSoup/) ·
+[readability-lxml](https://github.com/buriy/python-readability) ·
+[lxml](https://lxml.de) ·
+[Mutagen](https://mutagen.readthedocs.io)
+
+**The intelligence, all of it local**
+[Ollama](https://ollama.com) ·
+[Whisper](https://github.com/openai/whisper) ·
+[faster-whisper](https://github.com/SYSTRAN/faster-whisper) ·
+[CTranslate2](https://github.com/OpenNMT/CTranslate2) ·
+[ChromaDB](https://www.trychroma.com)
+
+**Holding it together**
+[FastAPI](https://fastapi.tiangolo.com) ·
+[Uvicorn](https://www.uvicorn.org) ·
+[SQLAlchemy](https://www.sqlalchemy.org) ·
+[SQLite](https://sqlite.org) ·
+[Pydantic](https://docs.pydantic.dev) ·
+[HTTPX](https://www.python-httpx.org) ·
+[APScheduler](https://github.com/agronholm/apscheduler) ·
+[cryptography](https://cryptography.io) ·
+[Zeroconf](https://github.com/python-zeroconf/python-zeroconf) ·
+[qrcode](https://github.com/lincolnloop/python-qrcode) ·
+[nginx](https://nginx.org) ·
+[Docker](https://www.docker.com)
+
+**Type**
+Set in [Satoshi](https://www.fontshare.com/fonts/satoshi) by Indian Type Foundry, free through Fontshare and served from your own machine rather than a CDN.
+
+If your project is here and you would rather it was described differently, or not listed at all, open an issue and it changes.
 
 ---
 

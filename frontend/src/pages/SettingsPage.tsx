@@ -24,7 +24,7 @@ import type { OllamaModel } from '@/types';
 type BuiltWithEntry = { name: string; url: string; desc: string };
 
 const BUILT_WITH_LEAD =
-  'openMemo stands on a stack of free, open-source software. Hover any name to see what it does.';
+  'openMemo is mostly other people’s work. Every one of these is free and open source, written by someone who gave it away, and openMemo would not exist without any of them. Hover a name to see what it does here.';
 
 function BuiltWith({ entries }: { entries: BuiltWithEntry[] }) {
   // Auto-scrolling band. The track is rendered twice back-to-back and animated
@@ -67,19 +67,56 @@ function BuiltWith({ entries }: { entries: BuiltWithEntry[] }) {
   );
 }
 
+// Everything openMemo leans on that somebody else wrote and gave away.
+// Kept honest rather than short: if it does real work in this app it belongs
+// here, and a name people would recognise is not the same as a name that
+// earned its place. Ordered by what it does, since the band scrolls past in
+// this order: the app itself, reading what you saved, getting things in, the
+// intelligence (all of it local), then what holds it together.
 const BUILT_WITH: BuiltWithEntry[] = [
-  { name: 'React', url: 'https://react.dev', desc: 'The UI library every screen is built on — components, hooks, the whole shape of the frontend.' },
-  { name: 'Vite', url: 'https://vitejs.dev', desc: 'Dev server + build tool. Instant HMR while building, a tiny production bundle when shipping.' },
-  { name: 'FastAPI', url: 'https://fastapi.tiangolo.com', desc: 'The Python web framework powering the API. Async-first, type-safe via Pydantic, OpenAPI for free.' },
-  { name: 'SQLite', url: 'https://sqlite.org', desc: 'The single-file database holding every memo, collection, tag and chat. Embedded, zero-config, fast.' },
-  { name: 'Ollama', url: 'https://ollama.com', desc: 'Runs the local LLMs that power chat, summarisation and embeddings — no cloud round-trip, no API key.' },
-  { name: 'ChromaDB', url: 'https://www.trychroma.com', desc: 'Vector store for memo embeddings. Makes "search by meaning" possible against your own knowledge base.' },
-  { name: 'TanStack Query', url: 'https://tanstack.com/query', desc: 'Frontend cache + data fetching. Keeps memos, stats and collections in sync without manual wiring.' },
-  { name: 'Zustand', url: 'https://github.com/pmndrs/zustand', desc: 'Tiny state store for sidebar, filters, sort mode and appearance — no boilerplate, no providers.' },
-  { name: 'framer-motion', url: 'https://motion.dev', desc: 'Every spring, fade and layout animation in the UI. The sidebar collapse, the filter pill, the card transitions.' },
-  { name: 'dnd-kit', url: 'https://dndkit.com', desc: 'Drag-and-drop primitives behind reordering memos and dropping cards into collections.' },
-  { name: 'MDXEditor', url: 'https://mdxeditor.dev', desc: 'The rich Markdown editor for notes and memo content — WYSIWYG with real Markdown underneath.' },
-  { name: 'yt-dlp', url: 'https://github.com/yt-dlp/yt-dlp', desc: 'Pulls title, description and thumbnails from YouTube and social-video URLs so saving a link gives a rich memo.' },
+  { name: 'React', url: 'https://react.dev', desc: 'The UI library every screen is built on, components, hooks, the whole shape of the frontend.' },
+  { name: 'Vite', url: 'https://vitejs.dev', desc: 'Dev server and build tool. Instant reloads while building, a small bundle when shipping.' },
+  { name: 'TypeScript', url: 'https://www.typescriptlang.org', desc: 'Types across the whole frontend, so a renamed field breaks the build instead of a card.' },
+  { name: 'React Router', url: 'https://reactrouter.com', desc: 'Every address in the app. A collection, a Space and a memo each get a real URL you can bookmark.' },
+  { name: 'TanStack Query', url: 'https://tanstack.com/query', desc: 'Frontend cache and data fetching. Keeps memos, stats and collections in sync without manual wiring.' },
+  { name: 'Zustand', url: 'https://github.com/pmndrs/zustand', desc: 'Tiny state store for the sidebar, filters and appearance. No boilerplate, no providers.' },
+  { name: 'Motion', url: 'https://motion.dev', desc: 'Every spring, fade and layout animation in the UI. The sidebar collapse, the filter pill, the card transitions.' },
+  { name: 'dnd-kit', url: 'https://dndkit.com', desc: 'The drag and drop behind reordering memos and dropping a card into a collection or a Space.' },
+  { name: 'Radix UI', url: 'https://www.radix-ui.com', desc: 'The unstyled primitives under the dialogs, menus, tabs and tooltips, so keyboard and screen reader behaviour is right by default.' },
+  { name: 'Lucide', url: 'https://lucide.dev', desc: 'The icon set. Nearly every glyph in the interface that is not hand drawn.' },
+  { name: 'Lenis', url: 'https://lenis.darkroom.engineering', desc: 'The smooth scrolling on long pages and the music rails.' },
+  { name: 'date-fns', url: 'https://date-fns.org', desc: 'Turns timestamps into the readable dates on every card and memo page.' },
+  { name: 'MDXEditor', url: 'https://mdxeditor.dev', desc: 'The rich Markdown editor for notes and memo content. What you see is what you get, with real Markdown underneath.' },
+  { name: 'pdf.js', url: 'https://mozilla.github.io/pdf.js/', desc: 'Draws a saved PDF page by page inside openMemo, on a canvas the app owns, with no network and no browser viewer.' },
+  { name: 'PDFium', url: 'https://pdfium.googlesource.com/pdfium/', desc: 'Renders page one of a PDF into the picture on its card, through the pypdfium2 wheel.' },
+  { name: 'CodeMirror', url: 'https://codemirror.net', desc: 'The syntax highlighted viewer for an uploaded source file, with line numbers and search inside the file.' },
+  { name: 'react-markdown', url: 'https://github.com/remarkjs/react-markdown', desc: 'Renders Markdown safely wherever openMemo shows it: notes, summaries, extracted article text.' },
+  { name: 'pypdf', url: 'https://github.com/py-pdf/pypdf', desc: 'Reads the text out of a PDF so it can be searched, embedded and asked about.' },
+  { name: 'python-docx', url: 'https://github.com/python-openxml/python-docx', desc: 'Reads Word documents into plain text on the way in.' },
+  { name: 'openpyxl', url: 'https://foss.heptapod.net/openpyxl/openpyxl', desc: 'Reads spreadsheets into text, so a saved workbook is searchable rather than opaque.' },
+  { name: 'Pillow', url: 'https://python-pillow.org', desc: 'Every image openMemo writes: thumbnails, covers, and the page rendered off a PDF.' },
+  { name: 'yt-dlp', url: 'https://github.com/yt-dlp/yt-dlp', desc: 'Pulls title, description and thumbnails from YouTube and social video links, and downloads the media when you make a memo local.' },
+  { name: 'gallery-dl', url: 'https://github.com/mikf/gallery-dl', desc: 'Fetches photo posts and carousels at full resolution, which the video tools cannot do at all.' },
+  { name: 'FFmpeg', url: 'https://ffmpeg.org', desc: 'Pulls the still frame off a video for its card, and converts audio when a memo is made local.' },
+  { name: 'Playwright', url: 'https://playwright.dev', desc: 'The headless browser behind the link scraper, so a page that needs JavaScript still saves properly.' },
+  { name: 'Beautiful Soup', url: 'https://www.crummy.com/software/BeautifulSoup/', desc: 'Reads the HTML of a saved page apart to find the article inside it.' },
+  { name: 'readability-lxml', url: 'https://github.com/buriy/python-readability', desc: 'Decides which part of a cluttered page is actually the article.' },
+  { name: 'Mutagen', url: 'https://mutagen.readthedocs.io', desc: 'Reads artist, album and title tags off an uploaded music file.' },
+  { name: 'Ollama', url: 'https://ollama.com', desc: 'Runs the local models behind chat, summaries and embeddings. No cloud round trip, no API key.' },
+  { name: 'Whisper', url: 'https://github.com/openai/whisper', desc: 'The speech recognition model behind every transcript openMemo makes on your own machine.' },
+  { name: 'faster-whisper', url: 'https://github.com/SYSTRAN/faster-whisper', desc: 'The fast runtime that actually executes Whisper here, on a GPU or a CPU.' },
+  { name: 'ChromaDB', url: 'https://www.trychroma.com', desc: 'Vector store for memo embeddings. Makes search by meaning possible against your own library.' },
+  { name: 'FastAPI', url: 'https://fastapi.tiangolo.com', desc: 'The Python web framework powering the API. Async first, type safe through Pydantic.' },
+  { name: 'Uvicorn', url: 'https://www.uvicorn.org', desc: 'The server the backend actually runs on.' },
+  { name: 'SQLAlchemy', url: 'https://www.sqlalchemy.org', desc: 'Describes every table once, and talks to the database asynchronously so one slow query cannot block the rest.' },
+  { name: 'SQLite', url: 'https://sqlite.org', desc: 'The single file database holding every memo, collection, tag and chat. Embedded, no configuration, fast.' },
+  { name: 'Pydantic', url: 'https://docs.pydantic.dev', desc: 'Validates everything crossing the API boundary, and every setting read at startup.' },
+  { name: 'HTTPX', url: 'https://www.python-httpx.org', desc: 'Every outbound request openMemo makes, all of them ones you asked for.' },
+  { name: 'APScheduler', url: 'https://github.com/agronholm/apscheduler', desc: 'Runs the quiet background jobs: backups, integrity checks, re-filing memo types.' },
+  { name: 'cryptography', url: 'https://cryptography.io', desc: 'Encrypts the Mesh sync channel between your two machines with AES-256-GCM.' },
+  { name: 'Zeroconf', url: 'https://github.com/python-zeroconf/python-zeroconf', desc: 'Lets two of your machines find each other on the network with no address typed in.' },
+  { name: 'nginx', url: 'https://nginx.org', desc: 'Serves the built frontend and passes the API through, in the Docker build.' },
+  { name: 'Docker', url: 'https://www.docker.com', desc: 'How openMemo installs on a machine without you assembling a Python and Node toolchain first.' },
 ];
 
 type Stats = {
