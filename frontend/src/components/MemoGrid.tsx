@@ -124,6 +124,7 @@ export function MemoGrid({ memos: serverMemos, transitionKey }: MemoGridProps) {
   const [localMemos, setLocalMemos] = useState(serverMemos);
   const reorderingRef = useRef(false);
   const dragOrderRef = useRef<Memo[]>([]);
+  const dragStartOrderRef = useRef<string[]>([]);
   const lastOverIdRef = useRef<string | null>(null);
 
   useEffect(() => {
@@ -134,6 +135,7 @@ export function MemoGrid({ memos: serverMemos, transitionKey }: MemoGridProps) {
     setActiveId(String(event.active.id));
     lastOverIdRef.current = null;
     dragOrderRef.current = [...localMemos];
+    dragStartOrderRef.current = localMemos.map((m) => m.id);
   };
 
   const handleDragOver = (event: DragOverEvent) => {
@@ -200,6 +202,19 @@ export function MemoGrid({ memos: serverMemos, transitionKey }: MemoGridProps) {
 
     const finalMemos = dragOrderRef.current;
     if (!finalMemos.length) {
+      setActiveId(null);
+      return;
+    }
+    // A drag that ended where it started is not a reorder. Without this, every
+    // stray grab, including one that only nudged the card and let go, wrote
+    // recency_at for the whole grid, which is one PUT per memo on screen fired
+    // at once against a SQLite backend that has no reason to hear about any of
+    // them.
+    const startIds = dragStartOrderRef.current;
+    if (
+      startIds.length === finalMemos.length &&
+      finalMemos.every((m, i) => m.id === startIds[i])
+    ) {
       setActiveId(null);
       return;
     }

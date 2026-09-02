@@ -7,6 +7,20 @@ All notable changes to OpenMemo are documented here.
 
 <!-- Add entries here as work lands: ### Added / ### Changed / ### Fixed -->
 
+### Added
+
+- 📄 **A PDF you upload now opens as the PDF.** Until now openMemo pulled the text out of it and showed you that: a wall of paragraphs with the layout, the tables, the figures and the signatures thrown away. For anything designed rather than typed, a statement, a boarding pass, a lease, a paper, that is not the document, it is a transcript of the document, and you had to download the file to see what you actually saved. The memo page now renders the real pages, with page numbers, next and previous, zoom, fit to width, rotate, theater mode for full width, and open or download for when you want it outside the app. Pages load as you scroll and are let go when they leave, so a four hundred page report opens as fast as a one page receipt.
+
+  The extracted text has not gone anywhere. It is still what search and Ask read, and it is still on the page, moved underneath as "Show extracted text". The pages are the memo, the text is its index.
+
+  Rendered by openMemo rather than handed to the browser's own PDF viewer on purpose. That one brings its own toolbar, ignores your theme and, because of the app's content security policy, would have been blocked outright in the Docker build. This one is drawn onto a canvas openMemo owns, so it wears whatever theme you are in and the page inside it stays paper white, since a document's own ink is not ours to tint. Everything it needs is served from your own machine: the engine, the worker, the font data, the decoders and the character maps for non-Latin documents are all copied in at build time, so a PDF renders with the network unplugged and nothing about the file you opened reaches a CDN.
+
+### Fixed
+
+- 🖱️ **Dragging a memo card quickly no longer blanks the app.** Move a card fast enough and the whole page went dark and stayed dark until you reloaded. Cards are dragged with pointer events, but the picture inside a card is something the browser will happily drag by itself, and a quick flick tripped the browser's own image drag before openMemo's had begun. From there the gesture belonged to the browser: openMemo never saw the drag, and letting go navigated the tab clean out of the app to the raw image file. What looked like a crash was the app being left behind. Card images are no longer draggable by the browser, and the global drop layer now cancels any drag it recognises rather than only the ones it wants to save, so even a stray one from somewhere else can never carry the app away with it. The drop veil also gives up on its own if a drag leaves the window without saying so, which was a second way to end up staring at a screen you could only fix with a reload.
+
+- 🪶 **A drag that changes nothing no longer rewrites the whole grid.** Grabbing a card, nudging it and letting go where you found it counted as a reorder, and a reorder writes a new position for every memo on screen at once. On a full dashboard that was one write per card for a gesture that moved nothing. The order is now compared against where the drag started, and an unchanged one is left alone.
+
 ---
 ## [3.15.0] - 2026-09-02
 

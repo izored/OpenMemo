@@ -41,6 +41,11 @@ Get the transcript of any video without losing the video. One click pulls the so
 ### 💾 Make It Local
 Point it at any video or audio link (YouTube, Vimeo, podcast hosts, direct media files, anything yt-dlp can fetch) and openMemo pulls the media down and keeps it. A Memo survives the original being taken offline. Or convert a long video into an audio-only copy when you just want the podcast.
 
+### 📄 PDFs Open As PDFs
+Drop a PDF in and the memo page shows the document, not a transcript of it. Real pages, with the layout, the tables, the figures and the signatures still on them. Page through it, zoom, fit to the width, rotate, go full width, or download the original. Pages draw as you scroll and are released when they leave, so a four hundred page report opens as fast as a one page receipt. The extracted text has not gone anywhere: it is still what search and Ask read, and it is still on the page, folded up underneath.
+
+It is drawn by openMemo rather than handed to the browser's own viewer, so it wears whatever theme you are in, and the paper inside the frame stays white because a document's own ink is not ours to tint. Everything it needs to draw, down to the character maps for non-Latin scripts, is served from your own machine. A PDF renders with the network unplugged.
+
 ### 📚 Smart Collections
 Organise Memos into themed collections with emoji icons and descriptions. Drag and drop cards directly into collections. Scope your AI chat to a single project or topic. A collection you fill fast, a shopping wishlist or a research dump, can be hidden from the dashboard so it stops burying everything else, while staying in the sidebar and in search.
 
@@ -84,7 +89,7 @@ Rendering openMemo makes no network request at all. Fonts are served from your o
 
 ### ⚙️ Everything Gets Indexed
 Every saved item is automatically processed in the background:
-- **Extracted:** PDFs, DOCX, images, audio, and webpages parsed into clean text
+- **Extracted:** PDFs, DOCX, images, audio, and webpages parsed into clean text (a PDF keeps its real pages too, see above)
 - **Embedded:** Vectorised by your local Ollama embed model for semantic search
 - **Indexed:** Added to FTS5 for instant keyword retrieval
 

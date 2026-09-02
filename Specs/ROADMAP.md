@@ -350,7 +350,7 @@ Settings toggle.
 - **User flow diagram** — Full UX flow diagram for birds-eye view of journeys across Dashboard, MemoDetail, Collections, Chat, Settings
 - **Multimedia icon Lottie animation** — FAB animated icon; spec at [`Specs/multimedia-icon-animation.md`](./multimedia-icon-animation.md)
 - **List view & Timeline view** — Alternatives to card grid
-- **Built-in code viewer / light editor** — `code` is its own memo type (uploaded source files only — not text notes). Add an in-app syntax-highlighted viewer, and later a light editor, for code memos. Reuse an open-source editor (CodeMirror 6 — already a transitive dep via MDXEditor, or Monaco) rather than building from scratch. Detail page renders the file with language detection + copy button; editor phase allows in-place edits saved back to the file.
+- **Built-in code viewer / light editor** — `code` is its own memo type (uploaded source files only — not text notes). Add an in-app syntax-highlighted viewer, and later a light editor, for code memos. Reuse an open-source editor (CodeMirror 6 — already a transitive dep via MDXEditor, or Monaco) rather than building from scratch. Detail page renders the file with language detection + copy button; editor phase allows in-place edits saved back to the file. `PdfViewer.tsx` is the precedent for the viewer half: lazy-loaded component, own toolbar in `om-*` tokens, assets vendored at build time rather than fetched.
 - **[Y] Remove Claude attribution from codebase** — Audit code comments, generated headers, UI text. Claude disclosed in README only
 
 ---

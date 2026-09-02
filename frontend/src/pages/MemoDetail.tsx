@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useCallback, useRef, Suspense, lazy } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import {
@@ -44,7 +44,7 @@ import { AskMemoPanel } from '@/components/AskMemoPanel';
 import { BorderBeam } from 'border-beam';
 import { useBeamConfig, resolveBeamTheme } from '@/lib/beamConfig';
 import { useIsMobile } from '@/lib/useBreakpoint';
-import { audioEmbed, audioPlatformMeta, canMakeLocal, canTranscript, canSummarize, audioKind, mediaSrc, transcriptText } from '@/lib/media';
+import { audioEmbed, audioPlatformMeta, canMakeLocal, canTranscript, canSummarize, audioKind, isPdf, mediaSrc, transcriptText } from '@/lib/media';
 import { videoEmbedUrl, resolveEmbedShape, platformMeta } from '@/lib/platforms';
 import { useImageAspect } from '@/lib/useMediaOrientation';
 import { truncateTitle, isLongTitle } from '@/lib/title';
@@ -59,6 +59,12 @@ import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { motion, AnimatePresence } from 'framer-motion';
 import type { Memo, Collection, CollectionRef, SummaryMode, GalleryItem } from '@/types';
+
+// pdf.js is ~1.7 MB of engine + worker. Split out so it only ever loads on a
+// memo that is actually a PDF, and never on the dashboard.
+const PdfViewer = lazy(() =>
+  import('@/components/PdfViewer').then((m) => ({ default: m.PdfViewer })),
+);
 
 // A signal to seek the open player (embed iframe or local <video>). The nonce
 // lets the same timestamp fire repeated seeks (OPNMMO-0042).
@@ -1707,6 +1713,7 @@ export function MemoDetail() {
   const videoEmbedShape = resolveEmbedShape(memo, posterAspect);
   const videoEmbedKind = videoEmbed ? videoEmbedShape.kind : 'video';
   const isWebType = memo.type === 'article' || memo.type === 'link';
+  const isPdfMemo = isPdf(memo);
 
   // Tool rail (OPNMMO-0042): AI Summary + Make-it-local + future tools hug the
   // content column on desktop. On mobile the rail is hidden — except an already
@@ -2211,15 +2218,57 @@ export function MemoDetail() {
               </div>
             )}
 
+            {/* An uploaded PDF renders as the document it is (OPNMMO-0054).
+                Its extracted text is still there and still what search and Ask
+                run on, but it moves under the pages as a collapsible: the text
+                is the index, the pages are the memo. */}
+            {isPdfMemo && !isEditing && (
+              <Suspense
+                fallback={
+                  <div className="om-pdf om-pdf-loading">
+                    <Loader2 size={18} className="om-spin" />
+                    <span className="om-detail-desc">Loading the viewer…</span>
+                  </div>
+                }
+              >
+                <PdfViewer
+                  src={`/api/memos/${memo.id}/file`}
+                  title={memo.title}
+                  downloadHref={`/api/memos/${memo.id}/file?download=1`}
+                  theater={theater}
+                  onTheaterChange={setTheater}
+                />
+              </Suspense>
+            )}
+
             {/* Document / code content — on its own surface card so the file
                 content sits in a panel instead of floating on the page bg
                 (OPNMMO-0047). */}
             {(memo.type === 'document' || memo.type === 'code') && !isEditing && memo.content_text && (
-              <div className="om-file-content">
-                <div className="om-prose">
-                  <ReactMarkdown remarkPlugins={[remarkGfm]}>{memo.content_raw || memo.content_text}</ReactMarkdown>
+              isPdfMemo ? (
+                <div style={{ marginBottom: '24px' }}>
+                  <button
+                    onClick={() => setShowExtracted(!showExtracted)}
+                    className="om-extracted-toggle"
+                  >
+                    {showExtracted ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
+                    {showExtracted ? 'Hide extracted text' : 'Show extracted text'}
+                  </button>
+                  {showExtracted && (
+                    <div className="om-file-content" style={{ marginTop: '16px', marginBottom: 0 }}>
+                      <div className="om-prose">
+                        <ReactMarkdown remarkPlugins={[remarkGfm]}>{memo.content_raw || memo.content_text}</ReactMarkdown>
+                      </div>
+                    </div>
+                  )}
                 </div>
-              </div>
+              ) : (
+                <div className="om-file-content">
+                  <div className="om-prose">
+                    <ReactMarkdown remarkPlugins={[remarkGfm]}>{memo.content_raw || memo.content_text}</ReactMarkdown>
+                  </div>
+                </div>
+              )
             )}
 
             {/* Edit: Content */}

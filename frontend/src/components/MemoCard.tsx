@@ -117,6 +117,7 @@ function VideoSourceIcon({ memo }: { memo: Memo }) {
   if (memo.source_url && memo.source_favicon)
     return (
       <img
+        draggable={false}
         src={memo.source_favicon}
         alt=""
         width={13}
@@ -322,6 +323,7 @@ function Meta({ memo }: { memo: Memo }) {
       <div className="om-meta-left">
         {memo.source_favicon ? (
           <img
+            draggable={false}
             src={memo.source_favicon}
             alt=""
             className="om-favicon"
@@ -609,6 +611,7 @@ export function MemoCard({ memo, dragHandleProps, lightboxGroup }: CardProps) {
           <div className="om-image-frame" data-orient={imageOrient} style={{ background: heroBg, ...(imageAR ? { ['--card-ar']: imageAR } : {}) } as React.CSSProperties}>
             {src ? (
               <img
+                draggable={false}
                 src={src}
                 alt=""
                 className="om-media-img"
@@ -670,6 +673,7 @@ export function MemoCard({ memo, dragHandleProps, lightboxGroup }: CardProps) {
           <div className="om-video-frame" data-orient={videoOrient} style={{ background: heroBg, ...(videoAR ? { ['--card-ar']: videoAR } : {}) } as React.CSSProperties}>
             {src ? (
               <img
+                draggable={false}
                 src={src}
                 alt=""
                 className="om-media-img"
@@ -805,6 +809,7 @@ export function MemoCard({ memo, dragHandleProps, lightboxGroup }: CardProps) {
           <div className="om-audio-frame">
             {src ? (
               <img
+                draggable={false}
                 src={src}
                 alt=""
                 className="om-media-img"
@@ -842,6 +847,7 @@ export function MemoCard({ memo, dragHandleProps, lightboxGroup }: CardProps) {
       <div className="om-card-hero" style={{ background: heroBg }}>
         {src ? (
           <img
+            draggable={false}
             src={src}
             alt=""
             className="om-media-img"
@@ -861,6 +867,7 @@ export function MemoCard({ memo, dragHandleProps, lightboxGroup }: CardProps) {
       <div className="om-min-domain">
         {memo.source_favicon ? (
           <img
+            draggable={false}
             src={memo.source_favicon}
             alt=""
             width={12}

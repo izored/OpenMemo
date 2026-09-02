@@ -35,6 +35,22 @@ The default size cap is **5 GB**, changeable in Settings. Setting it to 0
 removes the cap entirely. This is a local-first app; your disk is the real
 limit.
 
+## Can I read a PDF without leaving openMemo?
+
+Yes. A PDF memo renders its real pages on the memo page, with page navigation,
+zoom, fit to width, rotate, a full-width mode and a download button. The text
+openMemo extracted at save time is still there and still what search and Ask
+read; it sits under the pages behind **Show extracted text**.
+
+It is drawn by openMemo itself, using pdf.js on a canvas, rather than handed to
+the browser's built-in viewer. That keeps the frame in your theme and keeps the
+whole thing offline: the engine, its worker, the standard fonts, the image
+decoders and the character maps for non-Latin scripts are all served from your
+own machine. Nothing about the document you opened leaves it.
+
+Other document types (DOCX, XLSX, EPUB, CSV, plain text) still show their
+extracted text. Only PDF has a page renderer today.
+
 ## How do I change the LLM model?
 
 Pull it with Ollama (`ollama pull llama3.1:8b`), then pick it in

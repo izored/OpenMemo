@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import type { Memo, MemoType } from '@/types';
-import { canSummarize } from './media';
+import { canSummarize, isPdf } from './media';
 
 // Minimal memo factory — canSummarize reads type, content_text, audio_kind,
 // source_url and title (the last two only as the audio_kind fallback heuristic).
@@ -47,5 +47,29 @@ describe('canSummarize() — AI Summary eligibility (ADR-007)', () => {
     expect(
       canSummarize(m({ type: 'audio', audio_kind: 'music', content_text: 'la la la lyrics' })),
     ).toBe(false);
+  });
+});
+
+describe('isPdf(): which document memos get the page viewer (OPNMMO-0054)', () => {
+  it('accepts a stored .pdf, whatever case the path is in', () => {
+    expect(isPdf(m({ type: 'document', file_path: '/app/files/a1b2.pdf' }))).toBe(true);
+    expect(isPdf(m({ type: 'document', file_path: 'D:\\files\\Scan.PDF' }))).toBe(true);
+  });
+
+  it('accepts a hashed path whose original name survives in the title', () => {
+    expect(
+      isPdf(m({ type: 'document', file_path: '/app/files/9f3c1a', title: 'Lease agreement.pdf' })),
+    ).toBe(true);
+  });
+
+  it('rejects the other document types that share the "document" bucket', () => {
+    for (const name of ['notes.docx', 'sheet.xlsx', 'book.epub', 'rows.csv', 'plain.txt']) {
+      expect(isPdf(m({ type: 'document', file_path: `/app/files/${name}` }))).toBe(false);
+    }
+  });
+
+  it('rejects a memo with no file of its own, title or not', () => {
+    expect(isPdf(m({ type: 'document', title: 'paper.pdf' }))).toBe(false);
+    expect(isPdf(m({ type: 'link', source_url: 'https://example.com/paper.pdf' }))).toBe(false);
   });
 });
