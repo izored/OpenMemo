@@ -7,6 +7,9 @@ All notable changes to OpenMemo are documented here.
 
 <!-- Add entries here as work lands: ### Added / ### Changed / ### Fixed -->
 
+---
+## [3.17.0] - 2026-09-02
+
 ### Added
 
 - 💻 **An uploaded source file now reads like code.** A `code` memo went through the markdown pipeline as a plain fenced block: one flat colour, no line numbers, and no way to search inside it. That is fine for three lines quoted in a note and close to useless for the 800-line file you actually saved, which is the only thing that ever becomes a code memo. The detail page now opens it in a real viewer: syntax highlighting with the language worked out from the filename, line numbers, find inside the file, a wrap toggle for long lines, copy the whole thing, download the original, and the same theater mode the PDF and video get.
