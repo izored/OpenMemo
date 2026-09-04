@@ -19,6 +19,10 @@ All notable changes to OpenMemo are documented here.
 
   A post already in your library keeps whatever type it was saved with, because the fix is in the reading and that already happened. Re-pull it from its own page, the circular arrow next to delete, and it corrects itself.
 
+- 🎬 **A video inside a post is recognised before it starts playing.** Facebook, and any site that streams the way it does, puts an empty player on the page and only attaches the video to it when you press play. Until then the element has no address and no preview frame. openMemo worked out what a post held by looking at those addresses, so a post whose only content was a clip looked like a post holding nothing, and got filed as a plain bookmark or, if a still happened to sit nearby, as a picture. The player itself is now the evidence, which is how the downloader had always read the same page. The two halves disagreed, and the typing half was the wrong one.
+
+- 📥 **Downloading from a share link no longer risks fetching the wrong clip.** Before openMemo saves a video it narrows the page to your post, so that the feed of other posts around it cannot answer instead. A share link never matched, so that narrowing silently did not happen and the download fell back to picking the largest video the page loaded, which on a busy permalink page can belong to somebody else entirely. It now takes the same second look the reader does.
+
 ---
 ## [3.17.0] - 2026-09-02
 

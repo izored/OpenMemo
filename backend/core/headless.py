@@ -229,15 +229,26 @@ _SCOPE_MEDIA_JS = r"""() => {
     if (r.width < 120 || r.height < 120) continue;
     let u = '', type = 'image', poster = '';
     if (el.tagName === 'VIDEO') {
+      // A player is a player before it has loaded. Facebook mounts <video>
+      // with no src AND no poster until you press play, so typing the item
+      // from its src made the post's own clip either a still or nothing at
+      // all, and a shared video post came out as a bookmark. The ELEMENT is
+      // the evidence; the URL is only how the card gets a picture. The
+      // download path has always counted players this way (sniff_media's
+      // probe counts <video> elements), and the two readers of one scope must
+      // not disagree about what a player is.
       const src = el.currentSrc || el.src || '';
       poster = el.poster || '';
       u = src || poster;
-      type = src ? 'video' : 'image';
+      type = 'video';
     } else {
       u = widest(el);
+      if (!u) continue;
     }
-    if (!u || u.startsWith('data:')) continue;
-    const k = key(u);
+    if (u.startsWith('data:')) continue;
+    // A player with nothing to name yet still has to be told apart from the
+    // next one, so it is keyed by position rather than by URL.
+    const k = u ? key(u) : 'player:' + out.length;
     if (seen.has(k)) continue;
     seen.add(k);
     out.push({ url: u, type: type, poster: poster });
@@ -646,7 +657,13 @@ async def _collect_post_media(page, max_slides: int) -> list:
         items = await page.evaluate(_SCOPE_MEDIA_JS) or []
     except Exception:
         return []
-    return [i for i in items if isinstance(i, dict) and i.get("url")][:max_slides]
+    # A player that has not loaded names no URL yet and is still the strongest
+    # thing the post holds, so it is kept and classify_media sees a video where
+    # there is one. A still with no URL is nothing at all.
+    return [
+        i for i in items
+        if isinstance(i, dict) and (i.get("url") or i.get("type") == "video")
+    ][:max_slides]
 
 
 def _cookie_path(domain: str) -> Path:

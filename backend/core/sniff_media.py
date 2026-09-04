@@ -32,6 +32,7 @@ from backend.core.headless import (
     _save_cookies,
     _dismiss_consent,
     _scope_post,
+    _landed_rescope,
 )
 
 # A media response we are willing to download directly. Progressive containers
@@ -263,6 +264,14 @@ async def sniff_media(
         if scope_permalink:
             await page.wait_for_timeout(1500)
             scoped = await _scope_post(page, scope_permalink)
+            if not scoped:
+                # A share-sheet link names nothing the page carries, so without
+                # this the capture stays unscoped and the download goes back to
+                # picking the biggest media on the wire - a neighbour's clip.
+                # The same second look the renderer takes, for the same reason.
+                retry = _landed_rescope(scope_permalink, page.url or "")
+                if retry:
+                    scoped = await _scope_post(page, retry)
 
         # Nudge a lazily-mounted player into requesting its media.
         try:

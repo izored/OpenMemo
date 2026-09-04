@@ -290,6 +290,56 @@ def test_a_four_photo_album_is_an_image_memo_with_a_gallery():
     assert len(memo["gallery"]) == 4
 
 
+# ------------------------------------------- a player that has not loaded yet
+
+
+def test_an_unloaded_player_is_still_a_video():
+    """Facebook mounts <video> with no src and no poster until you press play.
+    Typing the item from its src made a shared video post come out as a
+    bookmark, which is the same class of bug as typing it from the domain."""
+    assert classify_media([{"url": "", "type": "video"}], scoped=True,
+                          post_text="a caption", fallback="link") == "video"
+
+
+def test_an_unloaded_player_does_not_shadow_the_still_behind_it():
+    assert cover([{"url": "", "type": "video", "poster": ""},
+                  {"url": "https://cdn/a.jpg", "type": "image"}]) == "https://cdn/a.jpg"
+
+
+def test_a_player_with_a_poster_still_covers_the_card():
+    assert cover([{"url": "", "type": "video", "poster": "p.jpg"}]) == "p.jpg"
+
+
+def test_an_unloaded_player_is_not_a_gallery_slide():
+    """It names no picture, so there is nothing to render in a carousel. The
+    stills around it still make one."""
+    media = [{"url": "", "type": "video"},
+             {"url": "a.jpg", "type": "image"},
+             {"url": "b.jpg", "type": "image"}]
+    assert slides(media) == [{"url": "a.jpg", "type": "image"},
+                             {"url": "b.jpg", "type": "image"}]
+    assert slides([{"url": "", "type": "video"}]) is None
+
+
+def test_both_readers_of_a_scope_agree_on_what_a_player_is():
+    """The download path counts <video> ELEMENTS (sniff_media's probe sets
+    `out.count = vids.length`). The typing path used to require a src, so one
+    said "there is a clip here" while the other said "no media at all"."""
+    from backend.core import headless, sniff_media
+
+    assert "out.count = vids.length" in sniff_media._PLAY_AND_PROBE_JS
+    assert "type = src ? 'video' : 'image'" not in headless._SCOPE_MEDIA_JS
+
+
+def test_the_download_path_also_rescopes_a_share_link():
+    """A share link left the capture unscoped, and an unscoped capture picks
+    the biggest media on the wire, which on a permalink page is a neighbour's
+    clip. Both readers now take the same second look."""
+    from backend.core import sniff_media
+
+    assert sniff_media._landed_rescope is not None
+
+
 def test_the_scope_script_takes_one_argument():
     """Playwright hands `evaluate` a single argument, so the script has to
     destructure. Passing two parameters silently binds `kind` to undefined and

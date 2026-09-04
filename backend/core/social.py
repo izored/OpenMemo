@@ -64,13 +64,20 @@ def slides(post_media: list) -> list | None:
 
 
 def cover(post_media: list) -> str:
-    """The card image: the first slide, or a video's poster frame."""
-    if not post_media:
-        return ""
-    first = post_media[0] or {}
-    if first.get("type") == "video":
-        return first.get("poster") or first.get("url") or ""
-    return first.get("url") or ""
+    """The card image: the first slide, or a video's poster frame.
+
+    Walks past an item that names no picture at all. A player mounted but not
+    yet loaded carries neither a src nor a poster, and letting that shadow the
+    still sitting behind it leaves the card blank."""
+    for item in post_media or []:
+        item = item or {}
+        if item.get("type") == "video":
+            pic = item.get("poster") or item.get("url") or ""
+        else:
+            pic = item.get("url") or ""
+        if pic:
+            return pic
+    return ""
 
 
 def apply_media(memo: dict, post_media: list) -> dict:
