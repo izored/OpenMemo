@@ -139,8 +139,9 @@ _SCOPE_POST_JS = r"""([wantPrefix, kind]) => {
   };
   document.querySelectorAll('[data-om-scope]').forEach(
     (e) => e.removeAttribute('data-om-scope'));
-  const want = (wantPrefix || '').replace(/\/+$/, '');
-  if (!want || !kind) return false;
+  const want0 = (wantPrefix || '').replace(/\/+$/, '');
+  if (!want0 || !kind) return false;
+  let want = want0;
   // Ours: the permalink itself, and anything BELOW it. Reddit spells one post
   // as both /r/x/comments/abc and /r/x/comments/abc/a_long_title/, and a
   // comment deep-link sits below that again — all the same post, so the test
@@ -151,8 +152,37 @@ _SCOPE_POST_JS = r"""([wantPrefix, kind]) => {
   // label, a view counter. Some of those sit in a tiny corner of the post, so
   // expanding the FIRST one found can scope to a two-word fragment. Expand
   // every self-link and keep the richest result.
-  const selves = anchors.filter((a) => mine(norm(a.getAttribute('href'))));
-  if (!selves.length) return false;
+  let selves = anchors.filter((a) => mine(norm(a.getAttribute('href'))));
+  if (!selves.length) {
+    // Facebook labels one post with TWO different ids: the pfbid a share link
+    // redirects to, and a different pfbid in the page's own link back to
+    // itself. Both are stable, neither is derivable from the other, and the
+    // strict test above therefore matches nothing - so the post is read as the
+    // feed around it and every re-pull quietly changes nothing. Verified twice
+    // on a live album, 2026-09-04.
+    //
+    // When the page carries EXACTLY ONE link by this author of this kind, that
+    // link is the post. Being the only candidate is the whole argument: a feed
+    // of other posts is what produces several, which is the case the strict
+    // test exists for and where this still refuses. Reddit, Threads and
+    // Instagram permalink pages all list neighbouring posts, so they never
+    // reach here at all.
+    const at = want0.indexOf('/' + kind + '/');
+    if (at < 0) return false;
+    const stem = want0.slice(0, at + kind.length + 2);
+    const cands = new Set();
+    for (const a of anchors) {
+      const p = norm(a.getAttribute('href'));
+      if (p && p.startsWith(stem)) cands.add(p);
+    }
+    if (cands.size !== 1) return false;
+    // `mine` and `foreign` both close over `want`, so re-pointing it here is
+    // enough: the ancestor walk below now measures against the id the page
+    // actually uses.
+    want = Array.from(cands)[0];
+    selves = anchors.filter((a) => mine(norm(a.getAttribute('href'))));
+    if (!selves.length) return false;
+  }
   // Somebody else's post: an anchor carrying the same kind token that is not
   // ours. `kind` comes from the URL, so nothing here knows which site it is on.
   const foreign = (el) => Array.from(el.querySelectorAll('a[href]')).some((a) => {
@@ -971,6 +1001,12 @@ async def render_page(
                     retry = _landed_rescope(scope_permalink, page.url or "")
                     if retry:
                         scoped = await _scope_post(page, retry)
+                if not scoped:
+                    # Not an error, and that is the problem: everything below
+                    # still runs, the memo still saves, and the only symptom is
+                    # a re-pull that changes nothing. Say so out loud.
+                    print(f"[headless] could not narrow {domain} to its post; "
+                          f"reading the whole page instead")
                 if scoped:
                     post_media = await _collect_post_media(page, max_slides)
                     # The grid hands over thumbnails. Trade a few page loads for
