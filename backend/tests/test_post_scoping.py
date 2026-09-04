@@ -51,6 +51,33 @@ from backend.core.social import apply_media, classify_media, cover, slides
             "/profile/alice.bsky.social/post/3kabcdef",
             "post",
         ),
+        # Facebook, in the spellings a memo actually arrives in. The share
+        # wrapper is the only link Facebook offers for a multi-photo post.
+        (
+            "https://www.facebook.com/share/p/1MKkkWnVcG/",
+            "/share/p/1MKkkWnVcG",
+            "p",
+        ),
+        (
+            "https://www.facebook.com/share/v/1MKkkWnVcG/",
+            "/share/v/1MKkkWnVcG",
+            "v",
+        ),
+        (
+            "https://www.facebook.com/HuePhilips/posts/pfbid02g45nVnqBfvJev?rdid=x",
+            "/HuePhilips/posts/pfbid02g45nVnqBfvJev",
+            "posts",
+        ),
+        (
+            "https://www.facebook.com/HuePhilips/videos/1129791406044705/",
+            "/HuePhilips/videos/1129791406044705",
+            "videos",
+        ),
+        (
+            "https://www.facebook.com/groups/123456/posts/7890123/",
+            "/groups/123456/posts/7890123",
+            "posts",
+        ),
     ],
 )
 def test_a_permalink_yields_its_prefix_and_kind(url, prefix, kind):
@@ -202,6 +229,65 @@ def test_a_video_host_with_no_permalink_still_defaults_to_video():
         type = "link"
 
     assert derive_memo_type(_Memo()) == "video"
+
+
+# ------------------------------------------------- share links that redirect
+
+
+def test_facebooks_share_wrapper_is_not_read_as_an_instagram_post():
+    """`/share/p/<code>` is Facebook's, and Instagram's `/p/` shape claims it
+    unless Facebook's sits above it. The two that prove the ordering are the
+    video and reel wrappers, which Instagram's alternation cannot match at
+    all — before this they were not permalinks and so were never scoped."""
+    for code in ("v", "r", "g"):
+        assert is_post_permalink(f"https://www.facebook.com/share/{code}/1MKkkWnVcG/")
+
+
+def test_a_redirect_wrapper_is_rescoped_from_where_it_landed():
+    """The whole Facebook album fix. `/share/p/<code>` names the post and
+    appears nowhere inside it, so the first scope pass matches nothing; the
+    pfbid permalink the browser lands on is the spelling the page's own anchors
+    use."""
+    from backend.core.headless import _landed_rescope
+
+    share = "https://www.facebook.com/share/p/1MKkkWnVcG"
+    landed = (
+        "https://www.facebook.com/HuePhilips/posts/pfbid02g45nVnqBfvJev/"
+        "?rdid=Kqn6Osd5S59NgTrr"
+    )
+    assert _landed_rescope(share, landed) == landed
+
+
+def test_a_page_that_did_not_redirect_is_not_scoped_twice():
+    """The common path pays one string compare, not a second DOM walk."""
+    from backend.core.headless import _landed_rescope
+
+    url = "https://www.threads.com/@medallomami_/post/Dcq6Ff4DHeR"
+    assert _landed_rescope(url, url) is None
+    assert _landed_rescope(url, url + "/") is None
+    assert _landed_rescope(url, "") is None
+
+
+def test_landing_somewhere_that_is_not_a_post_is_not_worth_retrying():
+    """A dead share link lands on a login screen or a feed. Scoping that can
+    only narrow to a stranger's post, so it must not be attempted."""
+    from backend.core.headless import _landed_rescope
+
+    share = "https://www.facebook.com/share/p/1MKkkWnVcG"
+    assert _landed_rescope(share, "https://www.facebook.com/login/") is None
+    assert _landed_rescope(share, "https://www.facebook.com/") is None
+
+
+def test_a_four_photo_album_is_an_image_memo_with_a_gallery():
+    """What the scoped read makes of the Philips Hue post that started this:
+    four stills, no player, so an image memo whose gallery holds all four —
+    not a video card with nothing to play."""
+    media = [{"url": f"https://cdn/{i}.jpg", "type": "image"} for i in range(4)]
+    memo = {"thumbnail_path": ""}
+    assert classify_media(media, scoped=True, fallback="video") == "image"
+    apply_media(memo, media)
+    assert memo["thumbnail_path"] == "https://cdn/0.jpg"
+    assert len(memo["gallery"]) == 4
 
 
 def test_the_scope_script_takes_one_argument():

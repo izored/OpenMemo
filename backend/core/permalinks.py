@@ -45,6 +45,14 @@ _SHAPES = (
     re.compile(r"^(?P<prefix>/@[^/]+/post/[A-Za-z0-9_-]{5,})", re.I),
     # Bluesky — /profile/<handle>/post/<rkey>
     re.compile(r"^(?P<prefix>/profile/[^/]+/post/[A-Za-z0-9]{5,})", re.I),
+    # Facebook share sheet — /share/p|v|r|g/<code>. Must sit ABOVE Instagram,
+    # whose /p/ shape happily claims /share/p/ and hands back the kind "p".
+    # This is the only link Facebook offers for a multi-photo post: the post's
+    # own Share menu has no copy-link entry, so the URL has to be fished out of
+    # a saved collection. The code names neither the author nor the post and
+    # therefore matches nothing on the rendered page — the render re-scopes from
+    # the URL the redirect lands on (headless.render_page).
+    re.compile(r"^(?P<prefix>/share/(?:p|v|r|g)/[A-Za-z0-9_-]{5,})", re.I),
     # Instagram — /p/, /reel/, /reels/, /tv/, optionally under a username
     re.compile(r"^(?P<prefix>(?:/[^/]+)?/(?:p|reel|reels|tv)/[A-Za-z0-9_-]{5,})", re.I),
     # TikTok — /@user/video/<id>, /@user/photo/<id>
@@ -53,8 +61,13 @@ _SHAPES = (
     re.compile(r"^(?P<prefix>/[^/]+/status(?:es)?/\d+)", re.I),
     # Reddit — /r/<sub>/comments/<id>[/<slug>[/<comment id>]]
     re.compile(r"^(?P<prefix>/r/[^/]+/comments/[A-Za-z0-9]{4,})", re.I),
-    # Facebook — /<user>/posts/<id>
-    re.compile(r"^(?P<prefix>/[^/]+/posts/[A-Za-z0-9.]{5,})", re.I),
+    # Facebook groups — /groups/<gid>/posts/<pid>, ahead of the generic shape
+    # below, which reads "groups" as the username and then finds no /posts/.
+    re.compile(r"^(?P<prefix>/groups/[^/]+/posts/[A-Za-z0-9.]{5,})", re.I),
+    # Facebook — /<user>/posts/<id>, /<user>/videos/<id>. The id is the pfbid
+    # spelling a share link redirects to, which is also the spelling the page's
+    # own anchors use.
+    re.compile(r"^(?P<prefix>/[^/]+/(?:posts|videos)/[A-Za-z0-9.]{5,})", re.I),
 )
 
 

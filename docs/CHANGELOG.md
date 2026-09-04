@@ -7,6 +7,18 @@ All notable changes to OpenMemo are documented here.
 
 <!-- Add entries here as work lands: ### Added / ### Changed / ### Fixed -->
 
+### Fixed
+
+- 🖼️ **A Facebook photo post saved from a share link is a photo post again.** Facebook does not give you a link for a post with several pictures in it. The post's own share menu has no copy link entry at all, so the only way to get one is to save the post to a collection, open the collection, and share it from there, which hands you a `facebook.com/share/p/...` address. Everything arriving at that address was saved as a video. A four picture album came in as a video card with nothing to play, no gallery, and the wrong filter tab.
+
+  The cause was that a share link is a redirect wrapper. Before reading a social page, openMemo narrows it down to the one post you asked for, so that a neighbour's photo in the feed around it can never become your memo, and it does that by matching the address you gave against the links the page carries. A share code appears nowhere inside the post it opens, so nothing matched, nothing was narrowed, and with no evidence either way the memo fell back on what the domain says. facebook.com says video.
+
+  It now takes a second look using the address the browser actually landed on, which is the real post link in the spelling the page itself uses. The Philips Hue album that turned this up comes back as four pictures with a working gallery, its own caption, and filed under images. Nothing about it is Facebook specific: any share link that redirects, on any network, gets the same second look.
+
+  Facebook's video, reel and group post addresses are recognised properly too, and its share links are no longer quietly read as Instagram's.
+
+  A post already in your library keeps whatever type it was saved with, because the fix is in the reading and that already happened. Re-pull it from its own page, the circular arrow next to delete, and it corrects itself.
+
 ---
 ## [3.17.0] - 2026-09-02
 
