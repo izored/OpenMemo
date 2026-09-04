@@ -7,6 +7,9 @@ All notable changes to OpenMemo are documented here.
 
 <!-- Add entries here as work lands: ### Added / ### Changed / ### Fixed -->
 
+---
+## [3.17.1] - 2026-09-04
+
 ### Fixed
 
 - 🖼️ **A Facebook photo post saved from a share link is a photo post again.** Facebook does not give you a link for a post with several pictures in it. The post's own share menu has no copy link entry at all, so the only way to get one is to save the post to a collection, open the collection, and share it from there, which hands you a `facebook.com/share/p/...` address. Everything arriving at that address was saved as a video. A four picture album came in as a video card with nothing to play, no gallery, and the wrong filter tab.
