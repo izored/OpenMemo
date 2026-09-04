@@ -9,6 +9,12 @@ All notable changes to OpenMemo are documented here.
 
 ### Fixed
 
+- 🛡️ **A re-pull that comes back empty handed no longer undoes a working memo.** Re-pull fetches the post again and applies what comes back, and it is allowed to correct the memo's type, which is the whole repair path for anything filed wrongly. What it was also allowed to do was apply a verdict from a fetch that found nothing at all. A four picture album, correctly filed as pictures, was re-pulled at a moment when Facebook happened to answer with a cookie screen instead of the post. Nothing was found, and "nothing found on a video site" comes back as "video", so the album was filed under Videos, where the picture carousel is not offered and the photos it had already saved were shown by nobody.
+
+  The gallery on a memo is evidence. It was gathered by an earlier fetch of the same post that did work, and one bad fetch should not outrank it. A re-pull that returns no media of its own now leaves the type alone and says so in the log. Meta pages fail this way often enough that this is not a hypothetical.
+
+### Fixed
+
 - 🖼️ **A saved photo is the photo now, not the preview of it.** A four picture Facebook album came in as four 590 pixel JPEGs of about 26KB each. The post held 2000 pixel originals of about 215KB. Eleven times the pixels, thrown away at the moment of saving, and gone for good: the address a social network serves a photo from expires after a while, so there is no fetching it later. A memo you keep forever should be the picture, not a thumbnail of it.
 
   What made this hard to spot is that the thumbnail carries a receipt for the original. The address says, in the same breath, that a 2000 pixel version exists and that it is handing you the 590 pixel one. You cannot simply ask for the bigger one, because both numbers are inside the signature and editing either is refused. The full picture is only served where Facebook publishes it, on the photo's own page, and the album already links every thumbnail there. So openMemo follows those links now and takes the real file.
