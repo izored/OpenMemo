@@ -15,6 +15,10 @@ All notable changes to OpenMemo are documented here.
 
   It only does this where there is something to gain. A thumbnail that makes no claim about a bigger version, which is every other site, is left alone and costs nothing. Instagram and Threads already hand over their best copy in one go and are untouched. On the album that turned this up, four photos went from 590 to 2000 pixels for about five extra seconds of saving.
 
+- 🎠 **An album with a clip in it is still an album.** A post holding three photos and one video was filed as a video, because a single player used to outrank any number of photos. Nothing then showed it. The photos were fetched, saved, and sent to your browser, where the page declined to draw them, because the picture carousel is only offered to picture memos. What you got instead was an empty video player pointed at a photo album. The rule is now the one the Instagram side has always used: a post that is nothing but clips is a video, and a post with a photo in it is an album. Mixed posts render again, with the photos in the carousel and the first real photo on the card.
+
+  Being straight about the limit: the clip itself is not in the carousel. Facebook hands over an empty player with no preview frame until you press play, so there is no picture to put in a slide for it. The photos are all there, and the post is one click away.
+
 - 💬 **A photo post shows its caption again.** Filing a Facebook album correctly as pictures rather than as a video had an unhappy side effect: the caption disappeared. The page only ever offered a Description panel to videos and music, from back when every picture memo was a file you had uploaded and there was nothing to write under it. A scraped photo post is not that. It has an author, a caption and hashtags, and hiding them made the memo less useful than the version that had the type wrong. Picture memos get the panel too.
 
 ---
