@@ -2680,8 +2680,17 @@ def _apply_resolved_type(memo, resolved: dict, gallery: list) -> None:
     that were typed from their domain: a Threads photo carousel filed as
     `video`, a Reddit text post filed as `video`.
 
-    Two guards, and they are the reason this is safe:
+    Three guards, and they are the reason this is safe:
 
+    * A resolve that came back EMPTY-HANDED cannot retype a memo that already
+      holds a gallery. This one was missing and it cost a working memo. A
+      four-photo Facebook album, correctly filed as images, was re-pulled while
+      Facebook happened to serve a consent gate; the scope found nothing, and
+      `classify_media` answers `video` when it has learned nothing on a video
+      host. That verdict then sailed through here and filed the album back under
+      Videos, where no gallery branch renders it. The gallery was evidence, from
+      an earlier read of the same post that DID work, and one flaky fetch should
+      not outrank it. Meta pages fail this way often enough to matter.
     * The resolver has to be talking about the POST. A resolved type is only
       trusted when the resolve returned media of its own (a gallery) or the memo
       holds no downloaded file to contradict it. A resolver that fell back to a
@@ -2695,6 +2704,23 @@ def _apply_resolved_type(memo, resolved: dict, gallery: list) -> None:
     if not new_type or new_type == (memo.type or "").lower():
         return
     has_file = bool((memo.file_path or "").strip())
+    # Silence is not a verdict. A resolve that found no media at all knows
+    # nothing about this post, and the type it hands back is whatever the
+    # DOMAIN would have said, which is the thing scoping exists to stop being
+    # authoritative. So it may not overwrite a gallery an earlier, successful
+    # read gathered. The cost of being wrong here is a post that genuinely
+    # turned from an album into a video keeping its old type until the next
+    # re-pull that actually reads it; the cost of the alternative is a working
+    # album silently disappearing from the page.
+    from backend.core.pictures import _slides
+
+    if not gallery and _slides(getattr(memo, "gallery", None)):
+        log.info(
+            "repull: %s resolved to %s with no media of its own, keeping %s "
+            "and the gallery already on it",
+            memo.id, new_type, memo.type,
+        )
+        return
     # A carousel of stills is unambiguous evidence about what the post is.
     carousel = len(gallery) > 1 and any(
         (s or {}).get("type") != "video" for s in gallery

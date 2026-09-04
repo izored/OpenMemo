@@ -28,6 +28,49 @@ class _Memo:
 
 
 SIX_SLIDES = [{"url": f"https://cdn/{i}.jpg", "type": "image"} for i in range(6)]
+FOUR_SLIDES = [{"url": f"https://cdn/{i}.jpg", "type": "image"} for i in range(4)]
+FB_ALBUM = "https://www.facebook.com/share/p/1MKkkWnVcG/"
+
+
+# ------------------------------------------ a resolve that found nothing
+
+
+def test_an_empty_resolve_cannot_retype_a_memo_that_has_a_gallery():
+    """The live failure, 2026-09-04. A four photo Facebook album, correctly
+    filed as images, was re-pulled while Facebook served a consent gate. The
+    scope found nothing, `classify_media` answered `video` because that is what
+    it says when it has learned nothing on a video host, and the album was filed
+    back under Videos, where no gallery branch renders it. The gallery came from
+    an earlier read that DID work; one flaky fetch does not outrank it."""
+    memo = _Memo(type="image", source_url=FB_ALBUM, gallery=FOUR_SLIDES)
+    _apply_resolved_type(memo, {"type": "video"}, [])
+    assert memo.type == "image"
+
+
+def test_a_gallery_stored_as_json_text_counts_too():
+    """A raw SQL read hands the column back as text. A guard that only knows
+    the list shape is no guard at all on that path."""
+    import json
+
+    memo = _Memo(type="image", source_url=FB_ALBUM, gallery=json.dumps(FOUR_SLIDES))
+    _apply_resolved_type(memo, {"type": "video"}, [])
+    assert memo.type == "image"
+
+
+def test_an_empty_resolve_still_retypes_a_memo_with_nothing_to_lose():
+    """The guard is about protecting evidence, not about refusing to work. A
+    memo with no gallery has none to protect, so the old behaviour stands."""
+    memo = _Memo(type="link", source_url=FB_ALBUM, gallery=None)
+    _apply_resolved_type(memo, {"type": "video"}, [])
+    assert memo.type == "video"
+
+
+def test_a_resolve_that_did_find_media_still_wins():
+    """The repair path this whole function exists for has to keep working: a
+    resolve holding a carousel outranks whatever the memo said before."""
+    memo = _Memo(type="video", source_url=FB_ALBUM, gallery=[{"url": "old.jpg", "type": "image"}])
+    _apply_resolved_type(memo, {"type": "image"}, FOUR_SLIDES)
+    assert memo.type == "image"
 
 
 # ------------------------------------------------------------ the repair
