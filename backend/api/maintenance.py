@@ -450,13 +450,13 @@ async def backfill_auto_file(
     """
     from sqlalchemy import func
 
-    from backend.api.ingest import auto_file_collection_name
+    from backend.api.ingest import auto_file_collection_id
 
     rows = (await db.execute(select(Memo))).scalars().all()
 
-    # Collections by lowercased name, resolved once rather than per memo.
+    # Collections by id, resolved once rather than per memo.
     colls = (await db.execute(select(Collection))).scalars().all()
-    by_name = {(c.name or "").strip().lower(): c for c in colls}
+    by_id = {c.id: c for c in colls}
 
     # Which memos already sit in something. One query beats a lazy load per row
     # (and a lazy load here is illegal under async anyway).
@@ -470,14 +470,15 @@ async def backfill_auto_file(
     for memo in rows:
         if memo.id in linked:
             continue
-        name = auto_file_collection_name(memo)
-        if not name:
+        coll_id = auto_file_collection_id(memo)
+        if not coll_id:
             continue
-        coll = by_name.get(name.strip().lower())
+        coll = by_id.get(coll_id)
         if coll is None:
-            # The rule names a collection that does not exist here. Report it
-            # rather than creating one: which collections exist is the user's.
-            missing[name] = missing.get(name, 0) + 1
+            # The rule points at a collection that has since been deleted.
+            # Report it rather than recreating one: which collections exist is
+            # the user's business, and a broken rule is worth seeing.
+            missing[coll_id] = missing.get(coll_id, 0) + 1
             continue
         filed[coll.name] = filed.get(coll.name, 0) + 1
         changed += 1

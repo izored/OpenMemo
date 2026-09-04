@@ -48,16 +48,24 @@ _AUTO_FILE_DOMAINS = {
     "temu.com": "Temu",
 }
 
+# One label of a hostname. Deliberately strict: a rule is matched against a real
+# host, so anything that cannot BE a host is a typo worth rejecting while the
+# user is still looking at the field.
+_HOST_LABEL_RE = re.compile(r"[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?")
 
-def auto_file_collection_name(memo: Memo) -> Optional[str]:
-    """The collection this memo files itself into from its source, or None.
 
-    An EXACT host match, `www.` aside. Not "contains", and not "ends with":
-    subdomains are somebody else's to hand out, and `temu.com.evil.io` is a
-    domain any stranger can register in an afternoon. A rule that files a memo
-    somewhere on the strength of a substring would put that stranger's page in
-    your collection. The host either is the site or it is not.
+def auto_file_collection_id(memo: Memo) -> Optional[str]:
+    """The collection id this memo's source files it into, or None.
+
+    Reads the user's rules. Exact host match, `www.` aside: not "contains" and
+    not "ends with", because a subdomain is somebody else's to hand out and
+    `temu.com.evil.io` is a domain any stranger can register in an afternoon.
     """
+    from backend.core.app_settings import get_settings
+
+    conf = get_settings()
+    if not conf.get("auto_file_by_source", True):
+        return None
     host = (getattr(memo, "source_domain", "") or "").strip().lower()
     if not host:
         try:
@@ -66,9 +74,46 @@ def auto_file_collection_name(memo: Memo) -> Optional[str]:
             return None
     if host.startswith("www."):
         host = host[4:]
+    host = host.split(":")[0].strip(".")
     if not host:
         return None
-    return _AUTO_FILE_DOMAINS.get(host)
+    for rule in conf.get("auto_file_rules") or []:
+        if not isinstance(rule, dict):
+            continue
+        if (rule.get("domain") or "").strip().lower() == host:
+            return (rule.get("collection_id") or "").strip() or None
+    return None
+
+
+def normalize_rule_domain(raw: str) -> Optional[str]:
+    """A user's typing reduced to the host a rule matches on, or None.
+
+    People paste what they have, which is a whole product URL. Accepting only a
+    bare hostname would mean a rule that silently never fires, so a full URL is
+    reduced here and the normalized form is what the UI shows back - the rule
+    should never match something other than what it says it matches.
+    """
+    text = (raw or "").strip().lower()
+    if not text:
+        return None
+    if "://" in text:
+        try:
+            text = urlparse(text).netloc
+        except Exception:
+            return None
+    # A bare "example.com/path" never went through urlparse's netloc.
+    text = text.split("/")[0].split("?")[0].split("#")[0]
+    text = text.split("@")[-1].split(":")[0]          # creds and :port
+    if text.startswith("www."):
+        text = text[4:]
+    text = text.strip(".")
+    if not text or " " in text or "." not in text:
+        return None
+    if not all(part and _HOST_LABEL_RE.fullmatch(part) for part in text.split(".")):
+        return None
+    return text
+
+
 
 
 async def _attach_collection(db: AsyncSession, memo: Memo, collection_id: Optional[str]) -> None:
@@ -85,18 +130,10 @@ async def _attach_collection(db: AsyncSession, memo: Memo, collection_id: Option
             await db.execute(select(Collection).where(Collection.id == collection_id))
         ).scalar_one_or_none()
     else:
-        from backend.core.app_settings import get_settings
-
-        name = (
-            auto_file_collection_name(memo)
-            if get_settings().get("auto_file_by_source", True)
-            else None
-        )
-        if name:
+        auto_id = auto_file_collection_id(memo)
+        if auto_id:
             coll = (
-                await db.execute(
-                    select(Collection).where(func.lower(Collection.name) == name.lower())
-                )
+                await db.execute(select(Collection).where(Collection.id == auto_id))
             ).scalar_one_or_none()
     if coll is None:
         return

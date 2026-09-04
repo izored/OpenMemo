@@ -9,15 +9,21 @@ All notable changes to OpenMemo are documented here.
 
 ### Added
 
-- 📂 **Save from a shop, and it files itself.** Anything saved from temu.com now lands in the Temu collection on its own. If you have hidden that collection from the dashboard, which is the whole point of having it, a saved product no longer shows up in the middle of your actual library and no longer has to be dragged away afterwards. Settings has a **File by source** switch to turn it off.
+- 📂 **Send a whole site to one collection, and stop tidying up after it.** In Settings, under **File by source**, write a site address, pick a collection from the list, and everything you save from there goes straight in. A shop you buy from often stops landing in the middle of your actual library, especially if you have hidden that collection from the dashboard, which is usually the point.
 
-  It only ever acts when you have not chosen a collection yourself. Picking one is an instruction and this does not argue with it.
+  Paste whatever you have. A full product link works as well as a bare address: it is reduced to the site it belongs to and shown back to you that way, so a rule always says exactly what it matches.
 
-  The match is the exact site, not a name that resembles it. `www.temu.com` counts, `us.temu.com` and `temu.com.evil.io` do not, because a subdomain is somebody else's to hand out and a lookalike domain can be registered by anyone in an afternoon. Filing a stranger's page into your collection on the strength of a substring is not a trade worth making.
+  The list includes collections you have hidden, marked as hidden. Leaving those out would have removed the only option most people want.
 
-  Deliberately one site rather than a clever rule. The obvious clever version, file into any collection whose name matches the domain, also starts pulling code.org into `Code` and home.com into `Home`. Adding a site later is a one line change.
+  Rules only act when you have not chosen a collection yourself. Picking one is an instruction and this does not argue with it.
 
-  Anything saved before this is not left behind. One request files them:
+  The match is the exact site, never a name that resembles one. `www.example.com` counts. `shop.example.com` does not, and neither does `example.com.something-else.io`, because a subdomain is somebody else's to hand out and a lookalike domain can be registered by anyone in an afternoon. If you want a subdomain, give it its own rule and say so on purpose.
+
+  Rules point at a collection rather than at its name, so renaming a collection does not quietly break them. Delete the collection and the rule says so instead of failing in silence.
+
+  A rule for temu.com is set up for you if you already have a Temu collection, since that is where this started. Clear the list and it stays cleared.
+
+  Anything saved before this is not left behind. One request files it:
 
   ```
   curl -X POST http://localhost:8091/api/maintenance/backfill-auto-file

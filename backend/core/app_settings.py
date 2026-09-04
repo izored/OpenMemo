@@ -61,6 +61,12 @@ _DEFAULTS: dict[str, Any] = {
     # default because the list is short and explicit; off leaves every memo
     # exactly where you put it.
     "auto_file_by_source": True,
+    # The rules themselves: [{"domain": "temu.com", "collection_id": "<uuid>"}].
+    # None means "never configured" and is the signal to seed it once from the
+    # built-in list; an empty list means the user cleared it and is left alone.
+    # Collections are referenced by ID rather than name so renaming one does not
+    # quietly break the rule that points at it.
+    "auto_file_rules": None,
     # Lossless quality for the SpotiFLAC chain (Spotify + Apple Music).
     # Always request hi-res (24-bit); the resolver downgrades to 16-bit CD
     # automatically when a release has no hi-res master (no user setting).
