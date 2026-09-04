@@ -229,15 +229,26 @@ _SCOPE_MEDIA_JS = r"""() => {
     if (r.width < 120 || r.height < 120) continue;
     let u = '', type = 'image', poster = '';
     if (el.tagName === 'VIDEO') {
+      // A player is a player before it has loaded. Facebook mounts <video>
+      // with no src AND no poster until you press play, so typing the item
+      // from its src made the post's own clip either a still or nothing at
+      // all, and a shared video post came out as a bookmark. The ELEMENT is
+      // the evidence; the URL is only how the card gets a picture. The
+      // download path has always counted players this way (sniff_media's
+      // probe counts <video> elements), and the two readers of one scope must
+      // not disagree about what a player is.
       const src = el.currentSrc || el.src || '';
       poster = el.poster || '';
       u = src || poster;
-      type = src ? 'video' : 'image';
+      type = 'video';
     } else {
       u = widest(el);
+      if (!u) continue;
     }
-    if (!u || u.startsWith('data:')) continue;
-    const k = key(u);
+    if (u.startsWith('data:')) continue;
+    // A player with nothing to name yet still has to be told apart from the
+    // next one, so it is keyed by position rather than by URL.
+    const k = u ? key(u) : 'player:' + out.length;
     if (seen.has(k)) continue;
     seen.add(k);
     out.push({ url: u, type: type, poster: poster });
@@ -606,6 +617,29 @@ async def _scope_post(page, permalink: str) -> bool:
         return False
 
 
+def _landed_rescope(scope_permalink: str, landed: str) -> str | None:
+    """The URL to try scoping from when `scope_permalink` scoped nothing.
+
+    A share-sheet link is a redirect wrapper, not a permalink the page has ever
+    heard of. `facebook.com/share/p/<code>` names the post but appears nowhere
+    inside it, so the scope pass finds no self-link, narrows to nothing, and the
+    post is then read as the feed wrapped around it — which is how a four-photo
+    album came to be saved as a video. Facebook offers no other link for such a
+    post: its Share menu has no copy-link entry, so this wrapper is the shape
+    these memos arrive in.
+
+    The URL the browser LANDED on is the real permalink, in the same spelling
+    the page's own anchors use. Host-blind, like everything else here: returns
+    None when nothing redirected, or when what we landed on is not a permalink
+    either, so the retry costs one string compare on the common path."""
+    from backend.core.permalinks import post_scope
+
+    landed = (landed or "").strip()
+    if not landed or landed.rstrip("/") == (scope_permalink or "").rstrip("/"):
+        return None
+    return landed if post_scope(landed) else None
+
+
 async def _collect_post_media(page, max_slides: int) -> list:
     """Every still and clip the scoped post owns, in document order.
 
@@ -623,7 +657,13 @@ async def _collect_post_media(page, max_slides: int) -> list:
         items = await page.evaluate(_SCOPE_MEDIA_JS) or []
     except Exception:
         return []
-    return [i for i in items if isinstance(i, dict) and i.get("url")][:max_slides]
+    # A player that has not loaded names no URL yet and is still the strongest
+    # thing the post holds, so it is kept and classify_media sees a video where
+    # there is one. A still with no URL is nothing at all.
+    return [
+        i for i in items
+        if isinstance(i, dict) and (i.get("url") or i.get("type") == "video")
+    ][:max_slides]
 
 
 def _cookie_path(domain: str) -> Path:
@@ -721,7 +761,10 @@ async def render_page(
     happened to be biggest. It also switches the gallery from click-to-page to
     enumerate-the-scope, which is the only thing that reads a carousel laid out
     as a horizontal strip. Adds `post_media` (ordered {url,type,poster} for the
-    post's own stills and clips), `post_text`, and `scoped`.
+    post's own stills and clips), `post_text`, and `scoped`. A permalink that is
+    really a redirect wrapper - a share-sheet link, which is the only link
+    Facebook offers for a multi-photo post - names nothing the page carries, so
+    the scope is retried from the URL the browser landed on (`_landed_rescope`).
 
     `consent_wall` is True when the settled DOM is a cookie-consent gate rather
     than the page. A decline control is clicked first, so this only stays True
@@ -803,6 +846,10 @@ async def render_page(
             await page.wait_for_timeout(2500)
             if scope_permalink:
                 scoped = await _scope_post(page, scope_permalink)
+                if not scoped:
+                    retry = _landed_rescope(scope_permalink, page.url or "")
+                    if retry:
+                        scoped = await _scope_post(page, retry)
                 if scoped:
                     post_media = await _collect_post_media(page, max_slides)
                     try:
