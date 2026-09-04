@@ -7,6 +7,10 @@ All notable changes to OpenMemo are documented here.
 
 <!-- Add entries here as work lands: ### Added / ### Changed / ### Fixed -->
 
+### Changed
+
+- 🎨 **Every dropdown in Settings is openMemo's own now.** Two were still the browser's. A plain dropdown hands its open list to the operating system to draw, so in a dark app it comes up as a white panel with a blue highlight, and nothing the page can do reaches inside it. Picking how often Telegram is checked, and picking a snapshot to restore, both did that. They now match the rest of the app, and there is one dropdown in Settings rather than one per author.
+
 ---
 ## [3.18.0] - 2026-09-04
 
