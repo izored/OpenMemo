@@ -429,3 +429,70 @@ async def reset_workspace(body: ResetRequest, db: AsyncSession = Depends(get_db)
         pass
 
     return {"ok": True}
+
+
+@router.post("/backfill-auto-file")
+async def backfill_auto_file(
+    dry_run: bool = False,
+    db: AsyncSession = Depends(get_db),
+):
+    """File already-saved memos into the collection their source belongs to.
+
+    New memos get this at save time. Anything saved before the rule existed did
+    not, and there is no reason to go and drag them across by hand.
+
+    Only touches memos that are in NO collection at all. A memo you filed
+    somewhere yourself has been decided about, and this is not the thing to
+    second-guess it. Crosses workspaces on purpose, the way the other backfills
+    here do: a Space holds memos too and they are just as unfiled.
+
+    `dry_run` reports what it would do and writes nothing.
+    """
+    from sqlalchemy import func
+
+    from backend.api.ingest import auto_file_collection_name
+
+    rows = (await db.execute(select(Memo))).scalars().all()
+
+    # Collections by lowercased name, resolved once rather than per memo.
+    colls = (await db.execute(select(Collection))).scalars().all()
+    by_name = {(c.name or "").strip().lower(): c for c in colls}
+
+    # Which memos already sit in something. One query beats a lazy load per row
+    # (and a lazy load here is illegal under async anyway).
+    linked = {
+        row[0] for row in (await db.execute(select(memo_collections.c.memo_id))).all()
+    }
+
+    filed: dict[str, int] = {}
+    missing: dict[str, int] = {}
+    changed = 0
+    for memo in rows:
+        if memo.id in linked:
+            continue
+        name = auto_file_collection_name(memo)
+        if not name:
+            continue
+        coll = by_name.get(name.strip().lower())
+        if coll is None:
+            # The rule names a collection that does not exist here. Report it
+            # rather than creating one: which collections exist is the user's.
+            missing[name] = missing.get(name, 0) + 1
+            continue
+        filed[coll.name] = filed.get(coll.name, 0) + 1
+        changed += 1
+        if not dry_run:
+            await db.execute(
+                memo_collections.insert().values(memo_id=memo.id, collection_id=coll.id)
+            )
+
+    if changed and not dry_run:
+        await db.commit()
+
+    return {
+        "scanned": len(rows),
+        "filed": changed,
+        "by_collection": filed,
+        "collection_missing": missing,
+        "dry_run": dry_run,
+    }

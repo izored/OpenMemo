@@ -415,6 +415,7 @@ export interface AppSettings {
   avatar_data_url: string;
   mailing_list_consent: boolean;
   auto_download_audio: boolean;
+  auto_file_by_source: boolean;
   auto_download_video: boolean;
   // Spotify → FLAC lossless quality: '16' (CD) | '24' (hi-res). SpotiFLAC.
   music_quality: '16' | '24';

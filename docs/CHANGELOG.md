@@ -7,6 +7,24 @@ All notable changes to OpenMemo are documented here.
 
 <!-- Add entries here as work lands: ### Added / ### Changed / ### Fixed -->
 
+### Added
+
+- 📂 **Save from a shop, and it files itself.** Anything saved from temu.com now lands in the Temu collection on its own. If you have hidden that collection from the dashboard, which is the whole point of having it, a saved product no longer shows up in the middle of your actual library and no longer has to be dragged away afterwards. Settings has a **File by source** switch to turn it off.
+
+  It only ever acts when you have not chosen a collection yourself. Picking one is an instruction and this does not argue with it.
+
+  The match is the exact site, not a name that resembles it. `www.temu.com` counts, `us.temu.com` and `temu.com.evil.io` do not, because a subdomain is somebody else's to hand out and a lookalike domain can be registered by anyone in an afternoon. Filing a stranger's page into your collection on the strength of a substring is not a trade worth making.
+
+  Deliberately one site rather than a clever rule. The obvious clever version, file into any collection whose name matches the domain, also starts pulling code.org into `Code` and home.com into `Home`. Adding a site later is a one line change.
+
+  Anything saved before this is not left behind. One request files them:
+
+  ```
+  curl -X POST http://localhost:8091/api/maintenance/backfill-auto-file
+  ```
+
+  Add `?dry_run=true` to see what it would do first. It only touches memos that are in no collection at all, since one you filed yourself has already been decided about, and it reaches inside Spaces the same way the other backfills do.
+
 ### Fixed
 
 - 🔑 **A post that Facebook gives two names finally saves properly.** To make sure a memo holds YOUR post and not a neighbour's, openMemo narrows the page down to the one post you asked for, and it finds that post by looking for the post's link to itself. Facebook, it turns out, labels the same post with two different identifiers: one in the address a share link sends you to, and a different one in the page's own link back to itself. Neither is wrong and neither can be worked out from the other, so the search found nothing, the narrowing never happened, and the memo quietly kept whatever it already had. Re-pulling did not help, because every attempt failed the same way and reported success.

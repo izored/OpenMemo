@@ -55,6 +55,12 @@ _DEFAULTS: dict[str, Any] = {
     # (YouTube, Vimeo, …) are left remote so this never fills the disk. When
     # False, no video is auto-downloaded.
     "auto_download_video": True,
+    # File a memo into a collection automatically when its source says where it
+    # belongs (see `_AUTO_FILE_DOMAINS` in api/ingest). Only ever fires when no
+    # collection was chosen, so it can never overrule a deliberate one. On by
+    # default because the list is short and explicit; off leaves every memo
+    # exactly where you put it.
+    "auto_file_by_source": True,
     # Lossless quality for the SpotiFLAC chain (Spotify + Apple Music).
     # Always request hi-res (24-bit); the resolver downgrades to 16-bit CD
     # automatically when a release has no hi-res master (no user setting).

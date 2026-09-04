@@ -43,6 +43,7 @@ class SettingsPatch(BaseModel):
     mailing_list_consent: Optional[bool] = None
     auto_download_audio: Optional[bool] = None
     auto_download_video: Optional[bool] = None
+    auto_file_by_source: Optional[bool] = None
     music_quality: Optional[str] = None
     music_provider: Optional[str] = None
     chat_model: Optional[str] = None
