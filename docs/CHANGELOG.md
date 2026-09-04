@@ -7,6 +7,9 @@ All notable changes to OpenMemo are documented here.
 
 <!-- Add entries here as work lands: ### Added / ### Changed / ### Fixed -->
 
+---
+## [3.18.0] - 2026-09-04
+
 ### Added
 
 - 📂 **Send a whole site to one collection, and stop tidying up after it.** In Settings, under **File by source**, write a site address, pick a collection from the list, and everything you save from there goes straight in. A shop you buy from often stops landing in the middle of your actual library, especially if you have hidden that collection from the dashboard, which is usually the point.
