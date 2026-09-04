@@ -698,6 +698,15 @@ async def extract_video(url: str) -> dict:
     post_text = result.pop("_post_text", "") or ""
     scoped = bool(result.pop("_scoped", False))
 
+    # Say which read this was, so a narrowing that failed is visible instead of
+    # being inferred from a memo that looks untouched. Only when a scope was
+    # actually attempted: a URL that names no post was never going to be
+    # narrowed and should not be reported as a degraded read.
+    if scope:
+        from backend.core.social import SCOPE_TIER_PAGE, SCOPE_TIER_POST
+
+        result["resolve_tier"] = SCOPE_TIER_POST if scoped else SCOPE_TIER_PAGE
+
     # A photo post on a video host must not become a video memo. Downgrade to
     # image only when the URL path clearly says photo; an audio-only host stays
     # audio (SoundCloud/Bandcamp probe failures must not dead-end as "video" —

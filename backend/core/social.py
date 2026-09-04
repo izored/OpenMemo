@@ -17,6 +17,19 @@ network, no per-host branches at the call sites.
 from __future__ import annotations
 
 
+# Which read answered. A scoped read describes THIS post; an unscoped one
+# describes the page the post sits on, which is a quiet degradation rather than
+# an error: the page still parsed, the memo still saved, and nothing anywhere
+# said the narrowing had failed. That is how a Facebook album sat wrong through
+# six re-pulls, each returning 200 and changing nothing, before the cause could
+# be seen. Recorded now, mirroring the Instagram and Threads ladders
+# (`IG_TIER_*`, `THREADS_TIER_*`) so Settings can read all three the same way.
+SCOPE_TIER_POST = "scope:post"
+SCOPE_TIER_PAGE = "scope:page"
+
+SCOPE_TIERS = (SCOPE_TIER_POST, SCOPE_TIER_PAGE)
+
+
 def classify_media(
     post_media: list,
     *,

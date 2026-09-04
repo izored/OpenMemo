@@ -471,3 +471,74 @@ def test_the_scope_script_takes_one_argument():
     from backend.core import headless
 
     assert headless._SCOPE_POST_JS.startswith("([wantPrefix, kind]) =>")
+
+
+# ------------------------------------------- one post, two names for it
+
+
+def test_the_scope_falls_back_when_the_page_uses_a_different_id():
+    """Facebook labels one post with TWO stable pfbids: the one a share link
+    redirects to, and a different one in the page's own link back to itself.
+    Verified twice on a live album, 2026-09-04. The strict prefix test matches
+    neither, so the post was read as the page around it and every re-pull
+    quietly changed nothing."""
+    from backend.core import headless
+
+    js = headless._SCOPE_POST_JS
+    assert "const cands = new Set();" in js
+    assert "want = Array.from(cands)[0];" in js
+
+
+def test_the_fallback_refuses_when_there_is_more_than_one_candidate():
+    """Being the ONLY candidate is the whole safety argument. A feed of other
+    posts is what produces several, which is the case the strict test exists
+    for, and Reddit, Threads and Instagram permalink pages all list
+    neighbouring posts, so they never take this path at all."""
+    from backend.core import headless
+
+    assert "if (cands.size !== 1) return false;" in headless._SCOPE_POST_JS
+
+
+def test_the_fallback_only_considers_this_authors_posts():
+    """A candidate has to share the author AND the kind, not merely the kind.
+    A "more from around the web" link is not this post under another name."""
+    from backend.core import headless
+
+    js = headless._SCOPE_POST_JS
+    assert "const stem = want0.slice(0, at + kind.length + 2);" in js
+    assert "p.startsWith(stem)" in js
+
+
+def test_reassigning_want_carries_the_foreign_test_with_it():
+    """`mine` and `foreign` both close over `want`, so the ancestor walk has to
+    measure against the id the PAGE uses, not the one we arrived with. A `const`
+    here would have made the fallback find a self-link and then treat it as a
+    stranger."""
+    from backend.core import headless
+
+    assert "let want = want0;" in headless._SCOPE_POST_JS
+
+
+# --------------------------------------------- a failed read says so now
+
+
+def test_a_scope_that_failed_is_recorded_rather_than_inferred():
+    """An unscoped read is a quiet degradation, not an error: the page parses,
+    the memo saves, and the only symptom is a re-pull that returns 200 and
+    changes nothing. A Facebook album sat wrong through six of those."""
+    from backend.core.social import SCOPE_TIER_PAGE, SCOPE_TIER_POST, SCOPE_TIERS
+
+    assert SCOPE_TIER_POST != SCOPE_TIER_PAGE
+    assert set(SCOPE_TIERS) == {SCOPE_TIER_POST, SCOPE_TIER_PAGE}
+
+
+def test_the_scoped_path_reports_which_read_answered():
+    import inspect
+
+    from backend.core import extractor
+
+    src = inspect.getsource(extractor.extract_video)
+    assert 'result["resolve_tier"] = SCOPE_TIER_POST if scoped else SCOPE_TIER_PAGE' in src
+    # Only when a scope was attempted. A URL naming no post was never going to
+    # be narrowed and must not be reported as a degraded read.
+    assert "if scope:" in src

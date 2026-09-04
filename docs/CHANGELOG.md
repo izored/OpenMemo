@@ -9,6 +9,14 @@ All notable changes to OpenMemo are documented here.
 
 ### Fixed
 
+- 🔑 **A post that Facebook gives two names finally saves properly.** To make sure a memo holds YOUR post and not a neighbour's, openMemo narrows the page down to the one post you asked for, and it finds that post by looking for the post's link to itself. Facebook, it turns out, labels the same post with two different identifiers: one in the address a share link sends you to, and a different one in the page's own link back to itself. Neither is wrong and neither can be worked out from the other, so the search found nothing, the narrowing never happened, and the memo quietly kept whatever it already had. Re-pulling did not help, because every attempt failed the same way and reported success.
+
+  Now, when the strict search comes up empty and the page carries exactly one link by that author of that kind, that link is the post. Being the only one is the entire argument: a page showing a feed of other posts produces several, and that is still refused. Reddit, Threads and Instagram all list neighbouring posts on a permalink page, so none of them ever reach this path.
+
+- 📋 **A read that quietly gave up now says so.** When the narrowing above failed, nothing recorded it. The page still parsed, the memo still saved, the re-pull still reported success, and the only sign anything was wrong was a memo that looked untouched. One album sat wrong through six re-pulls that way. Memos now carry which read answered, the same way Instagram and Threads memos already did, so a fetch that degraded is visible instead of being deduced afterwards.
+
+### Fixed
+
 - 🎵 **A photo album no longer comes back as the song playing behind it.** Facebook lets you put music on a photo post, the way a reel has a soundtrack. When openMemo re-fetched one of those albums it went looking for something to download, found the only thing the page was playing, and saved it: a two minute file with a soundtrack and no pictures in it at all. Because the file is an .mp4, the album was then filed under Videos, where the photo carousel is not offered, so five saved photos sat behind a video player with a song in it.
 
   It got worse each time. The memo was now a video, so the next re-pull went looking again and downloaded the same song again. Three in a row did exactly that before it was caught.
