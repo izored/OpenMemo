@@ -5,6 +5,9 @@ from typing import Optional
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
 from fastapi.responses import FileResponse
 from pydantic import BaseModel
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from backend.db.database import get_db
 
 # The music relay is off by default; every route that acts on it 404s until the
 # user turns it on (core/music_relay.py), the same way Mesh gates its surface.
@@ -44,6 +47,7 @@ class SettingsPatch(BaseModel):
     auto_download_audio: Optional[bool] = None
     auto_download_video: Optional[bool] = None
     auto_file_by_source: Optional[bool] = None
+    auto_file_rules: Optional[list[dict]] = None
     music_quality: Optional[str] = None
     music_provider: Optional[str] = None
     chat_model: Optional[str] = None
@@ -65,14 +69,77 @@ class SettingsPatch(BaseModel):
     settings_card_layout: Optional[dict] = None
 
 
+async def _seed_auto_file_rules(db) -> None:
+    """Turn the built-in list into editable rows, once.
+
+    `auto_file_rules` is None until somebody configures it, which is the signal
+    to seed. The built-in list names collections; a rule stores an ID, so the
+    names are resolved here where there is a database, and a name that matches
+    no collection is simply skipped rather than conjuring one. An empty list is
+    NOT None: a user who deleted every rule has configured it, and reseeding
+    what they removed would be the rudest possible feature.
+    """
+    from sqlalchemy import func, select
+
+    from backend.api.ingest import _AUTO_FILE_DOMAINS
+    from backend.db.models import Collection
+
+    conf = get_settings()
+    if conf.get("auto_file_rules") is not None:
+        return
+    rules = []
+    for domain, name in _AUTO_FILE_DOMAINS.items():
+        coll = (
+            await db.execute(
+                select(Collection).where(func.lower(Collection.name) == name.lower())
+            )
+        ).scalar_one_or_none()
+        if coll is not None:
+            rules.append({"domain": domain, "collection_id": coll.id})
+    update_settings({"auto_file_rules": rules})
+
+
 @router.get("")
-async def read_settings():
+async def read_settings(db: AsyncSession = Depends(get_db)):
+    try:
+        await _seed_auto_file_rules(db)
+    except Exception:
+        # Seeding is a convenience. It must never be the reason Settings fails
+        # to load.
+        pass
     return get_settings()
+
+
+def _clean_auto_file_rules(raw: list) -> list[dict]:
+    """Normalize, validate and de-duplicate the rules before they are stored.
+
+    Done on the way IN rather than on the way out, so what the user sees in
+    Settings is exactly what will be matched later. A rule whose domain cannot
+    be a hostname, or which names no collection, is dropped rather than kept as
+    a row that silently never fires. First rule for a domain wins; a second is a
+    contradiction and the UI does not offer to create one.
+    """
+    from backend.api.ingest import normalize_rule_domain
+
+    out: list[dict] = []
+    seen: set[str] = set()
+    for item in raw or []:
+        if not isinstance(item, dict):
+            continue
+        domain = normalize_rule_domain(str(item.get("domain") or ""))
+        coll_id = str(item.get("collection_id") or "").strip()
+        if not domain or not coll_id or domain in seen:
+            continue
+        seen.add(domain)
+        out.append({"domain": domain, "collection_id": coll_id})
+    return out
 
 
 @router.put("")
 async def write_settings(patch: SettingsPatch):
     data = patch.model_dump(exclude_none=True)
+    if "auto_file_rules" in data:
+        data["auto_file_rules"] = _clean_auto_file_rules(data["auto_file_rules"])
     result = update_settings(data)
     # Mesh's triggers are physical, so flipping the flag has to change the
     # database, not just a JSON field. Doing it here keeps "enabled" meaning one

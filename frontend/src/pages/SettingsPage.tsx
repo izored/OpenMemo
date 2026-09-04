@@ -15,7 +15,7 @@ import { useAppStore } from '@/stores/appStore';
 import { useIsMobile } from '@/lib/useBreakpoint';
 import { CookiesUpload } from '@/components/CookiesUpload';
 import { useConfirm } from '@/components/ConfirmModal';
-import { systemApi, maintenanceApi, backupApi, settingsApi, memoApi, type AppSettings, type LibraryIntegrity, type MusicRelayStatus, type TelegramRelayStatus } from '@/lib/api';
+import { systemApi, maintenanceApi, backupApi, settingsApi, memoApi, collectionApi, type AppSettings, type LibraryIntegrity, type MusicRelayStatus, type TelegramRelayStatus } from '@/lib/api';
 import { DndContext, PointerSensor, closestCenter, useSensor, useSensors, type DragEndEvent } from '@dnd-kit/core';
 import { SortableContext, useSortable, verticalListSortingStrategy } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
@@ -1264,6 +1264,112 @@ function SettingsCardBoard({
   );
 }
 
+type AutoFileRule = { domain: string; collection_id: string };
+
+/** Site to collection rules. The dropdown deliberately lists HIDDEN collections
+ *  too: filing into one that is hidden from the dashboard is the whole point of
+ *  the feature, and leaving those out would remove the only option that
+ *  matters. A rule whose collection has since been deleted is shown as broken
+ *  rather than dropped, because a rule that silently stopped working is worse
+ *  than one that says so. */
+function AutoFileRules({ rules, onChange }: { rules: AutoFileRule[]; onChange: (r: AutoFileRule[]) => void }) {
+  const { data: collections } = useQuery({
+    queryKey: ['collections'],
+    queryFn: () => collectionApi.list(),
+  });
+  const [domain, setDomain] = useState('');
+  const [collId, setCollId] = useState('');
+  const [error, setError] = useState('');
+
+  // Mirrors normalize_rule_domain on the server, so the row the user sees is
+  // the host that will actually be matched. The server normalizes again and is
+  // the authority; this exists so nobody adds a rule and then wonders why it
+  // reads back differently.
+  const normalize = (raw: string): string | null => {
+    let t = (raw || '').trim().toLowerCase();
+    if (!t) return null;
+    if (t.includes('://')) {
+      try { t = new URL(t).hostname; } catch { return null; }
+    }
+    t = t.split('/')[0].split('?')[0].split('#')[0];
+    const at = t.split('@');
+    t = at[at.length - 1].split(':')[0];
+    if (t.startsWith('www.')) t = t.slice(4);
+    t = t.replace(/^\.+/, '').replace(/\.+$/, '');
+    if (!t || t.indexOf(' ') !== -1 || t.indexOf('.') === -1) return null;
+    const label = /^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/;
+    if (!t.split('.').every((part) => label.test(part))) return null;
+    return t;
+  };
+
+  const nameFor = (id: string) => (collections || []).find((c: any) => c.id === id)?.name;
+
+  const add = () => {
+    const host = normalize(domain);
+    if (!host) { setError('That does not look like a site address.'); return; }
+    if (!collId) { setError('Pick a collection first.'); return; }
+    if (rules.some((r) => r.domain === host)) { setError('There is already a rule for ' + host + '.'); return; }
+    setError('');
+    setDomain('');
+    setCollId('');
+    onChange(rules.concat([{ domain: host, collection_id: collId }]));
+  };
+
+  return (
+    <div style={{ padding: '8px 0 4px' }}>
+      {rules.length > 0 && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginBottom: 8 }}>
+          {rules.map((r) => {
+            const name = nameFor(r.collection_id);
+            return (
+              <div key={r.domain} style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <span className="mono" style={{ flex: '0 0 auto' }}>{r.domain}</span>
+                <span className="mono" style={{ opacity: 0.5 }}>&rarr;</span>
+                <span className="mono" style={{ flex: 1, color: name ? undefined : 'var(--danger)' }}>
+                  {name || 'collection deleted, this rule will not fire'}
+                </span>
+                <button
+                  type="button"
+                  className="om-btn-ghost om-btn-pill"
+                  onClick={() => onChange(rules.filter((x) => x.domain !== r.domain))}
+                  aria-label={'Remove the rule for ' + r.domain}
+                >
+                  Remove
+                </button>
+              </div>
+            );
+          })}
+        </div>
+      )}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+        <input
+          type="text"
+          value={domain}
+          placeholder="example.com, or paste a link"
+          onChange={(e) => { setDomain(e.target.value); setError(''); }}
+          onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); add(); } }}
+          style={{ flex: '1 1 200px', minWidth: 0 }}
+        />
+        <select
+          value={collId}
+          onChange={(e) => { setCollId(e.target.value); setError(''); }}
+          style={{ flex: '1 1 160px' }}
+        >
+          <option value="">Collection...</option>
+          {(collections || []).map((c: any) => (
+            <option key={c.id} value={c.id}>
+              {c.name}{c.hidden_from_dashboard ? ' (hidden)' : ''}
+            </option>
+          ))}
+        </select>
+        <button type="button" className="om-btn-ghost om-btn-pill" onClick={add}>Add rule</button>
+      </div>
+      {error && <p className="mono" style={{ color: 'var(--danger)', marginTop: 6 }}>{error}</p>}
+    </div>
+  );
+}
+
+
 export function SettingsPage() {
   const t = useAppStore((s) => s.tweaks);
   const setAppearancePanelOpen = useAppStore((s) => s.setAppearancePanelOpen);
@@ -1357,7 +1463,7 @@ export function SettingsPage() {
       })
       .catch(() => {
         setMaxUploadMb(5120);
-        setProfile({ max_upload_mb: 5120, display_name: '', email: '', avatar_data_url: '', mailing_list_consent: false, auto_download_audio: true, auto_download_video: true, auto_file_by_source: true, music_quality: '16', music_provider: 'qobuz', chat_model: '', num_ctx: 0, yt_cookies_present: false, bg_image_ext: '', hidden_passcode_set: false, telegram_enabled: false, telegram_poll_minutes: 15, telegram_default_collection: 'Bot Inbox', telegram_force_localize: true, telegram_token_present: false, telegram_user_locked: false, music_relay_enabled: false, mesh_enabled: false, mesh_reachable: false, settings_card_layout: {}, install_kind: 'dev', platform: '', ollama_host: '' });
+        setProfile({ max_upload_mb: 5120, display_name: '', email: '', avatar_data_url: '', mailing_list_consent: false, auto_download_audio: true, auto_download_video: true, auto_file_by_source: true, auto_file_rules: [], music_quality: '16', music_provider: 'qobuz', chat_model: '', num_ctx: 0, yt_cookies_present: false, bg_image_ext: '', hidden_passcode_set: false, telegram_enabled: false, telegram_poll_minutes: 15, telegram_default_collection: 'Bot Inbox', telegram_force_localize: true, telegram_token_present: false, telegram_user_locked: false, music_relay_enabled: false, mesh_enabled: false, mesh_reachable: false, settings_card_layout: {}, install_kind: 'dev', platform: '', ollama_host: '' });
       });
   }, []);
 
@@ -1742,7 +1848,7 @@ export function SettingsPage() {
                 <div className="om-setting-row-text">
                   <p>File by source</p>
                   <span className="mono">
-                    Put a memo straight into the collection its source belongs to, so a shop you save from often stays out of the way. Only applies when you have not picked a collection yourself. Right now: temu.com goes to Temu.
+                    Send everything from a site straight into one collection, so a shop you save from often stays out of the way. Only applies when you have not picked a collection yourself.
                   </span>
                 </div>
                 <button
@@ -1756,6 +1862,12 @@ export function SettingsPage() {
                   </span>
                 </button>
               </div>
+              {(profile?.auto_file_by_source ?? true) && (
+                <AutoFileRules
+                  rules={profile?.auto_file_rules ?? []}
+                  onChange={(rules) => saveProfile({ auto_file_rules: rules })}
+                />
+              )}
               <div className="om-setting-row" style={{ borderTop: '1px solid var(--border)', marginTop: 8, paddingTop: 8 }}>
                 <div className="om-setting-row-text">
                   <p>Auto-download embed-less video</p>
