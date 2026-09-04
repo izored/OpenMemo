@@ -183,3 +183,58 @@ def test_a_real_article_body_is_not_replaceable():
 
 def test_an_empty_body_is_not_a_consent_screen():
     assert not _is_consent_text("")
+
+
+# ------------------------------------ a song is not a video, and an album
+# ------------------------------------ is not a download
+
+
+def test_a_file_with_no_picture_stream_is_not_a_video():
+    """The mirror of the silent-reel check. A Facebook photo album can carry a
+    song the way a reel does; the sniffer captured the audio representation and
+    the download "succeeded" with a 133 second mp4 holding one stream,
+    codec_type=audio. `derive_memo_type` reads the extension first, so a five
+    photo album was filed under Videos with a song where the video should be."""
+    from backend.core.localize_media import _has_audio_stream, _has_video_stream
+    import inspect
+
+    a, v = inspect.getsource(_has_audio_stream), inspect.getsource(_has_video_stream)
+    assert '"-select_streams", "a"' in a
+    assert '"-select_streams", "v"' in v
+
+
+def test_a_missing_ffprobe_cannot_reject_a_download(monkeypatch, tmp_path):
+    """"I cannot tell" must never read as "no pictures", or a box without
+    ffprobe would refuse every download it makes. Same rule as its sibling."""
+    from backend.config import settings
+    from backend.core.localize_media import _has_video_stream
+
+    monkeypatch.setattr(settings, "FFMPEG_BIN", str(tmp_path / "no-such-ffmpeg"))
+    f = tmp_path / "clip.mp4"
+    f.write_bytes(b"not really a container")
+    assert _has_video_stream(f) is None
+
+
+def test_an_album_is_not_offered_to_the_downloader():
+    """Once the memo is `video` the "has media" test says yes, so the next
+    re-pull fetches the song again. Three in a row did exactly that live, which
+    is how this was found. The gate has to read the gallery, and it has to
+    detach a file that holds no pictures or the loop never breaks."""
+    import inspect
+
+    from backend.api import ingest
+
+    src = inspect.getsource(ingest.repull_memo_task)
+    assert "album = bool(memo) and len([" in src
+    assert "if album and not (resolved or {}).get(\"video_url\"):" in src
+    assert "_has_video_stream(on_disk) is False" in src
+
+
+def test_an_explicit_og_video_still_wins_over_the_album_gate():
+    """The source naming a video of its own is not us going looking for one."""
+    import inspect
+
+    from backend.api import ingest
+
+    src = inspect.getsource(ingest.repull_memo_task)
+    assert "not (resolved or {}).get(\"video_url\")" in src

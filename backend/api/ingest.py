@@ -2885,6 +2885,50 @@ async def repull_memo_task(memo_id: str, mode: str):
                 and resolved_type not in ("image", "link", "note")
             )
         )
+        # An album is not a download. A memo holding a gallery of stills has
+        # already said what the post is, and hunting a media stream on it finds
+        # whatever the page happens to play. On Facebook that is the song
+        # attached to a photo post: the sniffer captures the audio
+        # representation, the download "succeeds" with a 133 second .mp4 that
+        # has one stream and no pictures, `derive_memo_type` reads the extension
+        # first, and a five photo album is filed under Videos with a song where
+        # the video should be.
+        #
+        # It is also self-sustaining, which is how it was found. Once the memo
+        # is `video` the first clause above says "has media", so the next
+        # re-pull downloads the song again. Three in a row did exactly that on
+        # 2026-09-04. An explicit `og:video` still wins: that is the source
+        # naming a video of its own rather than us going looking.
+        from backend.core.pictures import _slides
+
+        album = bool(memo) and len([
+            sl for sl in _slides(getattr(memo, "gallery", None))
+            if (sl or {}).get("type") != "video"
+        ]) > 1
+        if album and not (resolved or {}).get("video_url"):
+            has_media = False
+            # Repair, not only prevention. A file already attached to an album
+            # that holds no pictures was never this memo's, and while it is
+            # attached `derive_memo_type` keeps filing the album as a video. The
+            # bytes stay on disk for the integrity report; only the reference
+            # goes, which is the rule `_apply_resolved_type` already follows.
+            if memo.file_path:
+                from backend.core.file_paths import resolve_memo_path
+                from backend.core.localize_media import _has_video_stream
+
+                on_disk = resolve_memo_path(memo.file_path)
+                if on_disk and _has_video_stream(on_disk) is False:
+                    log.info(
+                        "repull: %s is an album and %s holds no pictures, detaching it",
+                        memo.id, memo.file_path,
+                    )
+                    memo.file_path = None
+                    memo.localize_status = None
+                    memo.localize_error = None
+                    memo.type = "image"
+                    memo.updated_at = datetime.utcnow()
+                    await db.commit()
+
         no_media = bool(memo) and not has_media
         if no_media:
             memo.localize_status = None

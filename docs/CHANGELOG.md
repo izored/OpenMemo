@@ -9,6 +9,12 @@ All notable changes to OpenMemo are documented here.
 
 ### Fixed
 
+- 🎵 **A photo album no longer comes back as the song playing behind it.** Facebook lets you put music on a photo post, the way a reel has a soundtrack. When openMemo re-fetched one of those albums it went looking for something to download, found the only thing the page was playing, and saved it: a two minute file with a soundtrack and no pictures in it at all. Because the file is an .mp4, the album was then filed under Videos, where the photo carousel is not offered, so five saved photos sat behind a video player with a song in it.
+
+  It got worse each time. The memo was now a video, so the next re-pull went looking again and downloaded the same song again. Three in a row did exactly that before it was caught.
+
+  Two things changed. A post that already holds a gallery of photos is an album, and an album has nothing to download, so openMemo stops hunting. And a file with no pictures in it can never be a memo's video, which is the mirror of a check that already existed for the opposite case, silent clips. A song already attached to an album is detached on the next re-pull, and the album goes back to being an album.
+
 - 🛡️ **A re-pull that comes back empty handed no longer undoes a working memo.** Re-pull fetches the post again and applies what comes back, and it is allowed to correct the memo's type, which is the whole repair path for anything filed wrongly. What it was also allowed to do was apply a verdict from a fetch that found nothing at all. A four picture album, correctly filed as pictures, was re-pulled at a moment when Facebook happened to answer with a cookie screen instead of the post. Nothing was found, and "nothing found on a video site" comes back as "video", so the album was filed under Videos, where the picture carousel is not offered and the photos it had already saved were shown by nobody.
 
   The gallery on a memo is evidence. It was gathered by an earlier fetch of the same post that did work, and one bad fetch should not outrank it. A re-pull that returns no media of its own now leaves the type alone and says so in the log. Meta pages fail this way often enough that this is not a hypothetical.

@@ -106,6 +106,36 @@ def _has_audio_stream(path: Path) -> bool | None:
     return b"audio" in out.stdout
 
 
+def _has_video_stream(path: Path) -> bool | None:
+    """Does this file carry PICTURES? None when ffprobe cannot answer.
+
+    The mirror of `_has_audio_stream`, and it exists because the opposite
+    failure is just as real. A Facebook photo album can have a song attached to
+    it, the way a reel does. The sniffer plays every player it can see, the only
+    thing on the wire is the audio representation, and the download "succeeds":
+    a 133 second .mp4 with one stream, `codec_type=audio`, no pictures at all.
+    That file then lands on `file_path`, `derive_memo_type` reads the extension
+    first, and a five photo album is filed under Videos with a song where the
+    video should be. Caught live on 2026-09-04.
+
+    None rather than False when ffprobe is missing, for the same reason as its
+    sibling: "I cannot tell" must not be read as "no video", or a box without
+    ffprobe would reject every download it makes.
+    """
+    probe = str(settings.FFMPEG_BIN).replace("ffmpeg", "ffprobe")
+    try:
+        out = subprocess.run(
+            [probe, "-v", "quiet", "-select_streams", "v", "-show_entries",
+             "stream=codec_type", "-of", "csv=p=0", str(path)],
+            capture_output=True, timeout=30,
+        )
+    except (OSError, subprocess.SubprocessError):
+        return None
+    if out.returncode != 0:
+        return None
+    return b"video" in out.stdout
+
+
 def _playable_container(path: Path) -> bool:
     """Does this file begin like a media container a player can open?
 
