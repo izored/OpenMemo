@@ -1266,12 +1266,87 @@ function SettingsCardBoard({
 
 type AutoFileRule = { domain: string; collection_id: string };
 
-/** Site to collection rules. The dropdown deliberately lists HIDDEN collections
- *  too: filing into one that is hidden from the dashboard is the whole point of
- *  the feature, and leaving those out would remove the only option that
- *  matters. A rule whose collection has since been deleted is shown as broken
- *  rather than dropped, because a rule that silently stopped working is worse
- *  than one that says so. */
+/** The collection picker for a filing rule.
+ *
+ *  A native <select> was the first cut and it looked wrong the moment it
+ *  opened: the option list is drawn by the operating system, not by the page,
+ *  so it came up white with a blue highlight in the middle of a dark app and no
+ *  amount of CSS on the control could touch it. This is the same
+ *  button-plus-menu the model picker above already uses, so it wears the theme
+ *  and matches the rest of Settings.
+ *
+ *  Hidden collections are listed, and marked. Filing into one that is hidden
+ *  from the dashboard is the entire point of the feature, so leaving them out
+ *  would drop the only option most people are here for.
+ */
+function CollectionPicker({
+  collections,
+  value,
+  onChange,
+}: {
+  collections: any[];
+  value: string;
+  onChange: (id: string) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    const onDown = (e: MouseEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+    };
+    window.addEventListener('mousedown', onDown);
+    return () => window.removeEventListener('mousedown', onDown);
+  }, [open]);
+
+  const picked = collections.find((c) => c.id === value);
+
+  return (
+    <div className="om-model-select" ref={ref}>
+      <button
+        type="button"
+        className="om-model-select-btn"
+        onClick={() => setOpen((v) => !v)}
+        disabled={collections.length === 0}
+        aria-haspopup="listbox"
+        aria-expanded={open}
+      >
+        <span className="mono om-model-select-val">
+          {picked ? picked.name : 'Collection'}
+        </span>
+        <Icon name="chevronDown" size={13} />
+      </button>
+      {open && (
+        <div className="om-model-select-menu" role="listbox" data-lenis-prevent>
+          {collections.map((c) => (
+            <button
+              key={c.id}
+              type="button"
+              role="option"
+              aria-selected={value === c.id}
+              className={'om-model-select-opt mono' + (value === c.id ? ' active' : '')}
+              onClick={() => {
+                onChange(c.id);
+                setOpen(false);
+              }}
+            >
+              <span>
+                {c.name}
+                {c.hidden_from_dashboard ? ' (hidden)' : ''}
+              </span>
+              {value === c.id && <Icon name="check" size={12} />}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+/** Site to collection rules. A rule whose collection has since been deleted is
+ *  shown as broken rather than dropped, because a rule that silently stopped
+ *  working is worse than one that says so. */
 function AutoFileRules({ rules, onChange }: { rules: AutoFileRule[]; onChange: (r: AutoFileRule[]) => void }) {
   const { data: collections } = useQuery({
     queryKey: ['collections'],
@@ -1302,7 +1377,8 @@ function AutoFileRules({ rules, onChange }: { rules: AutoFileRule[]; onChange: (
     return t;
   };
 
-  const nameFor = (id: string) => (collections || []).find((c: any) => c.id === id)?.name;
+  const list = collections || [];
+  const nameFor = (id: string) => list.find((c: any) => c.id === id)?.name;
 
   const add = () => {
     const host = normalize(domain);
@@ -1316,16 +1392,16 @@ function AutoFileRules({ rules, onChange }: { rules: AutoFileRule[]; onChange: (
   };
 
   return (
-    <div style={{ padding: '8px 0 4px' }}>
+    <div className="om-autofile">
       {rules.length > 0 && (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginBottom: 8 }}>
+        <div className="om-autofile-list">
           {rules.map((r) => {
             const name = nameFor(r.collection_id);
             return (
-              <div key={r.domain} style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                <span className="mono" style={{ flex: '0 0 auto' }}>{r.domain}</span>
-                <span className="mono" style={{ opacity: 0.5 }}>&rarr;</span>
-                <span className="mono" style={{ flex: 1, color: name ? undefined : 'var(--danger)' }}>
+              <div className="om-autofile-rule" key={r.domain}>
+                <span className="mono om-autofile-domain">{r.domain}</span>
+                <Icon name="arrowRight" size={13} className="om-autofile-arrow" />
+                <span className={'mono om-autofile-target' + (name ? '' : ' broken')}>
                   {name || 'collection deleted, this rule will not fire'}
                 </span>
                 <button
@@ -1341,30 +1417,23 @@ function AutoFileRules({ rules, onChange }: { rules: AutoFileRule[]; onChange: (
           })}
         </div>
       )}
-      <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+      <div className="om-autofile-add">
         <input
           type="text"
+          className="om-input"
           value={domain}
           placeholder="example.com, or paste a link"
           onChange={(e) => { setDomain(e.target.value); setError(''); }}
           onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); add(); } }}
-          style={{ flex: '1 1 200px', minWidth: 0 }}
         />
-        <select
+        <CollectionPicker
+          collections={list}
           value={collId}
-          onChange={(e) => { setCollId(e.target.value); setError(''); }}
-          style={{ flex: '1 1 160px' }}
-        >
-          <option value="">Collection...</option>
-          {(collections || []).map((c: any) => (
-            <option key={c.id} value={c.id}>
-              {c.name}{c.hidden_from_dashboard ? ' (hidden)' : ''}
-            </option>
-          ))}
-        </select>
+          onChange={(id) => { setCollId(id); setError(''); }}
+        />
         <button type="button" className="om-btn-ghost om-btn-pill" onClick={add}>Add rule</button>
       </div>
-      {error && <p className="mono" style={{ color: 'var(--danger)', marginTop: 6 }}>{error}</p>}
+      {error && <p className="mono om-autofile-error">{error}</p>}
     </div>
   );
 }

@@ -15,6 +15,8 @@ All notable changes to OpenMemo are documented here.
 
   The list includes collections you have hidden, marked as hidden. Leaving those out would have removed the only option most people want.
 
+  The picker is the app's own, not the browser's. A plain dropdown hands the open list to the operating system to draw, which came up white with a blue highlight in the middle of a dark app and could not be styled from the page at all.
+
   Rules only act when you have not chosen a collection yourself. Picking one is an instruction and this does not argue with it.
 
   The match is the exact site, never a name that resembles one. `www.example.com` counts. `shop.example.com` does not, and neither does `example.com.something-else.io`, because a subdomain is somebody else's to hand out and a lookalike domain can be registered by anyone in an afternoon. If you want a subdomain, give it its own rule and say so on purpose.

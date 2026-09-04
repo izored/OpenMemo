@@ -7177,6 +7177,7 @@ button.om-add-link { background: none; border: 0; padding: 0; cursor: pointer; f
 
 .om-mesh-code { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 12px; }
 .om-mesh-words { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px 10px; transition: filter var(--transition-fast); }
+
 @media (max-width: 560px) { .om-mesh-words { grid-template-columns: repeat(2, 1fr); } }
 .om-mesh-words.hidden { filter: blur(6px); user-select: none; }
 .om-mesh-word { font-family: var(--font-mono); font-size: 13px; color: var(--text); display: flex; gap: 6px; }
@@ -7193,3 +7194,20 @@ button.om-add-link { background: none; border: 0; padding: 0; cursor: pointer; f
    the class. */
 .om-coll, .om-connected-row, .om-ask-source { text-decoration: none; }
 .om-coll:hover, .om-connected-row:hover, .om-ask-source:hover { text-decoration: none; }
+
+/* Site to collection filing rules (Settings -> File by source). A native
+   <select> was the first cut: its option list is drawn by the OS, so it opened
+   white-on-blue in the middle of a dark app and no CSS on the control could
+   reach it. The picker is the om-model-select button/menu instead; these rules
+   only lay out the rows around it. */
+.om-autofile { padding: 8px 0 4px; }
+.om-autofile-list { display: flex; flex-direction: column; gap: 6px; margin-bottom: 10px; }
+.om-autofile-rule { display: flex; align-items: center; gap: 10px; }
+.om-autofile-domain { flex: 0 0 auto; color: var(--text); }
+.om-autofile-arrow { flex: 0 0 auto; opacity: .45; }
+.om-autofile-target { flex: 1 1 auto; min-width: 0; color: var(--text-2);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.om-autofile-target.broken { color: var(--danger); }
+.om-autofile-add { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.om-autofile-add .om-input { flex: 1 1 200px; min-width: 0; }
+.om-autofile-error { color: var(--danger); margin-top: 8px; }
