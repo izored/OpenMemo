@@ -1357,7 +1357,7 @@ export function SettingsPage() {
       })
       .catch(() => {
         setMaxUploadMb(5120);
-        setProfile({ max_upload_mb: 5120, display_name: '', email: '', avatar_data_url: '', mailing_list_consent: false, auto_download_audio: true, auto_download_video: true, music_quality: '16', music_provider: 'qobuz', chat_model: '', num_ctx: 0, yt_cookies_present: false, bg_image_ext: '', hidden_passcode_set: false, telegram_enabled: false, telegram_poll_minutes: 15, telegram_default_collection: 'Bot Inbox', telegram_force_localize: true, telegram_token_present: false, telegram_user_locked: false, music_relay_enabled: false, mesh_enabled: false, mesh_reachable: false, settings_card_layout: {}, install_kind: 'dev', platform: '', ollama_host: '' });
+        setProfile({ max_upload_mb: 5120, display_name: '', email: '', avatar_data_url: '', mailing_list_consent: false, auto_download_audio: true, auto_download_video: true, auto_file_by_source: true, music_quality: '16', music_provider: 'qobuz', chat_model: '', num_ctx: 0, yt_cookies_present: false, bg_image_ext: '', hidden_passcode_set: false, telegram_enabled: false, telegram_poll_minutes: 15, telegram_default_collection: 'Bot Inbox', telegram_force_localize: true, telegram_token_present: false, telegram_user_locked: false, music_relay_enabled: false, mesh_enabled: false, mesh_reachable: false, settings_card_layout: {}, install_kind: 'dev', platform: '', ollama_host: '' });
       });
   }, []);
 
@@ -1734,6 +1734,24 @@ export function SettingsPage() {
                   aria-pressed={profile?.auto_download_audio ?? true}
                 >
                   <span className={'om-add-toggle-switch' + ((profile?.auto_download_audio ?? true) ? ' on' : '')}>
+                    <span className="om-add-toggle-knob" />
+                  </span>
+                </button>
+              </div>
+              <div className="om-setting-row" style={{ borderTop: '1px solid var(--border)', marginTop: 8, paddingTop: 8 }}>
+                <div className="om-setting-row-text">
+                  <p>File by source</p>
+                  <span className="mono">
+                    Put a memo straight into the collection its source belongs to, so a shop you save from often stays out of the way. Only applies when you have not picked a collection yourself. Right now: temu.com goes to Temu.
+                  </span>
+                </div>
+                <button
+                  type="button"
+                  className="om-add-toggle"
+                  onClick={() => profile && saveProfile({ auto_file_by_source: !profile.auto_file_by_source })}
+                  aria-pressed={profile?.auto_file_by_source ?? true}
+                >
+                  <span className={'om-add-toggle-switch' + ((profile?.auto_file_by_source ?? true) ? ' on' : '')}>
                     <span className="om-add-toggle-knob" />
                   </span>
                 </button>

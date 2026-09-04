@@ -19,7 +19,8 @@ from backend.config import settings
 from backend.core.job_handlers import queue_task
 from backend.core.pictures import is_picture_slide
 from backend.db.database import get_db, AsyncSessionLocal
-from sqlalchemy import select
+from sqlalchemy import func, select
+from urllib.parse import urlparse
 from sqlalchemy.orm.attributes import set_committed_value
 
 from backend.db.models import Memo, Collection, memo_collections
@@ -35,13 +36,68 @@ router = APIRouter(prefix="/api/ingest", tags=["ingest"])
 _upload_handler = FileUploadHandler(settings.FILES_DIR)
 
 
+# Sites whose memos file themselves, mapped to the collection NAME they belong
+# in. Deliberately a short, explicit list rather than "match a collection whose
+# name looks like the domain": that generic version would also start pulling
+# code.org into `Code` and home.com into `Home`, which is a surprise nobody
+# asked for. Adding a site here is one line.
+#
+# Matched by name, and the collection has to exist already. Nothing here creates
+# one, so deleting the collection turns the rule off instead of resurrecting it.
+_AUTO_FILE_DOMAINS = {
+    "temu.com": "Temu",
+}
+
+
+def auto_file_collection_name(memo: Memo) -> Optional[str]:
+    """The collection this memo files itself into from its source, or None.
+
+    An EXACT host match, `www.` aside. Not "contains", and not "ends with":
+    subdomains are somebody else's to hand out, and `temu.com.evil.io` is a
+    domain any stranger can register in an afternoon. A rule that files a memo
+    somewhere on the strength of a substring would put that stranger's page in
+    your collection. The host either is the site or it is not.
+    """
+    host = (getattr(memo, "source_domain", "") or "").strip().lower()
+    if not host:
+        try:
+            host = urlparse(getattr(memo, "source_url", "") or "").netloc.lower()
+        except Exception:
+            return None
+    if host.startswith("www."):
+        host = host[4:]
+    if not host:
+        return None
+    return _AUTO_FILE_DOMAINS.get(host)
+
+
 async def _attach_collection(db: AsyncSession, memo: Memo, collection_id: Optional[str]) -> None:
-    """Link a memo to a collection by id, if provided and it exists."""
-    if not collection_id:
-        return
-    coll = (
-        await db.execute(select(Collection).where(Collection.id == collection_id))
-    ).scalar_one_or_none()
+    """Link a memo to a collection: the one asked for, else the one its source
+    files itself into.
+
+    The auto-file rule only runs when no collection was chosen. An explicit
+    choice is an instruction, and an id that turns out not to exist is a mistake
+    worth leaving visible rather than quietly papering over with a guess.
+    """
+    coll = None
+    if collection_id:
+        coll = (
+            await db.execute(select(Collection).where(Collection.id == collection_id))
+        ).scalar_one_or_none()
+    else:
+        from backend.core.app_settings import get_settings
+
+        name = (
+            auto_file_collection_name(memo)
+            if get_settings().get("auto_file_by_source", True)
+            else None
+        )
+        if name:
+            coll = (
+                await db.execute(
+                    select(Collection).where(func.lower(Collection.name) == name.lower())
+                )
+            ).scalar_one_or_none()
     if coll is None:
         return
     # The Collection query autoflushes the pending memo, making it persistent — so
