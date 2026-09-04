@@ -27,18 +27,28 @@ def classify_media(
 ) -> str:
     """The memo type for a post, from what the post actually holds.
 
-    Order of evidence, strongest first: a player inside the post, stills inside
-    the post, an `og:video` the render could not reach, then a scope that found
-    real text and no media at all, which is a text post.
+    Order of evidence, strongest first: a post that is ONLY players, stills
+    inside the post, an `og:video` the render could not reach, then a scope that
+    found real text and no media at all, which is a text post.
+
+    A mixed post is an image post. This is the rule the Instagram path already
+    applies -- `all_video = bool(slides) and not stills`, "a mixed post keeps its
+    gallery: the stills carry it" -- and the reason it has to be shared is that
+    the alternative, one clip outranking any number of photos, files an album of
+    three photos and a clip as a video. Nothing then renders it: both gallery
+    branches on the memo page ask for an image memo, so the slides are
+    downloaded, stored, served and shown by nobody, behind a video player with
+    no video to play.
 
     `fallback` is what to answer when NONE of that is known, and it is the whole
     safety story here. A caller that could not scope the page has learned
     nothing, so it keeps whatever it would have said before (`video` on a video
     host); a caller whose own tier already confirmed the post exists can pass
     `link` and let a text post be a text post."""
-    if any((m or {}).get("type") == "video" for m in post_media or []):
+    stills = [m for m in post_media or [] if (m or {}).get("type") != "video"]
+    if post_media and not stills:
         return "video"
-    if post_media:
+    if stills:
         return "image"
     if og_video:
         return "video"

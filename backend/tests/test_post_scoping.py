@@ -340,6 +340,130 @@ def test_the_download_path_also_rescopes_a_share_link():
     assert sniff_media._landed_rescope is not None
 
 
+# ------------------------------------------------ an album with a clip in it
+
+
+def test_a_mixed_album_is_an_image_post():
+    """Three photos and a clip is an album, not a video. One clip outranking any
+    number of photos filed it as a video, and then nothing rendered it: both
+    gallery branches on the memo page ask for an image memo, so the slides were
+    downloaded, stored, served and shown by nobody, behind a player with nothing
+    to play. Same rule the Instagram path already applies."""
+    media = [{"url": "a.jpg", "type": "image"},
+             {"url": "", "type": "video"},
+             {"url": "b.jpg", "type": "image"},
+             {"url": "c.jpg", "type": "image"}]
+    assert classify_media(media, scoped=True, post_text="cap", fallback="video") == "image"
+    assert len(slides(media)) == 3
+
+
+def test_a_post_that_is_only_players_is_still_a_video():
+    """The other half of the rule, and the one that must not regress: a lone
+    Facebook player mounts with no src and no poster, and it is still a video."""
+    assert classify_media([{"url": "", "type": "video"}], scoped=True,
+                          post_text="cap", fallback="link") == "video"
+    assert classify_media([{"url": "a.mp4", "type": "video"},
+                           {"url": "b.mp4", "type": "video"}]) == "video"
+    assert slides([{"url": "a.mp4", "type": "video"},
+                   {"url": "b.mp4", "type": "video"}]) is None
+
+
+def test_a_clip_at_the_front_does_not_take_the_cover():
+    """Facebook puts the clip wherever it likes in the grid. An unloaded player
+    names no picture, so the cover is the first photo behind it."""
+    media = [{"url": "", "type": "video"},
+             {"url": "a.jpg", "type": "image"},
+             {"url": "b.jpg", "type": "image"}]
+    assert classify_media(media, scoped=True, post_text="cap") == "image"
+    assert cover(media) == "a.jpg"
+
+
+def test_the_shared_rule_matches_the_instagram_one():
+    """`_instagram_resolve` decides this with `all_video = bool(slides) and not
+    stills`. Two spellings of one rule is how they drifted apart in the first
+    place, so this pins them together."""
+    import inspect
+
+    from backend.core import extractor
+
+    src = inspect.getsource(extractor._instagram_resolve)
+    assert "all_video = bool(slides) and not stills" in src
+
+
+# ------------------------------------------- the thumbnail is not the photo
+
+# The real shapes, from a live Facebook album on 2026-09-04. Both numbers ride
+# on the same URL: `cstp=mx` is the biggest rendition that exists, `ctp=s` the
+# one being served.
+_GRID = (
+    "https://scontent-bru2-1.xx.fbcdn.net/v/t51.82787-15/793551200_n.jpg"
+    "?stp=dst-jpg_tt6&cstp=mx2000x2000&ctp=s590x590&_nc_cat=108"
+)
+_FULL = (
+    "https://scontent-bru2-1.xx.fbcdn.net/v/t51.82787-15/793551200_n.jpg"
+    "?stp=dst-jpg_tt6&cstp=mx2000x2000&ctp=s2000x2000&_nc_cat=108"
+)
+
+
+def test_a_feed_thumbnail_knows_a_bigger_one_exists():
+    """Saving the 590px preview of a 2000px photo is a loss that cannot be
+    undone later: the CDN URL expires and the original goes with it."""
+    from backend.core.headless import _underserved
+
+    assert _underserved(_GRID) is True
+    assert _underserved(_FULL) is False
+
+
+def test_a_url_that_says_nothing_about_size_is_left_alone():
+    """No claim, no page load. This is what keeps every other host free."""
+    from backend.core.headless import _underserved
+
+    assert _underserved("https://cdn.example.com/photo.jpg") is False
+    assert _underserved("") is False
+
+
+def test_a_marginal_gain_is_not_worth_a_page_load():
+    from backend.core.headless import _underserved
+
+    assert _underserved("https://cdn/a.jpg?cstp=mx640x640&ctp=s600x600") is False
+    assert _underserved("https://cdn/a.jpg?cstp=mx1200x1200&ctp=s600x600") is True
+
+
+def test_served_pixels_reads_what_the_url_is_handing_over():
+    from backend.core.headless import _served_pixels
+
+    assert _served_pixels(_GRID) == 590 * 590
+    assert _served_pixels(_FULL) == 2000 * 2000
+    assert _served_pixels("https://cdn/a.jpg") == 0
+
+
+def test_a_still_carries_the_link_to_its_own_photo_page():
+    """The full rendition is only reachable where Facebook published it, and the
+    grid already links there. Same-origin, so a link out of the post can never
+    become the thing we fetch."""
+    from backend.core import headless
+
+    assert "link: link" in headless._SCOPE_MEDIA_JS
+    assert "closest('a[href]')" in headless._SCOPE_MEDIA_JS
+    assert "abs.origin === location.origin" in headless._SCOPE_MEDIA_JS
+
+
+def test_the_full_image_reader_scores_natural_pixels():
+    """Rendered size is whatever the viewer chose. The file behind it is the
+    point, so `_LARGEST_IMAGE_JS`'s bounding-box score is the wrong one here."""
+    from backend.core import headless
+
+    assert "naturalWidth * img.naturalHeight" in headless._FULL_IMAGE_JS
+
+
+def test_the_gallery_does_not_carry_the_permalink_into_the_memo():
+    """`link` is scaffolding for the upgrade pass, not memo data."""
+    media = [{"url": "a.jpg", "type": "image", "link": "https://fb/photo/?fbid=1"},
+             {"url": "b.jpg", "type": "image", "link": "https://fb/photo/?fbid=2"}]
+    assert slides(media) == [{"url": "a.jpg", "type": "image"},
+                             {"url": "b.jpg", "type": "image"}]
+
+
 def test_the_scope_script_takes_one_argument():
     """Playwright hands `evaluate` a single argument, so the script has to
     destructure. Passing two parameters silently binds `kind` to undefined and
