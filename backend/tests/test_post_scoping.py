@@ -340,6 +340,80 @@ def test_the_download_path_also_rescopes_a_share_link():
     assert sniff_media._landed_rescope is not None
 
 
+# ------------------------------------------- the thumbnail is not the photo
+
+# The real shapes, from a live Facebook album on 2026-09-04. Both numbers ride
+# on the same URL: `cstp=mx` is the biggest rendition that exists, `ctp=s` the
+# one being served.
+_GRID = (
+    "https://scontent-bru2-1.xx.fbcdn.net/v/t51.82787-15/793551200_n.jpg"
+    "?stp=dst-jpg_tt6&cstp=mx2000x2000&ctp=s590x590&_nc_cat=108"
+)
+_FULL = (
+    "https://scontent-bru2-1.xx.fbcdn.net/v/t51.82787-15/793551200_n.jpg"
+    "?stp=dst-jpg_tt6&cstp=mx2000x2000&ctp=s2000x2000&_nc_cat=108"
+)
+
+
+def test_a_feed_thumbnail_knows_a_bigger_one_exists():
+    """Saving the 590px preview of a 2000px photo is a loss that cannot be
+    undone later: the CDN URL expires and the original goes with it."""
+    from backend.core.headless import _underserved
+
+    assert _underserved(_GRID) is True
+    assert _underserved(_FULL) is False
+
+
+def test_a_url_that_says_nothing_about_size_is_left_alone():
+    """No claim, no page load. This is what keeps every other host free."""
+    from backend.core.headless import _underserved
+
+    assert _underserved("https://cdn.example.com/photo.jpg") is False
+    assert _underserved("") is False
+
+
+def test_a_marginal_gain_is_not_worth_a_page_load():
+    from backend.core.headless import _underserved
+
+    assert _underserved("https://cdn/a.jpg?cstp=mx640x640&ctp=s600x600") is False
+    assert _underserved("https://cdn/a.jpg?cstp=mx1200x1200&ctp=s600x600") is True
+
+
+def test_served_pixels_reads_what_the_url_is_handing_over():
+    from backend.core.headless import _served_pixels
+
+    assert _served_pixels(_GRID) == 590 * 590
+    assert _served_pixels(_FULL) == 2000 * 2000
+    assert _served_pixels("https://cdn/a.jpg") == 0
+
+
+def test_a_still_carries_the_link_to_its_own_photo_page():
+    """The full rendition is only reachable where Facebook published it, and the
+    grid already links there. Same-origin, so a link out of the post can never
+    become the thing we fetch."""
+    from backend.core import headless
+
+    assert "link: link" in headless._SCOPE_MEDIA_JS
+    assert "closest('a[href]')" in headless._SCOPE_MEDIA_JS
+    assert "abs.origin === location.origin" in headless._SCOPE_MEDIA_JS
+
+
+def test_the_full_image_reader_scores_natural_pixels():
+    """Rendered size is whatever the viewer chose. The file behind it is the
+    point, so `_LARGEST_IMAGE_JS`'s bounding-box score is the wrong one here."""
+    from backend.core import headless
+
+    assert "naturalWidth * img.naturalHeight" in headless._FULL_IMAGE_JS
+
+
+def test_the_gallery_does_not_carry_the_permalink_into_the_memo():
+    """`link` is scaffolding for the upgrade pass, not memo data."""
+    media = [{"url": "a.jpg", "type": "image", "link": "https://fb/photo/?fbid=1"},
+             {"url": "b.jpg", "type": "image", "link": "https://fb/photo/?fbid=2"}]
+    assert slides(media) == [{"url": "a.jpg", "type": "image"},
+                             {"url": "b.jpg", "type": "image"}]
+
+
 def test_the_scope_script_takes_one_argument():
     """Playwright hands `evaluate` a single argument, so the script has to
     destructure. Passing two parameters silently binds `kind` to undefined and

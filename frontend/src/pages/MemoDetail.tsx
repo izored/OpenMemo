@@ -1739,7 +1739,14 @@ export function MemoDetail() {
   // Summary, Description, Transcript, Make it local, Ask. Notes stays out, in
   // the content column. On mobile (no rail) these render inline under the media.
   const isMusicAudio = memo.type === 'audio' && audioKind(memo) === 'music';
-  const showDescription = !isEditing && (memo.type === 'video' || isMusicAudio);
+  // `image` belongs here as much as video does. A scraped photo post carries the
+  // author's caption in `description`, and the card falls back to it already —
+  // but the gate used to be video-only, from back when every image memo was an
+  // uploaded file with nothing to say. Filing a Facebook album correctly as
+  // images then made its caption vanish from the page: the type got more right
+  // and the memo got less readable, which is not a trade worth making.
+  const showDescription = !isEditing
+    && (memo.type === 'video' || memo.type === 'image' || isMusicAudio);
   const showTranscript = !isEditing
     && (memo.type === 'video' || (memo.type === 'audio' && !isMusicAudio))
     && (canTranscript(memo) || !!memo.transcript_status || !!memo.content_text);

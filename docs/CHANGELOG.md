@@ -7,6 +7,16 @@ All notable changes to OpenMemo are documented here.
 
 <!-- Add entries here as work lands: ### Added / ### Changed / ### Fixed -->
 
+### Fixed
+
+- 🖼️ **A saved photo is the photo now, not the preview of it.** A four picture Facebook album came in as four 590 pixel JPEGs of about 26KB each. The post held 2000 pixel originals of about 215KB. Eleven times the pixels, thrown away at the moment of saving, and gone for good: the address a social network serves a photo from expires after a while, so there is no fetching it later. A memo you keep forever should be the picture, not a thumbnail of it.
+
+  What made this hard to spot is that the thumbnail carries a receipt for the original. The address says, in the same breath, that a 2000 pixel version exists and that it is handing you the 590 pixel one. You cannot simply ask for the bigger one, because both numbers are inside the signature and editing either is refused. The full picture is only served where Facebook publishes it, on the photo's own page, and the album already links every thumbnail there. So openMemo follows those links now and takes the real file.
+
+  It only does this where there is something to gain. A thumbnail that makes no claim about a bigger version, which is every other site, is left alone and costs nothing. Instagram and Threads already hand over their best copy in one go and are untouched. On the album that turned this up, four photos went from 590 to 2000 pixels for about five extra seconds of saving.
+
+- 💬 **A photo post shows its caption again.** Filing a Facebook album correctly as pictures rather than as a video had an unhappy side effect: the caption disappeared. The page only ever offered a Description panel to videos and music, from back when every picture memo was a file you had uploaded and there was nothing to write under it. A scraped photo post is not that. It has an author, a caption and hashtags, and hiding them made the memo less useful than the version that had the type wrong. Picture memos get the panel too.
+
 ---
 ## [3.17.1] - 2026-09-04
 

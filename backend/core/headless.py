@@ -43,6 +43,7 @@ already-solved tab.
 import asyncio
 import json
 import random
+import re
 import tempfile
 from pathlib import Path
 from typing import Optional
@@ -246,14 +247,42 @@ _SCOPE_MEDIA_JS = r"""() => {
       if (!u) continue;
     }
     if (u.startsWith('data:')) continue;
+    // The photo's own page, when the grid links to it. Facebook serves the feed
+    // a thumbnail of a much larger photo and SIGNS the size into the URL, so the
+    // full one cannot be asked for by editing the query - every rewrite is a
+    // 403. It is reachable only where Facebook already published it, which is
+    // the permalink this thumbnail is wrapped in. Same-origin only, so a link
+    // out of the post can never become the thing we fetch.
+    let link = '';
+    const a = el.closest('a[href]');
+    if (a) {
+      try {
+        const abs = new URL(a.getAttribute('href'), location.href);
+        if (abs.origin === location.origin) link = abs.href;
+      } catch (_) {}
+    }
     // A player with nothing to name yet still has to be told apart from the
     // next one, so it is keyed by position rather than by URL.
     const k = u ? key(u) : 'player:' + out.length;
     if (seen.has(k)) continue;
     seen.add(k);
-    out.push({ url: u, type: type, poster: poster });
+    out.push({ url: u, type: type, poster: poster, link: link });
   }
   return out;
+}"""
+
+# The full-size still on a photo's own page.
+_FULL_IMAGE_JS = """() => {
+  let best = null, bestArea = -1;
+  for (const img of document.querySelectorAll('img')) {
+    const src = img.currentSrc || img.src || '';
+    if (!src || src.startsWith('data:')) continue;
+    // NATURAL pixels, not rendered ones. The viewer scales the photo down to
+    // the window; what we are here for is the file behind it.
+    const area = img.naturalWidth * img.naturalHeight;
+    if (area > bestArea) { bestArea = area; best = {url: src, w: img.naturalWidth, h: img.naturalHeight}; }
+  }
+  return best;
 }"""
 
 # The scoped post's own text - author line, caption, counters. Read instead of
@@ -666,6 +695,98 @@ async def _collect_post_media(page, max_slides: int) -> list:
     ][:max_slides]
 
 
+# A CDN URL that names both the biggest rendition it HAS and the one it is
+# SERVING. Facebook writes them as `cstp=mx2000x2000` (max) and `ctp=s590x590`
+# (served) on the same URL, so a feed thumbnail carries a receipt for the 2000px
+# original sitting behind it. Both numbers are inside the signature: editing
+# either one returns 403, verified 2026-09-04 against a live photo, so knowing
+# the big one exists is not the same as being able to ask for it.
+_CDN_MAX_RE = re.compile(r"[?&]cstp=[a-z]*(\d+)x(\d+)", re.I)
+_CDN_SERVED_RE = re.compile(r"[?&]ctp=[a-z]*(\d+)x(\d+)", re.I)
+
+
+def _served_pixels(url: str) -> int:
+    """Pixel count the URL says it is serving, or 0 when it does not say."""
+    m = _CDN_SERVED_RE.search(url or "")
+    return int(m.group(1)) * int(m.group(2)) if m else 0
+
+
+def _underserved(url: str) -> bool:
+    """True when the URL advertises a materially bigger rendition than it serves.
+
+    The gate on following a photo's permalink, so the extra page load is only
+    paid where there is something to gain. A host that already handed over its
+    best - anything with a `srcset`, which `widest` reads - says nothing here and
+    costs nothing. The threshold is 1.5x on the long edge: chasing a 10% bigger
+    file across a page load is not worth the second it takes."""
+    mx = _CDN_MAX_RE.search(url or "")
+    sv = _CDN_SERVED_RE.search(url or "")
+    if not mx or not sv:
+        return False
+    biggest = max(int(mx.group(1)), int(mx.group(2)))
+    serving = max(int(sv.group(1)), int(sv.group(2)))
+    return serving > 0 and biggest >= serving * 1.5
+
+
+async def _upgrade_stills(context, media: list, *, max_upgrades: int = 12,
+                          timeout_ms: int = 20000) -> list:
+    """Replace thumbnail stills with the full-size file, via each photo's own page.
+
+    A four-photo Facebook album saved as four 590x590 JPEGs of about 26KB while
+    the post held 2000x2000 originals of about 215KB - eleven times the pixels,
+    thrown away at save time and unrecoverable later, because the CDN URL expires.
+    "Kept forever" has to mean the photo, not a preview of it.
+
+    The grid links each thumbnail to its photo page and that page serves the full
+    rendition, so this walks the links rather than guessing at URLs. One reused
+    tab, in order, only for stills that `_underserved` flags, capped. Every step
+    fails soft: a photo page that will not load, or that turns out to hold nothing
+    bigger, leaves the thumbnail exactly as it was."""
+    targets = [
+        (i, m) for i, m in enumerate(media or [])
+        if (m or {}).get("type") != "video"
+        and (m or {}).get("link")
+        and _underserved((m or {}).get("url") or "")
+    ][:max_upgrades]
+    if not targets:
+        return media
+
+    page = None
+    upgraded = 0
+    try:
+        page = await context.new_page()
+        for i, m in targets:
+            try:
+                await page.goto(m["link"], wait_until="domcontentloaded",
+                                timeout=timeout_ms)
+                await _dismiss_consent(page)
+                await page.wait_for_timeout(1500)
+                full = await page.evaluate(_FULL_IMAGE_JS)
+            except Exception:
+                continue
+            if not full or not full.get("url"):
+                continue
+            # Only take it when it really is bigger. The photo page can serve the
+            # same rendition the grid did, and a swap that gains nothing still
+            # costs a URL that expires on a different clock.
+            gained = int(full.get("w") or 0) * int(full.get("h") or 0)
+            if gained <= _served_pixels(m.get("url") or ""):
+                continue
+            media[i] = {**m, "url": full["url"]}
+            upgraded += 1
+    except Exception:
+        pass
+    finally:
+        if page is not None:
+            try:
+                await page.close()
+            except Exception:
+                pass
+    if upgraded:
+        print(f"[headless] upgraded {upgraded} still(s) to the full-size original")
+    return media
+
+
 def _cookie_path(domain: str) -> Path:
     safe = domain.replace(":", "_").replace("/", "_")
     return _COOKIE_DIR / f"{safe}.json"
@@ -852,6 +973,9 @@ async def render_page(
                         scoped = await _scope_post(page, retry)
                 if scoped:
                     post_media = await _collect_post_media(page, max_slides)
+                    # The grid hands over thumbnails. Trade a few page loads for
+                    # the originals before anything downstream saves them.
+                    post_media = await _upgrade_stills(ctx, post_media)
                     try:
                         post_text = await page.evaluate(_SCOPE_TEXT_JS) or ""
                     except Exception:
