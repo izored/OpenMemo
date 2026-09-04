@@ -5597,8 +5597,8 @@ body.om-has-bbar .om-fab { display: none !important; }
 .om-bw-lead-name { color: var(--text); font-weight: 600; }
 
 /* ── Local AI · in-brand default-model dropdown ────────────────────────── */
-.om-model-select { position: relative; flex: none; }
-.om-model-select-btn {
+.om-model-select, .om-picker { position: relative; flex: none; }
+.om-model-select-btn, .om-picker-btn {
   display: inline-flex; align-items: center; gap: 8px;
   max-width: 200px;
   padding: 6px 10px; border-radius: var(--r-sm);
@@ -5607,10 +5607,10 @@ body.om-has-bbar .om-fab { display: none !important; }
   font-size: 12px; cursor: pointer;
   transition: border-color .15s, background .15s;
 }
-.om-model-select-btn:hover { border-color: var(--border-2); }
-.om-model-select-btn:disabled { opacity: .5; cursor: default; }
-.om-model-select-val { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.om-model-select-menu {
+.om-model-select-btn:hover, .om-picker-btn:hover { border-color: var(--border-2); }
+.om-model-select-btn:disabled, .om-picker-btn:disabled { opacity: .5; cursor: default; }
+.om-model-select-val, .om-picker-val { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.om-model-select-menu, .om-picker-menu {
   position: absolute; top: calc(100% + 6px); right: 0; z-index: 20;
   min-width: 220px; max-width: 280px; max-height: 280px; overflow-y: auto;
   padding: 5px; border-radius: var(--r-md);
@@ -5618,17 +5618,17 @@ body.om-has-bbar .om-fab { display: none !important; }
   box-shadow: var(--shadow-card-hover);
   display: flex; flex-direction: column; gap: 1px;
 }
-.om-model-select-opt {
+.om-model-select-opt, .om-picker-opt {
   display: flex; align-items: center; justify-content: space-between; gap: 10px;
   width: 100%; padding: 7px 9px; border-radius: var(--r-xs);
   background: none; border: 0; cursor: pointer;
   font-size: 12px; color: var(--text-2); text-align: left;
   transition: background .12s, color .12s;
 }
-.om-model-select-opt:hover { background: var(--surface-3); color: var(--text); }
-.om-model-select-opt.active { color: var(--text); }
-.om-model-select-opt.active span:first-child { font-weight: 600; }
-.om-model-select-opt svg { color: var(--accent); flex: none; }
+.om-model-select-opt:hover, .om-picker-opt:hover { background: var(--surface-3); color: var(--text); }
+.om-model-select-opt.active, .om-picker-opt.active { color: var(--text); }
+.om-model-select-opt.active span:first-child, .om-picker-opt.active span:first-child { font-weight: 600; }
+.om-model-select-opt svg, .om-picker-opt svg { color: var(--accent); flex: none; }
 
 /* ── Bento responsive ──────────────────────────────────────────────────── */
 @media (max-width: 900px) {
@@ -7211,3 +7211,12 @@ button.om-add-link { background: none; border: 0; padding: 0; cursor: pointer; f
 .om-autofile-add { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
 .om-autofile-add .om-input { flex: 1 1 200px; min-width: 0; }
 .om-autofile-error { color: var(--danger); margin-top: 8px; }
+
+/* The generic picker shares the model selector's styling rather than copying
+   it: same control, two names, one set of rules. It exists because a native
+   <select> hands its open list to the operating system to draw, which in a dark
+   app means a white panel with a blue highlight that no page CSS can reach.
+   `.om-picker-menu-left` is for a picker that sits at the left of its row,
+   where a right-anchored menu would hang off the edge. */
+.om-picker-menu-left { right: auto; left: 0; }
+.om-picker-wide .om-picker-menu { min-width: 260px; }

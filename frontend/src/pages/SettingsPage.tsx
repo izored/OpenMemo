@@ -898,17 +898,18 @@ function TelegramRelayRows({ profile, save }: { profile: AppSettings | null; sav
             and reconnecting asks straight away.{install.isMac ? ' Waking this Mac does too.' : ''}
           </span>
         </div>
-        <select
-          className="om-input"
+        <SettingsPicker
+          options={[
+            { value: '5', label: '5 minutes' },
+            { value: '15', label: '15 minutes' },
+            { value: '30', label: '30 minutes' },
+            { value: '60', label: '1 hour' },
+          ]}
           value={String(profile?.telegram_poll_minutes ?? 15)}
-          onChange={(e) => save({ telegram_poll_minutes: Number(e.target.value) })}
-          style={{ width: 130 }}
-        >
-          <option value="5">5 minutes</option>
-          <option value="15">15 minutes</option>
-          <option value="30">30 minutes</option>
-          <option value="60">1 hour</option>
-        </select>
+          placeholder="15 minutes"
+          onChange={(v) => save({ telegram_poll_minutes: Number(v) })}
+          width={130}
+        />
       </div>
     </>
   );
@@ -1264,16 +1265,108 @@ function SettingsCardBoard({
   );
 }
 
+type PickerOption = { value: string; label: string };
+
+/** The app's own dropdown, for anywhere a native <select> would have gone.
+ *
+ *  A <select> draws its open list with the operating system, not the page, so
+ *  in a dark app it opens as a white panel with a blue highlight and no amount
+ *  of CSS on the control can reach it. This is the same button-and-menu the
+ *  model selector uses, lifted out so Settings has one dropdown rather than one
+ *  per author.
+ *
+ *  `value` may be the empty string on purpose: a picker that fires an ACTION
+ *  (restore this snapshot) has no lasting selection, so it shows its
+ *  placeholder again as soon as the menu closes.
+ */
+function SettingsPicker({
+  options,
+  value,
+  placeholder,
+  onChange,
+  disabled,
+  width,
+  alignLeft,
+}: {
+  options: PickerOption[];
+  value: string;
+  placeholder: string;
+  onChange: (value: string) => void;
+  disabled?: boolean;
+  width?: number;
+  alignLeft?: boolean;
+}) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    const onDown = (e: MouseEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+    };
+    const onKey = (e: KeyboardEvent) => {
+      // A menu you cannot dismiss from the keyboard is a trap, and the native
+      // control this replaces closed on Escape.
+      if (e.key === 'Escape') setOpen(false);
+    };
+    window.addEventListener('mousedown', onDown);
+    window.addEventListener('keydown', onKey);
+    return () => {
+      window.removeEventListener('mousedown', onDown);
+      window.removeEventListener('keydown', onKey);
+    };
+  }, [open]);
+
+  const picked = options.find((o) => o.value === value);
+
+  return (
+    <div className="om-picker" ref={ref}>
+      <button
+        type="button"
+        className="om-picker-btn"
+        style={width ? { width } : undefined}
+        onClick={() => setOpen((v) => !v)}
+        disabled={disabled || options.length === 0}
+        aria-haspopup="listbox"
+        aria-expanded={open}
+      >
+        <span className="mono om-picker-val" style={{ flex: 1 }}>
+          {picked ? picked.label : placeholder}
+        </span>
+        <Icon name="chevronDown" size={13} />
+      </button>
+      {open && (
+        <div
+          className={'om-picker-menu' + (alignLeft ? ' om-picker-menu-left' : '')}
+          role="listbox"
+          data-lenis-prevent
+        >
+          {options.map((o) => (
+            <button
+              key={o.value}
+              type="button"
+              role="option"
+              aria-selected={value === o.value}
+              className={'om-picker-opt mono' + (value === o.value ? ' active' : '')}
+              onClick={() => {
+                onChange(o.value);
+                setOpen(false);
+              }}
+            >
+              <span>{o.label}</span>
+              {value === o.value && <Icon name="check" size={12} />}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+
 type AutoFileRule = { domain: string; collection_id: string };
 
 /** The collection picker for a filing rule.
- *
- *  A native <select> was the first cut and it looked wrong the moment it
- *  opened: the option list is drawn by the operating system, not by the page,
- *  so it came up white with a blue highlight in the middle of a dark app and no
- *  amount of CSS on the control could touch it. This is the same
- *  button-plus-menu the model picker above already uses, so it wears the theme
- *  and matches the rest of Settings.
  *
  *  Hidden collections are listed, and marked. Filing into one that is hidden
  *  from the dashboard is the entire point of the feature, so leaving them out
@@ -1288,59 +1381,16 @@ function CollectionPicker({
   value: string;
   onChange: (id: string) => void;
 }) {
-  const [open, setOpen] = useState(false);
-  const ref = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    if (!open) return;
-    const onDown = (e: MouseEvent) => {
-      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
-    };
-    window.addEventListener('mousedown', onDown);
-    return () => window.removeEventListener('mousedown', onDown);
-  }, [open]);
-
-  const picked = collections.find((c) => c.id === value);
-
   return (
-    <div className="om-model-select" ref={ref}>
-      <button
-        type="button"
-        className="om-model-select-btn"
-        onClick={() => setOpen((v) => !v)}
-        disabled={collections.length === 0}
-        aria-haspopup="listbox"
-        aria-expanded={open}
-      >
-        <span className="mono om-model-select-val">
-          {picked ? picked.name : 'Collection'}
-        </span>
-        <Icon name="chevronDown" size={13} />
-      </button>
-      {open && (
-        <div className="om-model-select-menu" role="listbox" data-lenis-prevent>
-          {collections.map((c) => (
-            <button
-              key={c.id}
-              type="button"
-              role="option"
-              aria-selected={value === c.id}
-              className={'om-model-select-opt mono' + (value === c.id ? ' active' : '')}
-              onClick={() => {
-                onChange(c.id);
-                setOpen(false);
-              }}
-            >
-              <span>
-                {c.name}
-                {c.hidden_from_dashboard ? ' (hidden)' : ''}
-              </span>
-              {value === c.id && <Icon name="check" size={12} />}
-            </button>
-          ))}
-        </div>
-      )}
-    </div>
+    <SettingsPicker
+      options={collections.map((c) => ({
+        value: c.id,
+        label: c.name + (c.hidden_from_dashboard ? ' (hidden)' : ''),
+      }))}
+      value={value}
+      placeholder="Collection"
+      onChange={onChange}
+    />
   );
 }
 
@@ -2107,25 +2157,25 @@ export function SettingsPage() {
                       {autoSnaps.length} kept, newest first. Restores the database only.
                     </span>
                   </div>
-                  <select
-                    className="om-select"
+                  <SettingsPicker
+                    options={autoSnaps.map((s) => ({
+                      value: s.name,
+                      label:
+                        new Date(s.created_at).toLocaleString() +
+                        ' · ' +
+                        (s.bytes / 1024 / 1024).toFixed(1) +
+                        ' MB',
+                    }))}
+                    /* An action, not a selection: nothing stays picked, so the
+                       placeholder comes back the moment the menu closes. */
+                    value=""
+                    placeholder={restoring ? 'Restoring…' : 'Pick a date…'}
                     disabled={restoring}
-                    defaultValue=""
-                    onChange={(e) => {
-                      const snap = autoSnaps.find((s) => s.name === e.target.value);
-                      e.target.value = '';
+                    onChange={(name) => {
+                      const snap = autoSnaps.find((s) => s.name === name);
                       if (snap) void handleRestoreAuto(snap.name, new Date(snap.created_at).toLocaleString());
                     }}
-                  >
-                    <option value="" disabled>
-                      {restoring ? 'Restoring…' : 'Pick a date…'}
-                    </option>
-                    {autoSnaps.map((s) => (
-                      <option key={s.name} value={s.name}>
-                        {new Date(s.created_at).toLocaleString()} · {(s.bytes / 1024 / 1024).toFixed(1)} MB
-                      </option>
-                    ))}
-                  </select>
+                  />
                 </div>
               ) : null}
               <div className="om-setting-row">
