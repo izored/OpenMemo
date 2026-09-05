@@ -212,6 +212,9 @@ _ROUTING: dict[str, tuple[str, Callable[[tuple], tuple[str | None, dict[str, Any
     "relocalize_pictures_task": (KIND_RELOCALIZE_PICTURES, _p_memo),
     "localize_memo_task": (KIND_LOCALIZE, _p_localize),
     "repull_memo_task": (KIND_REPULL, _p_localize),
+    # Resolve-only retry after a degraded read. Persists just the memo id, so
+    # it can never be replayed as a download with some other mode.
+    "reresolve_memo_task": (KIND_REPULL, _p_memo),
     "_localize_memo_task": (KIND_LOCALIZE_AUTO, _p_localize_auto),
     "transcribe_memo_task": (KIND_TRANSCRIBE, _p_memo),
     "transcript_memo_task": (KIND_TRANSCRIPT, _p_memo),

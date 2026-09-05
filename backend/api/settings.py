@@ -401,6 +401,7 @@ _IG_HEALTH_WINDOW = 12
 _IG_HEALTH_RATIO = 0.5
 
 
+
 @router.get("/instagram/health")
 async def instagram_health():
     """Is Instagram actually resolving properly, or only appearing to?

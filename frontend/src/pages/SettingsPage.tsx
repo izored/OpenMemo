@@ -258,6 +258,12 @@ function TrashRow() {
 function LibraryIntegrityRows() {
   const [state, setState] = useState<LibraryIntegrity | null>(null);
   const [busy, setBusy] = useState(false);
+  // Two-step repair: the first click asks the server what it WOULD re-pull,
+  // the second commits. Queueing fetches against real hosts is not something
+  // to do on one click of a button somebody found by accident.
+  const [plan, setPlan] = useState<{ memos: number } | null>(null);
+  const [repairing, setRepairing] = useState(false);
+  const [repaired, setRepaired] = useState<number | null>(null);
 
   useEffect(() => {
     settingsApi.libraryIntegrity().then(setState).catch(() => setState(null));
@@ -272,6 +278,7 @@ function LibraryIntegrityRows() {
 
   const missing = state ? state.missing_media + state.missing_thumbs : 0;
   const incident = state?.status === 'incident';
+  const wrongPulls = state ? state.pictureless_videos + state.degraded_reads : 0;
 
   return (
     <>
@@ -294,7 +301,7 @@ function LibraryIntegrityRows() {
       {/* Loud only when it is news. A library that has been missing the same
           59 uploads for a month is a known state; more missing than at the
           last check is an incident, and saying so early is the entire point. */}
-      {state && (missing > 0 || state.silent_videos > 0) && (
+      {state && (missing > 0 || state.silent_videos > 0 || state.pictureless_videos > 0 || state.degraded_reads > 0) && (
         <div
           role="status"
           style={{
@@ -306,7 +313,12 @@ function LibraryIntegrityRows() {
           <p style={{ margin: 0, fontWeight: 500, color: `var(${incident ? '--text-danger, #C62828' : '--text-warning, #BA7517'})` }}>
             {incident
               ? `${state.delta} more file${state.delta === 1 ? '' : 's'} went missing since the last check`
-              : `${missing} file${missing === 1 ? '' : 's'} referenced by your library are missing from disk`}
+              : missing > 0
+                ? `${missing} file${missing === 1 ? '' : 's'} referenced by your library are missing from disk`
+                /* Nothing is missing: this panel is open for a wrong pull, and
+                   saying "0 files are missing" above copy about wrong pulls
+                   reads as a bug and contradicts the row directly above. */
+                : `${wrongPulls} memo${wrongPulls === 1 ? '' : 's'} did not come back from ${wrongPulls === 1 ? 'its' : 'their'} source correctly`}
           </p>
           <span className="mono" style={{ display: 'block', marginTop: 4 }}>
             {state.recoverable > 0 && (
@@ -321,8 +333,50 @@ function LibraryIntegrityRows() {
             {state.silent_videos > 0 && (
               <>{state.silent_videos} video{state.silent_videos === 1 ? ' has' : 's have'} no sound. Often the original has none either — plenty of clips are posted muted — so this is worth a look rather than an alarm. Re-pull one from its own page to try again. </>
             )}
+            {state.pictureless_videos > 0 && (
+              <>{state.pictureless_videos === 1 ? '1 memo is' : `${state.pictureless_videos} memos are`} filed as a video but {state.pictureless_videos === 1 ? 'holds' : 'hold'} a file with no pictures in it. That is the song a photo post was playing, saved instead of the photos. Re-pulling brings the pictures back. </>
+            )}
+            {state.degraded_reads > 0 && (
+              <>{state.degraded_reads === 1 ? '1 memo was' : `${state.degraded_reads} memos were`} saved from a read that could not find the post inside the page, usually a cookie notice getting in the way, so {state.degraded_reads === 1 ? 'it may be' : 'they may be'} missing photos the post actually has. Re-pulling often fixes it, and openMemo already tried once on its own. </>
+            )}
             {incident && 'Stop writing to the disk before investigating — see docs/DISASTER-RECOVERY.md.'}
           </span>
+
+          {/* The repair, in the same box as the diagnosis. Without this the
+              panel names a problem and leaves the user to find the memos
+              themselves among a thousand, which is not a fix. Two clicks:
+              the first only asks what would be touched. */}
+          {wrongPulls > 0 && (
+            <div style={{ marginTop: 10, display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+              <button
+                className="om-btn-secondary"
+                disabled={repairing}
+                onClick={async () => {
+                  setRepairing(true);
+                  try {
+                    if (!plan) {
+                      const r = await maintenanceApi.repullWrongPulls({ pictureless: true, degraded: true, dryRun: true });
+                      setPlan({ memos: r.memos });
+                    } else {
+                      const r = await maintenanceApi.repullWrongPulls({ pictureless: true, degraded: true, dryRun: false });
+                      setRepaired(r.queued);
+                      setPlan(null);
+                    }
+                  } catch { /* leave the panel as it was */ }
+                  finally { setRepairing(false); }
+                }}
+              >
+                {repairing ? 'Working…' : plan ? `Re-pull ${plan.memos} memo${plan.memos === 1 ? '' : 's'}` : 'Repair these'}
+              </button>
+              <span className="mono">
+                {repaired !== null
+                  ? `Queued ${repaired}. They update as each one finishes.`
+                  : plan
+                    ? 'Fetches each post again. Click to start.'
+                    : 'Check what can be repaired.'}
+              </span>
+            </div>
+          )}
         </div>
       )}
     </>

@@ -1,8 +1,9 @@
 """Maintenance API — clear cached previews, reset the workspace."""
+import asyncio
 import shutil
 from pathlib import Path
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel
 from sqlalchemy import delete, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -338,6 +339,122 @@ async def relocalize_pictures(
         "pictures": sum(t["pictures"] for t in targets),
         "expiring_only": expiring_only,
         "dry_run": dry_run,
+        "targets": targets[:50],
+    }
+
+
+@router.post("/repull-wrong-pulls")
+async def repull_wrong_pulls(
+    pictureless: bool = True,
+    degraded: bool = False,
+    dry_run: bool = True,
+    limit: int = Query(50, ge=1, le=500),
+    db: AsyncSession = Depends(get_db),
+):
+    """Re-pull the memos the integrity check found were pulled wrongly.
+
+    The repair half of `pictureless_videos` and `degraded_reads`. Both are
+    fixed the same way, by fetching the post again, so they share one endpoint
+    and are selected separately because they are not equally certain.
+
+    `pictureless` (on): memos filed as video whose file holds no pictures. This
+    has exactly one cause, a photo post whose attached song got downloaded
+    instead of the post, and there is no innocent reading of it. Small, and
+    always worth repairing.
+
+    `degraded` (OFF): memos whose read could not narrow to the post. Far more
+    numerous, and a re-pull is *likely* rather than certain to improve them, so
+    it is opt-in. Turning it on can queue hundreds of browser renders.
+
+    `dry_run` defaults to TRUE here, unlike its siblings. This queues real work
+    against real hosts, and the honest default for something that heavy is to
+    show what it would touch first (see the never-default-on rule in DESIGN).
+    """
+    from backend.api.ingest import repull_memo_task
+    from backend.core.file_paths import resolve_memo_path
+    from backend.core.job_handlers import queue_task
+    from backend.core.localize_media import _has_video_stream
+
+    rows = (
+        await db.execute(
+            select(
+                Memo.id, Memo.type, Memo.file_path, Memo.resolve_tier,
+                Memo.source_domain, Memo.source_url, Memo.audio_kind,
+            ).where((Memo.is_deleted.is_(False)) | (Memo.is_deleted.is_(None)))
+        )
+    ).all()
+
+    def _pick(rows):
+        """Blocking: ffprobes one file per candidate. Runs off the event loop."""
+        out = []
+        for (
+            memo_id, memo_type, file_path, resolve_tier, domain, source_url,
+            audio_kind,
+        ) in rows:
+            # Nothing to re-pull from. An upload has no source to fetch again.
+            if not (source_url or "").strip():
+                continue
+            kind = (memo_type or "").lower()
+            # NEVER touch a memo that holds music or speech. An audio memo's
+            # file has no pictures by design, its `resolve_tier` was written by
+            # the ORIGINAL save and survives a later "make it local -> audio",
+            # so a TikTok or Facebook link the user converted to a song still
+            # carries `scope:page` years later. Re-pulling that as a video
+            # replaces the song with an mp4, or detaches the file outright when
+            # the post resolves to pictures. Caught in review before it shipped.
+            if kind == "audio" or audio_kind:
+                continue
+            reason = None
+            if pictureless and kind == "video" and (file_path or "").strip():
+                on_disk = resolve_memo_path(file_path)
+                # `is False` only. None means ffprobe could not tell, and a box
+                # without ffprobe must not queue a re-pull of the whole library.
+                if on_disk is not None and _has_video_stream(on_disk) is False:
+                    reason = "pictureless"
+            # Only a memo that still claims to be a video. `scope:page` on a
+            # link or an image memo means the read was poor, not that the memo
+            # is holding the wrong kind of thing.
+            if (
+                reason is None
+                and degraded
+                and kind in ("video", "link", "image")
+                and (resolve_tier or "") == "scope:page"
+            ):
+                reason = "degraded"
+            if reason:
+                out.append(
+                    {"id": str(memo_id), "domain": domain, "reason": reason,
+                     "type": kind}
+                )
+        return out
+
+    # ffprobe is a process spawn per candidate and this is an async route. Run
+    # it in a thread or the whole app freezes for the length of the scan, which
+    # is the exact failure `_scan_sync` already avoids the same way.
+    targets = await asyncio.to_thread(_pick, rows)
+
+    # The certain repairs first, so an opt-in `degraded` sweep can never crowd
+    # them out of the limit. Slicing an arbitrary DB order starved the very
+    # memos this endpoint exists for.
+    targets.sort(key=lambda t: 0 if t["reason"] == "pictureless" else 1)
+    targets = targets[:limit]
+    if not dry_run:
+        for t in targets:
+            # An audio memo never reaches here, but derive the mode the way
+            # `memos.py` does rather than hardcoding it, so this stays correct
+            # if the filter above is ever relaxed.
+            queue_task(
+                repull_memo_task, t["id"],
+                "audio" if t["type"] == "audio" else "video",
+            )
+
+    return {
+        "queued": 0 if dry_run else len(targets),
+        "memos": len(targets),
+        "pictureless": sum(1 for t in targets if t["reason"] == "pictureless"),
+        "degraded": sum(1 for t in targets if t["reason"] == "degraded"),
+        "dry_run": dry_run,
+        "limit": limit,
         "targets": targets[:50],
     }
 
