@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useRef, Suspense, lazy } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   Sparkles,
@@ -38,6 +38,7 @@ import {
 import { cn } from '@/lib/utils';
 import { useOnline } from '@/lib/useOnline';
 import { BackButton } from '@/components/BackButton';
+import { MemoRemoveModal } from '@/components/MemoRemoveModal';
 import { MarkdownEditor } from '@/components/MarkdownEditor';
 import { memoApi, collectionApi } from '@/lib/api';
 import { AskMemoPanel } from '@/components/AskMemoPanel';
@@ -1507,15 +1508,20 @@ function AskRailTool({ memoId, open, onToggle }: { memoId: string; open: boolean
 export function MemoDetail() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
+  const location = useLocation();
   const queryClient = useQueryClient();
   const openThumbEdit = useAppStore((s) => s.openThumbEdit);
   const showNotice = useAppStore((s) => s.showNotice);
+  const showDeleteToast = useAppStore((s) => s.showDeleteToast);
   const isMobile = useIsMobile();
   const [isEditing, setIsEditing] = useState(false);
   const [noteContent, setNoteContent] = useState('');
   const [showExtracted, setShowExtracted] = useState(false);
   const [saving, setSaving] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
+  // Which destructive action is in flight, so the modal can disable both
+  // rows and spin the one that was pressed.
+  const [removing, setRemoving] = useState<'hide' | 'delete' | null>(null);
   // "Add to playlist" popover (music memos only).
   const [plMenuOpen, setPlMenuOpen] = useState(false);
   const [repulling, setRepulling] = useState(false);
@@ -1596,13 +1602,6 @@ export function MemoDetail() {
   }, [memo]);
   /* eslint-enable react-hooks/set-state-in-effect */
 
-  useEffect(() => {
-    if (!confirmDelete) return;
-    const h = (e: KeyboardEvent) => { if (e.key === 'Escape') setConfirmDelete(false); };
-    window.addEventListener('keydown', h);
-    return () => window.removeEventListener('keydown', h);
-  }, [confirmDelete]);
-
   const togglePin = async () => {
     if (!id || !memo) return;
     try {
@@ -1614,14 +1613,60 @@ export function MemoDetail() {
     }
   };
 
+  // Deleting a memo has to leave the page — the memo it renders is gone. A bare
+  // navigate(-1) is not enough: on a deep link (a shared URL, a reload, a
+  // capture opened straight into the app) there is no in-app entry behind this
+  // one, so the history pop does nothing and the page sits there still showing
+  // the memo that was just deleted, which reads as the button being dead.
+  // React Router marks the first entry of a session with key 'default', so fall
+  // back to the library when that is where we are.
+  const leaveDetail = () => {
+    if (location.key === 'default') navigate('/', { replace: true });
+    else navigate(-1);
+  };
+
   const handleDelete = async () => {
-    if (!id) return;
+    if (!id || !memo || removing) return;
+    setRemoving('delete');
     try {
       await memoApi.delete(id);
+      // ['memo', id] is deliberately left in cache: this page still has an
+      // observer on it for another tick, and dropping it would refetch a
+      // deleted id. It also keeps Undo instant.
       queryClient.invalidateQueries({ queryKey: ['memos'] });
-      navigate(-1);
+      queryClient.invalidateQueries({ queryKey: ['memos', 'pinned'] });
+      setConfirmDelete(false);
+      // Same undo affordance as the card grid: soft delete, five seconds to
+      // take it back, and Settings after that.
+      showDeleteToast(id, memo.title);
+      leaveDetail();
     } catch (e) {
       console.error(e);
+      showNotice('Could not delete that memo. Try again.');
+    } finally {
+      setRemoving(null);
+    }
+  };
+
+  // Hide (OPNMMO-0016): off the dashboard, still in its collections, reachable
+  // from the passcode-gated Hidden section. Non-destructive and reversible, so
+  // it stays on the page — leaving would strand the user from the one screen
+  // that can put it back.
+  const handleHide = async () => {
+    if (!id || !memo || removing) return;
+    const next = !memo.hidden;
+    setRemoving('hide');
+    try {
+      await memoApi.hide(id, next);
+      queryClient.invalidateQueries({ queryKey: ['memo', id] });
+      queryClient.invalidateQueries({ queryKey: ['memos'] });
+      setConfirmDelete(false);
+      showNotice(next ? 'Hidden. It lives in the Hidden section now.' : 'Unhidden. Back on the dashboard.', 'info');
+    } catch (e) {
+      console.error(e);
+      showNotice(next ? 'Could not hide that memo. Try again.' : 'Could not unhide that memo. Try again.');
+    } finally {
+      setRemoving(null);
     }
   };
 
@@ -1795,29 +1840,18 @@ export function MemoDetail() {
                 )}
               </div>
             )}
-            {/* Delete with inline confirm popover */}
+            {/* Remove: opens the Hide / Delete modal (MemoRemoveModal). */}
             {!isEditing && (
-              <div style={{ position: 'relative' }}>
-                <button
-                  className="om-icon-btn"
-                  onClick={() => setConfirmDelete((v) => !v)}
-                  title="Delete memo"
-                  aria-label="Delete memo"
-                >
-                  <Trash2 size={15} />
-                </button>
-                {confirmDelete && (
-                  <div
-                    className="om-delete-confirm"
-                    role="dialog"
-                    aria-label="Confirm delete"
-                  >
-                    <span className="om-delete-confirm-label">Delete memo?</span>
-                    <button className="om-btn-ghost om-btn-pill" onClick={() => setConfirmDelete(false)}>Cancel</button>
-                    <button className="om-btn-danger om-btn-pill" onClick={handleDelete}>Delete</button>
-                  </div>
-                )}
-              </div>
+              <button
+                className="om-icon-btn"
+                onClick={() => setConfirmDelete(true)}
+                title="Hide or delete this memo"
+                aria-label="Hide or delete this memo"
+                aria-haspopup="dialog"
+                aria-expanded={confirmDelete}
+              >
+                <Trash2 size={15} />
+              </button>
             )}
             {/* Re-pull: fetch the source again and apply what comes back.
                 For a memo that is wrong rather than merely remote — a video
@@ -2369,6 +2403,16 @@ export function MemoDetail() {
           </div>{/* /.om-detail-content */}
         </div>
       </div>
+
+      {confirmDelete && (
+        <MemoRemoveModal
+          memo={memo}
+          busy={removing}
+          onHide={handleHide}
+          onDelete={handleDelete}
+          onCancel={() => setConfirmDelete(false)}
+        />
+      )}
     </div>
   );
 }

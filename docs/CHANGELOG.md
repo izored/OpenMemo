@@ -7,6 +7,16 @@ All notable changes to OpenMemo are documented here.
 
 <!-- Add entries here as work lands: ### Added / ### Changed / ### Fixed -->
 
+### Fixed
+
+- 🗑️ **The delete button on a memo page works, and asks properly first.** Pressing Delete could leave you sitting on the page you just deleted, with the little confirm bubble still open and nothing else to show for it. The memo was gone from the library, the page just never said so. It now leaves for wherever you came from, and falls back to your library when you opened the memo from a link and there is nowhere to go back to. If the delete fails you get told, instead of it failing quietly.
+
+  Deleting from a memo page also gives you the same five second Undo the cards give you, so it is the same promise everywhere: nothing you delete is gone the moment you press the button.
+
+### Changed
+
+- 🙈 **Hide and Delete now live together on a memo page.** The trash icon opened a small bubble hanging off itself that offered one thing. It opens a proper dialog, and it offers both: hide it, which takes it off the dashboard and keeps it in its collections, or delete it. Each one says what it does before you pick. Hiding keeps you on the page so you can put it back.
+
 ---
 ## [3.19.0] - 2026-09-05
 
