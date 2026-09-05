@@ -5,6 +5,11 @@ All notable changes to OpenMemo are documented here.
 ---
 ## [Unreleased]
 
+<!-- Add entries here as work lands: ### Added / ### Changed / ### Fixed -->
+
+---
+## [3.19.0] - 2026-09-05
+
 ### Added
 
 - 🩺 **openMemo now notices when a pull came back wrong, and offers to fix it.** Until now a bad pull was silent. A memo could be visibly, obviously wrong on the page and nothing in the app knew: the checks that run every hour looked for missing files and lost sound, and had no idea what a wrong pull even looked like.
@@ -20,8 +25,6 @@ All notable changes to OpenMemo are documented here.
   It is off for links forwarded in bulk from Telegram, where thirty forwarded links would have meant thirty page loads nobody asked for. It also refuses outright to touch anything holding music, whatever else it has been told, because a memo that started as a video link and was later turned into a song still remembers the read that saved it.
 
   Re-reading the ones that could not be read properly is a separate tick box, off by default, because that half can mean hundreds of page loads.
-
-<!-- Add entries here as work lands: ### Added / ### Changed / ### Fixed -->
 
 - 🗂️ **Drag your collections into the order you want them.** The sidebar list was in whatever order the database handed it over, which is the order you happened to create them in. Grab a collection and drop it where it belongs. The order sticks across reloads and restarts, because it is written down rather than remembered by the browser.
   Dragging is the only ordering there is. No sort menu, no "by name", nothing that can quietly undo an order you arranged by hand. A new collection lands at the bottom of the list, where you just made it, and stays there until you move it.

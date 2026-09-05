@@ -5,7 +5,7 @@ from pathlib import Path
 
 class Settings(BaseSettings):
     APP_NAME: str = "OpenMemo"
-    VERSION: str = "3.18.1"
+    VERSION: str = "3.19.0"
     
     # Paths
     BASE_DIR: Path = Path(__file__).parent.parent
