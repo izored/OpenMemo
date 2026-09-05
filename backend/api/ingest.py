@@ -2998,29 +2998,45 @@ async def repull_memo_task(memo_id: str, mode: str):
             sl for sl in _slides(getattr(memo, "gallery", None))
             if (sl or {}).get("type") != "video"
         ]) > 1
-        if album and not (resolved or {}).get("video_url"):
-            has_media = False
-            # Repair, not only prevention. A file already attached to an album
-            # that holds no pictures was never this memo's, and while it is
-            # attached `derive_memo_type` keeps filing the album as a video. The
-            # bytes stay on disk for the integrity report; only the reference
-            # goes, which is the rule `_apply_resolved_type` already follows.
-            if memo.file_path:
-                from backend.core.file_paths import resolve_memo_path
-                from backend.core.localize_media import _has_video_stream
+        # The file's own bytes, asked directly. A gallery used to be the only way
+        # in to this repair, and the memo that needed it most had none: its scope
+        # failed on the FIRST save, so no gallery was ever written, and the memo
+        # re-downloaded the same song on every re-pull. What makes the file wrong
+        # is that it holds no pictures while the memo calls itself a video — and
+        # that is true whether or not anything ever managed to read the album.
+        #
+        # Only for a memo typed `video`. An audio memo's file is SUPPOSED to have
+        # no pictures, and detaching one would delete a music library by degrees.
+        pictureless = False
+        if memo and (memo.file_path or "").strip() and (memo.type or "").lower() == "video":
+            from backend.core.file_paths import resolve_memo_path
+            from backend.core.localize_media import _has_video_stream
 
-                on_disk = resolve_memo_path(memo.file_path)
-                if on_disk and _has_video_stream(on_disk) is False:
-                    log.info(
-                        "repull: %s is an album and %s holds no pictures, detaching it",
-                        memo.id, memo.file_path,
-                    )
-                    memo.file_path = None
-                    memo.localize_status = None
-                    memo.localize_error = None
-                    memo.type = "image"
-                    memo.updated_at = datetime.utcnow()
-                    await db.commit()
+            on_disk = resolve_memo_path(memo.file_path)
+            pictureless = bool(on_disk) and _has_video_stream(on_disk) is False
+
+        if (album or pictureless) and not (resolved or {}).get("video_url"):
+            has_media = False
+            # Repair, not only prevention. A file that holds no pictures was
+            # never this memo's video, and while it stays attached
+            # `derive_memo_type` reads its extension and keeps filing the memo
+            # under Videos. The bytes stay on disk for the integrity report;
+            # only the reference goes, which is the rule `_apply_resolved_type`
+            # already follows.
+            if pictureless:
+                log.info(
+                    "repull: %s holds no pictures in %s, detaching it",
+                    memo.id, memo.file_path,
+                )
+                memo.file_path = None
+                memo.localize_status = None
+                memo.localize_error = None
+                # An album says what the post is. With no gallery to go on, all
+                # that is known is that this is not the video it claimed to be,
+                # and a link is the honest card for a post we could not read.
+                memo.type = "image" if album else "link"
+                memo.updated_at = datetime.utcnow()
+                await db.commit()
 
         no_media = bool(memo) and not has_media
         if no_media:

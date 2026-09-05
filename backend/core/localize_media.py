@@ -136,6 +136,43 @@ def _has_video_stream(path: Path) -> bool | None:
     return b"video" in out.stdout
 
 
+def _reject_pictureless(dest: Path, kind: str = "download") -> None:
+    """Delete and raise when a VIDEO download carries sound but no pictures.
+
+    Every tier here already refuses a file of the wrong SIZE
+    (`_MIN_VALID_BYTES`) and of the wrong SHAPE (`_playable_container`). This is
+    the same refusal for the wrong CONTENT, and it belongs beside them for the
+    same reason: a tier that reports success without checking its own bytes is
+    how all three of these bugs got in.
+
+    A photo post with a song attached puts exactly ONE progressive stream on the
+    wire — the song. "Download the media on the page" then succeeds and hands
+    back 270 seconds of AAC in an .mp4 container, `derive_memo_type` reads the
+    extension first, and a photo album is a video memo forever after. Caught
+    live 2026-09-04 on a Facebook album, and again on 2026-09-05 with the repair
+    already shipped, because that repair lived in `repull_memo_task` and could
+    only reach a memo that already held a gallery. The memo that needed it had
+    none: its scope failed on the FIRST save, so nothing ever wrote one.
+
+    Here, no entry path can miss it — first save, "Make it local", re-pull and
+    the playlist pass all go through a tier.
+
+    Raises LocalizeError so the caller falls through to the next tier exactly as
+    it does for an unplayable container. `_has_video_stream` answers None when
+    ffprobe cannot tell, which must never be read as "no pictures".
+    """
+    if _has_video_stream(dest) is not False:
+        return
+    try:
+        dest.unlink()
+    except Exception:
+        pass
+    raise LocalizeError(
+        f"The {kind} carried sound but no pictures - that is the page's audio "
+        "track, not a video (a photo post with music attached does this)"
+    )
+
+
 def _playable_container(path: Path) -> bool:
     """Does this file begin like a media container a player can open?
 
@@ -282,6 +319,10 @@ def _localize_sync(url: str, workspace_id: str, mode: str, quality: int) -> dict
 
     path = _run_ytdlp(url, out_template, mode, quality)
     memo_type = "audio" if mode == "audio" else "video"
+    if memo_type == "video":
+        # yt-dlp asked for video and can still come back with only sound, when
+        # the only format it could reach on a photo post is the attached track.
+        _reject_pictureless(path, "yt-dlp download")
     thumbnail_url = _get_thumbnail_url(url) if memo_type == "video" else None
     return {
         "path": str(path), "type": memo_type, "filename": path.name,
@@ -478,6 +519,7 @@ async def _localize_via_instagram_api(url: str, workspace_id: str) -> dict:
         referer=f"https://www.instagram.com/p/{shortcode}/" if shortcode
         else "https://www.instagram.com/",
     )
+    _reject_pictureless(dest, "Instagram rendition")
     return {
         "path": str(dest),
         "type": "video",
@@ -631,7 +673,13 @@ async def _localize_via_sniff(url: str, workspace_id: str) -> dict:
     # answers with a neighbour's — which is how a six-photo Threads carousel was
     # localized as a stranger's video (2026-08-30). A URL that is not a post
     # permalink scopes to nothing and behaves exactly as before.
-    info = await sniff_media(url, scope_permalink=_post_permalink(url))
+    # A share wrapper scopes to nothing, so resolve it to the real permalink
+    # first — otherwise the capture is scoped to the whole page and "the biggest
+    # stream on the wire" answers with whatever the page happens to play.
+    from backend.core.permalinks import resolve_permalink
+
+    target = await resolve_permalink(url)
+    info = await sniff_media(target, scope_permalink=_post_permalink(target))
     if not info or not info.get("media_url"):
         raise LocalizeError("No downloadable media stream found on the page")
 
@@ -650,6 +698,11 @@ async def _localize_via_sniff(url: str, workspace_id: str) -> dict:
             info["media_url"], dest,
             referer=info.get("referer"), user_agent=info.get("user_agent"),
         )
+
+    # Before anything asks about SOUND, ask whether there are pictures at all.
+    # A photo post with music on it puts only the song on the wire, and every
+    # question below this line assumes it is looking at a video.
+    _reject_pictureless(dest, "sniffed stream")
 
     has_audio = _has_audio_stream(dest)
     if has_audio is False:

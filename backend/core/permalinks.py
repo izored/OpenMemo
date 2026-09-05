@@ -113,3 +113,43 @@ def canonical_post_url(url: str) -> str:
     """`url` reduced to its permalink, or `url` unchanged when it is not one."""
     scope = post_scope(url)
     return scope["url"] if scope else url
+
+
+async def resolve_permalink(url: str, *, timeout: float = 8.0) -> str:
+    """`url` with a share-sheet redirect followed to the post it really names.
+
+    A share wrapper is a URL the page has never heard of. `facebook.com/share/p/
+    <code>` names a post but appears nowhere inside it, so scoping from it finds
+    no self-link, narrows to nothing, and the post is then read as the feed
+    wrapped around it. That is how a photo album became a video memo playing the
+    song attached to it.
+
+    `headless._landed_rescope` already retries from wherever the BROWSER landed,
+    and that turns out to be the wrong place to ask: Meta answers a logged-out
+    browser with a wall, so the browser never lands on the post at all. The
+    plain HTTP redirect needs no session — `/share/p/<code>` 302s straight to
+    `/<author>/posts/<pfbid>` for an anonymous HEAD — so following it BEFORE
+    anything renders is what puts the render on a page whose own anchors the
+    scope can match. The landed retry stays as the second line.
+
+    Host-blind: any wrapper on any host resolves the same way. Returns `url`
+    unchanged when nothing redirects, when the destination is not a post
+    permalink either, or on any network failure — so every caller behaves
+    exactly as it did before whenever this cannot help.
+    """
+    if not url or post_scope(url) is None:
+        return url
+    import httpx
+
+    try:
+        async with httpx.AsyncClient(
+            timeout=timeout, follow_redirects=True
+        ) as client:
+            resp = await client.head(url)
+            landed = str(resp.url)
+    except Exception:
+        return url
+    if not landed or landed.rstrip("/") == url.rstrip("/"):
+        return url
+    scope = post_scope(landed)
+    return scope["url"] if scope else url

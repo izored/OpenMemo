@@ -7,6 +7,18 @@ All notable changes to OpenMemo are documented here.
 
 <!-- Add entries here as work lands: ### Added / ### Changed / ### Fixed -->
 
+### Fixed
+
+- 🎵 **The album that comes back as a song, properly this time.** Version 3.18.0 said this was fixed. It was not, and the memo that proved it was saved the day after. The repair only knew how to rescue an album whose photos openMemo had already managed to read once. The album that needed rescuing had never been read at all: Facebook answered with a wall the first time, so no photos were ever saved, and there was nothing for the repair to recognise. It downloaded the same four and a half minute song on every single try.
+
+  The check that catches this already existed. It was sitting in the repair step, where only a re-pull ever ran it. It now runs on the download itself, so nothing can put a file with no pictures in it onto a memo that calls itself a video. Saving something new, making it local, re-pulling, and downloading a playlist all go through that one gate.
+
+  A song already sitting on an album is still detached the next time you re-pull, and now that works whether or not the photos were ever read.
+
+- 🔗 **A shared link is followed to the post before anything reads it.** Facebook's share menu gives you the only link it offers for a photo post, and that link names the post in a spelling the post's own page has never heard of. openMemo narrows a page down to the one post you asked for by matching that spelling, so it matched nothing, and the whole feed answered instead. There was already a retry for this, but it asked the browser where it had ended up, and the browser gets stopped at the door. The plain web address redirect needs no account at all, so it is followed first now, and the page is read at the address the post actually lives at.
+
+- 🏷️ **A post nobody could read still gets its name.** When every attempt came back empty the memo was titled with its own raw address and nothing else. Facebook, Instagram and the rest hand a full preview to the little robots that make link previews in chat apps, while turning away anything that looks like a person without an account. openMemo already knew that trick and only used it for Instagram. Any site gets it now, and only after everything else has failed, so the memo arrives with a real title and the post's own picture on it instead of a bare link.
+
 ### Changed
 
 - 🎨 **Every dropdown in Settings is openMemo's own now.** Two were still the browser's. A plain dropdown hands its open list to the operating system to draw, so in a dark app it comes up as a white panel with a blue highlight, and nothing the page can do reaches inside it. Picking how often Telegram is checked, and picking a snapshot to restore, both did that. They now match the rest of the app, and there is one dropdown in Settings rather than one per author.
