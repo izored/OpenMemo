@@ -3,13 +3,111 @@
 Single source of truth for all planned work. Versioned milestones + unversioned backlog.
 
 > Sections below are **not** in version order. The Shipped block at the top is
-> current as of v3.13.0 (2026-08-19). Everything under a `v1.x` heading further
-> down is old planning material kept for its detail; check the Shipped block and
-> `docs/CHANGELOG.md` before assuming an item is still outstanding.
+> current as of **v3.19.0 (2026-09-05)**. Everything under a `v1.x` heading
+> further down is old planning material kept for its detail, including headings
+> that still say "NEXT" or "IN PROGRESS" from 2026; those are historical. Check
+> the Shipped block and `docs/CHANGELOG.md` before assuming an item is still
+> outstanding.
+
+---
+
+## 🎯 Next
+
+Grounded in what the library and this year's sessions actually surfaced, newest
+thinking first. Nothing here is committed until it has an ADR or a plan file.
+
+### A memo can hold its own library *(proposed, needs an ADR)*
+
+Open any memo and add things **to that memo**: a link, a picture, a note, a PDF,
+another memo you already have. The subject gathers its own references without
+anyone creating a Space or a collection first.
+
+The gap it fills is real. Today the only way to group anything is to decide up
+front that it deserves a container, name it, and file into it. Most subjects
+never earn that ceremony, so the supporting material ends up loose in the
+library with nothing tying it to the thing it belongs to. A recipe wants its
+source video. A flat wants the listing, three photos and the agent's email. A
+song wants the interview about it. None of those is a collection.
+
+**The open questions, which are the whole design:**
+
+- **Are inner memos real memos?** If yes they are searchable, backed up and
+  syncable for free, and they clutter the dashboard. If no they are invisible to
+  search, which throws away most of the value. Leaning yes, kept out of the
+  dashboard feed by default, reusing the mechanism collections already have for
+  exactly this problem.
+- **One parent or many?** A reference can genuinely belong to two subjects. A
+  join table costs little now and is painful to retrofit; a `parent_id` column
+  is simpler and will be wrong the first time something is filed twice.
+- **How is this not a third containment mechanism?** Collections group, Spaces
+  isolate, and this attaches. Three ways to put things together is how a library
+  becomes incoherent. This repo already learned that lesson with the dashboard
+  sort toggle, which was cut because three ordering mechanisms fought each other.
+  The distinction has to be sharp enough to explain in one sentence before any
+  code is written.
+- **What does the dashboard show?** If an inner memo is hidden from the feed,
+  deleting the parent must not silently orphan it into invisibility.
+
+**Reuse rather than invent:** app-wide drag and drop already exists (ADR-023),
+so dropping a file or a link onto an open memo is the natural gesture. Gallery
+already renders multi-item memos. `sort_order` already exists on memos, so
+ordering inside a memo is free. Related memos (`/api/memos/:id/related`) already
+computes affinity and could suggest what to attach.
+
+**Must survive:** backup and restore, Mesh sync between machines, and moving the
+parent between Spaces.
+
+### Windows standalone app *(planned — [plans/028](../plans/028-windows-standalone-app.md))*
+
+One installer, no Docker, no terminal. A port of the working macOS Electron
+shell rather than a second application.
+
+### Say a memo is wrong where the user is looking *(small, high value)*
+
+A pull that came back wrong is currently only visible in Settings, under Data
+safety. Somebody whose album saved as a song has no reason to go there. A marker
+on the memo itself, beside the existing re-pull button, reaches them at the only
+moment they care.
+
+### Finish the media recovery *(from [plans/027](../plans/027-media-recovery-and-hardening.md))*
+
+127 files are referenced and missing as of 2026-09-05. 105 still have a source
+and can be re-fetched; 22 were uploads and exist nowhere else. Source URLs rot,
+so this one has a clock on it.
 
 ---
 
 ## ✅ Shipped
+
+### v3.19.0 — Wrong pulls repair themselves *(SHIPPED 2026-09-05)*
+
+- [x] **A save that could not read the post retries itself once**, immediately and without asking. The usual cause is a cookie notice, and declining it is remembered, so the second attempt walks past what stopped the first
+- [x] **The library notices a pull that came back wrong.** A memo filed as video whose file holds no pictures, or a read that never narrowed to the post. Both show in Settings with a two-step repair button
+- [x] **Drag collections into the order you want** in the sidebar. Dragging is the only ordering; no sort menu that can undo an order arranged by hand
+
+### v3.18.x — Facebook albums save as albums *(SHIPPED 2026-09-04/05)*
+
+- [x] **A photo album no longer arrives as the song playing behind it.** A download with no pictures in it can never be attached to a memo, on any path
+- [x] **A cookie banner no longer costs the photographs.** The scoped read of a post now survives a failed parse of the page wrapped around it, which was the root cause
+- [x] **A site can file itself** into a collection you choose, by domain
+
+### v3.17.x — PDFs, code, and shared posts *(SHIPPED 2026-09-02/04)*
+
+- [x] PDF cards show page one; code reads like code
+- [x] A shared Facebook post saves as the post rather than as a video
+
+### v3.16.0 — PDFs open as PDFs *(SHIPPED 2026-09-02)*
+
+- [x] A PDF opens in a real viewer inside openMemo instead of downloading
+
+### v3.15.0 — Drag a memo into a Space *(SHIPPED 2026-09-02)*
+
+- [x] Moving a memo between Spaces is a drag, not a form
+
+### v3.14.x — Drag anything in *(SHIPPED 2026-08-30/09-01)*
+
+- [x] **Drag a link, a picture or a selection straight out of the browser.** Previously only files worked, and a dropped link navigated the whole app away from itself
+- [x] **Hide a collection from the dashboard** so a fast-filling bucket stops burying everything else
 
 ### v3.13.0 — Backups that survive an update *(SHIPPED 2026-08-19)*
 
@@ -172,7 +270,7 @@ Mixcloud, Audius, + graceful fallback), never SoundCloud-only.
 
 ---
 
-## v1.7.4 — UX Quick Wins + P1 Fixes *(NEXT — IN PROGRESS)*
+## v1.7.4 — UX Quick Wins + P1 Fixes *(historical, 2026)*
 
 **P1 fixes (this session):**
 - [x] **[L] Note markdown render in MemoDetail** — `MarkdownEditor` now derives `editing` from `viewFirst` prop instead of fragile `useState(!viewFirst)` + sync effect. ReactMarkdown renders on load; MDXEditor opens only on user click. *(Regression fixed)*

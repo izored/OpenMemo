@@ -250,8 +250,8 @@ openmemo/
 
 ## Roadmap
 
-**v3.13** *(current)*: Mesh two-way sync between your machines, backups that restore and that run before a Mac update, full offline operation, a native macOS app with its own settings and PIN lock, music library with playlist import and lossless pulls, Spaces, Ask Memo with the Memos/Chat toggle and per-memo citations, phone capture through a private Telegram bot, mobile responsive pass, hidden section behind a passcode, cinematic onboarding
-**Next**: Transcript-synced playback, AI-suggested collections, similar Memos, multiple views (grid/list/board)
+**v3.19** *(current)*: Drop a link, a picture or a file anywhere in the app, PDFs that open as PDFs, collections you drag into the order you want, a library that notices when a pull came back wrong and offers to repair it, Mesh two-way sync between your machines, backups that restore and that run before a Mac update, full offline operation, a native macOS app with its own settings and PIN lock, music library with playlist import and lossless pulls, Spaces, Ask Memo with per-memo citations, phone capture through a private Telegram bot, hidden section behind a passcode
+**Next**: A memo that holds its own library of references, a Windows app with no Docker, transcript-synced playback, similar Memos
 **Later**: Multi-user workspaces, Notion/Obsidian import, PWA install, plugin system
 
 See [`Specs/ROADMAP.md`](Specs/ROADMAP.md) for the full roadmap, architectural findings, and contributor guide.
