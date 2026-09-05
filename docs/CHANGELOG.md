@@ -17,7 +17,9 @@ All notable changes to OpenMemo are documented here.
 
   It reads the post again and downloads nothing, so it cannot fight with a download already in progress, cannot override your setting about pulling videos automatically, and cannot touch a memo you asked for the song of. It happens once. A post that stays unreadable costs one extra read and then stops asking.
 
-  It is off for links forwarded in bulk from Telegram, where thirty forwarded links would have meant thirty page loads nobody asked for.
+  It is off for links forwarded in bulk from Telegram, where thirty forwarded links would have meant thirty page loads nobody asked for. It also refuses outright to touch anything holding music, whatever else it has been told, because a memo that started as a video link and was later turned into a song still remembers the read that saved it.
+
+  Re-reading the ones that could not be read properly is a separate tick box, off by default, because that half can mean hundreds of page loads.
 
 <!-- Add entries here as work lands: ### Added / ### Changed / ### Fixed -->
 

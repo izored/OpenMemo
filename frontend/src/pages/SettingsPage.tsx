@@ -264,6 +264,10 @@ function LibraryIntegrityRows() {
   const [plan, setPlan] = useState<{ memos: number } | null>(null);
   const [repairing, setRepairing] = useState(false);
   const [repaired, setRepaired] = useState<number | null>(null);
+  // The slow half stays OFF unless asked for. Re-reading every degraded memo
+  // can be hundreds of page loads, and a button that quietly opts you into that
+  // is the thing the never-default-on rule exists to stop.
+  const [alsoDegraded, setAlsoDegraded] = useState(false);
 
   useEffect(() => {
     settingsApi.libraryIntegrity().then(setState).catch(() => setState(null));
@@ -355,12 +359,15 @@ function LibraryIntegrityRows() {
                   setRepairing(true);
                   try {
                     if (!plan) {
-                      const r = await maintenanceApi.repullWrongPulls({ pictureless: true, degraded: true, dryRun: true });
+                      const r = await maintenanceApi.repullWrongPulls({ pictureless: true, degraded: alsoDegraded, dryRun: true });
                       setPlan({ memos: r.memos });
                     } else {
-                      const r = await maintenanceApi.repullWrongPulls({ pictureless: true, degraded: true, dryRun: false });
+                      const r = await maintenanceApi.repullWrongPulls({ pictureless: true, degraded: alsoDegraded, dryRun: false });
                       setRepaired(r.queued);
                       setPlan(null);
+                      // The counts just changed. Leaving the panel showing the
+                      // old ones reads as the repair having done nothing.
+                      settingsApi.libraryIntegrity().then(setState).catch(() => {});
                     }
                   } catch { /* leave the panel as it was */ }
                   finally { setRepairing(false); }
@@ -368,6 +375,16 @@ function LibraryIntegrityRows() {
               >
                 {repairing ? 'Working…' : plan ? `Re-pull ${plan.memos} memo${plan.memos === 1 ? '' : 's'}` : 'Repair these'}
               </button>
+              {state.degraded_reads > 0 && (
+                <label style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }} className="mono">
+                  <input
+                    type="checkbox"
+                    checked={alsoDegraded}
+                    onChange={(e) => { setAlsoDegraded(e.target.checked); setPlan(null); }}
+                  />
+                  Also re-read the {state.degraded_reads} that could not be read properly (slower)
+                </label>
+              )}
               <span className="mono">
                 {repaired !== null
                   ? `Queued ${repaired}. They update as each one finishes.`

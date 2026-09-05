@@ -110,7 +110,7 @@ def _scan_sync() -> dict:
             rows = con.execute(
                 text(
                     "select file_path, thumbnail_path, source_url, type, id, gallery, "
-                    "resolve_tier "
+                    "resolve_tier, audio_kind "
                     "from memos where is_deleted = 0 or is_deleted is null"
                 )
             ).fetchall()
@@ -136,6 +136,7 @@ def _scan_sync() -> dict:
         memo_id,
         gallery,
         resolve_tier,
+        audio_kind,
     ) in rows:
         # A read that could not narrow to the post. Recorded since 3.18.0 and,
         # until now, read by nobody: the number existed and no surface showed
@@ -192,7 +193,14 @@ def _scan_sync() -> dict:
                 # repair endpoint tests pictures directly. The scan would then
                 # report zero and the repair would find targets, which reads as
                 # the app disagreeing with itself.
-                if _has_video_stream(resolved) is False:
+                # `audio_kind` as well as the type, because `derive_memo_type`
+                # reads the file EXTENSION first and the startup sorter runs on
+                # every boot: a song that ever lands in an .mp4 container gets
+                # retyped `video` while keeping `audio_kind`. Without this the
+                # scan reports it for ever and the repair endpoint, which does
+                # check `audio_kind`, refuses to touch it — the app disagreeing
+                # with itself, in public, at WARNING level, hourly.
+                if _has_video_stream(resolved) is False and not audio_kind:
                     pictureless_videos += 1
                     pictureless_memos.append(str(memo_id))
         # A remote thumbnail URL is not a file we can lose, so only local ones

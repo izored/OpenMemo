@@ -2945,6 +2945,21 @@ async def reresolve_memo_task(memo_id: str):
     decided deliberately not to fetch it, and if the user asked for the audio
     of this link then a video download would take the song away.
     """
+    # Step 1 of the re-pull can rewrite `type` and detach `file_path`
+    # (`_apply_resolved_type`), which is exactly what makes it useful: a second
+    # read that finally sees the album applies the gallery. On a memo holding
+    # music that same power is a liability, so refuse here rather than trust the
+    # scheduling conditions upstream to stay correct for ever. The window is
+    # narrow (the memo would have to become audio between this job being queued
+    # and it running) and closing it by construction costs one query.
+    async with AsyncSessionLocal() as db:
+        memo = await db.get(Memo, memo_id)
+        if not memo:
+            return
+        if (memo.type or "").lower() == "audio" or memo.audio_kind:
+            log.info("reresolve: %s holds music, leaving it alone", memo_id)
+            return
+
     await repull_memo_task(memo_id, "video", resolve_only=True)
 
 
