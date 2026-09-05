@@ -15,6 +15,12 @@ All notable changes to OpenMemo are documented here.
 
   A song already sitting on an album is still detached the next time you re-pull, and now that works whether or not the photos were ever read.
 
+- 🖼️ **A photo post with music on it is now the photo.** When openMemo works out that the thing it downloaded was the soundtrack and not a video, the post is not a video, and it stopped being one. The question is what it becomes. The first attempt said a plain link, which threw away the whole point: the picture was sitting right there, already saved, and the card showed a web address instead of it. A post that left a picture behind is a picture. A link is only for a post that left nothing to look at.
+
+  Two things that used to happen no longer do. There is no red failure chip on these, because nothing failed. The download worked and told us what the post is. And the same song is not fetched again on the next re-pull, and the one after that, which is what a memo stuck on "video" kept asking for.
+
+  A post that openMemo could not read at all no longer gets called a video on the strength of the site it came from. Facebook is a video site, so anything unreadable from it was being labelled a video, and a memo labelled a video is a memo the downloader is then sent to fill. That guess is only made now when there is something behind it.
+
 - 🔗 **A shared link is followed to the post before anything reads it.** Facebook's share menu gives you the only link it offers for a photo post, and that link names the post in a spelling the post's own page has never heard of. openMemo narrows a page down to the one post you asked for by matching that spelling, so it matched nothing, and the whole feed answered instead. There was already a retry for this, but it asked the browser where it had ended up, and the browser gets stopped at the door. The plain web address redirect needs no account at all, so it is followed first now, and the page is read at the address the post actually lives at.
 
 - 🏷️ **A post nobody could read still gets its name.** When every attempt came back empty the memo was titled with its own raw address and nothing else. Facebook, Instagram and the rest hand a full preview to the little robots that make link previews in chat apps, while turning away anything that looks like a person without an account. openMemo already knew that trick and only used it for Instagram. Any site gets it now, and only after everything else has failed, so the memo arrives with a real title and the post's own picture on it instead of a bare link.

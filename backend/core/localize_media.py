@@ -167,7 +167,7 @@ def _reject_pictureless(dest: Path, kind: str = "download") -> None:
         dest.unlink()
     except Exception:
         pass
-    raise LocalizeError(
+    raise PicturelessDownload(
         f"The {kind} carried sound but no pictures - that is the page's audio "
         "track, not a video (a photo post with music attached does this)"
     )
@@ -239,6 +239,26 @@ def _video_format(quality: int) -> str:
 
 class LocalizeError(Exception):
     """Raised when the download cannot be completed."""
+
+
+class PicturelessDownload(LocalizeError):
+    """The download worked and brought back the wrong KIND of thing.
+
+    A LocalizeError, so every `except LocalizeError` tier-fallthrough below
+    keeps working unchanged. It is a separate class because the memo layer has
+    to tell two situations apart, and treating them alike is what left a photo
+    album filed as a video:
+
+      * a download that FAILED. The post is a video we could not reach, the
+        memo stays a video, and a red error chip is the honest report.
+      * a download that SUCCEEDED and thereby proved the post is not a video.
+        It handed over the page's audio track, so this is a photo post with
+        music. There is nothing to retry, a red chip is a lie, and leaving the
+        memo typed `video` is what sends the downloader back for the same song
+        on the next re-pull.
+
+    See `_reject_pictureless` and `localize_memo_task`.
+    """
 
 
 def _have(binary: str) -> bool:
@@ -806,7 +826,19 @@ async def localize_media(url: str, workspace_id: str, mode: str, quality: int = 
                 print(f"[localize] sniff fallback failed for {url}: {sniff_err}")
                 # The download helper was the LAST attempt, so surface BOTH
                 # reasons — the modal must not blame yt-dlp for a sniff failure.
-                raise LocalizeError(
+                #
+                # Keep the CLASS when either tier reported pictures-with-no-
+                # video. Both tiers reaching the same audio track is the
+                # strongest possible evidence the post is not a video, and
+                # flattening it to a plain LocalizeError here would throw that
+                # verdict away one line before the memo layer reads it.
+                combined = (
+                    PicturelessDownload
+                    if isinstance(ytdlp_err, PicturelessDownload)
+                    or isinstance(sniff_err, PicturelessDownload)
+                    else LocalizeError
+                )
+                raise combined(
                     f"yt-dlp: {ytdlp_err} | download helper: {sniff_err}"
                 ) from sniff_err
         raise

@@ -127,7 +127,7 @@ def test_a_pictureless_file_is_detached_even_with_no_gallery():
 
     src = inspect.getsource(ingest.repull_memo_task)
     assert "pictureless = " in src
-    assert "if (album or pictureless) and not (resolved or {}).get(\"video_url\"):" in src
+    assert "if (album or pictureless or is_picture_post) and not og_video:" in src
 
 
 def test_an_audio_memo_keeps_its_file():
@@ -139,14 +139,15 @@ def test_an_audio_memo_keeps_its_file():
     assert '(memo.type or "").lower() == "video"' in src
 
 
-def test_a_detached_memo_with_no_gallery_becomes_a_link():
-    """An album says what the post is. With no gallery, all that is known is
-    that this is not the video it claimed to be, and `link` is what
-    `derive_memo_type` will leave alone on a post permalink."""
+def test_a_detached_memo_is_filed_by_what_it_left_behind():
+    """First cut of this filed every gallery-less post as a `link`, which is how
+    the live memo ended up as a bare link card when the whole point was to see
+    the photo. A post holding a picture is an image memo; `link` is only for a
+    post that left nothing to look at."""
     from backend.api import ingest
 
     src = inspect.getsource(ingest.repull_memo_task)
-    assert 'memo.type = "image" if album else "link"' in src
+    assert 'memo.type = "image" if (album or has_picture) else "link"' in src
 
 
 def test_a_link_verdict_survives_the_background_sorter():
@@ -273,3 +274,130 @@ def test_the_sniffer_scopes_to_the_resolved_post():
     src = inspect.getsource(_localize_via_sniff)
     assert "target = await resolve_permalink(url)" in src
     assert "sniff_media(target" in src
+
+
+# ------------------------------- the post is its picture, not a link card
+
+def test_the_rejection_is_its_own_class():
+    """A download that FAILED and a download that proved the post is not a
+    video need different answers. Same class for both is what left the memo
+    typed video with a red chip, which is a lie and also a loop: the next
+    re-pull sees a video memo and goes after the same song."""
+    from backend.core.localize_media import LocalizeError, PicturelessDownload
+
+    assert issubclass(PicturelessDownload, LocalizeError)
+
+
+def test_the_verdict_survives_both_tiers_failing():
+    """yt-dlp and the sniffer reaching the same audio track is the strongest
+    evidence there is. Flattening it to a plain LocalizeError threw that away
+    one line before the memo layer read it."""
+    src = inspect.getsource(
+        __import__("backend.core.localize_media", fromlist=["x"]).localize_media
+    )
+    assert "isinstance(ytdlp_err, PicturelessDownload)" in src
+    assert "isinstance(sniff_err, PicturelessDownload)" in src
+
+
+def test_a_proven_non_video_is_filed_by_what_it_holds():
+    """The memo the user was actually looking at. A post holding a picture and
+    an audio track is a photo post with music, and a link card hides the one
+    thing that survived the fetch."""
+    from backend.api import ingest
+
+    src = inspect.getsource(ingest.localize_memo_task)
+    assert "except PicturelessDownload" in src
+    assert '"image" if (memo.thumbnail_path or "").strip() else "link"' in src
+
+
+def test_a_proven_non_video_gets_no_error_chip():
+    """"This broke, try again" is wrong. Nothing broke and there is nothing to
+    retry."""
+    from backend.api import ingest
+
+    src = inspect.getsource(ingest.localize_memo_task)
+    head = src[src.index("except PicturelessDownload"):]
+    head = head[: head.index("except LocalizeError")]
+    assert "memo.localize_status = None" in head
+    assert "memo.localize_error = None" in head
+
+
+def test_the_repull_detach_keeps_the_picture_too():
+    from backend.api import ingest
+
+    src = inspect.getsource(ingest.repull_memo_task)
+    assert 'memo.type = "image" if (album or has_picture) else "link"' in src
+
+
+def test_an_image_memo_is_never_offered_to_the_downloader():
+    """Without this a single-photo post loops for ever: the resolve says
+    `video` from the domain, so "has media" stays true, so the song is fetched
+    and discarded on every re-pull."""
+    from backend.api import ingest
+
+    src = inspect.getsource(ingest.repull_memo_task)
+    assert 'is_picture_post = bool(memo) and (memo.type or "").lower() == "image"' in src
+    assert "if (album or pictureless or is_picture_post) and not og_video:" in src
+
+
+# --------------------------- a failed narrowing is not evidence of a video
+
+def test_a_failed_scope_cannot_promote_a_memo_to_video():
+    """`scope:page` is the resolver saying it read the feed, not the post. On a
+    video host `classify_media` then answers `video` because that is what it
+    says when it has learned nothing, and that verdict is not inert: it sends
+    the downloader out to fill the memo."""
+    from backend.api.ingest import _apply_resolved_type
+
+    memo = _Repullable(type="link", source_url=FB_SHARE)
+    _apply_resolved_type(memo, {"type": "video", "resolve_tier": "scope:page"}, [])
+    assert memo.type == "link"
+
+
+def test_a_scope_that_worked_still_speaks():
+    from backend.api.ingest import _apply_resolved_type
+
+    memo = _Repullable(type="link", source_url=FB_SHARE)
+    _apply_resolved_type(memo, {"type": "video", "resolve_tier": "scope:post"}, [])
+    assert memo.type == "video"
+
+
+def test_a_resolve_with_no_tier_at_all_is_unaffected():
+    """yt-dlp succeeding sets no tier, and it genuinely did read the video."""
+    from backend.api.ingest import _apply_resolved_type
+
+    memo = _Repullable(type="link", source_url=FB_SHARE)
+    _apply_resolved_type(memo, {"type": "video"}, [])
+    assert memo.type == "video"
+
+
+def test_a_failed_scope_can_still_demote():
+    """The guard is about promotion to video only. A read that found stills is
+    still allowed to take a wrongly typed video apart."""
+    from backend.api.ingest import _apply_resolved_type
+
+    memo = _Repullable(type="video", source_url=FB_SHARE)
+    _apply_resolved_type(
+        memo,
+        {"type": "image", "resolve_tier": "scope:page"},
+        [{"url": "a.jpg", "type": "image"}, {"url": "b.jpg", "type": "image"}],
+    )
+    assert memo.type == "image"
+
+
+FB_SHARE = "https://www.facebook.com/share/p/1DHJhfiXSF/"
+
+
+class _Repullable:
+    """The fields `_apply_resolved_type` reads and may write."""
+
+    def __init__(self, **kw):
+        self.id = "memo-1"
+        self.type = "video"
+        self.file_path = None
+        self.gallery = None
+        self.localize_status = None
+        self.localize_error = None
+        self.thumbnail_path = None
+        self.source_url = FB_SHARE
+        self.__dict__.update(kw)
