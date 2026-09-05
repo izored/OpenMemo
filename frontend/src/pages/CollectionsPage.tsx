@@ -149,9 +149,13 @@ export function CollectionsPage() {
     if (oldI === -1 || newI === -1) return;
     const next = arrayMove(order, oldI, newI);
     setOrder(next);
-    Promise.all(next.map((c, i) => collectionApi.update(c.id, { sort_order: i })))
-      .then(() => queryClient.invalidateQueries({ queryKey: ['collections'] }))
-      .catch((err) => console.error('Reorder failed:', err));
+    // One request for the whole list. This used to be a PUT per collection
+    // fired all at once, which is 45 writes against SQLite for a single drag
+    // and left the rows renumbered one by one rather than together.
+    collectionApi
+      .reorder(next.map((c) => c.id))
+      .catch((err) => console.error('Reorder failed:', err))
+      .finally(() => queryClient.invalidateQueries({ queryKey: ['collections'] }));
   };
 
   return (

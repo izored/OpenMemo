@@ -222,6 +222,14 @@ export function Layout() {
   // clicks (see CLAUDE.md dnd-kit gotcha).
   const dndBusRef = useRef<GridDragHandlers>({});
   const dndSensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 8 } }));
+  // Two different drags share this one context: a memo card (active id = the
+  // memo's own id) and a sidebar collection being dragged into a new position
+  // (active id = `col-<id>`). Only the first belongs to the page. Handing the
+  // grid a collection drag would make it look for a memo it will never find and
+  // then rewrite recency_at for every card on screen, so the sidebar's reorder
+  // is filtered out here and picked up by the Sidebar's own useDndMonitor.
+  const isCollectionDrag = (e: { active: { id: string | number } }) =>
+    String(e.active.id).startsWith('col-');
 
   // Global shortcuts: ⌘K search, N new memo (when not typing), Esc closes the
   // mobile drawer.
@@ -279,9 +287,9 @@ export function Layout() {
       <DndContext
         sensors={dndSensors}
         collisionDetection={pointerWithin}
-        onDragStart={(e) => dndBusRef.current.onDragStart?.(e)}
-        onDragOver={(e) => dndBusRef.current.onDragOver?.(e)}
-        onDragEnd={(e) => dndBusRef.current.onDragEnd?.(e)}
+        onDragStart={(e) => { if (!isCollectionDrag(e)) dndBusRef.current.onDragStart?.(e); }}
+        onDragOver={(e) => { if (!isCollectionDrag(e)) dndBusRef.current.onDragOver?.(e); }}
+        onDragEnd={(e) => { if (!isCollectionDrag(e)) dndBusRef.current.onDragEnd?.(e); }}
       >
       <OfflineBar />
       <CloudBackground />

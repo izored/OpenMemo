@@ -3,7 +3,14 @@ import { useNavigate, useLocation } from 'react-router-dom';
 import { Link } from 'react-router-dom';
 import { isPlainClick } from '@/lib/nav';
 import { useQueries, useQuery, useQueryClient } from '@tanstack/react-query';
-import { useDroppable } from '@dnd-kit/core';
+import { useDndMonitor, useDroppable } from '@dnd-kit/core';
+import {
+  SortableContext,
+  arrayMove,
+  useSortable,
+  verticalListSortingStrategy,
+} from '@dnd-kit/sortable';
+import { CSS } from '@dnd-kit/utilities';
 import { motion } from 'framer-motion';
 import { Icon } from './Icon';
 import { SidebarPlayer } from './SidebarPlayer';
@@ -89,29 +96,52 @@ function SpaceCollectionRow({
   );
 }
 
-function CollectionRow({
-  col,
-  pinned,
-  active,
-  onSelect,
-  onEdit,
-}: {
+interface CollectionRowProps {
   col: Collection;
   pinned: boolean;
   active: boolean;
   onSelect: () => void;
   onEdit: (e: React.MouseEvent) => void;
+}
+
+/** The row itself. Both wrappers below render this, so a collection looks
+ *  identical whether or not it can be dragged. */
+function CollectionRowView({
+  col,
+  pinned,
+  active,
+  onSelect,
+  onEdit,
+  rowRef,
+  isOver,
+  isDragging,
+  style,
+  dragProps,
+}: CollectionRowProps & {
+  rowRef: (node: HTMLElement | null) => void;
+  isOver: boolean;
+  isDragging?: boolean;
+  style?: React.CSSProperties;
+  dragProps?: Record<string, unknown>;
 }) {
-  const { isOver, setNodeRef } = useDroppable({ id: `col-${col.id}` });
   // Dimmed, not removed: a collection kept out of the dashboard feed is still
   // the fastest way to open it (OPNMMO-0053).
   const dashHidden = !!col.hidden_from_dashboard;
   return (
     <button
-      ref={setNodeRef}
-      className={cn('om-coll', pinned && 'pinned', active && 'active', isOver && 'drop-over', dashHidden && 'dash-hidden')}
+      ref={rowRef}
+      style={style}
+      className={cn(
+        'om-coll',
+        pinned && 'pinned',
+        active && 'active',
+        isOver && 'drop-over',
+        dashHidden && 'dash-hidden',
+        isDragging && 'dragging',
+      )}
       onClick={onSelect}
       title={dashHidden ? `${col.name} — hidden from the dashboard feed` : undefined}
+      {...dragProps}
     >
       <span
         className="om-coll-dot"
@@ -127,6 +157,46 @@ function CollectionRow({
         {col.emoji || '·'}
       </span>
     </button>
+  );
+}
+
+/** A collection row that only receives drops (the Pinned list, and the whole
+ *  list on mobile — see the Collections section for why touch is left alone). */
+function CollectionRow(props: CollectionRowProps) {
+  const { isOver, setNodeRef } = useDroppable({ id: `col-${props.col.id}` });
+  return <CollectionRowView {...props} rowRef={setNodeRef} isOver={isOver} />;
+}
+
+/** A collection row you can also drag to reorder.
+ *
+ *  The sortable id IS the droppable id (`col-<id>`): useSortable registers the
+ *  droppable itself, so a memo dropped onto this row still reports
+ *  over.id === 'col-<id>' and MemoGrid's file-into-collection path never has to
+ *  know the row became draggable.
+ *
+ *  `drop-over` is suppressed while sorting. That accent ring means "let go and
+ *  this memo lands here", which is not what is happening when the thing being
+ *  dragged is the collection itself. */
+function SortableCollectionRow(props: CollectionRowProps) {
+  const {
+    attributes,
+    listeners,
+    setNodeRef,
+    transform,
+    transition,
+    isDragging,
+    isSorting,
+    isOver,
+  } = useSortable({ id: `col-${props.col.id}` });
+  return (
+    <CollectionRowView
+      {...props}
+      rowRef={setNodeRef}
+      isOver={isOver && !isSorting}
+      isDragging={isDragging}
+      style={{ transform: CSS.Translate.toString(transform), transition }}
+      dragProps={{ ...attributes, ...listeners }}
+    />
   );
 }
 
@@ -333,6 +403,62 @@ export function Sidebar() {
   const others = collections.filter((c: Collection) => !c.pinned);
   // Mobile drawer shows the first 3 collections until the chevron expands them.
   const visibleOthers = isMobile && !collExpanded ? others.slice(0, 3) : others;
+
+  // Drag a collection to put it where you want it. This is the ONLY ordering
+  // mechanism collections get: no sort toggle, no sortOrder state, nothing that
+  // can reset a hand-made order behind the user's back (see
+  // .claude/rules/openmemo-conventions.md). New collections append at the end,
+  // dragging reorders in place, and that is the whole story.
+  //
+  // Desktop only. The sidebar body is a single touch-scroll region, and making
+  // its rows drag handles is the fastest way to lose the scroll on a phone. The
+  // mobile drawer keeps the list it already had, and the Collections page still
+  // reorders on touch through its Edit mode.
+  const canReorder = !isMobile && others.length > 1;
+  const sortableIds = React.useMemo(
+    () => others.map((c: Collection) => `col-${c.id}`),
+    [others],
+  );
+
+  const reorderCollections = React.useCallback(
+    (activeId: string, overId: string) => {
+      const all = collections as Collection[];
+      const from = all.findIndex((c) => `col-${c.id}` === activeId);
+      const to = all.findIndex((c) => `col-${c.id}` === overId);
+      if (from === -1 || to === -1 || from === to) return;
+      const next = arrayMove(all, from, to);
+      // Optimistic: the list repaints from the cache before the request goes
+      // out, so the row lands under the cursor instead of snapping back for a
+      // round trip. The invalidate at the end reconciles either way, so a
+      // failed write undoes itself rather than leaving a lie on screen.
+      queryClient.setQueryData(['collections'], next);
+      collectionApi
+        .reorder(next.map((c) => c.id))
+        .catch((e) => console.error('Failed to save the collection order:', e))
+        .finally(() => queryClient.invalidateQueries({ queryKey: ['collections'] }));
+    },
+    [collections, queryClient],
+  );
+
+  // The app-level DndContext lives in Layout (so a memo card can be dragged
+  // from the grid onto a sidebar collection). Subscribing here rather than
+  // nesting a second DndContext is what keeps those drop targets working:
+  // a nested context would capture the sidebar's droppables away from the
+  // grid's drag.
+  const dndMonitor = React.useMemo(
+    () => ({
+      onDragEnd(e: { active: { id: string | number }; over: { id: string | number } | null }) {
+        const activeId = String(e.active.id);
+        // A memo drag carries a bare memo id — not ours.
+        if (!activeId.startsWith('col-')) return;
+        const overId = e.over ? String(e.over.id) : '';
+        if (!overId.startsWith('col-') || overId === activeId) return;
+        reorderCollections(activeId, overId);
+      },
+    }),
+    [reorderCollections],
+  );
+  useDndMonitor(dndMonitor);
 
   // Leaving for a library route exits any open Space (ADR-020 accordion).
   const goRoute = (path: string) => {
@@ -635,16 +761,31 @@ export function Sidebar() {
                       <span>Create your first collection</span>
                     </button>
                   )}
-                  {visibleOthers.map((c: Collection) => (
-                    <CollectionRow
-                      key={c.id}
-                      col={c}
-                      pinned={false}
-                      active={activeCollection === c.id}
-                      onSelect={() => selectCollection(c.id)}
-                      onEdit={(e) => editCollection(e, c)}
-                    />
-                  ))}
+                  {canReorder ? (
+                    <SortableContext items={sortableIds} strategy={verticalListSortingStrategy}>
+                      {visibleOthers.map((c: Collection) => (
+                        <SortableCollectionRow
+                          key={c.id}
+                          col={c}
+                          pinned={false}
+                          active={activeCollection === c.id}
+                          onSelect={() => selectCollection(c.id)}
+                          onEdit={(e) => editCollection(e, c)}
+                        />
+                      ))}
+                    </SortableContext>
+                  ) : (
+                    visibleOthers.map((c: Collection) => (
+                      <CollectionRow
+                        key={c.id}
+                        col={c}
+                        pinned={false}
+                        active={activeCollection === c.id}
+                        onSelect={() => selectCollection(c.id)}
+                        onEdit={(e) => editCollection(e, c)}
+                      />
+                    ))
+                  )}
                   {isMobile && !collExpanded && others.length > 3 && (
                     <button className="om-coll-more mono" onClick={() => setCollExpanded(true)}>
                       Show {others.length - 3} more
