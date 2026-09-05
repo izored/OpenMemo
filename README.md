@@ -49,7 +49,7 @@ It is drawn by openMemo rather than handed to the browser's own viewer, so it we
 On the dashboard, a PDF's card is its first page rather than a generic document icon, so a lease does not look like nine invoices.
 
 ### 📚 Smart Collections
-Organise Memos into themed collections with emoji icons and descriptions. Drag and drop cards directly into collections. Scope your AI chat to a single project or topic. A collection you fill fast, a shopping wishlist or a research dump, can be hidden from the dashboard so it stops burying everything else, while staying in the sidebar and in search.
+Organise Memos into themed collections with emoji icons and descriptions. Drag and drop cards directly into collections, and drag the collections themselves into whatever order you want them in the sidebar. Scope your AI chat to a single project or topic. A collection you fill fast, a shopping wishlist or a research dump, can be hidden from the dashboard so it stops burying everything else, while staying in the sidebar and in search.
 
 ### 🔌 Chrome Extension
 One-click save from any webpage. Site-specific extractors pull clean article text, video metadata, and source attribution automatically.
@@ -79,6 +79,9 @@ Step by step for two machines, including from different networks: [the pairing w
 
 ### 🗂️ Spaces
 Group whole areas of your life. A Space bundles Memos and collections under one cover, one color, one name. Client work, home projects, research topics. Each Space gets its own page.
+
+### 🩺 Notices When A Save Went Wrong
+Checks the library on a timer and says so when something did not come back correctly: a file that has gone missing, a video that lost its sound, a photo post that saved as the song playing behind it, or a post it could not read properly. Most of it repairs from one button. A post that could not be read properly retries itself once, immediately, without being asked.
 
 ### 🛟 Backups You Can Actually Restore
 openMemo compresses a copy of your library on its own, daily, and keeps the recent ones. Settings lists them by date and size, and restoring one is picking it from the list. No exporting, no re-uploading a file the app wrote itself. Restoring keeps a copy of what it is about to replace, so changing your mind is a second restore rather than a loss. On the Mac, dropping in a new build saves a copy before the new backend is allowed to touch your library, named for the version jump it is about to make, because a database only migrates forwards. Open a library that a newer version already touched and it says so first, with a copy saved and the option to quit straight back out.

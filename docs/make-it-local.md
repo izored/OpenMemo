@@ -235,6 +235,37 @@ be satisfied.
 > most IPs. Connect Instagram in Settings so tier 0 can use the session
 > (`data/yt_cookies.txt`, ADR-012). Without it, downloads fall to the sniffer.
 
+### The mirror: a download with sound and no pictures
+
+The opposite failure, and it is not symmetrical with the one above. A photo post
+can have a song attached the way a reel has a soundtrack. The page then puts
+exactly ONE progressive stream on the wire, the song, so "download the media on
+this page" succeeds and hands back an `.mp4` holding a single audio stream and no
+pictures at all. `derive_memo_type` reads the extension first, so the post is
+filed under Videos with a song where the video should be, and it is
+self-sustaining: the memo is now a video, so the next re-pull goes looking again.
+
+`_reject_pictureless` refuses that file at **every** video tier (sniffer,
+Instagram API, yt-dlp), the same place `_playable_container` and
+`_has_audio_stream` already sit. It raises `PicturelessDownload`, which is a
+`LocalizeError` so the tier ladder falls through unchanged, but a distinct class
+because the memo layer has to tell two things apart:
+
+- a download that **failed**: the post is a video we could not reach, the memo
+  stays a video, a red error chip is honest.
+- a download that **succeeded and proved the post is not a video**: there is
+  nothing to retry, a red chip is a lie, and leaving the memo typed `video` is
+  what sends the downloader after the same song next time. The memo is filed by
+  what it holds instead, `image` when a cover survived and `link` when nothing
+  did.
+
+Unlike the silent-video count this one has no innocent reading, so the UI may say
+"repair these" without ever nagging about something that cannot be fixed.
+
+> **Audio conversions are never gated.** "Make it local -> audio" is supposed to
+> produce a file with no pictures, and Spotify and Apple tracks return before
+> `localize_media` is reached at all. The check only runs for `mode="video"`.
+
 ### Fixing videos already in your library
 
 Re-pull the memo from its own page (`POST /api/memos/:id/repull`). It re-resolves
@@ -247,6 +278,22 @@ instagram.com, which quietly made re-pull mean "re-download the file" everywhere
 else. The download is also skipped when the source has no media stream to fetch,
 so re-pulling an article or a shopping link repairs its title and cover instead of
 parking a "No video formats found" error on it.
+
+Since 3.19.0 you do not have to find the broken memo yourself. The hourly
+integrity check counts two wrong-pull signatures and Settings, under Data safety,
+offers to repair them:
+
+| Signature | What it means | Certainty |
+| --- | --- | --- |
+| `pictureless_videos` | typed video, file holds no picture stream | no innocent reading |
+| `degraded_reads` | `resolve_tier == "scope:page"`, the read never narrowed to the post | likely missing a gallery |
+
+`POST /api/maintenance/repull-wrong-pulls` is the endpoint behind the button. It
+is `dry_run=true` by default and the `degraded` half is opt-in, because that one
+can queue hundreds of browser renders. Anything holding music is skipped
+outright: `resolve_tier` is written by the ORIGINAL save and survives a later
+conversion to audio, so a TikTok link you turned into a song still carries the
+tier that would otherwise select it.
 
 Settings → Library integrity reports a `silent_videos` count. It is a number to
 look at, not an alarm: it cannot tell a broken download from a clip that was

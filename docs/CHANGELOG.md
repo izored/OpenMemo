@@ -23,16 +23,10 @@ All notable changes to OpenMemo are documented here.
 
 <!-- Add entries here as work lands: ### Added / ### Changed / ### Fixed -->
 
-### Added
-
 - 🗂️ **Drag your collections into the order you want them.** The sidebar list was in whatever order the database handed it over, which is the order you happened to create them in. Grab a collection and drop it where it belongs. The order sticks across reloads and restarts, because it is written down rather than remembered by the browser.
-
   Dragging is the only ordering there is. No sort menu, no "by name", nothing that can quietly undo an order you arranged by hand. A new collection lands at the bottom of the list, where you just made it, and stays there until you move it.
-
   Dropping a memo onto a collection still files it, exactly as before. The two gestures live on the same row and do not get in each other's way: a short drag of a memo card files it, a drag of the collection row itself moves the row.
-
   Desktop only, on purpose. The sidebar on a phone is one scrolling column, and turning its rows into drag handles is the quickest way to lose that scroll. The Collections page still reorders on touch through its Edit button.
-
 ### Changed
 
 - ⚡ **Reordering collections is one request now.** Dragging a card on the Collections page used to fire one save per collection, all at once. With 45 collections that is 45 writes for a single drag. It is a single write for the whole list, which is also what stops two collections ending up with the same position.

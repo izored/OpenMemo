@@ -147,6 +147,32 @@ through, so the wall never enters into it. Uploading your cookies in Settings
 also helps for sites whose wall only lifts for a signed-in session. Full detail
 in [bot-walls-and-captchas.md](bot-walls-and-captchas.md).
 
+## A photo post saved as a video, and it plays a song
+
+Facebook and Instagram let you put music on a photo post. openMemo used to go
+looking for something to download, find the only thing the page was playing, and
+save that: a file with a soundtrack and no pictures in it. Because the file is an
+`.mp4`, the post was then filed under Videos, where the photo carousel is not
+offered.
+
+Fixed in 3.18.1. A download with no pictures in it can no longer be attached to a
+memo at all, on any path, so this cannot happen to anything you save now.
+
+For a memo already in this state, re-pull it from its own page. The song is
+detached and the post comes back as its pictures. Settings, under Data safety,
+also lists any memo in this state and offers to repair them together.
+
+## My saved post is missing most of its photos
+
+The page a post sits on sometimes comes with a cookie notice wrapped around it.
+openMemo narrows the page down to the one post you asked for, and until 3.18.1 a
+notice in the way could make that narrowing come back empty, so the memo kept the
+cover and none of the other photos.
+
+It now tries again by itself, once, immediately. Declining the notice is
+remembered, so the second attempt usually walks straight past what stopped the
+first. If a post still came back thin, re-pull it from its own page.
+
 ## A collection is drowning my dashboard
 
 Edit the collection and turn on **Hide from the dashboard**. Its memos stop
