@@ -262,9 +262,11 @@ See [`Specs/ROADMAP.md`](Specs/ROADMAP.md) for the full roadmap, architectural f
 
 openMemo was my first serious attempt at building something useful for myself with AI.
 
-It started with **Kimi 2.6 Pro**, then **Claude Code (Opus 4.7 / Sonnet 4.6)**, and later **Perplexity** for quick fixes and release help.
+It started with **Kimi 2.6 Pro**, then **Claude Code (Opus 5 / Sonnet 5)**, and later **Perplexity** for quick fixes and release help.
 
 Most of the code is AI-assisted, but not directionless. I knew what I wanted to build from the start, and used AI as a tool to steer execution, iterate faster, and explore solutions.
+
+I never got to use **GPT Astra** on it. I wish I had.
 
 This project is also a learning record: a messy, practical discovery step into AI-powered software building.
 
