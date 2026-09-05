@@ -690,10 +690,20 @@ async def extract_video(url: str) -> dict:
     # So scope the render to the post and let what the post holds decide. One
     # browser pass, shared with the scrape below it (ADR "scope is the memo
     # type, not the one provider").
-    scope = post_scope(url)
+    # Follow a share wrapper to the post it names BEFORE rendering. A wrapper
+    # matches nothing on the page it points at, so scoping from it narrows to
+    # nothing and the whole feed answers instead; the resolved permalink is
+    # spelled the way the page's own anchors spell it. No-op for a URL that is
+    # already a permalink, or when the redirect cannot be followed.
+    from backend.core.permalinks import resolve_permalink
+
+    target = await resolve_permalink(url)
+    scope = post_scope(target)
     result = await _minimal_link(
-        url, domain, scope_permalink=scope["url"] if scope else None
+        target, domain, scope_permalink=scope["url"] if scope else None
     )
+    # The memo keeps the URL the user actually saved, whatever we rendered.
+    result["source_url"] = url
     post_media = result.pop("_post_media", None) or []
     post_text = result.pop("_post_text", "") or ""
     scoped = bool(result.pop("_scoped", False))
@@ -714,7 +724,10 @@ async def extract_video(url: str) -> dict:
     # scoped the fallback is still `video` — the item may be a private or
     # region-locked video we simply could not pull, and guessing `link` there
     # would lose a real one.
-    result["type"] = _url_media_hint(url) or (
+    # The hint reads the PATH, so it has to read the resolved one: a share
+    # wrapper's path says nothing, while the post it redirects to may say
+    # `/photos/` out loud.
+    result["type"] = _url_media_hint(target) or _url_media_hint(url) or (
         "audio" if is_audio_host(url)
         else classify_media(
             post_media, scoped=scoped, post_text=post_text, fallback="video"
@@ -1258,6 +1271,18 @@ async def _minimal_link(
 
     # 2) Direct OG scrape (browser UA) -- for pages that block only the API path.
     enrichment = await _fetch_og_meta(url)
+
+    # Nothing at all came back. Meta hands a logged-out browser a wall (HTTP 400
+    # on a post permalink, verified 2026-09-05) while serving full OpenGraph to
+    # a link-preview crawler with no gate in front of it, which is the
+    # difference between a memo titled "KEIN" with the album's own cover and one
+    # titled with its raw URL. Host-blind: a site that does not special-case
+    # crawlers answers this identically, and it only costs a request on a path
+    # that has already failed.
+    if not (enrichment.get("title") or enrichment.get("thumbnail_path")):
+        crawled = await _fetch_og_meta(url, user_agent=_CRAWLER_UA)
+        if crawled.get("title") or crawled.get("thumbnail_path"):
+            enrichment = crawled
 
     has_meta = bool(enrichment.get("title") or enrichment.get("thumbnail_path"))
     description = enrichment.get("description") or (

@@ -219,14 +219,18 @@ def test_an_album_is_not_offered_to_the_downloader():
     """Once the memo is `video` the "has media" test says yes, so the next
     re-pull fetches the song again. Three in a row did exactly that live, which
     is how this was found. The gate has to read the gallery, and it has to
-    detach a file that holds no pictures or the loop never breaks."""
+    detach a file that holds no pictures or the loop never breaks.
+
+    The gallery is no longer the only way in — see
+    test_pictureless_download.py, where a memo that never had one is repaired
+    from the file's own bytes."""
     import inspect
 
     from backend.api import ingest
 
     src = inspect.getsource(ingest.repull_memo_task)
     assert "album = bool(memo) and len([" in src
-    assert "if album and not (resolved or {}).get(\"video_url\"):" in src
+    assert "if (album or pictureless) and not (resolved or {}).get(\"video_url\"):" in src
     assert "_has_video_stream(on_disk) is False" in src
 
 
