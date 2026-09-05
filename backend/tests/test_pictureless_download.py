@@ -401,3 +401,67 @@ class _Repullable:
         self.thumbnail_path = None
         self.source_url = FB_SHARE
         self.__dict__.update(kw)
+
+
+# ------------------- a consent banner is not a verdict about the post
+
+async def test_a_consent_gate_does_not_discard_the_scoped_photos(monkeypatch):
+    """The real root cause, found 2026-09-05 by rendering the live post directly:
+    `scoped=True media=5`. The renderer had walked the post's own subtree and
+    come back with five full-size stills. Every one was thrown away, because the
+    page WRAPPED AROUND the post carried a cookie banner and the branch that
+    drops that banner's text also dropped the media.
+
+    Nothing downstream then saw any media, so `classify_media` answered `video`
+    from the domain, and the downloader went after the song attached to the
+    album. Two different questions, two independent failures: the body text can
+    be a cookie policy while the scoped read is perfect."""
+    from backend.core import extractor
+
+    stills = [{"url": f"https://cdn/{i}.jpg", "type": "image"} for i in range(5)]
+
+    async def _rendered(url, **kw):
+        return {
+            "html": "<html><body>Allow cookies?</body></html>",
+            "post_media": stills,
+            "post_text": "the caption",
+            "scoped": True,
+            "consent_wall": True,
+            "bot_wall": False,
+            "main_image": None,
+            "slides": [],
+        }
+
+    async def _og(url, user_agent=None):
+        return {"title": "KEIN", "description": "Sade on repeat.",
+                "thumbnail_path": "https://cdn/cover.jpg"}
+
+    monkeypatch.setattr("backend.core.headless.render_page", _rendered)
+    monkeypatch.setattr(extractor, "_fetch_og_meta", _og)
+    monkeypatch.setattr(extractor, "_looks_like_consent_gate", lambda t: True)
+
+    out = await extractor._minimal_link("https://www.facebook.com/x/posts/123", "facebook.com")
+
+    assert out["_scoped"] is True
+    assert len(out["_post_media"]) == 5
+
+
+async def test_the_scoped_read_survives_a_render_with_no_usable_text(monkeypatch):
+    """Same rule, stated as the invariant rather than the incident: whatever
+    text path `_minimal_link` ends up taking, a scoped read that succeeded
+    travels with the result."""
+    from backend.core import extractor
+
+    async def _rendered(url, **kw):
+        return {"html": "", "post_media": [{"url": "https://cdn/a.jpg", "type": "image"}],
+                "post_text": "", "scoped": True, "bot_wall": False, "main_image": None}
+
+    async def _og(url, user_agent=None):
+        return {"title": "t", "description": "d", "thumbnail_path": "https://cdn/c.jpg"}
+
+    monkeypatch.setattr("backend.core.headless.render_page", _rendered)
+    monkeypatch.setattr(extractor, "_fetch_og_meta", _og)
+
+    out = await extractor._minimal_link("https://www.facebook.com/x/posts/123", "facebook.com")
+    assert out["_scoped"] is True
+    assert len(out["_post_media"]) == 1

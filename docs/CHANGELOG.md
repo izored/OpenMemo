@@ -25,6 +25,12 @@ All notable changes to OpenMemo are documented here.
 
 - 🏷️ **A post nobody could read still gets its name.** When every attempt came back empty the memo was titled with its own raw address and nothing else. Facebook, Instagram and the rest hand a full preview to the little robots that make link previews in chat apps, while turning away anything that looks like a person without an account. openMemo already knew that trick and only used it for Instagram. Any site gets it now, and only after everything else has failed, so the memo arrives with a real title and the post's own picture on it instead of a bare link.
 
+- 📷 **A cookie banner no longer costs you the photographs.** This is the one that caused everything above. openMemo narrows a page down to the post you asked for, and on the album that started this it worked perfectly: it found all five photos, at full size. Then it threw them away.
+
+  The page a post sits on sometimes comes with a cookie notice wrapped around it. openMemo already knew to bin that notice rather than save it as the memo's text, which is right. What it did not know is that the notice and the post are two separate readings. Binning the cookie text also binned the five photographs sitting next to it, so nothing further down ever saw a single picture, decided the post must be a video because it came from a video site, and went off to download the only thing playing: the song.
+
+  The reading of the post now survives the reading of the page. If the narrowing worked, the photos come home, whatever nonsense was wrapped around them.
+
 ### Changed
 
 - 🎨 **Every dropdown in Settings is openMemo's own now.** Two were still the browser's. A plain dropdown hands its open list to the operating system to draw, so in a dark app it comes up as a white panel with a blue highlight, and nothing the page can do reaches inside it. Picking how often Telegram is checked, and picking a snapshot to restore, both did that. They now match the rest of the app, and there is one dropdown in Settings rather than one per author.

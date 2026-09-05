@@ -1215,12 +1215,25 @@ async def _minimal_link(
     # rendered image and prefer it. General: keyed off the centralized
     # _url_media_hint, no per-host code.
     is_photo = _url_media_hint(url) == "image"
+    # What the SCOPED read found, kept apart from the parse of the page around
+    # it. These two answer different questions and they fail independently: the
+    # scope can read the post's own subtree perfectly while the body text of the
+    # surrounding page is a cookie banner. Held here so every return path below
+    # can carry them, because the one that could not is what threw five photos
+    # away. See the consent branch.
+    extras: dict = {"_post_media": [], "_post_text": "", "_scoped": False}
     try:
         from backend.core.headless import render_page
 
         rendered = await render_page(
             url, want_main_image=is_photo, scope_permalink=scope_permalink
         )
+        if rendered:
+            extras = {
+                "_post_media": rendered.get("post_media") or [],
+                "_post_text": rendered.get("post_text") or "",
+                "_scoped": bool(rendered.get("scoped")),
+            }
         # An interactive puzzle (Temu, DataDome, PerimeterX) rendered instead of
         # the page. Its DOM parses perfectly well — into a memo titled "Verify"
         # with the CAPTCHA's own artwork as the thumbnail. Stop here and file an
@@ -1240,6 +1253,20 @@ async def _minimal_link(
             ):
                 print(f"[extract] {domain} served a cookie-consent gate, not the page")
                 parsed = None
+                # Only the TEXT is the cookie policy. The scoped read is a
+                # different question with a different answer, and on the live
+                # memo this cost five photographs: the scope had already walked
+                # the post's own subtree and come back with 5 full-size stills
+                # (`scoped=True media=5`), and every one was dropped here
+                # because the page WRAPPED AROUND the post carried a consent
+                # banner. Nothing downstream then saw any media, so
+                # `classify_media` answered `video` from the domain and sent the
+                # downloader after the song attached to the album.
+                if extras["_post_media"]:
+                    print(
+                        f"[extract] keeping {len(extras['_post_media'])} item(s) the "
+                        f"scoped read found behind that gate"
+                    )
             main_img = rendered.get("main_image")
             if parsed is None and is_photo and main_img:
                 # Photo page with no usable OG/text in the rendered DOM (FB/IG
@@ -1262,9 +1289,7 @@ async def _minimal_link(
                 if is_photo and main_img:
                     parsed["thumbnail_path"] = main_img
                 # Private keys -- the caller pops these before a memo is built.
-                parsed["_post_media"] = rendered.get("post_media") or []
-                parsed["_post_text"] = rendered.get("post_text") or ""
-                parsed["_scoped"] = bool(rendered.get("scoped"))
+                parsed.update(extras)
                 return parsed
     except Exception:
         pass
@@ -1297,4 +1322,9 @@ async def _minimal_link(
         "source_favicon": None,
         "thumbnail_path": enrichment.get("thumbnail_path") or "",
         "type": "link",
+        # The scraped card is the best TEXT available once the render was
+        # unusable. It says nothing about what the post holds, so a scoped read
+        # that did succeed still travels with it. `type` here is a placeholder
+        # the caller overwrites from exactly that evidence.
+        **extras,
     }
