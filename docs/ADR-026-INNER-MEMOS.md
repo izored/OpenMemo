@@ -94,22 +94,47 @@ already someone's child cannot become a parent.
 two parents in different positions. Memos already carry their own `sort_order`
 for the dashboard and reusing it here would make the two orders fight.
 
-### 4. Deleting a parent never buries a child
+### 4. Deleting a parent asks what to do with its inner memos
 
-Deletion is already soft (`Memo.is_deleted`). Deleting a parent deletes the
-parent only.
+Deletion is already soft (`Memo.is_deleted`). Deleting a parent that holds inner
+memos raises a confirmation, and that confirmation has a second step naming the
+only two sensible outcomes:
 
-- Join rows survive, so restoring the parent restores its shelf intact.
-- A child whose `hidden_from_dashboard` was set **by attachment** and which now
-  has no remaining live parent gets that flag cleared, so it returns to the
-  dashboard rather than existing only inside a deleted thing.
-- A child the user hid by hand stays hidden. Their choice outranks ours.
-- Permanently deleting a parent removes its join rows and applies the same
-  un-hiding pass.
+> **Delete the inner memos too**, or **release them into the dashboard.**
 
-The failure this prevents is the one that matters: material that is invisible in
-the dashboard, has no parent to be seen inside, and is therefore reachable only
-by search for a word the user may not remember.
+The first draft of this ADR decided for the user: children were quietly released
+and that was that. That is wrong for the same reason the wrong-pull work was
+wrong when it filed an album as a link. Choosing silently is how a user ends up
+with either four surprise items on their dashboard or four things they thought
+they still had. The app knows two outcomes are reasonable and does not know which
+one is meant, so it asks.
+
+**Release** is the default and the safer half, per the standing rule that the
+smallest action is the default and the destructive one is an explicit opt in. It
+clears the attachment-set `hidden_from_dashboard` and **keeps the join rows**, so
+the material returns to the library and restoring the parent still brings its
+shelf back intact. Nothing is lost in either direction.
+
+**Delete too** soft-deletes the children as well. They are in the trash, listed
+and restorable individually, so this is recoverable rather than final. Restoring
+the parent afterwards does **not** silently resurrect them: they were deleted on
+purpose and are restored on purpose.
+
+Four rules keep the prompt honest:
+
+- **No prompt when there is nothing to decide.** A memo with no inner memos, or
+  whose children all have another live parent, deletes with the ordinary
+  confirmation. A dialog that always appears is a dialog nobody reads.
+- **Only genuinely orphaned children are offered.** A child attached to two
+  parents keeps its other one and is not in the list.
+- **A child the user hid by hand stays hidden** even on release. Their choice
+  outranks ours.
+- **Permanent deletion asks the same question**, since that is the point of no
+  return, and applies the same two outcomes to the join rows.
+
+The failure all of this prevents is the one that matters: material that is
+invisible on the dashboard, has no parent left to be seen inside, and is
+therefore reachable only by searching for a word the user may not remember.
 
 ## What this touches
 
@@ -118,6 +143,7 @@ by search for a word the user may not remember.
 | Schema | `memo_links` table, `Memo.hidden_from_dashboard` column, both via `_run_migrations` |
 | Dashboard | exclude `hidden_from_dashboard` memos from the feed and type tabs, as collections already are |
 | MemoDetail | a section listing attached memos, a drop target, add-existing picker |
+| Delete flow | a two-step confirmation on deleting a parent that holds orphanable children, offering release or delete. Every delete entry point reaches it: memo page, card menu, and bulk delete |
 | Search | results show the parent for an inner memo |
 | Backup / restore | `memo_links` in the archive, or restores lose every shelf |
 | Mesh | the join table syncs, or two machines disagree about what is attached |
@@ -137,6 +163,10 @@ computes affinity and is the obvious source for "attach one of these".
 - **A migration on a live library** for anyone upgrading, including the macOS app.
 - **A new way to lose track of something.** Mitigated by section 4, but the honest
   version is that any container can swallow things.
+- **One more confirmation dialog.** Section 4 adds a second step to a delete that
+  most users will meet rarely. It is justified because both outcomes are
+  reasonable and irreversible-feeling, but every dialog is a tax and this one
+  must not appear when there is nothing to decide.
 
 ## Alternatives rejected
 
