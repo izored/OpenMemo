@@ -109,22 +109,45 @@ def _scan_sync() -> dict:
         with engine.connect() as con:
             rows = con.execute(
                 text(
-                    "select file_path, thumbnail_path, source_url, type, id, gallery "
+                    "select file_path, thumbnail_path, source_url, type, id, gallery, "
+                    "resolve_tier, audio_kind "
                     "from memos where is_deleted = 0 or is_deleted is null"
                 )
             ).fetchall()
     finally:
         engine.dispose()
 
-    from backend.core.localize_media import _has_audio_stream
+    from backend.core.localize_media import _has_audio_stream, _has_video_stream
 
     memos = len(rows)
     with_media = missing_media = recoverable = unrecoverable = 0
     with_thumb = missing_thumbs = silent_videos = 0
     remote_pictures = expiring_pictures = 0
+    pictureless_videos = degraded_reads = 0
     expiring_memos: list[str] = []
+    pictureless_memos: list[str] = []
+    degraded_memos: list[str] = []
 
-    for file_path, thumbnail_path, source_url, memo_type, memo_id, gallery in rows:
+    for (
+        file_path,
+        thumbnail_path,
+        source_url,
+        memo_type,
+        memo_id,
+        gallery,
+        resolve_tier,
+        audio_kind,
+    ) in rows:
+        # A read that could not narrow to the post. Recorded since 3.18.0 and,
+        # until now, read by nobody: the number existed and no surface showed
+        # it, which is how a five photo album sat filed as a song for a day.
+        # Unlike the counts below this one is not about a lost file. It means
+        # the memo probably never got the gallery the post actually has, and a
+        # re-pull is likely to fix it because the usual cause (a consent gate)
+        # is transient.
+        if (resolve_tier or "") == "scope:page":
+            degraded_reads += 1
+            degraded_memos.append(str(memo_id))
         if file_path:
             with_media += 1
             resolved = resolve_memo_path(file_path)
@@ -147,6 +170,39 @@ def _scan_sync() -> dict:
                 # `is False` only: None means ffprobe could not tell.
                 if _has_audio_stream(resolved) is False:
                     silent_videos += 1
+                # The mirror, and unlike its sibling this one IS an alarm. A
+                # video with no PICTURES is not a video: it is the audio track
+                # the page was playing, saved as an .mp4 because that is the
+                # container it arrived in. A photo post with a song attached
+                # does this, and `derive_memo_type` then reads the extension
+                # and files the post under Videos.
+                #
+                # It cannot be created any more (`_reject_pictureless` refuses
+                # it at every download tier, 3.18.1). This counts the ones made
+                # BEFORE that shipped, which nothing else would ever notice.
+                # There is no innocent reading of it the way there is for a
+                # clip that was posted muted, so the UI may say "re-pull these"
+                # without ever nagging about something that cannot be fixed.
+                #
+                # Only for memos typed `video`. An audio memo's file has no
+                # pictures BY DESIGN, and counting those would report the whole
+                # music library as broken.
+                # A sibling `if`, not `elif`. Chained behind the audio test, a
+                # file missing BOTH streams (a truncated container) was filed
+                # as merely silent and never tested for pictures, while the
+                # repair endpoint tests pictures directly. The scan would then
+                # report zero and the repair would find targets, which reads as
+                # the app disagreeing with itself.
+                # `audio_kind` as well as the type, because `derive_memo_type`
+                # reads the file EXTENSION first and the startup sorter runs on
+                # every boot: a song that ever lands in an .mp4 container gets
+                # retyped `video` while keeping `audio_kind`. Without this the
+                # scan reports it for ever and the repair endpoint, which does
+                # check `audio_kind`, refuses to touch it — the app disagreeing
+                # with itself, in public, at WARNING level, hourly.
+                if _has_video_stream(resolved) is False and not audio_kind:
+                    pictureless_videos += 1
+                    pictureless_memos.append(str(memo_id))
         # A remote thumbnail URL is not a file we can lose, so only local ones
         # count as missing. These resolve differently from media: the column
         # holds the URL the app serves the image at, and `/api/files/thumb/x`
@@ -177,6 +233,10 @@ def _scan_sync() -> dict:
         "with_thumb": with_thumb,
         "missing_thumbs": missing_thumbs,
         "silent_videos": silent_videos,
+        "pictureless_videos": pictureless_videos,
+        "pictureless_memo_ids": pictureless_memos[:50],
+        "degraded_reads": degraded_reads,
+        "degraded_memo_ids": degraded_memos[:50],
         # Un-localized pictures. `remote_pictures` includes stable hosts (Apple
         # artwork, YouTube covers) which are untidy but not urgent;
         # `expiring_pictures` is the subset on a countdown.
@@ -241,6 +301,24 @@ async def run_integrity_check() -> dict:
             "library integrity: %d picture(s) across %d memo(s) never downloaded and "
             "sit on expiring URLs — POST /api/maintenance/relocalize-pictures to fix",
             scan["expiring_pictures"], len(scan.get("expiring_memo_ids") or []),
+        )
+
+    # Two wrong-pull signatures, both repairable by re-pulling the post, so
+    # neither belongs in the missing-files verdict above. They are reported
+    # because until now nothing looked: a memo can be visibly, obviously wrong
+    # on the page and still be invisible to every check the app runs.
+    if scan.get("pictureless_videos"):
+        log.warning(
+            "library integrity: %d memo(s) filed as video hold a file with no pictures "
+            "in it (the page's audio track) — POST /api/maintenance/repull-wrong-pulls",
+            scan["pictureless_videos"],
+        )
+    if scan.get("degraded_reads"):
+        log.info(
+            "library integrity: %d memo(s) were saved from a read that could not narrow "
+            "to the post, so they may be missing a gallery — "
+            "POST /api/maintenance/repull-wrong-pulls",
+            scan["degraded_reads"],
         )
     return result
 

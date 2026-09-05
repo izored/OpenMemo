@@ -5,6 +5,22 @@ All notable changes to OpenMemo are documented here.
 ---
 ## [Unreleased]
 
+### Added
+
+- 🩺 **openMemo now notices when a pull came back wrong, and offers to fix it.** Until now a bad pull was silent. A memo could be visibly, obviously wrong on the page and nothing in the app knew: the checks that run every hour looked for missing files and lost sound, and had no idea what a wrong pull even looked like.
+
+  Two things are now checked. A memo filed as a video whose file has no pictures in it, which is the song a photo post was playing saved instead of the photos. And a memo saved from a read that could not find the post inside its page, usually a cookie notice getting in the way, which means it may be missing photos the post actually has.
+
+  Both show up under Settings, in Data safety, with a button that repairs them. The button asks first: one click tells you how many memos it would fetch again, a second click starts it. Nothing goes out to a website until you say so twice.
+
+- 🔁 **A save that could not read the post properly tries again by itself, once.** This is the one that fixes the problem without you ever seeing it. The usual cause is a cookie notice, and the first attempt is what clears it: openMemo declines the notice and remembers that, so the second attempt walks straight past the thing that blocked the first. The album that prompted all of this reads perfectly on the second try.
+
+  It reads the post again and downloads nothing, so it cannot fight with a download already in progress, cannot override your setting about pulling videos automatically, and cannot touch a memo you asked for the song of. It happens once. A post that stays unreadable costs one extra read and then stops asking.
+
+  It is off for links forwarded in bulk from Telegram, where thirty forwarded links would have meant thirty page loads nobody asked for. It also refuses outright to touch anything holding music, whatever else it has been told, because a memo that started as a video link and was later turned into a song still remembers the read that saved it.
+
+  Re-reading the ones that could not be read properly is a separate tick box, off by default, because that half can mean hundreds of page loads.
+
 <!-- Add entries here as work lands: ### Added / ### Changed / ### Fixed -->
 
 ---

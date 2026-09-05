@@ -832,6 +832,40 @@ async def ingest_url_core(data: URLIngest, db: AsyncSession, schedule) -> dict:
     elif auto_localize_video:
         schedule(localize_memo_task, memo.id, "video")
 
+    # A read that could not narrow to the post gets ONE automatic retry, and
+    # it RE-READS ONLY. It never downloads.
+    #
+    # Worth doing rather than merely reporting, because the usual cause is
+    # transient and the first attempt is what clears it: `render_page` clicks
+    # decline on a consent gate and then PERSISTS the cookie jar, so attempt two
+    # starts past the gate that beat attempt one. The live album this was built
+    # for scoped perfectly on the very next try.
+    #
+    # Every exclusion below is a way this went wrong in review:
+    #
+    # * `audio_only` — the Music page's "+" means "give me the SONG of this
+    #   link". Re-pulling it as a video races the audio download and can leave
+    #   the memo holding an mp4 where the song was.
+    # * `force_localize` — the Telegram relay calls this once per forwarded
+    #   URL. Thirty forwarded links would queue thirty headless renders with
+    #   nobody asking for them, which is the fan-out the never-default-on rule
+    #   exists to stop. A WebUI paste is one memo the user just chose to save.
+    # * `no_pull` — the user asked for a plain link. Honour it.
+    #
+    # Bounded by construction: scheduled from the SAVE path only, and nothing
+    # inside the re-resolve schedules it again, so a post that stays unreadable
+    # costs exactly one extra read and then stops.
+    if (
+        (memo.resolve_tier or "") == SCOPE_TIER_PAGE
+        and not data.no_pull
+        and not data.audio_only
+        and not data.force_localize
+    ):
+        log.info(
+            "ingest: %s could not be narrowed to its post, re-reading once", memo.id
+        )
+        schedule(reresolve_memo_task, memo.id)
+
     return {"id": memo.id, "title": memo.title, "type": memo.type, "status": "processing"}
 
 
@@ -2898,7 +2932,38 @@ def _apply_resolved_type(memo, resolved: dict, gallery: list) -> None:
     memo.type = new_type
 
 
-async def repull_memo_task(memo_id: str, mode: str):
+async def reresolve_memo_task(memo_id: str):
+    """Read a memo's source again and apply what comes back. Downloads nothing.
+
+    The automatic second attempt after a read that could not narrow to the post
+    (`ingest_url_core`). Separate from `repull_memo_task` so the queue persists
+    ONE argument and can never be replayed with a `mode` that means something
+    else: a re-pull carries a mode and downloads, and neither is wanted here.
+
+    Downloading is the whole thing being avoided. The save path may already
+    have a download in flight for this memo, the embed-host rule may have
+    decided deliberately not to fetch it, and if the user asked for the audio
+    of this link then a video download would take the song away.
+    """
+    # Step 1 of the re-pull can rewrite `type` and detach `file_path`
+    # (`_apply_resolved_type`), which is exactly what makes it useful: a second
+    # read that finally sees the album applies the gallery. On a memo holding
+    # music that same power is a liability, so refuse here rather than trust the
+    # scheduling conditions upstream to stay correct for ever. The window is
+    # narrow (the memo would have to become audio between this job being queued
+    # and it running) and closing it by construction costs one query.
+    async with AsyncSessionLocal() as db:
+        memo = await db.get(Memo, memo_id)
+        if not memo:
+            return
+        if (memo.type or "").lower() == "audio" or memo.audio_kind:
+            log.info("reresolve: %s holds music, leaving it alone", memo_id)
+            return
+
+    await repull_memo_task(memo_id, "video", resolve_only=True)
+
+
+async def repull_memo_task(memo_id: str, mode: str, resolve_only: bool = False):
     """Fetch a memo's source again and apply everything that comes back.
 
     `localize_memo_task` downloads and nothing else, which is the right job for
@@ -2999,6 +3064,15 @@ async def repull_memo_task(memo_id: str, mode: str):
                 await db.commit()
         if len(gallery) > 1:
             await cache_gallery(memo_id)
+
+    # Read the post again and stop. `reresolve_memo_task` is the one caller,
+    # and it exists because the automatic retry after a degraded read must NOT
+    # download anything. Falling through here would run a second download of a
+    # memo the save path is already downloading, override the embed-host rule
+    # and `auto_download_video` that decided not to fetch it, and on a memo the
+    # user converted to audio it would replace the song with an mp4.
+    if resolve_only:
+        return
 
     # 2. The download. Sets localize_status itself, done | error.
     #

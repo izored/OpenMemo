@@ -725,6 +725,18 @@ export interface LibraryIntegrity {
   missing_thumbs: number;
   /** Videos that are present and playable and have no audio track. */
   silent_videos: number;
+  /** Memos filed as video whose file holds no pictures: the page's audio
+   *  track, saved as an .mp4. Cannot be created since 3.18.1; this counts the
+   *  ones made before that. Unlike silent_videos there is no innocent reading. */
+  pictureless_videos: number;
+  /** Memos saved from a read that could not narrow to the post, so they may be
+   *  missing the gallery the post actually has. Re-pulling usually fixes it. */
+  degraded_reads: number;
+  /** Which memos, so the panel can link to them instead of only counting them.
+   *  Capped at 50 by the scan. Optional: a result stored before 3.18.2 has
+   *  neither field. */
+  pictureless_memo_ids?: string[];
+  degraded_memo_ids?: string[];
   delta: number;
   checked_at: string;
   previous_checked_at: string | null;
@@ -734,6 +746,19 @@ export const maintenanceApi = {
   clearCache: () => fetchJSON<{ ok: boolean; freed_bytes: number }>('/maintenance/clear-cache', { method: 'POST' }),
   localize: () => fetchJSON<{ memos_updated: number; images_localized: number }>('/maintenance/localize', { method: 'POST' }),
   reset: () => fetchJSON<{ ok: boolean }>('/maintenance/reset', { method: 'POST', body: JSON.stringify({ confirm: true }) }),
+  // Re-pull the memos the integrity check found were pulled wrongly. Dry run
+  // by default on the server too: this queues real fetches against real hosts,
+  // so the UI asks first and commits on a second, deliberate click.
+  repullWrongPulls: (opts: { pictureless?: boolean; degraded?: boolean; dryRun?: boolean }) => {
+    const q = new URLSearchParams({
+      pictureless: String(opts.pictureless ?? true),
+      degraded: String(opts.degraded ?? false),
+      dry_run: String(opts.dryRun ?? true),
+    });
+    return fetchJSON<{ queued: number; memos: number; pictureless: number; degraded: number; dry_run: boolean }>(
+      `/maintenance/repull-wrong-pulls?${q}`, { method: 'POST' },
+    );
+  },
   // Rebuild the whole vector index (re-embed every memo, purge ghost chunks).
   // Slow-ish (one Ollama embed batch per memo) — show progress state in the UI.
   reindex: () =>

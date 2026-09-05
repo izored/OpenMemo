@@ -52,6 +52,14 @@ KIND_LOCALIZE_AUTO = "localize_auto"
 # for while a localize is already queued for the same memo, and dedupe keys on
 # (kind, memo_id) — sharing a kind would silently swallow one of them.
 KIND_REPULL = "repull"
+# The automatic second READ after a degraded save. Its own kind, for the same
+# reason KIND_LOCALIZE_AUTO is separate from KIND_LOCALIZE: `enqueue` dedupes on
+# (kind, memo_id), so sharing `repull` would let a pending automatic retry
+# silently swallow the user's own explicit re-pull click on that memo. It also
+# carries NO mode, because it never downloads, and the repull handler requires
+# one — routing it at `repull` made every one of these die with KeyError inside
+# the worker, so the feature shipped completely dead. Caught in review.
+KIND_RERESOLVE = "reresolve"
 KIND_TRANSCRIBE = "transcribe"
 KIND_TRANSCRIPT = "transcript"
 KIND_PLAYLIST_DOWNLOAD = "playlist_download"
@@ -112,6 +120,14 @@ async def _repull(payload: dict[str, Any]) -> None:
     from backend.api.ingest import repull_memo_task
 
     await repull_memo_task(payload["memo_id"], payload["mode"])
+
+
+@register(KIND_RERESOLVE, concurrency=2)
+async def _reresolve(payload: dict[str, Any]) -> None:
+    """Re-read the source and apply what comes back. Downloads nothing."""
+    from backend.api.ingest import reresolve_memo_task
+
+    await reresolve_memo_task(payload["memo_id"])
 
 
 @register(KIND_LOCALIZE_AUTO, concurrency=3)
@@ -212,6 +228,9 @@ _ROUTING: dict[str, tuple[str, Callable[[tuple], tuple[str | None, dict[str, Any
     "relocalize_pictures_task": (KIND_RELOCALIZE_PICTURES, _p_memo),
     "localize_memo_task": (KIND_LOCALIZE, _p_localize),
     "repull_memo_task": (KIND_REPULL, _p_localize),
+    # Resolve-only retry after a degraded read. Persists just the memo id, so
+    # it can never be replayed as a download with some other mode.
+    "reresolve_memo_task": (KIND_RERESOLVE, _p_memo),
     "_localize_memo_task": (KIND_LOCALIZE_AUTO, _p_localize_auto),
     "transcribe_memo_task": (KIND_TRANSCRIBE, _p_memo),
     "transcript_memo_task": (KIND_TRANSCRIPT, _p_memo),
