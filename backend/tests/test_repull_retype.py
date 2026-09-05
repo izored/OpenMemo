@@ -230,7 +230,7 @@ def test_an_album_is_not_offered_to_the_downloader():
 
     src = inspect.getsource(ingest.repull_memo_task)
     assert "album = bool(memo) and len([" in src
-    assert "if (album or pictureless) and not (resolved or {}).get(\"video_url\"):" in src
+    assert "if (album or pictureless or is_picture_post) and not og_video:" in src
     assert "_has_video_stream(on_disk) is False" in src
 
 
@@ -241,4 +241,5 @@ def test_an_explicit_og_video_still_wins_over_the_album_gate():
     from backend.api import ingest
 
     src = inspect.getsource(ingest.repull_memo_task)
-    assert "not (resolved or {}).get(\"video_url\")" in src
+    assert 'og_video = (resolved or {}).get("video_url")' in src
+    assert "and not og_video:" in src

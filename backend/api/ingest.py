@@ -2314,7 +2314,11 @@ async def localize_memo_task(memo_id: str, mode: str, quality: int = 1080):
     every entry point — the per-track chip, a playlist's "download all", and
     the playlist auto-download pass — handles Spotify with zero extra wiring.
     """
-    from backend.core.localize_media import localize_media, LocalizeError
+    from backend.core.localize_media import (
+        LocalizeError,
+        PicturelessDownload,
+        localize_media,
+    )
     from backend.core.spotiflac import is_spotify_track_url
     from backend.core.apple_music import is_apple_track_url
 
@@ -2338,6 +2342,33 @@ async def localize_memo_task(memo_id: str, mode: str, quality: int = 1080):
 
     try:
         result = await localize_media(url, ws, mode, quality)
+    except PicturelessDownload as e:
+        # Not a failure. The download worked and proved the post is not a video:
+        # what came back was the page's audio track, which is what a photo post
+        # with music attached puts on the wire. So there is nothing to retry and
+        # nothing to apologise for, and the two things the old path did here
+        # were both wrong. A red error chip says "this broke, try again", and
+        # leaving the memo typed `video` is what sends the downloader after the
+        # same song on the next re-pull.
+        #
+        # The post is its picture. The resolver has already saved a cover by
+        # this point, so a memo holding one is an image memo; `link` is only for
+        # a post that left nothing to look at. Type is set here rather than left
+        # to `derive_memo_type`, which reads the domain and would say `video`
+        # again for exactly the hosts this happens on.
+        log.info("localize: %s is not a video (%s); filing it by what it holds", memo_id, e)
+        async with AsyncSessionLocal() as db:
+            memo = await db.get(Memo, memo_id)
+            if memo:
+                memo.localize_status = None
+                memo.localize_error = None
+                if not (memo.file_path or "").strip():
+                    memo.type = (
+                        "image" if (memo.thumbnail_path or "").strip() else "link"
+                    )
+                memo.updated_at = datetime.utcnow()
+                await db.commit()
+        return
     except LocalizeError as e:
         log.warning("Localize failed for %s: %s", memo_id, e)
         async with AsyncSessionLocal() as db:
@@ -2814,6 +2845,26 @@ def _apply_resolved_type(memo, resolved: dict, gallery: list) -> None:
             memo.id, new_type, memo.type,
         )
         return
+    # A read that could not narrow to the post may not promote a memo TO video.
+    # `scope:page` is the resolver saying out loud that it read the feed instead
+    # of the post, and on a video host `classify_media` answers `video` when it
+    # has learned nothing. Unlike every other verdict this one is not inert: a
+    # memo typed `video` is a memo the downloader is then sent to fill, which is
+    # precisely how a photo post ended up holding the song playing behind it.
+    # Demotions, and reads that DID narrow, are untouched.
+    from backend.core.social import SCOPE_TIER_PAGE
+
+    if (
+        new_type == "video"
+        and not gallery
+        and (resolved.get("resolve_tier") or "") == SCOPE_TIER_PAGE
+    ):
+        log.info(
+            "repull: %s could not be narrowed to its post, so `video` is the "
+            "domain talking; keeping %s",
+            memo.id, memo.type,
+        )
+        return
     # A carousel of stills is unambiguous evidence about what the post is.
     carousel = len(gallery) > 1 and any(
         (s or {}).get("type") != "video" for s in gallery
@@ -3015,7 +3066,18 @@ async def repull_memo_task(memo_id: str, mode: str):
             on_disk = resolve_memo_path(memo.file_path)
             pictureless = bool(on_disk) and _has_video_stream(on_disk) is False
 
-        if (album or pictureless) and not (resolved or {}).get("video_url"):
+        # A memo that is already a picture has nothing to download. The album
+        # clause is the special case of this that shipped first, and on its own
+        # it let a single-photo post go round the loop for ever: the resolve
+        # answers `video` from the domain, so "has media" stayed true, so the
+        # song was fetched and thrown away on every single re-pull.
+        is_picture_post = bool(memo) and (memo.type or "").lower() == "image"
+
+        # An explicit og:video still wins over all three: that is the source
+        # naming a video of its own, rather than us going looking for one.
+        og_video = (resolved or {}).get("video_url")
+
+        if (album or pictureless or is_picture_post) and not og_video:
             has_media = False
             # Repair, not only prevention. A file that holds no pictures was
             # never this memo's video, and while it stays attached
@@ -3031,10 +3093,13 @@ async def repull_memo_task(memo_id: str, mode: str):
                 memo.file_path = None
                 memo.localize_status = None
                 memo.localize_error = None
-                # An album says what the post is. With no gallery to go on, all
-                # that is known is that this is not the video it claimed to be,
-                # and a link is the honest card for a post we could not read.
-                memo.type = "image" if album else "link"
+                # The post is whatever it left behind. An album says so loudest,
+                # but a single cover says it too: a post holding a picture and
+                # an audio track is a photo post with music, and filing it as a
+                # `link` hides the one thing that survived the fetch. `link` is
+                # only right when there is nothing to look at.
+                has_picture = bool((memo.thumbnail_path or "").strip())
+                memo.type = "image" if (album or has_picture) else "link"
                 memo.updated_at = datetime.utcnow()
                 await db.commit()
 
