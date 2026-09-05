@@ -7,6 +7,9 @@ All notable changes to OpenMemo are documented here.
 
 <!-- Add entries here as work lands: ### Added / ### Changed / ### Fixed -->
 
+---
+## [3.18.1] - 2026-09-05
+
 ### Fixed
 
 - 🎵 **The album that comes back as a song, properly this time.** Version 3.18.0 said this was fixed. It was not, and the memo that proved it was saved the day after. The repair only knew how to rescue an album whose photos openMemo had already managed to read once. The album that needed rescuing had never been read at all: Facebook answered with a wall the first time, so no photos were ever saved, and there was nothing for the repair to recognise. It downloaded the same four and a half minute song on every single try.
