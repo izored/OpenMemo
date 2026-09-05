@@ -352,6 +352,18 @@ input, textarea { font: inherit; color: inherit; }
   color: var(--text);
   box-shadow: inset 0 0 0 1px var(--accent);
 }
+/* Drag-to-reorder, sidebar Collections. The dragged row dims and the rest of
+   the list slides around it, same feel as the Collections page grid. Resting
+   cursor is left alone: clicking a collection opens it, dragging is the
+   secondary gesture and only says so once it is under way. */
+.om-coll.dragging {
+  position: relative;
+  z-index: 1;
+  opacity: 0.4;
+  background: var(--surface-2);
+  color: var(--text);
+  cursor: grabbing;
+}
 .om-coll-dot {
   width: 8px; height: 8px; border-radius: 50%;
   background: var(--text-4);

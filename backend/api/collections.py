@@ -6,7 +6,7 @@ from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, File, UploadFile
 from fastapi.responses import FileResponse
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from pydantic import BaseModel
 
@@ -69,6 +69,11 @@ class CollectionUpdate(BaseModel):
     hidden_from_dashboard: Optional[bool] = None
 
 
+class CollectionReorder(BaseModel):
+    """The collections of one workspace, in the order the user dragged them."""
+    ids: list[str]
+
+
 @router.get("")
 async def list_collections(
     workspace_id: Optional[str] = None,
@@ -82,7 +87,12 @@ async def list_collections(
     kind=playlist for the Music page, kind=all for everything. NULL kind
     (rows predating the column) counts as standard.
     """
-    query = select(Collection).order_by(Collection.pinned.desc(), Collection.sort_order)
+    # sort_order is the user's drag order (see PUT /reorder). created_at is the
+    # tiebreak, so a library whose rows all still sit at the default 0 keeps
+    # showing oldest-first instead of whatever order SQLite feels like.
+    query = select(Collection).order_by(
+        Collection.pinned.desc(), Collection.sort_order, Collection.created_at
+    )
     if kind == "standard":
         query = query.where(
             (Collection.kind == "standard") | (Collection.kind == None)  # noqa: E711
@@ -119,9 +129,21 @@ async def list_collections(
 @router.post("")
 async def create_collection(data: CollectionCreate, db: AsyncSession = Depends(get_db)):
     """Create a new collection."""
+    workspace_id = sanitize_workspace_id(data.workspace_id)
+    # Drag order is the only ordering mechanism there is, so a new collection
+    # goes on the END of the list rather than landing at the default 0 and
+    # shoving itself in among rows the user placed by hand.
+    max_order = (
+        await db.execute(
+            select(func.max(Collection.sort_order)).where(
+                Collection.workspace_id == workspace_id
+            )
+        )
+    ).scalar()
     collection = Collection(
         id=str(uuid.uuid4()),
-        workspace_id=sanitize_workspace_id(data.workspace_id),
+        workspace_id=workspace_id,
+        sort_order=(max_order or 0) + 1,
         name=data.name,
         emoji=data.emoji,
         description=data.description,
@@ -135,6 +157,53 @@ async def create_collection(data: CollectionCreate, db: AsyncSession = Depends(g
     db.add(collection)
     await db.commit()
     return {"id": collection.id, "name": collection.name}
+
+
+@router.put("/reorder")
+async def reorder_collections(
+    data: CollectionReorder,
+    db: AsyncSession = Depends(get_db),
+):
+    """Write the user's drag order for a whole list of collections at once.
+
+    The client sends every id it is showing, in the order it now shows them,
+    and each row's `sort_order` becomes its index. One request instead of one
+    PUT per collection, and because the whole list is renumbered together
+    there are no ties left for SQLite to break however it likes.
+
+    Declared above PUT /{collection_id} on purpose: FastAPI matches routes in
+    declaration order, and the path parameter would otherwise swallow
+    "reorder" and try to update a collection by that id.
+    """
+    # Dedupe but keep first position — a client that sent an id twice meant the
+    # first slot, and silently renumbering around the duplicate beats a 400.
+    ids = list(dict.fromkeys(data.ids))
+    if not ids:
+        return {"status": "noop", "count": 0}
+
+    rows = (
+        await db.execute(select(Collection).where(Collection.id.in_(ids)))
+    ).scalars().all()
+    by_id = {c.id: c for c in rows}
+    missing = [i for i in ids if i not in by_id]
+    if missing:
+        raise HTTPException(
+            status_code=404,
+            detail=f"Unknown collection(s): {', '.join(missing[:5])}",
+        )
+    # One list, one workspace. A reorder that spans workspaces would renumber a
+    # Space's collections from a library drag (ADR-020 isolation).
+    workspaces = {c.workspace_id for c in rows}
+    if len(workspaces) > 1:
+        raise HTTPException(
+            status_code=400,
+            detail="A reorder must stay inside one workspace.",
+        )
+
+    for i, cid in enumerate(ids):
+        by_id[cid].sort_order = i
+    await db.commit()
+    return {"status": "reordered", "count": len(ids)}
 
 
 @router.put("/{collection_id}")

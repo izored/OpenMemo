@@ -298,6 +298,15 @@ export const collectionApi = {
     fetchJSON<{ id: string }>('/collections', { method: 'POST', body: JSON.stringify(data) }),
   update: (id: string, data: any) =>
     fetchJSON<any>(`/collections/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
+  // Drag-to-reorder. Send every id of one workspace's list, in the order it is
+  // now shown; the server writes each row's index as its sort_order. One
+  // request for the whole list rather than a PUT per collection, and
+  // renumbering together is what stops two rows sharing a sort_order.
+  reorder: (ids: string[]) =>
+    fetchJSON<{ status: string; count: number }>('/collections/reorder', {
+      method: 'PUT',
+      body: JSON.stringify({ ids }),
+    }),
   delete: (id: string) => fetchJSON<any>(`/collections/${id}`, { method: 'DELETE' }),
   addMemo: (collectionId: string, memoId: string) =>
     fetchJSON<any>(`/collections/${collectionId}/memos/${memoId}`, { method: 'POST' }),
