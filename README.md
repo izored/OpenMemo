@@ -232,6 +232,7 @@ openmemo/
 │   ├── MESH-SECURITY.md            # What Mesh does before, during and after you switch it on
 │   ├── BACKUP-AND-RESTORE.md       # Automatic snapshots, archives, restoring
 │   ├── DISASTER-RECOVERY.md        # The first five minutes when data goes missing
+│   ├── incident-2026-09-06-silent-save-failure.md  # A save that worked, reported as a failure
 │   ├── AUDIO_MEMO_HANDBOOK.md      # Recording, transcription, the sidebar player
 │   ├── music-library.md            # Playlists, lossless pulls, the relay
 │   ├── make-it-local.md            # Download ladder, and how videos keep their sound
