@@ -16,7 +16,7 @@ Single source of truth for all planned work. Versioned milestones + unversioned 
 Grounded in what the library and this year's sessions actually surfaced, newest
 thinking first. Nothing here is committed until it has an ADR or a plan file.
 
-### A memo can hold its own library *(proposed, needs an ADR)*
+### A memo can hold its own library *(proposed — [ADR-026](../docs/ADR-026-INNER-MEMOS.md))*
 
 Open any memo and add things **to that memo**: a link, a picture, a note, a PDF,
 another memo you already have. The subject gathers its own references without
@@ -29,7 +29,8 @@ library with nothing tying it to the thing it belongs to. A recipe wants its
 source video. A flat wants the listing, three photos and the agent's email. A
 song wants the interview about it. None of those is a collection.
 
-**The open questions, which are the whole design:**
+**The four questions that decide the design.** All four are answered in
+[ADR-026](../docs/ADR-026-INNER-MEMOS.md); the short version:
 
 - **Are inner memos real memos?** If yes they are searchable, backed up and
   syncable for free, and they clutter the dashboard. If no they are invisible to
