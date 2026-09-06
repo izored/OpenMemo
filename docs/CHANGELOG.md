@@ -7,6 +7,9 @@ All notable changes to OpenMemo are documented here.
 
 <!-- Add entries here as work lands: ### Added / ### Changed / ### Fixed -->
 
+---
+## [3.19.1] - 2026-09-06
+
 ### Fixed
 
 - 📥 **Saving from Telegram works again, and the memos it said it lost were never lost.** Every save was answered with `Save failed: name 'SCOPE_TIER_PAGE' is not defined`. The memo had in fact already been written to your library by that point. What it lost was the video: the download is queued only once the save finishes, and the save never finished, so twenty Instagram memos landed with their picture and nothing to play.
