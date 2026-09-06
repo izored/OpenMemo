@@ -18,6 +18,11 @@ from pydantic import BaseModel
 from backend.config import settings
 from backend.core.job_handlers import queue_task
 from backend.core.pictures import is_picture_slide
+# Module level on purpose. `ingest_url_core` reads SCOPE_TIER_PAGE on the save
+# path, AFTER the memo is committed, so a function-local import elsewhere left
+# that line raising NameError on every single save while the memo itself landed
+# fine. social.py imports nothing but __future__, so there is no cycle to dodge.
+from backend.core.social import SCOPE_TIER_PAGE
 from backend.db.database import get_db, AsyncSessionLocal
 from sqlalchemy import func, select
 from urllib.parse import urlparse
@@ -855,16 +860,27 @@ async def ingest_url_core(data: URLIngest, db: AsyncSession, schedule) -> dict:
     # Bounded by construction: scheduled from the SAVE path only, and nothing
     # inside the re-resolve schedules it again, so a post that stays unreadable
     # costs exactly one extra read and then stops.
-    if (
-        (memo.resolve_tier or "") == SCOPE_TIER_PAGE
-        and not data.no_pull
-        and not data.audio_only
-        and not data.force_localize
-    ):
-        log.info(
-            "ingest: %s could not be narrowed to its post, re-reading once", memo.id
-        )
-        schedule(reresolve_memo_task, memo.id)
+    #
+    # Guarded because this runs AFTER the commit above. On 2026-09-06 a missing
+    # module-level import made the very next line raise NameError on every save:
+    # the memo was already committed, but the relay collects follow-up jobs and
+    # only hands them to the queue once this function RETURNS, so the raise
+    # dropped every one of them and reported "Save failed" for a memo that had
+    # saved fine. 20 Instagram memos landed with no video. An optional retry is
+    # never worth a lost download, so it fails alone and loudly.
+    try:
+        if (
+            (memo.resolve_tier or "") == SCOPE_TIER_PAGE
+            and not data.no_pull
+            and not data.audio_only
+            and not data.force_localize
+        ):
+            log.info(
+                "ingest: %s could not be narrowed to its post, re-reading once", memo.id
+            )
+            schedule(reresolve_memo_task, memo.id)
+    except Exception:
+        log.exception("ingest: re-resolve check failed for %s, memo is saved", memo.id)
 
     return {"id": memo.id, "title": memo.title, "type": memo.type, "status": "processing"}
 
@@ -2886,7 +2902,6 @@ def _apply_resolved_type(memo, resolved: dict, gallery: list) -> None:
     # memo typed `video` is a memo the downloader is then sent to fill, which is
     # precisely how a photo post ended up holding the song playing behind it.
     # Demotions, and reads that DID narrow, are untouched.
-    from backend.core.social import SCOPE_TIER_PAGE
 
     if (
         new_type == "video"

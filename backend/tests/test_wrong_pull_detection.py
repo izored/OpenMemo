@@ -123,6 +123,63 @@ def test_a_degraded_save_re_reads_itself_once():
     assert "schedule(reresolve_memo_task, memo.id)" in src
 
 
+def test_every_global_the_save_path_reads_actually_resolves():
+    """The regression test for 2026-09-06.
+
+    SCOPE_TIER_PAGE was imported inside a DIFFERENT function, so the save path
+    raised NameError on every single save. The memo committed first and the
+    relay only queues follow-up jobs once the function returns, so 20 Instagram
+    memos landed with no video while Telegram reported "Save failed".
+
+    The test above this one passed the entire time: it greps the source for a
+    string, and the string was there. What was missing was the import. So check
+    the thing that actually failed, by walking the compiled bytecode and
+    resolving every global the function loads the way CPython would.
+    """
+    import builtins
+    import dis
+
+    from backend.api import ingest
+
+    module_globals = vars(ingest)
+    unresolvable = sorted(
+        {
+            ins.argval
+            for ins in dis.get_instructions(ingest.ingest_url_core)
+            if ins.opname == "LOAD_GLOBAL"
+            and ins.argval not in module_globals
+            and not hasattr(builtins, ins.argval)
+        }
+    )
+    assert not unresolvable, (
+        f"ingest_url_core reads global(s) that do not exist: {unresolvable}. "
+        "Every one of these raises NameError at runtime, AFTER the memo has "
+        "been committed."
+    )
+
+
+def test_an_optional_retry_cannot_kill_a_committed_save():
+    """The structural half of the same incident.
+
+    Everything after `await db.commit()` runs on a memo that is already saved,
+    so a raise there loses the follow-up jobs and reports a failure that did
+    not happen. The re-resolve is explicitly best effort and must fail alone.
+    """
+    src = inspect.getsource(ingest_mod().ingest_url_core)
+    commit_at = src.index("await db.commit()")
+    tail = src[commit_at:]
+    guard_at = tail.index("try:")
+    reresolve_at = tail.index("schedule(reresolve_memo_task")
+    assert guard_at < reresolve_at, "the re-resolve schedule must sit inside the guard"
+    assert "log.exception" in tail[guard_at:]
+
+
+def ingest_mod():
+    from backend.api import ingest
+
+    return ingest
+
+
 def test_the_retry_never_downloads():
     """Review caught this. Re-pulling would run a SECOND download of a memo the
     save path is already downloading, override the embed-host rule that decided

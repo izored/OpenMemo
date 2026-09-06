@@ -9,6 +9,12 @@ All notable changes to OpenMemo are documented here.
 
 ### Fixed
 
+- 📥 **Saving from Telegram works again, and the memos it said it lost were never lost.** Every save was answered with `Save failed: name 'SCOPE_TIER_PAGE' is not defined`. The memo had in fact already been written to your library by that point. What it lost was the video: the download is queued only once the save finishes, and the save never finished, so twenty Instagram memos landed with their picture and nothing to play.
+
+  If you saw that message, the memos are already in your library. Search for them by their link before re-sending. One that shows its picture but will not play needs its video fetched again, not a re-save: use re-pull in the memo header.
+
+  The step that was crashing is a small optional retry that runs after the memo is written. It can no longer take a saved memo down with it, and if the relay ever does drop queued work again it now says so in the log instead of going quiet. Written up in full in `docs/incident-2026-09-06-silent-save-failure.md`, because the shape of this bug is worth not repeating.
+
 - 🗑️ **The delete button on a memo page works, and asks properly first.** Pressing Delete could leave you sitting on the page you just deleted, with the little confirm bubble still open and nothing else to show for it. The memo was gone from the library, the page just never said so. It now leaves for wherever you came from, and falls back to your library when you opened the memo from a link and there is nowhere to go back to. If the delete fails you get told, instead of it failing quietly.
 
   Deleting from a memo page also gives you the same five second Undo the cards give you, so it is the same promise everywhere: nothing you delete is gone the moment you press the button.

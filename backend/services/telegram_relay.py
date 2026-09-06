@@ -337,6 +337,18 @@ async def _save_url(url: str, collection_name: str, force_localize: bool) -> dic
             result = await ingest_url_core(data, db, schedule)
     except Exception as e:
         log.warning("relay save failed for %s: %r", url, e)
+        # `ingest_url_core` commits the memo partway through, so a raise after
+        # that point leaves a SAVED memo whose follow-up jobs die in this list.
+        # That is exactly how 20 Instagram memos ended up with no video on
+        # 2026-09-06 while Telegram said "Save failed". Not queued here on
+        # purpose (a genuinely failed save has no memo to work on), but never
+        # again silent about it.
+        if jobs:
+            log.error(
+                "relay: dropped %d follow-up job(s) for %s after a mid-save error "
+                "- the memo may have committed; check it before re-sending",
+                len(jobs), url,
+            )
         return {"status": "error", "url": url, "error": str(e)[:120]}
 
     # Hand every follow-up to the durable queue (ADR-024 §9) rather than
