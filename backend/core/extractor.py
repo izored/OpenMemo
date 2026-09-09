@@ -939,11 +939,18 @@ def _parse_gallery_dl_dump(text: str) -> tuple[list[str], str] | None:
 
 async def _instagram_gallery_dl(url: str) -> tuple[list[str], str] | None:
     """All full-size image URLs + caption via gallery-dl and the ADR-012 cookie
-    jar. None when cookies are absent, the tool is missing (dev venv), or
-    extraction fails — the caller falls down the tier ladder."""
-    from backend.core.app_settings import cookies_present, get_cookies_path
+    jar. None when there is no Instagram login, the tool is missing (dev venv),
+    or extraction fails — the caller falls down the tier ladder.
 
-    if not cookies_present():
+    The test is for an Instagram LOGIN, not for a cookie file. Those are not
+    the same thing and the difference is not free: the jar is shared with every
+    other host, so a YouTube cookie made `cookies_present()` true and this ran
+    a subprocess that could not possibly authenticate, on every Instagram save,
+    before the browser tiers did the work anyway."""
+    from backend.core.app_settings import get_cookies_path
+    from backend.core.instagram_login import _has_ig_session
+
+    if not _has_ig_session():
         return None
     try:
         proc = await asyncio.create_subprocess_exec(
@@ -1101,11 +1108,15 @@ async def _instagram_resolve(url: str, domain: str) -> dict:
     A carousel becomes a `gallery` (type=image, first slide = thumbnail); a
     single photo is type=image; a single video keeps the video/embed shape with
     a real poster. Always returns a dict (never None) — the caller stores it."""
-    from backend.core.app_settings import cookies_present, get_cookies_path
+    from backend.core.app_settings import get_cookies_path
     from backend.core.instagram import fetch_media_info
+    from backend.core.instagram_login import _has_ig_session
 
     fav = None
-    cookies = get_cookies_path() if cookies_present() else None
+    # An Instagram login, not "some cookie file exists". The jar holds cookies
+    # for every host openMemo has ever touched, so a YouTube session made the
+    # old test true and tier 2 went out to be refused on every single save.
+    cookies = get_cookies_path() if _has_ig_session() else None
 
     # Tiers 1–2: the guest media-info API (anonymous, then with the session jar).
     info = await fetch_media_info(url)
