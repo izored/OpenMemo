@@ -55,6 +55,11 @@ _DEFAULTS: dict[str, Any] = {
     # (YouTube, Vimeo, …) are left remote so this never fills the disk. When
     # False, no video is auto-downloaded.
     "auto_download_video": True,
+    # Optional ceiling on the height of a kept video, in pixels. 0 means no
+    # ceiling: keep whatever the host serves at its best, which is the point of
+    # keeping a copy at all. 720 / 1080 / 1440 / 2160 cap it for anyone who
+    # would rather trade resolution for disk.
+    "video_quality_cap": 0,
     # File a memo into a collection automatically when its source says where it
     # belongs (see `_AUTO_FILE_DOMAINS` in api/ingest). Only ever fires when no
     # collection was chosen, so it can never overrule a deliberate one. On by

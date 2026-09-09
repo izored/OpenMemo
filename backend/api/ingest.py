@@ -2353,10 +2353,11 @@ async def _localize_apple_track(memo_id: str, url: str, ws: str):
         await db.commit()
 
 
-async def localize_memo_task(memo_id: str, mode: str, quality: int = 1080):
+async def localize_memo_task(memo_id: str, mode: str, quality: int | None = None):
     """Background: download a memo's remote source via yt-dlp and re-home it as a
     local video/audio memo. `mode='audio'` is an explicit video→audio conversion.
-    `quality` caps the video height (720/1080/1440/2160, OPNMMO-0022).
+    `quality` caps the video height. None means "whatever the user set", and the
+    default setting is no cap at all: a kept copy is an archive copy.
     Status flows pending → processing → done | error on memo.localize_status.
 
     Spotify track sources take a different route entirely (no yt-dlp): the
@@ -2389,6 +2390,13 @@ async def localize_memo_task(memo_id: str, mode: str, quality: int = 1080):
     if is_apple_track_url(url):
         await _localize_apple_track(memo_id, url, ws)
         return
+
+    # None = follow the user's Settings preference, resolved here rather than
+    # at every call site so a background job and a button press agree.
+    if quality is None:
+        from backend.core.app_settings import get_settings
+
+        quality = int(get_settings().get("video_quality_cap", 0) or 0)
 
     try:
         result = await localize_media(url, ws, mode, quality)
