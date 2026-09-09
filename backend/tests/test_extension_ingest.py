@@ -29,6 +29,23 @@ def client():
 
 
 @pytest.fixture
+def saved(client):
+    """Memos this file creates, cleared away after each test.
+
+    The suite shares one database, and every memo here is an Instagram save on
+    a fallback tier -- which is exactly what the Instagram health check counts.
+    Left behind, they made test_instagram_health's "an empty library reports ok"
+    run against a library holding three degraded saves, and it failed with
+    no_session. Only in CI, where the whole suite runs together: per-file, this
+    file and that one both pass. Caught on PR 221, 2026-09-09.
+    """
+    ids: list[str] = []
+    yield ids
+    for memo_id in ids:
+        client.delete(f"/api/memos/{memo_id}")
+
+
+@pytest.fixture
 def resolved_carousel(monkeypatch):
     """What openMemo's own Instagram ladder hands back for a two-photo post."""
     async def _extract_video(url):
@@ -88,9 +105,10 @@ SCRAPE = {
 }
 
 
-def test_the_resolver_beats_the_dom_scrape(client, resolved_carousel):
+def test_the_resolver_beats_the_dom_scrape(client, resolved_carousel, saved):
     r = client.post("/api/ingest/extension", json={**SCRAPE, "url": POST})
     assert r.status_code == 200
+    saved.append(r.json()["id"])
     memo = client.get(f"/api/memos/{r.json()['id']}").json()
 
     assert memo["type"] == "image"
@@ -100,9 +118,10 @@ def test_the_resolver_beats_the_dom_scrape(client, resolved_carousel):
     assert "grid1.jpg" not in (memo.get("content_text") or "")
 
 
-def test_a_carousel_survives_the_extension_route(client, resolved_carousel):
+def test_a_carousel_survives_the_extension_route(client, resolved_carousel, saved):
     """This is the one the route used to drop on the floor."""
     r = client.post("/api/ingest/extension", json={**SCRAPE, "url": POST_2})
+    saved.append(r.json()["id"])
     memo = client.get(f"/api/memos/{r.json()['id']}").json()
 
     # Two slides, in order, both local by the time the row is written.
@@ -115,16 +134,17 @@ def test_a_carousel_survives_the_extension_route(client, resolved_carousel):
     assert memo["resolve_tier"] == "instagram:browser-render"
 
 
-def test_the_same_post_twice_is_one_memo(client, resolved_carousel):
+def test_the_same_post_twice_is_one_memo(client, resolved_carousel, saved):
     """Extension and paste share the dedup guard now, so a second save of the
     same permalink returns the memo that already exists."""
     first = client.post("/api/ingest/extension", json={**SCRAPE, "url": POST_3}).json()
+    saved.append(first["id"])
     second = client.post("/api/ingest/url", json={"url": POST_3}).json()
     assert second["id"] == first["id"]
     assert second["status"] == "duplicate"
 
 
-def test_an_ordinary_page_still_keeps_its_dom_scrape(client, monkeypatch):
+def test_an_ordinary_page_still_keeps_its_dom_scrape(client, monkeypatch, saved):
     """The delegation is for hosts openMemo resolves itself. Everywhere else the
     live DOM is the better reader — it is the whole reason the extension exists,
     and a server fetch of a JS-rendered article comes back empty."""
@@ -141,6 +161,7 @@ def test_an_ordinary_page_still_keeps_its_dom_scrape(client, monkeypatch):
         "thumbnail": "https://example.com/hero.jpg",
     })
     assert r.status_code == 200
+    saved.append(r.json()["id"])
     memo = client.get(f"/api/memos/{r.json()['id']}").json()
     assert memo["title"] == "Only the DOM knew this"
     assert memo["content_text"] == "the article body"
