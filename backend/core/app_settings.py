@@ -60,12 +60,6 @@ _DEFAULTS: dict[str, Any] = {
     # keeping a copy at all. 720 / 1080 / 1440 / 2160 cap it for anyone who
     # would rather trade resolution for disk.
     "video_quality_cap": 0,
-    # The largest video openMemo will keep a copy of on its own, in megabytes.
-    # Above this it saves the link and the thumbnail instead. Decided from a
-    # prediction made before anything is downloaded (core/extractor
-    # `predicted_bytes`); a video whose size cannot be predicted falls back to
-    # the old rule about which hosts have a dependable player.
-    "keep_local_max_mb": 100,
     # File a memo into a collection automatically when its source says where it
     # belongs (see `_AUTO_FILE_DOMAINS` in api/ingest). Only ever fires when no
     # collection was chosen, so it can never overrule a deliberate one. On by

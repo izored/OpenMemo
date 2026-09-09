@@ -9,13 +9,11 @@ All notable changes to OpenMemo are documented here.
 
 ### Changed
 
-- 💾 **openMemo keeps a copy of what it can, and says what that costs.** A Facebook video saved as a card with a picture and nothing to play. The video was reachable the whole time. openMemo simply never asked for it, because Facebook was on a list of sites trusted to play their own videos and those were left alone to save space. That trust was misplaced, and a list has no way to find that out.
+- 💾 **Facebook videos save with the video.** A Facebook link saved as a card with a picture and nothing to play. The video was reachable the whole time. openMemo simply never asked for it, because Facebook was on a list of sites trusted to play their own videos, and videos from those sites are left where they are. That trust does not hold for a shared link: the player openMemo would have used comes back with nothing in it and asks you to log in.
 
-  Size decides now, not the website. Before anything is downloaded, openMemo works out roughly how big the file would be and keeps it if it is small enough. A short clip is kept whatever site it came from, a two hour recording is left as a link whatever site it came from, and a YouTube Short is kept while an ordinary YouTube video is not, without the code knowing what YouTube is.
+  Facebook now downloads like any other site without a dependable player. Nothing else moved. A long Facebook video will download in full, which is the known cost of keeping this change small.
 
-  Paste a link and the panel now tells you which way it is going and roughly what it weighs, with a switch to overrule it. Asking to keep something large works even when automatic downloads are off, because asking for a copy and not getting one is worse than a full disk you chose.
-
-  Nothing you have already saved changes. This is only about new saves.
+  This is deliberately the smallest fix. A cleverer rule that decided by predicted file size was written and then withdrawn the same day, because a review found a way to point its size check at things it should not reach, and because it could not see most of a real library. Written up in `docs/parked-2026-09-09-download-policy.md` so it can be picked up properly rather than half-remembered.
 
 - 🎬 **A kept video is kept at full quality.** Every download was quietly capped at 1080p, so a four megabyte clip was served its 1080p copy while its sharper ones were thrown away for no saving at all. The cap is gone. If you would rather trade resolution for disk space there is now a ceiling in Settings, switched off.
 

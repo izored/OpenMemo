@@ -9,7 +9,7 @@ import { collectionEmojiOrDefault } from '@/lib/collectionEmoji';
 import { playlistShape } from '@/lib/playlistUrl';
 import { useAppStore } from '@/stores/appStore';
 import { useConfirm } from './ConfirmModal';
-import { cn, formatBytes } from '@/lib/utils';
+import { cn } from '@/lib/utils';
 import type { Collection } from '@/types';
 
 type Tab = 'link' | 'note' | 'multimedia' | 'voice';
@@ -197,40 +197,6 @@ export function AddMemoPanel({ embedded = false }: { embedded?: boolean } = {}) 
     return () => clearTimeout(t);
   }, [url]);
 
-  // Would this link keep a copy of its media, and how big would that be? Asked
-  // before the save so the choice can be shown with a number against it rather
-  // than discovered afterwards. `keepLocal` stays null until you touch the
-  // switch, and null means "whatever the server decided".
-  const [keepProbe, setKeepProbe] = useState<
-    { isMedia: boolean; keep: boolean; bytes: number | null; predicted: boolean } | null
-  >(null);
-  const [keepLocal, setKeepLocal] = useState<boolean | null>(null);
-  useEffect(() => {
-    const one = url.trim();
-    const many = one.split(/\s+/).filter((x) => /^https?:\/\//i.test(x)).length > 1;
-    // eslint-disable-next-line react-hooks/set-state-in-effect -- a new URL is a new question
-    setKeepProbe(null);
-    setKeepLocal(null);
-    if (many || !/^https?:\/\//i.test(one)) return;
-    // Same debounce as the playlist probe: one question per paste, not per
-    // keystroke. A failure is silent — the row simply does not appear, and the
-    // save behaves exactly as it would have.
-    const t = setTimeout(async () => {
-      try {
-        const res = await ingestApi.probeKeep(one);
-        setKeepProbe({
-          isMedia: res.is_media,
-          keep: res.keep,
-          bytes: res.bytes,
-          predicted: res.predicted ?? res.bytes !== null,
-        });
-      } catch {
-        setKeepProbe(null);
-      }
-    }, 700);
-    return () => clearTimeout(t);
-  }, [url]);
-
   useEffect(() => {
     if (open) {
       // eslint-disable-next-line react-hooks/set-state-in-effect -- clear stale error when the panel opens
@@ -400,11 +366,7 @@ export function AddMemoPanel({ embedded = false }: { embedded?: boolean } = {}) 
           navigate(`/music/${res.collection_id}`);
           return;
         }
-        await ingestApi.url(url.trim(), collection || undefined, {
-          noPull,
-          workspace_id: activeSpace || undefined,
-          keepLocal: keepLocal ?? undefined,
-        });
+        await ingestApi.url(url.trim(), collection || undefined, { noPull, workspace_id: activeSpace || undefined });
       } else if (tab === 'note') {
         if (!noteTitle.trim() && !note.trim()) return;
         await ingestApi.note(noteTitle.trim() || 'Untitled note', note, collection || undefined, activeSpace || undefined);
@@ -695,34 +657,6 @@ export function AddMemoPanel({ embedded = false }: { embedded?: boolean } = {}) 
                   <span className="om-switch"><span className="om-switch-dot" /></span>
                   <span className="om-switch-label">
                     Don't pull content, just save the link
-                    <Icon name="info" size={11} />
-                  </span>
-                </label>
-              )}
-              {/* Keep a copy of the media, or leave it playing from the source.
-                  A different question from the switch above, which is about
-                  whether to read the page at all. Only shown for a link that
-                  actually holds media, and only once the answer is known, so
-                  it never appears as an empty row mid-paste. */}
-              {!multi && !noPull && keepProbe?.isMedia && (
-                <label
-                  className="om-switch-row"
-                  title={
-                    keepProbe.predicted
-                      ? 'Predicted from the length and bitrate the host reports, before anything is downloaded.'
-                      : 'This host did not say how big the file is, so openMemo is going on where the link came from.'
-                  }
-                >
-                  <input
-                    type="checkbox"
-                    className="om-switch-input"
-                    checked={keepLocal ?? keepProbe.keep}
-                    onChange={(e) => setKeepLocal(e.target.checked)}
-                  />
-                  <span className="om-switch"><span className="om-switch-dot" /></span>
-                  <span className="om-switch-label">
-                    Keep a copy
-                    {keepProbe.bytes !== null && ` (about ${formatBytes(keepProbe.bytes)})`}
                     <Icon name="info" size={11} />
                   </span>
                 </label>

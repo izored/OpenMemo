@@ -172,11 +172,6 @@ class URLIngest(BaseModel):
     # telegram_force_localize setting — an on-the-go capture should survive
     # takedown with no manual "Make it local" visit, ADR-020).
     force_localize: bool = False
-    # Explicit answer to "keep a copy of the media, or leave it as a link?".
-    # None = let `should_keep_local` decide from the predicted size, which is
-    # what the New Memo panel shows you before you press save. True or False is
-    # the user overruling that for this one save.
-    keep_local: Optional[bool] = None
 
 
 class PlaylistProbe(BaseModel):
@@ -779,7 +774,7 @@ async def ingest_url_core(data: URLIngest, db: AsyncSession, schedule) -> dict:
     # step. Gated by the auto_download_audio setting; when off, the memo stays
     # remote and the detail page streams it via the platform embed widget.
     from backend.core.app_settings import get_settings
-    from backend.core.extractor import should_keep_local
+    from backend.core.extractor import has_embed_player
 
     auto_localize_audio = (
         not data.no_pull
@@ -790,24 +785,17 @@ async def ingest_url_core(data: URLIngest, db: AsyncSession, schedule) -> dict:
         # the auto_download_audio preference.
         and (data.audio_only or bool(get_settings().get("auto_download_audio", True)))
     )
-    # Auto-download a video small enough to be worth keeping. `should_keep_local`
-    # decides from a size predicted before anything is fetched, so a 24-second
-    # reel is kept and a two-hour stream stays a link, whichever host they came
-    # from. A video whose size cannot be predicted falls back to the old
-    # host rule. Gated by auto_download_video.
+    # Auto-download a video that has NO inline embed player (Threads, Reddit,
+    # unknown host). The sniff/yt-dlp helper makes it a local, playable memo with
+    # no manual "Make it local" step — embeddable hosts (YouTube/Vimeo/…) stay
+    # remote so we don't fill the disk. Gated by auto_download_video.
     auto_localize_video = (
         not data.no_pull
         and memo.type == "video"
         and bool(memo.source_url)
         and not memo.file_path
-        and (
-            data.keep_local
-            if data.keep_local is not None
-            else should_keep_local(memo.source_url, extracted.get("predicted_bytes"))
-        )
-        # An explicit "keep it" outranks the preference. Asking for a copy and
-        # not getting one is worse than a disk you chose to fill.
-        and (data.keep_local is True or bool(get_settings().get("auto_download_video", True)))
+        and not has_embed_player(memo.source_url)
+        and bool(get_settings().get("auto_download_video", True))
     )
     # Relay saves may force the pull (telegram_force_localize, ADR-020): media
     # downloads regardless of the embed-host rule and the auto_download_*
@@ -908,63 +896,6 @@ async def _find_saved_playlist(db: AsyncSession, url: str) -> Optional[Collectio
             )
         )
     ).scalars().first()
-
-
-class KeepProbe(BaseModel):
-    url: str
-
-
-@router.post("/keep/probe")
-async def probe_keep_local(data: KeepProbe):
-    """Would this URL keep a copy, and roughly how big would it be?
-
-    The new-memo panel asks before you press save, so the toggle can say what
-    it is about to cost instead of leaving you to find out afterwards. Reads
-    metadata only — nothing is downloaded and no memo is created.
-
-    Always answers 200. A URL this cannot read is not an error to show a
-    person mid-paste; it just means the panel shows the toggle with no number
-    against it, and the save behaves exactly as it would have anyway.
-    """
-    from backend.core.extractor import detect_url_type, should_keep_local
-
-    validate_url(data.url)
-    if detect_url_type(data.url) != "video":
-        # Not a media host: pictures, notes and articles are always kept, and
-        # there is no size to predict.
-        return {"is_media": False, "keep": True, "bytes": None}
-
-    size = None
-    try:
-        size = await asyncio.to_thread(_probe_size, data.url)
-    except Exception as e:
-        log.info("keep probe failed for %s: %r", data.url, e)
-
-    return {
-        "is_media": True,
-        "keep": should_keep_local(data.url, size),
-        "bytes": size,
-        # False when the answer came from the host rule rather than a real
-        # prediction, so the panel can decline to show a number it made up.
-        "predicted": size is not None,
-    }
-
-
-def _probe_size(url: str) -> int | None:
-    """yt-dlp metadata for `url`, reduced to a predicted byte count."""
-    import json
-    import subprocess
-
-    from backend.core.extractor import predicted_bytes
-
-    result = subprocess.run(
-        ["yt-dlp", "--dump-json", "--no-playlist", "--no-warnings",
-         "--socket-timeout", "15", url],
-        capture_output=True, text=True, timeout=25,
-    )
-    if result.returncode != 0 or not result.stdout.strip():
-        return None
-    return predicted_bytes(json.loads(result.stdout.strip().splitlines()[0]))
 
 
 @router.post("/playlist/probe")
@@ -2800,7 +2731,7 @@ async def ingest_from_extension(
     carousel. The DOM scrape stays primary for ordinary pages, which is the one
     thing it is better at than a server fetch."""
     from urllib.parse import urlparse
-    from backend.core.extractor import detect_url_type, extract_url, should_keep_local
+    from backend.core.extractor import detect_url_type, extract_url, has_embed_player
     from backend.core.app_settings import get_settings
 
     domain = ""
@@ -2869,9 +2800,7 @@ async def ingest_from_extension(
     )
     auto_localize_video = (
         memo.type == "video" and bool(memo.source_url) and not memo.file_path
-        # An ordinary page carries no size prediction, so this resolves to the
-        # same host rule it always used. One decider, not two.
-        and should_keep_local(memo.source_url, extracted.get("predicted_bytes"))
+        and not has_embed_player(memo.source_url)
         and bool(get_settings().get("auto_download_video", True))
     )
     if auto_localize_audio or auto_localize_video:

@@ -100,24 +100,11 @@ export const ingestApi = {
   // when the user just wants the bookmark (OPNMMO-0049).
   // `audioOnly` (Music page "+"): file the link as a music memo and pull the
   // audio track, even for video hosts like YouTube.
-  // `keepLocal` overrules the size rule for one save: true keeps a copy of the
-  // media however large, false leaves it as a link however small. Undefined
-  // lets the server decide, which is what the panel shows you before you save.
-  url: (url: string, collection_id?: string, opts?: { noPull?: boolean; audioOnly?: boolean; workspace_id?: string; keepLocal?: boolean }) =>
+  url: (url: string, collection_id?: string, opts?: { noPull?: boolean; audioOnly?: boolean; workspace_id?: string }) =>
     fetchJSON<{ id: string; title: string }>('/ingest/url', {
       method: 'POST',
-      body: JSON.stringify({ url, collection_id, no_pull: opts?.noPull ?? false, audio_only: opts?.audioOnly ?? false, workspace_id: opts?.workspace_id, keep_local: opts?.keepLocal ?? null }),
+      body: JSON.stringify({ url, collection_id, no_pull: opts?.noPull ?? false, audio_only: opts?.audioOnly ?? false, workspace_id: opts?.workspace_id }),
     }),
-  // Would this URL keep a copy, and roughly how big? Metadata only — nothing
-  // is downloaded and no memo is created. Always answers; `predicted` is false
-  // when the verdict came from the host rule rather than a real size.
-  probeKeep: (url: string) =>
-    fetchJSON<{
-      is_media: boolean;
-      keep: boolean;
-      bytes: number | null;
-      predicted?: boolean;
-    }>('/ingest/keep/probe', { method: 'POST', body: JSON.stringify({ url }) }),
   // Several image links → ONE carousel memo. The counterpart to dropping a
   // folder of files, for pictures you find one at a time across different
   // sites. `failed` names the links that held no image, so the panel can say so
