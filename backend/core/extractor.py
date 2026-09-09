@@ -1040,6 +1040,40 @@ _IG_OG_QUOTED = re.compile(r'[:—-]\s*[\"“”](.+)[\"“”]\s*\.?\s*$', re.S
 _IG_OG_HANDLE = re.compile(r'[-–—]\s*([A-Za-z0-9._]{2,30})\s+on\s', re.S)
 
 
+# A rolling count of how the caption read went, kept in memory. Small on
+# purpose: it exists to answer "did our reading of Instagram break?", which is
+# a question about the last few saves, not about the library's history. Lost on
+# restart, which is correct — a fresh process has no evidence either way.
+_IG_CAPTION_READS: list[bool] = []
+_IG_CAPTION_WINDOW = 20
+
+
+def _note_caption_parse(failed: bool) -> None:
+    _IG_CAPTION_READS.append(failed)
+    del _IG_CAPTION_READS[:-_IG_CAPTION_WINDOW]
+
+
+def caption_parse_health() -> dict:
+    """Is openMemo still able to read an Instagram caption?
+
+    Counts only reads where the answer was knowable: the page named an author,
+    so the post was visible, and the caption either came back or did not. A
+    post that genuinely has no caption never reaches the counter, which is what
+    lets a rate mean something — the base rate of captionless posts in a real
+    library is around one in twelve, and this is not measuring that.
+
+    `broken` needs several reads before it will say anything, because one odd
+    post is not a platform change.
+    """
+    reads = list(_IG_CAPTION_READS)
+    failed = sum(1 for r in reads if r)
+    return {
+        "checked": len(reads),
+        "failed": failed,
+        "broken": len(reads) >= 5 and failed == len(reads),
+    }
+
+
 def _instagram_text_from_html(html: str) -> dict:
     """`_instagram_text_from_og` for a page we already have the HTML of.
 
@@ -1059,10 +1093,49 @@ def _instagram_text_from_html(html: str) -> dict:
         return {"caption": "", "username": ""}
 
 
+def _og_offers_a_caption(og_title: str, og_desc: str) -> bool:
+    """Do these tags contain a caption at all, whatever shape it is in?
+
+    Instagram introduces a caption after the author-and-date clause, normally
+    in quotes. A post with no caption ends at the date:
+
+        with     3,416 likes, 79 comments - someone on August 21, 2026: "words"
+        without  3 likes, 0 comments - someone on May 1, 2026
+
+    Quotes alone are not enough to test for, because dropping them is one of
+    the rewordings this is meant to survive. So a colon introducing anything at
+    all, after an author clause, counts as an offer too.
+    """
+    for text in (og_title, og_desc):
+        t = (text or "").strip()
+        if not t:
+            continue
+        if any(q in t for q in '"“”'):
+            return True
+        m = re.search(r":\s*\S", t)
+        if m and " on " in t[: m.start()]:
+            return True
+    return False
+
+
 def _instagram_text_from_og(og_title: str, og_desc: str) -> dict:
     """Author handle + caption for an Instagram post, read from its OG tags.
 
-    Returns `{"caption": str, "username": str}`, either of which may be empty.
+    Returns `{"caption": str, "username": str, "parse_failed": bool}`.
+
+    `parse_failed` is the alarm this feature was missing. A post with no
+    caption and a caption openMemo could not read produce the identical memo —
+    filed under "@someone" with no words — so nothing downstream can tell a
+    normal empty post from the day Meta rewords its tags and every save goes
+    quiet. Here, and only here, the difference is visible: the page named an
+    author, so it IS a post we can see, and the caption pattern still found
+    nothing. That is not a captionless post, that is a parser that has stopped
+    matching.
+
+    The regex is one pattern doing all the work, and it is brittle by nature.
+    Verified against wording variants on 2026-09-09: a trailing " | Instagram",
+    a dropped colon, an ellipsis instead of the closing quote — each one yields
+    an empty caption today, silently.
     """
     caption = ""
     for candidate in (og_title, og_desc):
@@ -1078,7 +1151,33 @@ def _instagram_text_from_og(og_title: str, og_desc: str) -> dict:
         username = m.group(1)
     elif og_title and " on Instagram" in og_title:
         username = og_title.split(" on Instagram")[0].strip()
-    return {"caption": caption, "username": username}
+
+    # Three ways to end up with no caption, and only one of them is a fault:
+    #
+    #   the page named nobody          we could not read it at all — a wall, a
+    #                                  dead post. A different problem, own tier.
+    #   the tags offer no caption      the post genuinely has none. About one
+    #                                  post in twelve; never an alarm.
+    #   the tags offer one and the     the pattern has stopped matching. THIS.
+    #   pattern found nothing
+    #
+    # The middle case is what makes a naive "no words = broken" counter useless,
+    # so the test is whether the tags were OFFERING a caption to read.
+    parse_failed = (
+        bool(username)
+        and not caption
+        and _og_offers_a_caption(og_title, og_desc)
+    )
+    if parse_failed:
+        _note_caption_parse(failed=True)
+        log.warning(
+            "instagram: read the author but not the caption — the OG wording may "
+            "have changed. og:title=%r",
+            (og_title or "")[:160],
+        )
+    elif caption:
+        _note_caption_parse(failed=False)
+    return {"caption": caption, "username": username, "parse_failed": parse_failed}
 
 
 def _instagram_titles(text: dict, fallback: str = "Instagram post") -> dict:
