@@ -774,7 +774,7 @@ async def ingest_url_core(data: URLIngest, db: AsyncSession, schedule) -> dict:
     # step. Gated by the auto_download_audio setting; when off, the memo stays
     # remote and the detail page streams it via the platform embed widget.
     from backend.core.app_settings import get_settings
-    from backend.core.extractor import has_embed_player
+    from backend.core.extractor import should_keep_local
 
     auto_localize_audio = (
         not data.no_pull
@@ -785,16 +785,17 @@ async def ingest_url_core(data: URLIngest, db: AsyncSession, schedule) -> dict:
         # the auto_download_audio preference.
         and (data.audio_only or bool(get_settings().get("auto_download_audio", True)))
     )
-    # Auto-download a video that has NO inline embed player (Threads, Reddit,
-    # unknown host). The sniff/yt-dlp helper makes it a local, playable memo with
-    # no manual "Make it local" step — embeddable hosts (YouTube/Vimeo/…) stay
-    # remote so we don't fill the disk. Gated by auto_download_video.
+    # Auto-download a video small enough to be worth keeping. `should_keep_local`
+    # decides from a size predicted before anything is fetched, so a 24-second
+    # reel is kept and a two-hour stream stays a link, whichever host they came
+    # from. A video whose size cannot be predicted falls back to the old
+    # host rule. Gated by auto_download_video.
     auto_localize_video = (
         not data.no_pull
         and memo.type == "video"
         and bool(memo.source_url)
         and not memo.file_path
-        and not has_embed_player(memo.source_url)
+        and should_keep_local(memo.source_url, extracted.get("predicted_bytes"))
         and bool(get_settings().get("auto_download_video", True))
     )
     # Relay saves may force the pull (telegram_force_localize, ADR-020): media
@@ -2731,7 +2732,7 @@ async def ingest_from_extension(
     carousel. The DOM scrape stays primary for ordinary pages, which is the one
     thing it is better at than a server fetch."""
     from urllib.parse import urlparse
-    from backend.core.extractor import detect_url_type, extract_url, has_embed_player
+    from backend.core.extractor import detect_url_type, extract_url, should_keep_local
     from backend.core.app_settings import get_settings
 
     domain = ""
@@ -2800,7 +2801,9 @@ async def ingest_from_extension(
     )
     auto_localize_video = (
         memo.type == "video" and bool(memo.source_url) and not memo.file_path
-        and not has_embed_player(memo.source_url)
+        # An ordinary page carries no size prediction, so this resolves to the
+        # same host rule it always used. One decider, not two.
+        and should_keep_local(memo.source_url, extracted.get("predicted_bytes"))
         and bool(get_settings().get("auto_download_video", True))
     )
     if auto_localize_audio or auto_localize_video:

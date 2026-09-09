@@ -583,6 +583,76 @@ _EMBED_VIDEO_HOSTS = (
 )
 
 
+# How big a kept copy is allowed to be, before anything is downloaded. Drawn
+# from a real library: social clips sit near 4 MB and long-form video near
+# 160 MB, so a line at 100 leaves a wide gap on both sides and nothing near it.
+# Overridable as `keep_local_max_mb` in Settings.
+KEEP_LOCAL_DEFAULT_MB = 100
+
+
+def predicted_bytes(data: dict) -> int | None:
+    """How large the best rendition of this video would be, before fetching it.
+
+    yt-dlp reports an exact `filesize` for some hosts and nothing for most —
+    measured 2026-09-09, one of three real links had it, and neither YouTube's
+    4K nor Facebook's 1920p did. Bitrate and duration are present on all of
+    them, and their product is a good enough estimate to decide with:
+
+        YouTube, 2160p, 213s, 19117 kbps  ->  509 MB   (link)
+        Facebook, 1920p, 24s, 1938 kbps   ->    6 MB   (keep)
+        YouTube Short, 480p, 1s           ->   <1 MB   (keep)
+
+    Returns None when the input says nothing useful, which is the caller's
+    signal to fall back rather than to guess.
+    """
+    if not isinstance(data, dict):
+        return None
+    formats = [
+        f for f in (data.get("formats") or [])
+        if isinstance(f, dict) and (f.get("vcodec") or "none") != "none"
+    ]
+    # The rendition we would actually take, which is the tallest one now that
+    # nothing caps the height.
+    best = max(formats, key=lambda f: f.get("height") or 0, default=None)
+    for candidate in (best, data):
+        if not isinstance(candidate, dict):
+            continue
+        exact = candidate.get("filesize") or candidate.get("filesize_approx")
+        if isinstance(exact, (int, float)) and exact > 0:
+            return int(exact)
+    duration = data.get("duration")
+    if not isinstance(duration, (int, float)) or duration <= 0:
+        return None
+    for candidate in (best or {}, data):
+        rate = candidate.get("tbr") or candidate.get("vbr")
+        if isinstance(rate, (int, float)) and rate > 0:
+            # tbr is kbit/s. Audio rides along in the same figure.
+            return int(rate * 1000 / 8 * duration)
+    return None
+
+
+def should_keep_local(url: str, size_bytes: int | None, max_mb: int | None = None) -> bool:
+    """Is this worth keeping a copy of, rather than leaving as a link?
+
+    Size, not host. A host list is what left a Facebook memo with no file at
+    all: facebook.com was on a list of sites trusted to play their own videos,
+    that trust was misplaced, and the list had no way to find out. The same
+    host serves a 24-second reel and a two-hour stream, and with no resolution
+    ceiling those differ by a factor of hundreds — so the host says nothing
+    useful about what a save will cost.
+
+    When nothing can be predicted, the old host rule still answers, so a save
+    that cannot be measured behaves exactly as it did before this existed.
+    """
+    if size_bytes is None:
+        return not has_embed_player(url)
+    if max_mb is None:
+        from backend.core.app_settings import get_settings
+
+        max_mb = int(get_settings().get("keep_local_max_mb", KEEP_LOCAL_DEFAULT_MB))
+    return size_bytes <= max_mb * 1024 * 1024
+
+
 def has_embed_player(url: str) -> bool:
     """True when the URL's host has a reliable inline iframe player (YouTube,
     Vimeo, …). Mirrors the frontend platform registry. A video without an embed
@@ -677,6 +747,10 @@ async def extract_video(url: str) -> dict:
                 "source_favicon": None,
                 "thumbnail_path": thumbnail,
                 "type": "audio" if is_audio else "video",
+                # What a kept copy would weigh. The caller decides with it;
+                # None means it could not be worked out from this payload.
+                "predicted_bytes": predicted_bytes(data),
+                "duration": data.get("duration"),
             }
     except Exception:
         pass
