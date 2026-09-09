@@ -82,20 +82,45 @@ _LARGEST_IMAGE_JS = """() => {
 # by element size (as _LARGEST_IMAGE_JS does) returns slide 1 forever no matter
 # how many times you press Next. Clipping the score to the viewport is what
 # makes paging observable at all.
-_STAGE_IMAGE_JS = """() => {
+_STAGE_IMAGE_JS = r"""(useScope) => {
   let best = null, bestArea = 0;
   const W = window.innerWidth, H = window.innerHeight;
-  const root = document.querySelector('[data-om-scope]') || document;
+  // `useScope` is the caller's answer to "does the post's own subtree contain
+  // the carousel?". On an Instagram permalink it does not: the scope comes out
+  // holding one mounted slide with no Next control, and reading only that
+  // turned a ten-photo carousel into one picture. The stage and the Next button
+  // must be read from the SAME root or the walk clicks one carousel and reads
+  // another, which looks exactly like a stuck stage.
+  const root = (useScope && document.querySelector('[data-om-scope]')) || document;
+  // The widest entry in srcset, not currentSrc. currentSrc is the rendition the
+  // browser picked for the CURRENT layout, and Instagram hands the same low
+  // rendition back for several different slides — so a walk that keys on it
+  // reads slide 2 as a repeat of slide 1 and stops after two.
+  const widest = (img) => {
+    const ss = img.getAttribute('srcset') || '';
+    let b = '', bw = -1;
+    for (const part of ss.split(/,(?=https?:)/)) {
+      const bits = part.trim().split(/\s+/);
+      if (!bits[0]) continue;
+      const w = parseInt((bits[1] || '').replace(/[^0-9]/g, ''), 10) || 0;
+      if (w > bw) { bw = w; b = bits[0]; }
+    }
+    return b || img.currentSrc || img.src || '';
+  };
   for (const img of root.querySelectorAll('img')) {
     const r = img.getBoundingClientRect();
     const src = img.currentSrc || img.src;
     if (!src || src.startsWith('data:')) continue;
+    // An animated sticker in the comments is rendered at slide size and can win
+    // on visible area while the real stage is still settling. A post's own
+    // photo is never a GIF on any of the hosts this walks.
+    if (/[.]gif(?:[?#]|$)/i.test(src)) continue;
     if (r.width < 150 || r.height < 150) continue;
     const vw = Math.min(r.right, W) - Math.max(r.left, 0);
     const vh = Math.min(r.bottom, H) - Math.max(r.top, 0);
     if (vw <= 0 || vh <= 0) continue;      // mounted, but off stage
     const area = vw * vh;
-    if (area > bestArea) { bestArea = area; best = src; }
+    if (area > bestArea) { bestArea = area; best = widest(img); }
   }
   return best;
 }"""
@@ -106,19 +131,27 @@ _STAGE_IMAGE_JS = """() => {
 # which post it belongs to. Advancing the stage is what distinguishes them.
 # Label-driven, not class-driven: obfuscated class names change weekly, the
 # accessibility label does not.
-_NEXT_SLIDE_JS = """() => {
-  const sels = [
-    'button[aria-label="Next"]',
-    'div[role="button"][aria-label="Next"]',
-    '[aria-label="Next"]',
-  ];
-  const root = document.querySelector('[data-om-scope]') || document;
-  for (const s of sels) {
-    const el = root.querySelector(s);
-    if (el) { el.click(); return true; }
-  }
+_NEXT_SEL = (
+    'button[aria-label="Next"], div[role="button"][aria-label="Next"], [aria-label="Next"]'
+)
+
+_NEXT_SLIDE_JS = """(useScope) => {
+  const root = (useScope && document.querySelector('[data-om-scope]')) || document;
+  const el = root.querySelector(SEL);
+  if (el) { el.click(); return true; }
   return false;
-}"""
+}""".replace("SEL", json.dumps(_NEXT_SEL))
+
+# Does the post's own subtree contain the carousel control? When it does, the
+# walk stays inside the scope and a neighbouring post can never be paged. When
+# it does not — Instagram mounts the stage outside the subtree its permalink
+# anchor sits in — the walk has to read the document, and that is safe on a
+# permalink page because the grid around the post is static thumbnails with no
+# Next control of their own.
+_SCOPE_OWNS_CAROUSEL_JS = """() => {
+  const root = document.querySelector('[data-om-scope]');
+  return !!(root && root.querySelector(SEL));
+}""".replace("SEL", json.dumps(_NEXT_SEL))
 
 # ---------------------------------------------------------------------------
 # Post scoping. A permalink page is not just the post: Threads, Instagram and
@@ -277,6 +310,11 @@ _SCOPE_MEDIA_JS = r"""() => {
       if (!u) continue;
     }
     if (u.startsWith('data:')) continue;
+    // Same rule as the stage reader: an animated sticker in the comments is
+    // rendered at slide size, and on a post whose own carousel mounts one slide
+    // at a time it was the only thing the scope had to offer — so it became
+    // slide one, and the memo's cover.
+    if (type === 'image' && /[.]gif(?:[?#]|$)/i.test(u)) continue;
     // The photo's own page, when the grid links to it. Facebook serves the feed
     // a thumbnail of a much larger photo and SIGNS the size into the URL, so the
     // full one cannot be asked for by editing the query - every rewrite is a
@@ -625,34 +663,69 @@ def _netscape_cookies_for(domain: str) -> list:
     return out
 
 
-async def _walk_slides(page, max_slides: int) -> list:
+def _media_key(url: str) -> str:
+    """Identity of a piece of media, ignoring the rendition.
+
+    The same photo is served under several sizes and several signed query
+    strings, so the full URL is not an identity. The CDN path is."""
+    try:
+        return urlparse(url).path or url
+    except Exception:
+        return url
+
+
+async def _walk_slides(
+    page, max_slides: int, seed: list | None = None, use_scope: bool = False
+) -> list:
     """Page a slideshow and return each stage image in order.
 
     Reads the STAGE (largest rendered image) once per click rather than
     scraping every image on the page: a post's own slides and the unrelated
     grid of other posts around it are indistinguishable by URL, but only one
     of them is what you are looking at. Returns [] when there is nothing to
-    page through, so a single-image page costs one evaluate."""
-    slides: list = []
+    page through, so a single-image page costs one evaluate.
+
+    `seed` is media the scope enumeration already found. Passing it keeps those
+    slides first and stops the walk re-adding them under a different rendition.
+    `use_scope` says whether the post's own subtree holds the carousel; both
+    readers below use the same root either way.
+    """
+    slides: list = list(seed or [])
+    seen = {_media_key(u) for u in slides}
     try:
-        first = await page.evaluate(_STAGE_IMAGE_JS)
+        first = await page.evaluate(_STAGE_IMAGE_JS, use_scope)
     except Exception:
         return slides
     if not first:
         return slides
-    slides.append(first)
-    for _ in range(max_slides - 1):
+    if _media_key(first) not in seen:
+        seen.add(_media_key(first))
+        slides.append(first)
+    # Every Next press must reveal something new. Instagram redraws the stage
+    # asynchronously, so a click can land while the previous slide is still up;
+    # one repeat is a slow transition, several in a row means the carousel has
+    # wrapped and there is nothing left to find.
+    stale = 0
+    for _ in range(max_slides * 2):
+        if len(slides) >= max_slides:
+            break
         try:
-            if not await page.evaluate(_NEXT_SLIDE_JS):
+            if not await page.evaluate(_NEXT_SLIDE_JS, use_scope):
                 break  # no Next control: nothing to page through
             await page.wait_for_timeout(900)
-            nxt = await page.evaluate(_STAGE_IMAGE_JS)
+            nxt = await page.evaluate(_STAGE_IMAGE_JS, use_scope)
         except Exception:
             break
-        # A carousel wraps back to slide 1, and a stage mid-transition repeats
-        # the current slide. Either way, a URL already held means we are done.
-        if not nxt or nxt in slides:
-            break
+        # Keyed on the CDN path, not the whole URL: the same slide comes back
+        # under a different size parameter between reads, and treating those as
+        # two slides is how a carousel used to save the same photo twice.
+        if not nxt or _media_key(nxt) in seen:
+            stale += 1
+            if stale >= 2:
+                break
+            continue
+        stale = 0
+        seen.add(_media_key(nxt))
         slides.append(nxt)
     return slides
 
@@ -1009,18 +1082,38 @@ async def render_page(
                           f"reading the whole page instead")
                 if scoped:
                     post_media = await _collect_post_media(page, max_slides)
-                    # The grid hands over thumbnails. Trade a few page loads for
-                    # the originals before anything downstream saves them.
-                    post_media = await _upgrade_stills(ctx, post_media)
                     try:
                         post_text = await page.evaluate(_SCOPE_TEXT_JS) or ""
                     except Exception:
                         post_text = ""
-            # Enumerating the scope already answered the question; only fall
-            # back to clicking Next when it did not (no scope, or an empty one).
-            if want_gallery and not post_media:
-                slides = await _walk_slides(page, max_slides)
-        if post_media:
+            # Enumerating the scope answers the question on a page that lays its
+            # slides out as a strip (Threads, Facebook). A carousel that mounts
+            # ONE slide at a time (Instagram) leaves the scope holding a single
+            # picture, so the click-walk still has to run — seeded with what the
+            # scope found so the two readers agree on ordering and nothing is
+            # counted twice. Measured on a live ten-photo post on 2026-09-09:
+            # scope alone 1 slide, walk alone 2, both 10.
+            #
+            # This runs BEFORE the still upgrade below on purpose. Upgrading
+            # opens a page per slide, and by the time those return, Instagram
+            # has thrown its login prompt over the stage and the walk reads a
+            # comment sticker instead of slide one.
+            scoped_stills = [m["url"] for m in post_media if m.get("type") == "image"]
+            if want_gallery and len(scoped_stills) < 2:
+                try:
+                    owns = bool(await page.evaluate(_SCOPE_OWNS_CAROUSEL_JS))
+                except Exception:
+                    owns = False
+                slides = await _walk_slides(
+                    page, max_slides, seed=scoped_stills, use_scope=owns
+                )
+            elif scoped_stills:
+                slides = scoped_stills
+            if post_media:
+                # The grid hands over thumbnails. Trade a few page loads for the
+                # originals before anything downstream saves them.
+                post_media = await _upgrade_stills(ctx, post_media)
+        if post_media and not slides:
             slides = [m["url"] for m in post_media if m.get("type") == "image"]
 
         # Wait for OG meta to appear (fast path when challenge already passed).
