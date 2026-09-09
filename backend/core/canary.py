@@ -108,13 +108,23 @@ async def run_instagram_canary() -> dict:
         got_type = resolved.get("type")
         got_slides = len(resolved.get("gallery") or [])
 
-        if tier in IG_FALLBACK_TIERS:
-            outcome = "degraded"
-        elif got_type != want_type or got_slides < want_slides:
+        # Content first. This used to sit behind the tier test, which made it
+        # unreachable on any library without an Instagram login: the tier said
+        # "degraded" and the comparison never ran. The comparison is the whole
+        # reason this module exists — it is the only thing anywhere that can
+        # see a carousel come back with fewer slides than you already have —
+        # and it had never once decided anything on a session-less install.
+        if got_type != want_type or got_slides < want_slides:
             # Fewer slides than stored, or a different kind of post entirely.
             # Not necessarily our bug — the author may have edited the post —
             # but it is exactly the shape the original bug had, so say it.
             outcome = "mismatch"
+        elif tier in IG_FALLBACK_TIERS:
+            # Read without a login. Worth reporting, not worth alarming: since
+            # the browser tiers learned to read the caption and the whole
+            # carousel, what comes back this way is correct, and the comparison
+            # above just confirmed it.
+            outcome = "degraded"
         else:
             outcome = "ok"
         checks.append({

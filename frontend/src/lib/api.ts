@@ -679,12 +679,18 @@ export const settingsApi = {
   // the last few saves really used.
   instagramHealth: () =>
     fetchJSON<{
-      status: 'ok' | 'session_expired' | 'no_session';
+      /** `unreadable` is not about the session: openMemo can reach the post and
+       *  cannot read it, which connecting an account would not fix. */
+      status: 'ok' | 'session_expired' | 'no_session' | 'unreadable';
       connected: boolean;
       checked: number;
+      /** Saves that actually failed. Reading a post without a login is not one. */
       degraded: number;
+      /** Saves that read the public page. A fact, not a fault. */
+      no_session_saves?: number;
       blocked: number;
       recent_tiers: string[];
+      captions?: { checked: number; failed: number; broken: boolean };
     }>('/settings/instagram/health'),
   instagramImportSession: (cookies: string) =>
     fetchJSON<{ connected: boolean; who: string | null }>('/settings/instagram/session', {

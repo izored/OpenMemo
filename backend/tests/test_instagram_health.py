@@ -161,3 +161,97 @@ class TestCanaryVerdict:
         result = await canary.run_instagram_canary()
         assert result["status"] == "skipped"
         assert result["checks"][0]["outcome"] == "error"
+
+
+class TestTheWarningMeansSomethingWentWrong:
+    """Reading a post without a login is not a fault.
+
+    The check used to count every browser-tier save as degraded. That was
+    correct while those tiers produced a poorer memo — a reel as a still, a
+    carousel as one photo. It stopped being correct the day they learned to
+    read the caption and walk the whole carousel, and the warning went on
+    firing at a library whose memos were all fine. Measured on a live install
+    2026-09-09: twelve of twelve reported degraded, and every one of those
+    twelve had its caption, its slides and a local cover.
+    """
+
+    def _health(self, client):
+        return client.get("/api/settings/instagram/health").json()
+
+    def _rows(self, monkeypatch, tiers):
+        """Pretend the last few saves used these tiers."""
+        import backend.api.settings as settings_api
+
+        class _Result:
+            def scalars(self):
+                return self
+
+            def all(self):
+                return tiers
+
+        class _Session:
+            async def execute(self, *a, **kw):
+                return _Result()
+
+            async def __aenter__(self):
+                return self
+
+            async def __aexit__(self, *a):
+                return False
+
+        monkeypatch.setattr(settings_api, "AsyncSessionLocal", _Session, raising=False)
+        monkeypatch.setattr(
+            "backend.db.database.AsyncSessionLocal", _Session, raising=False
+        )
+
+    def test_saves_without_a_login_do_not_raise_a_warning(self, client, monkeypatch):
+        self._rows(monkeypatch, ["instagram:browser-render"] * 12)
+        monkeypatch.setattr("backend.core.canary.last_result", lambda: None)
+        body = self._health(client)
+        assert body["status"] == "ok"
+        # The fact is still reported, just not as a fault.
+        assert body["no_session_saves"] == 12
+        assert body["degraded"] == 0
+
+    def test_a_save_that_actually_failed_does(self, client, monkeypatch):
+        self._rows(monkeypatch, ["instagram:blocked"] * 12)
+        monkeypatch.setattr("backend.core.canary.last_result", lambda: None)
+        body = self._health(client)
+        assert body["status"] in ("no_session", "session_expired")
+        assert body["degraded"] == 12
+
+    def test_a_reader_that_stopped_working_says_so_in_its_own_words(
+        self, client, monkeypatch
+    ):
+        from backend.core import extractor
+
+        self._rows(monkeypatch, ["instagram:api-cookie"] * 12)
+        monkeypatch.setattr("backend.core.canary.last_result", lambda: None)
+        extractor._IG_CAPTION_READS.clear()
+        extractor._IG_CAPTION_READS.extend([True] * 8)
+        try:
+            body = self._health(client)
+            # Not a session problem. Connecting an account would not help.
+            assert body["status"] == "unreadable"
+            assert body["captions"]["broken"] is True
+        finally:
+            extractor._IG_CAPTION_READS.clear()
+
+    def test_a_stale_canary_verdict_of_degraded_no_longer_alarms(
+        self, client, monkeypatch
+    ):
+        # The stored verdict has no expiry, so a week-old "read without a
+        # login" was keeping the banner up on a healthy library.
+        self._rows(monkeypatch, ["instagram:browser-render"] * 12)
+        monkeypatch.setattr(
+            "backend.core.canary.last_result", lambda: {"status": "degraded"}
+        )
+        assert self._health(client)["status"] == "ok"
+
+    def test_a_canary_mismatch_still_alarms(self, client, monkeypatch):
+        # Slides going missing is the original bug and must still be loud.
+        self._rows(monkeypatch, ["instagram:api-cookie"] * 12)
+        monkeypatch.setattr(
+            "backend.core.canary.last_result", lambda: {"status": "mismatch"}
+        )
+        assert self._health(client)["status"] != "ok"

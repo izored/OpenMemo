@@ -585,10 +585,17 @@ function InstagramConnectRows() {
         </span>
       </div>
 
-      {/* The silent-degradation warning. Instagram saves never fail outright —
-          a blocked tier still produces a memo, just a poorer one (a reel as a
-          still, a carousel as one photo), which is exactly how six weeks of
-          bad saves went unnoticed. Say it out loud instead. */}
+      {/* Two different things, said differently.
+
+          The warning is for a save that FAILED — nothing came back but a
+          bookmark. It used to fire for any save that read the public page,
+          which was right while those reads produced a poorer memo. Since they
+          started returning the caption and the whole carousel, that warning was
+          telling people their saves were broken while every one of them was
+          fine, and a warning nobody can act on is one they learn to ignore.
+
+          Reading without a login is now a plain note. Connecting an account is
+          still faster and steadier, which is worth saying, once, quietly. */}
       {health && health.status !== 'ok' && (
         <div
           role="status"
@@ -599,20 +606,41 @@ function InstagramConnectRows() {
           }}
         >
           <p style={{ margin: 0, fontWeight: 500, color: 'var(--text-warning, #BA7517)' }}>
-            {health.status === 'session_expired'
-              ? 'Instagram session no longer works'
-              : 'Instagram saves are running without a session'}
+            {health.status === 'unreadable'
+              ? 'Instagram saves are arriving without their words'
+              : health.status === 'session_expired'
+                ? 'Instagram session no longer works'
+                : 'Instagram saves are not going through'}
           </p>
           <span className="mono" style={{ display: 'block', marginTop: 4 }}>
-            {health.degraded} of the last {health.checked} Instagram saves fell back to
-            reading the public page. Those still save, but only what a logged-out
-            visitor can see: reels can miss their video and carousels can arrive as a
-            single photo.{' '}
-            {health.status === 'session_expired'
-              ? 'Reconnect below to fix it.'
-              : 'Connect an account below to fix it.'}
+            {health.status === 'unreadable' ? (
+              <>
+                openMemo is reaching your posts and cannot read the caption out of
+                them, which usually means Instagram has changed how the page is
+                written. The pictures still save. Connecting an account will not fix
+                this one, and it is being logged so it can be repaired.
+              </>
+            ) : (
+              <>
+                {health.degraded} of the last {health.checked} Instagram saves came
+                back with nothing but a bookmark.{' '}
+                {health.status === 'session_expired'
+                  ? 'Reconnect below to fix it.'
+                  : 'Connect an account below to fix it.'}
+              </>
+            )}
           </span>
         </div>
+      )}
+
+      {/* Not a problem, so it does not look like one. */}
+      {health && health.status === 'ok' && !health.connected && !!health.no_session_saves && (
+        <span className="mono" style={{ display: 'block', maxWidth: 560, color: 'var(--text-3)' }}>
+          {health.no_session_saves} of the last {health.checked} Instagram saves read
+          the public page instead of signing in. They come back with the caption and
+          every photo either way; connecting an account is faster and less likely to
+          be rate limited.
+        </span>
       )}
 
       {status?.connected ? (

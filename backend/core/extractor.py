@@ -1015,12 +1015,22 @@ IG_TIERS = (
     IG_TIER_BLOCKED,
 )
 
-# Tiers that mean "we could not read the post properly". A save landing here
-# still produces a memo — that is exactly why the drop went unnoticed for six
-# weeks — so these are the ones worth telling the user about.
-IG_FALLBACK_TIERS = frozenset(
-    {IG_TIER_BROWSER_SNIFF, IG_TIER_BROWSER_RENDER, IG_TIER_BLOCKED}
-)
+# Tiers reached without an Instagram login. Worth SAYING — connecting an
+# account is faster and steadier — but no longer worth an alarm: since the
+# browser tiers learned to read the caption and walk the whole carousel, a save
+# that lands here comes back with its words and its pictures. Verified on a
+# live post, 2026-09-09: ten slides and the full caption, from browser-render.
+IG_NO_SESSION_TIERS = frozenset({IG_TIER_BROWSER_SNIFF, IG_TIER_BROWSER_RENDER})
+
+# The tier that means the save actually failed. Everything above it produces a
+# usable memo; this one produces a bookmark saying "connect Instagram". It is
+# the only Instagram outcome that deserves a warning.
+IG_FAILED_TIERS = frozenset({IG_TIER_BLOCKED})
+
+# Every tier that did not reach the API. Kept because the canary and older
+# callers ask "did this reach the good path", which is still a real question —
+# it is just not the same question as "is anything wrong".
+IG_FALLBACK_TIERS = IG_NO_SESSION_TIERS | IG_FAILED_TIERS
 
 
 # Instagram writes the author and the whole caption into its OpenGraph tags and
