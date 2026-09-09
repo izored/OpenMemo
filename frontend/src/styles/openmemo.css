@@ -3287,6 +3287,13 @@ body.om-has-bbar .om-fab { display: none !important; }
   display: flex; flex-direction: column; gap: 6px;
   overflow-y: auto; overflow-x: hidden; min-height: 0;
   scrollbar-width: thin; scrollbar-color: rgba(255,255,255,0.15) transparent;
+  /* Reserve the scrollbar gutter whether or not a bar is showing. Without it
+     the Appearance panel oscillates several times a second: AnimatedHeight
+     measures the content, the new height crosses the overflow threshold, the
+     scrollbar appears and takes 8px off the content width, the swatch rows and
+     preset grid rewrap to a different height, and the observer fires again.
+     A constant content width breaks that loop at its source. */
+  scrollbar-gutter: stable;
 }
 
 /* Animated-height wrapper for tab content. Height is set inline from a measured value. */
