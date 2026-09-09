@@ -109,8 +109,11 @@ async def _localize(payload: dict[str, Any]) -> None:
     """Explicit localize: the caller chose the mode."""
     from backend.api.ingest import localize_memo_task
 
+    # No stored quality means "follow the Settings preference", resolved inside
+    # the task. It used to default to 1080 here, which quietly re-capped every
+    # replayed job even after the ceiling was removed everywhere else.
     await localize_memo_task(
-        payload["memo_id"], payload["mode"], payload.get("quality", 1080)
+        payload["memo_id"], payload["mode"], payload.get("quality")
     )
 
 

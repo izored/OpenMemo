@@ -985,8 +985,10 @@ function MakeItLocalPanel({ memo, open, onToggle }: { memo: Memo; open?: boolean
   // offer the audio download. Video sources keep both options.
   const isAudio = memo.type === 'audio';
   const [mode, setMode] = useState<'video' | 'audio'>(isAudio ? 'audio' : 'video');
-  // Video height cap (OPNMMO-0022). 1080 default; 4K is an explicit pick.
-  const [quality, setQuality] = useState(1080);
+  // Video height ceiling. 0 = none, which is the default: a copy you asked to
+  // keep is an archive copy, and the smaller options are there to trade
+  // resolution for disk on purpose rather than by accident.
+  const [quality, setQuality] = useState(0);
   const [starting, setStarting] = useState(false);
   const status = memo.localize_status;
   const busy = status === 'pending' || status === 'processing' || starting;
@@ -1019,10 +1021,11 @@ function MakeItLocalPanel({ memo, open, onToggle }: { memo: Memo; open?: boolean
       ];
 
   const qualities: { value: number; label: string; hint: string }[] = [
+    { value: 0, label: 'Best', hint: 'Default — whatever the source offers' },
     { value: 720, label: '720p', hint: 'Smallest file' },
-    { value: 1080, label: '1080p', hint: 'Default — sharp and reasonably sized' },
+    { value: 1080, label: '1080p', hint: 'Sharp and reasonably sized' },
     { value: 1440, label: '1440p', hint: 'Big file' },
-    { value: 2160, label: '4K', hint: 'Source max — very large file' },
+    { value: 2160, label: '4K', hint: 'Very large file' },
   ];
 
   const body = (
@@ -1085,7 +1088,7 @@ function MakeItLocalPanel({ memo, open, onToggle }: { memo: Memo; open?: boolean
               ))}
             </div>
           )}
-          {!isAudio && mode === 'video' && quality > 1080 && (
+          {!isAudio && mode === 'video' && (quality === 0 || quality > 1080) && (
             <p className="om-detail-desc" style={{ marginTop: 10, fontStyle: 'italic' }}>
               {quality === 2160 ? '4K' : '1440p'} downloads can be several gigabytes and most hosts serve them as VP9/AV1 — playback works in modern browsers, but the file is much heavier. If the source has no {quality === 2160 ? '4K' : '1440p'} stream, the best available below it is saved.
             </p>

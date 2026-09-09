@@ -72,10 +72,12 @@ export const memoApi = {
   // wrong rather than merely remote.
   repull: (id: string) =>
     fetchJSON<{ id: string; status: string; mode: string }>(`/memos/${id}/repull`, { method: 'POST' }),
-  localize: (id: string, mode: 'video' | 'audio', quality: number = 1080) =>
+  // `quality` is a height ceiling in pixels: 0 = none, or 720/1080/1440/2160.
+  // Omit it to follow the preference in Settings, which defaults to no ceiling.
+  localize: (id: string, mode: 'video' | 'audio', quality?: number) =>
     fetchJSON<{ id: string; status: string; mode: string }>(`/memos/${id}/localize`, {
       method: 'POST',
-      body: JSON.stringify({ mode, quality }),
+      body: JSON.stringify({ mode, quality: quality ?? null }),
     }),
   // Set a custom thumbnail (already cropped client-side) for any memo. Multipart;
   // the browser sets the boundary, so don't add a Content-Type header.

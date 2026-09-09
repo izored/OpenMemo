@@ -65,3 +65,38 @@ class TestPreferenceIsResolvedOnce:
         cap = int(app_settings.get_settings().get("video_quality_cap", 0) or 0)
         assert cap == QUALITY_BEST
         assert "height<=" not in _video_format(cap)
+
+
+class TestNoRouteStillForcesTheOldCap:
+    """The ceiling has to be gone from every path, not just the automatic one.
+
+    It was removed from the save path first, and three places went on sending
+    a ceiling anyway: the durable queue's replay default, the API client's
+    default argument, and the memo page's initial picker value. So "Make it
+    local" — the button someone presses precisely because they want to keep the
+    thing — was the one path still capped.
+
+    There was a source-grep test here as well, asserting the literal was absent
+    from the handler. It failed on the comment explaining why the literal was
+    removed, which is the whole case against tests that read code instead of
+    running it. Deleted rather than reworded.
+    """
+
+    async def test_a_replayed_job_follows_the_setting(self, monkeypatch):
+        """The dispatcher's payload, handed to the real task signature."""
+        seen = {}
+
+        async def _task(memo_id, mode, quality=None):
+            seen["quality"] = quality
+
+        monkeypatch.setattr("backend.api.ingest.localize_memo_task", _task)
+
+        from backend.core.job_handlers import KIND_LOCALIZE
+        from backend.core.jobs import _HANDLERS
+
+        # What the queue stores for an explicit localize with no chosen height,
+        # dispatched exactly as the worker dispatches it.
+        await _HANDLERS[KIND_LOCALIZE].fn({"memo_id": "m1", "mode": "video"})
+        assert seen["quality"] is None, (
+            "a replayed job must defer to Settings, not carry a hardcoded cap"
+        )
