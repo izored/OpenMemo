@@ -46,6 +46,11 @@ class SettingsPatch(BaseModel):
     mailing_list_consent: Optional[bool] = None
     auto_download_audio: Optional[bool] = None
     auto_download_video: Optional[bool] = None
+    # Height ceiling on a kept video, 0 = none. Off by default: a kept copy is
+    # an archive copy.
+    video_quality_cap: Optional[int] = None
+    # The largest video openMemo keeps a copy of on its own, in megabytes.
+    keep_local_max_mb: Optional[int] = None
     auto_file_by_source: Optional[bool] = None
     auto_file_rules: Optional[list[dict]] = None
     music_quality: Optional[str] = None

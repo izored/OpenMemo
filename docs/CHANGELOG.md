@@ -7,6 +7,30 @@ All notable changes to OpenMemo are documented here.
 
 <!-- Add entries here as work lands: ### Added / ### Changed / ### Fixed -->
 
+### Changed
+
+- 💾 **openMemo keeps a copy of what it can, and says what that costs.** A Facebook video saved as a card with a picture and nothing to play. The video was reachable the whole time. openMemo simply never asked for it, because Facebook was on a list of sites trusted to play their own videos and those were left alone to save space. That trust was misplaced, and a list has no way to find that out.
+
+  Size decides now, not the website. Before anything is downloaded, openMemo works out roughly how big the file would be and keeps it if it is small enough. A short clip is kept whatever site it came from, a two hour recording is left as a link whatever site it came from, and a YouTube Short is kept while an ordinary YouTube video is not, without the code knowing what YouTube is.
+
+  Paste a link and the panel now tells you which way it is going and roughly what it weighs, with a switch to overrule it. Asking to keep something large works even when automatic downloads are off, because asking for a copy and not getting one is worse than a full disk you chose.
+
+  Nothing you have already saved changes. This is only about new saves.
+
+- 🎬 **A kept video is kept at full quality.** Every download was quietly capped at 1080p, so a four megabyte clip was served its 1080p copy while its sharper ones were thrown away for no saving at all. The cap is gone. If you would rather trade resolution for disk space there is now a ceiling in Settings, switched off.
+
+### Fixed
+
+- 🔔 **Settings stops telling you Instagram is broken when it is working.** It counted every save that read the public page as a failure and said so in an orange panel, promising that reels could miss their video and carousels could arrive as a single photo. Neither has happened since the last release taught those reads to pull the caption and the whole carousel. On one library it was reporting twelve failures out of twelve while all twelve memos were complete.
+
+  The warning is now for a save that actually came back with nothing. Reading a post without being signed in is reported as a plain line instead, because it is a fact rather than a fault. Connecting an account is still faster and less likely to be rate limited, and it still says so, once, quietly.
+
+- 🔍 **openMemo will notice if it ever stops being able to read Instagram captions.** Reading one depends on Instagram wording its pages a particular way. If that ever changes, every save loses its words while every other check still reports success, which is exactly how an earlier problem went unnoticed for six weeks. The difficulty is that a post with no caption looks identical, and about one post in twelve genuinely has none. openMemo now tells those apart by whether the page was offering a caption at all, counts the ones it could not read, and says so plainly rather than filing them under the author and moving on.
+
+- 🧹 **A memo filed under its author can be repaired.** When a post's caption could not be read, the memo was named after whoever posted it. That is not a name anybody chose, but re-pull treated it as one and refused to replace it, so the memo was stuck with it forever even once openMemo could read the real caption. Twenty five memos in one library were in that state. A caption that merely starts with a mention is still your words and is left alone.
+
+- ⚡ **Instagram saves stop knocking on a door they have no key to.** Two of the ways openMemo pulls a post need you to be signed in to Instagram. It was checking whether a cookies file existed rather than whether that file held an Instagram login, and the file is shared with every other site, so one YouTube cookie made it look signed in. Every single save paid for two attempts that could not possibly work before falling back to the one that does.
+
 ### Added
 
 - ⚡ **A Check now button for phone capture.** Under Settings, in the phone capture card, below the interval. It asks Telegram for waiting shares straight away instead of sitting out the wait, and it tells you what came back: how many shares it saved, that there was nothing waiting, or what went wrong reaching Telegram. It waits for the answer rather than firing and shrugging, because a button that goes quiet is indistinguishable from a broken one, and the moment you press it is the moment you already suspect something is wrong.
