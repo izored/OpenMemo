@@ -2716,12 +2716,14 @@ async def ingest_from_extension(
     """Save content from the browser extension.
 
     Converges with the WebUI `/url` path so the SAME source produces the SAME
-    memo regardless of entry point: `www.` is stripped from the domain, and a
-    video-platform URL is enriched through `extract_video` (yt-dlp metadata +
-    thumbnail) exactly like `/url` instead of relying on the DOM scrape. Without
-    this the two paths diverged (raw `www.` domain, DOM thumbnail, no auto-DL)."""
+    memo regardless of entry point: `www.` is stripped from the domain, and any
+    URL openMemo has its own resolver for is handed straight to the shared `/url`
+    body instead of being rebuilt from the DOM scrape. Without that the two paths
+    diverged, most visibly on Instagram, where an extension save lost the whole
+    carousel. The DOM scrape stays primary for ordinary pages, which is the one
+    thing it is better at than a server fetch."""
     from urllib.parse import urlparse
-    from backend.core.extractor import detect_url_type, extract_video, extract_url, has_embed_player
+    from backend.core.extractor import detect_url_type, extract_url, has_embed_player
     from backend.core.app_settings import get_settings
 
     domain = ""
@@ -2731,33 +2733,41 @@ async def ingest_from_extension(
         if domain.startswith("www."):
             domain = domain[4:]
 
-    # A video-platform URL goes through the same extractor the WebUI uses, so the
-    # result matches; otherwise the DOM scrape is primary and a server fetch fills
-    # only what the extension couldn't supply.
+    # A host openMemo resolves ITSELF (Instagram, Threads, Facebook, TikTok, any
+    # yt-dlp platform) goes through the shared /url body rather than being
+    # rebuilt here. The DOM scrape is the wrong reader for those pages, and this
+    # route never copied `gallery` or `resolve_tier` at all — so an extension
+    # save of a ten-photo Instagram carousel arrived as a single picture with no
+    # tier recorded, while the same link pasted into the app came out whole.
+    # Delegating also picks up dedup, the stale-Instagram upgrade, the
+    # caption-as-title guard and auto-localize, for free and in one place.
+    if data.url and detect_url_type(data.url) == "video":
+        return await ingest_url_core(
+            URLIngest(
+                url=data.url,
+                workspace_id=data.workspace_id,
+                collection_id=data.collection_id,
+            ),
+            db,
+            queue_task,
+        )
+
+    # Everything past the delegation above is an ordinary page, so the live DOM
+    # scrape is the primary reader and a server fetch only fills what the
+    # extension could not supply (a paywalled article body, a missing cover).
     extracted = {}
-    is_video_url = bool(data.url) and detect_url_type(data.url) == "video"
-    if is_video_url:
-        try:
-            extracted = await extract_video(data.url)
-        except Exception:
-            extracted = {}
-    elif data.url and (not data.content_text or not data.thumbnail) and data.type in ("article", "link"):
+    if data.url and (not data.content_text or not data.thumbnail) and data.type in ("article", "link"):
         try:
             extracted = await extract_url(data.url)
         except Exception:
             extracted = {}
 
-    # For a video URL the extractor result wins (parity with /url); otherwise the
-    # extension's live DOM scrape wins and the fetch only backfills gaps.
-    if is_video_url and extracted:
-        pick = lambda ex, dom: extracted.get(ex) or dom
-    else:
-        pick = lambda ex, dom: dom or extracted.get(ex)
+    pick = lambda ex, dom: dom or extracted.get(ex)
 
     memo = Memo(
         id=str(uuid.uuid4()),
         workspace_id=sanitize_workspace_id(data.workspace_id),
-        type=(extracted.get("type") if is_video_url else None) or data.type or extracted.get("type", "link"),
+        type=data.type or extracted.get("type", "link"),
         title=pick("title", data.title) or data.url,
         description=pick("description", data.description),
         content_text=pick("content_text", data.content_text),

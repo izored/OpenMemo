@@ -23,7 +23,6 @@ chrome.contextMenus.onClicked.addListener(async (info, tab) => {
   if (info.menuItemId === 'save-to-openmemo') {
     try {
       const API_BASE = await getApiBase();
-      const url = info.pageUrl || tab.url;
 
       // Extract from the live DOM via the content script (Defuddle-style).
       let content;
@@ -34,6 +33,13 @@ chrome.contextMenus.onClicked.addListener(async (info, tab) => {
         content = await chrome.tabs.sendMessage(tab.id, { action: 'extract-content' });
       }
       content = content || {};
+
+      // The content script's URL wins. On a single-page app it is the permalink
+      // of the post actually open — Instagram shows a post in a dialog while
+      // `pageUrl` still names the profile, and saving that URL is what pulled a
+      // profile's bio and grid instead of the post's own carousel. Falls back to
+      // the tab when the content script could not run at all.
+      const url = content.url || info.pageUrl || tab.url;
 
       // Save via API
       const response = await fetch(`${API_BASE}/ingest/extension`, {

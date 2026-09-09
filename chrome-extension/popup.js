@@ -36,10 +36,13 @@ chrome.tabs.query({ active: true, currentWindow: true }, async (tabs) => {
     } catch { r = null; }
   }
 
+  // Same rule as the context menu: the content script's URL is the permalink of
+  // the post on screen, which on Instagram is a dialog over a profile page that
+  // `tab.url` never names.
   pageData = r
     ? {
         type: r.type || 'article',
-        url: tab.url,
+        url: r.url || tab.url,
         title: r.title || tab.title,
         description: r.description || '',
         content_text: r.content_text || '',
@@ -47,6 +50,8 @@ chrome.tabs.query({ active: true, currentWindow: true }, async (tabs) => {
         favicon: tab.favIconUrl || r.favicon || '',
       }
     : { type: 'link', url: tab.url, title: tab.title, content_text: '', favicon: tab.favIconUrl };
+  // Show what will actually be saved, not what the address bar says.
+  urlEl.textContent = pageData.url;
 });
 
 // Save button click
