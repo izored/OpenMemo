@@ -126,3 +126,80 @@ class TestTheFallback:
 
     def test_an_unpredictable_video_on_an_unknown_host_is_still_kept(self):
         assert should_keep_local("https://example.com/clip.mp4", None) is True
+
+
+class TestTheOverrideThroughTheRealRoute:
+    """The switch on the panel has to beat the rule, in both directions.
+
+    Driven through /ingest/url rather than by re-evaluating the condition here:
+    a test that restates the expression passes even when nothing reads it.
+    `localize_status == "pending"` is the observable — it is what the route sets
+    when, and only when, it has decided to fetch the media.
+    """
+
+    @pytest.fixture
+    def client(self):
+        from fastapi.testclient import TestClient
+
+        from backend.main import app
+
+        with TestClient(app) as c:
+            yield c
+
+    @pytest.fixture(autouse=True)
+    def resolved_video(self, monkeypatch):
+        """A video host whose payload predicts 509 MB — over the line."""
+        async def _extract_video(url):
+            return {
+                "type": "video",
+                "title": "a long video",
+                "description": "",
+                "content_text": "",
+                "source_domain": "youtube.com",
+                "source_favicon": None,
+                "thumbnail_path": "",
+                "predicted_bytes": predicted_bytes(YOUTUBE_LONG),
+            }
+
+        async def _keep_remote(memo):
+            return 0
+
+        async def process_memo(memo_id):
+            return None
+
+        async def _localize_memo_task(memo_id):
+            return None
+
+        monkeypatch.setattr("backend.core.extractor.extract_video", _extract_video)
+        monkeypatch.setattr("backend.api.ingest.localize_pictures_inline", _keep_remote)
+        monkeypatch.setattr("backend.api.ingest.process_memo", process_memo)
+        monkeypatch.setattr("backend.api.ingest._localize_memo_task", _localize_memo_task)
+
+    def _save(self, client, url, **body):
+        r = client.post("/api/ingest/url", json={"url": url, **body})
+        assert r.status_code == 200, r.text
+        return client.get(f"/api/memos/{r.json()['id']}").json()
+
+    def test_a_large_video_is_left_as_a_link_by_default(self, client):
+        memo = self._save(client, "https://www.youtube.com/watch?v=keep1")
+        assert memo["localize_status"] is None
+
+    def test_asking_to_keep_it_downloads_it_anyway(self, client):
+        memo = self._save(client, "https://www.youtube.com/watch?v=keep2", keep_local=True)
+        assert memo["localize_status"] == "pending"
+
+    def test_asking_to_skip_a_small_video_leaves_it_remote(self, client, monkeypatch):
+        async def _small(url):
+            return {
+                "type": "video", "title": "a reel", "description": "", "content_text": "",
+                "source_domain": "facebook.com", "source_favicon": None,
+                "thumbnail_path": "", "predicted_bytes": predicted_bytes(FACEBOOK_REEL),
+            }
+
+        monkeypatch.setattr("backend.core.extractor.extract_video", _small)
+        kept = self._save(client, "https://www.facebook.com/share/r/keep3/")
+        assert kept["localize_status"] == "pending"
+        skipped = self._save(
+            client, "https://www.facebook.com/share/r/keep4/", keep_local=False
+        )
+        assert skipped["localize_status"] is None
