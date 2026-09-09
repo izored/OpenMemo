@@ -942,6 +942,78 @@ IG_FALLBACK_TIERS = frozenset(
 )
 
 
+# Instagram writes the author and the whole caption into its OpenGraph tags and
+# serves them to a logged-out visitor, which is the one thing the browser tiers
+# below were throwing away. They hardcoded `title="Instagram post"` with an empty
+# description, so every save that fell past the media-info API arrived with no
+# words at all — the shape of it verified on a live post on 2026-09-09, where
+# og:title carried the full caption while the memo held nothing.
+#
+#   og:title        Anna Louise Gille on Instagram: "<caption>"
+#   og:description  3,416 likes, 79 comments - annalouisegille on <date>: "<caption>".
+#
+# The caption is what sits inside the quotes; the handle is the word before
+# " on " in og:description. Both are best-effort — a page shape that no longer
+# matches gives back empty strings and the caller keeps its old fallback.
+_IG_OG_QUOTED = re.compile(r'[:—-]\s*[\"“”](.+)[\"“”]\s*\.?\s*$', re.S)
+_IG_OG_HANDLE = re.compile(r'[-–—]\s*([A-Za-z0-9._]{2,30})\s+on\s', re.S)
+
+
+def _instagram_text_from_html(html: str) -> dict:
+    """`_instagram_text_from_og` for a page we already have the HTML of.
+
+    Never raises: this runs on whatever a stealth render happened to settle on,
+    and a missing caption must degrade to the old titleless memo, not an error.
+    """
+    if not html:
+        return {"caption": "", "username": ""}
+    try:
+        soup = BeautifulSoup(html, "html.parser")
+        return _instagram_text_from_og(
+            _meta(soup, "og:title", "og:title"),
+            _meta(soup, "og:description", "og:description")
+            or _meta(soup, "description", "description"),
+        )
+    except Exception:
+        return {"caption": "", "username": ""}
+
+
+def _instagram_text_from_og(og_title: str, og_desc: str) -> dict:
+    """Author handle + caption for an Instagram post, read from its OG tags.
+
+    Returns `{"caption": str, "username": str}`, either of which may be empty.
+    """
+    caption = ""
+    for candidate in (og_title, og_desc):
+        m = _IG_OG_QUOTED.search(candidate or "")
+        if m:
+            caption = m.group(1).strip()
+            break
+    # A post with no caption still names its author, and "Reel by @who" beats
+    # "Instagram post" on a wall of cards.
+    username = ""
+    m = _IG_OG_HANDLE.search(og_desc or "")
+    if m:
+        username = m.group(1)
+    elif og_title and " on Instagram" in og_title:
+        username = og_title.split(" on Instagram")[0].strip()
+    return {"caption": caption, "username": username}
+
+
+def _instagram_titles(text: dict, fallback: str = "Instagram post") -> dict:
+    """The title/description/content_text triple for a caption we just read."""
+    caption = (text.get("caption") or "").strip()
+    username = (text.get("username") or "").strip()
+    title = (caption.splitlines()[0].strip() if caption else "")
+    if not title:
+        title = f"@{username}" if username else fallback
+    return {
+        "title": title,
+        "description": caption[:500],
+        "content_text": caption,
+    }
+
+
 async def _instagram_resolve(url: str, domain: str) -> dict:
     """Resolve any Instagram post (photo / carousel / video) to a memo dict.
 
@@ -1045,10 +1117,17 @@ async def _instagram_resolve(url: str, domain: str) -> dict:
         ) or {}
         sniff_image = probe.get("thumbnail_url") or probe.get("main_image") or ""
         if probe.get("media_url"):
+            # The sniff answers "is there a clip", not "what does it say", so the
+            # words come from a separate crawler-UA fetch of the OG tags. Meta
+            # serves those to link-preview bots with no login wall, which is why
+            # this costs one cheap request rather than a second render.
+            og = await _fetch_og_meta(url, user_agent=_CRAWLER_UA)
+            titles = _instagram_titles(
+                _instagram_text_from_og(og.get("title") or "", og.get("description") or "")
+            )
             return {
-                "title": "Instagram post",
-                "description": "",
-                "content_text": "",
+                **titles,
+                "video_description": titles["content_text"],
                 "source_url": canonical_source_url(url),
                 "source_domain": domain,
                 "source_favicon": fav,
@@ -1070,17 +1149,25 @@ async def _instagram_resolve(url: str, domain: str) -> dict:
     try:
         from backend.core.headless import render_page
 
-        rendered = await render_page(url, want_main_image=True, want_gallery=True) or {}
+        # Scoped to the post. Without the permalink the render reads the whole
+        # page — the post plus the grid of other posts around it — and the
+        # caption never comes back at all, because `post_text` is only collected
+        # for a scope. That was one half of "Instagram stopped pulling titles".
+        rendered = await render_page(
+            url,
+            want_main_image=True,
+            want_gallery=True,
+            scope_permalink=canonical_source_url(url),
+        ) or {}
         # The sniff pass already saw a still on this page; keep it as the floor
         # so a flaky second render can never downgrade a resolved post to the
         # needs-login bookmark below.
         main_img = rendered.get("main_image") or sniff_image
         slides = rendered.get("slides") or []
         if main_img:
+            text = _instagram_text_from_html(rendered.get("html") or "")
             base = {
-                "title": "Instagram post",
-                "description": "",
-                "content_text": "",
+                **_instagram_titles(text),
                 "source_url": canonical_source_url(url),
                 "source_domain": domain,
                 "source_favicon": fav,
@@ -1088,6 +1175,8 @@ async def _instagram_resolve(url: str, domain: str) -> dict:
                 "thumbnail_path": main_img,
                 "type": "video" if _is_instagram_video_path(url) else "image",
             }
+            if base["type"] == "video":
+                base["video_description"] = base["content_text"]
             if len(slides) > 1 and base["type"] == "image":
                 base["gallery"] = [{"url": u, "type": "image"} for u in slides]
                 base["thumbnail_path"] = slides[0]

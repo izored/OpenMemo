@@ -17,6 +17,22 @@ All notable changes to OpenMemo are documented here.
 
 ### Fixed
 
+- 📝 **Instagram saves have their words back.** Every post that came in without a logged-in session arrived titled "Instagram post" with an empty description and nothing to search on. The caption was never missing. Instagram writes the author and the whole caption into the tags it serves a link preview, openMemo was reading that page anyway, and the code threw the words away and wrote a fixed title instead.
+
+  The caption now becomes the memo: its first line is the title, the whole thing is the description, and a reel keeps it as its source blurb. A post with no caption at all is filed under its author rather than under "Instagram post". Checked against a live post: the same save that used to come back blank now comes back with the caption it was always carrying.
+
+- 🖼️ **An Instagram carousel saves all of its photos.** A ten photo post was saving two. The paging walk asks the page for the picture on stage, presses Next, and asks again, and it recognised a slide by its exact web address. Instagram hands back the same small copy of two different slides while it is redrawing, so the second slide looked like the first coming round again and the walk decided the carousel had ended.
+
+  A slide is now recognised by the photo it is, not by the address it arrived under, one slow redraw no longer reads as the end, and the walk asks for the largest copy of each picture rather than the small one the browser happened to pick. The same live post that saved two photos now saves ten. An animated sticker sitting in the comments can no longer become slide one, which is what had happened to the cover.
+
+- 🧩 **The browser extension saves the post you are looking at, and all of it.** Saving from a profile page saved the profile: Instagram opens a post in a panel over the page while the address bar still says the account name, and the extension saved that address. What you got was the account's bio as the description and its grid of thumbnails as the content.
+
+  The extension now works out which post is actually open and saves that link. And for any site openMemo can read by itself, it hands the link over instead of scraping the page. That path never copied the carousel or recorded how the post was read, so an extension save of a ten photo post came out as one picture. Saving with the extension and pasting the same link now produce the same memo, including saving the same post twice giving you the one you already have.
+
+- 🎨 **The Appearance panel stops jittering while you scroll.** Everything in it jumped out of place and back several times a second. The panel measures its own content and animates to fit. That measurement changed the height, the new height crossed the point where a scrollbar appears, the scrollbar took a few pixels off the width, the content rewrapped to a different height, and the measurement ran again. The panel now keeps room for the scrollbar whether or not one is showing, and ignores changes too small to see.
+
+- ⏳ **The music relay stops claiming "0 days left" on a session you just set up.** The relay grants a session lasting about half a day, and the label counted whole days, so a session verified one second ago rounded down to zero and a working feature looked broken. It now counts in the unit that fits: days when there is more than a day, then hours, then minutes. The panel also says up front that a session lasts about half a day, so needing to verify again is expected rather than alarming.
+
 - 🔒 **Changing a setting no longer wipes your Telegram bot out of the page.** Changing how often openMemo checks Telegram made the bot token disappear from the card and greyed the capture switch off, as if the bot had been forgotten. It never was. The token was on disk the whole time and capture never stopped; reloading the page brought it all back.
 
   The page asks the server to save a setting and stores whatever comes back as the new state of everything. The reply was missing the handful of facts the server works out rather than stores, and "a bot token is stored" is one of them. So the card read the silence as a no.

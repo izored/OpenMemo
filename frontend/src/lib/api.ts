@@ -740,7 +740,10 @@ export interface MusicRelayStatus {
   /** A session was set up at some point — tells "never verified" from "lapsed". */
   was_verified: boolean;
   expired: boolean;
+  /** Whole days only, so a 12-hour session reads 0. Prefer expires_in_seconds. */
   expires_in_days: number | null;
+  /** Time left on the session. The relay grants twelve hours, not days. */
+  expires_in_seconds: number | null;
 }
 
 export interface LibraryIntegrity {

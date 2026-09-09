@@ -10,6 +10,7 @@ import { MeshConflictModal } from '@/components/MeshConflictModal';
 import { MeshPairingPanel } from '@/components/MeshPairingPanel';
 import { meshApi, type MeshBatch } from '@/lib/api';
 import { ONBOARDING_KEY } from '@/lib/onboarding';
+import { relayTimeLeft } from '@/lib/relayTime';
 import { useInstall, shellBridge } from '@/lib/install';
 import { useAppStore } from '@/stores/appStore';
 import { useIsMobile } from '@/lib/useBreakpoint';
@@ -486,8 +487,9 @@ function MusicRelayRows({ profile, save }: { profile: AppSettings | null; save: 
 
       {enabled && (
         <span className="mono" style={{ maxWidth: 560 }}>
-          The relay only answers verified clients, so it needs a one-off challenge you complete in
-          your browser. Nothing is signed up for and no account is involved.
+          The relay only answers verified clients, so it needs a challenge you complete in your
+          browser. Nothing is signed up for and no account is involved. The session it hands back
+          lasts about half a day, so expect to do this again the next time you pull a track.
         </span>
       )}
 
@@ -515,7 +517,7 @@ function MusicRelayRows({ profile, save }: { profile: AppSettings | null; save: 
           {state?.verified ? (
             <>
               <span style={{ color: 'var(--text-success, #1D9E75)', fontWeight: 500 }}>
-                Verified ✓{state.expires_in_days !== null ? ` · ${state.expires_in_days} days left` : ''}
+                Verified ✓{relayTimeLeft(state.expires_in_seconds) && ` · ${relayTimeLeft(state.expires_in_seconds)}`}
               </span>
               <button className="om-btn-secondary" onClick={disconnect}>Disconnect</button>
             </>

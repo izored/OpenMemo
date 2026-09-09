@@ -182,6 +182,7 @@ def status() -> dict:
     """What Settings shows. Never includes the secret."""
     record = _record()
     expires = _expires_at(record)
+    remaining = (expires - datetime.now(timezone.utc)) if expires else None
     return {
         "enabled": is_enabled(),
         "verified": session_valid(record),
@@ -190,9 +191,15 @@ def status() -> dict:
         # different sentences in the UI.
         "was_verified": bool(record.get("session_id")),
         "expired": bool(record.get("session_id")) and not session_valid(record),
-        "expires_in_days": (
-            max(0, (expires - datetime.now(timezone.utc)).days) if expires else None
+        # Seconds, not days. The relay issues a TWELVE HOUR session (measured
+        # against the live service on 2026-09-09: granted 12:59 UTC, expiring
+        # 01:00 UTC), and `timedelta.days` floors that to 0 — so a session
+        # minted one second ago read "0 days left" and looked broken. Whole
+        # days are still derivable here; the UI picks the unit that fits.
+        "expires_in_seconds": (
+            max(0, int(remaining.total_seconds())) if remaining else None
         ),
+        "expires_in_days": (max(0, remaining.days) if remaining else None),
     }
 
 

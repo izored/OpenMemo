@@ -295,3 +295,37 @@ def test_the_signed_app_version_is_the_one_the_relay_stored(client):
     _verified()
     headers = music_relay.sign("POST", "https://qbz-oss.spotbye.qzz.io/api/dl", b"{}")
     assert headers["X-Sig-App-Version"] == "unknown"
+
+
+def test_a_session_shorter_than_a_day_still_reports_time_left(client):
+    """The relay grants TWELVE HOURS, not days.
+
+    Measured against the live service on 2026-09-09: verified 12:59 UTC,
+    expiring 01:00 UTC. `timedelta.days` floors that to 0, so Settings said
+    "0 days left" from the second a working session was minted and the feature
+    looked broken. Seconds is what the UI needs to pick a sensible unit."""
+    from backend.core.app_settings import set_music_relay
+
+    set_music_relay({
+        "install_id": "0123456789abcdef0123456789abcdef",
+        "session_id": "sess-abc",
+        "session_secret": "shhh-secret",
+        "expires_at": (datetime.now(timezone.utc) + timedelta(hours=12)).isoformat(),
+    })
+    s = music_relay.status()
+    assert s["verified"] is True
+    assert s["expires_in_days"] == 0
+    assert 11 * 3600 < s["expires_in_seconds"] <= 12 * 3600
+
+
+def test_a_lapsed_session_never_reports_negative_time(client):
+    _verified(days=-2)
+    s = music_relay.status()
+    assert s["expires_in_seconds"] == 0
+    assert s["expires_in_days"] == 0
+
+
+def test_no_session_at_all_has_nothing_to_count_down(client):
+    s = music_relay.status()
+    assert s["expires_in_seconds"] is None
+    assert s["expires_in_days"] is None

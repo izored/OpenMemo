@@ -159,8 +159,49 @@ const extractors = {
     };
   },
 
+  // Instagram, Threads and Facebook: hand over the permalink and let openMemo's
+  // own resolver read the post. Scraping the DOM here is actively wrong — the
+  // page around a post is a grid of OTHER posts, so the generic extractor
+  // returned the profile bio as the description and a wall of unrelated
+  // thumbnails as the content, and the memo showed one picture instead of the
+  // carousel. The server has a tier ladder for these hosts; this just has to
+  // name the right post.
+  meta: () => ({
+    type: 'link',
+    title: '',
+    description: '',
+    content_text: '',
+    thumbnail: '',
+  }),
+
   generic: extractGeneric,
 };
+
+// The permalink of the post actually being looked at, which is NOT always the
+// address bar. Instagram opens a post from a profile grid or the feed in a
+// dialog, and the extension's own `tab.url` then still says
+// `instagram.com/<handle>/` — which is how a save came back holding the
+// profile's bio and its grid instead of the post. Order matters: the open
+// dialog first (it is the thing on screen), then the page's canonical link,
+// then the address bar.
+const _POST_PATH = /\/(?:p|reel|reels|tv|share)\/[A-Za-z0-9_-]+/;
+
+function postPermalink() {
+  const abs = (h) => { try { return new URL(h, location.href).href; } catch { return ''; } };
+  for (const dialog of document.querySelectorAll('[role="dialog"]')) {
+    for (const a of dialog.querySelectorAll('a[href]')) {
+      const href = a.getAttribute('href') || '';
+      if (_POST_PATH.test(href)) return abs(href);
+    }
+  }
+  const canonical = document.querySelector('link[rel="canonical"]')?.getAttribute('href') || '';
+  if (_POST_PATH.test(canonical)) return abs(canonical);
+  const ogUrl = meta('og:url');
+  if (_POST_PATH.test(ogUrl)) return abs(ogUrl);
+  return location.href;
+}
+
+const _META_HOSTS = ['instagram.com', 'threads.net', 'threads.com', 'facebook.com', 'tiktok.com'];
 
 function getExtractor() {
   const host = window.location.hostname;
@@ -175,6 +216,7 @@ function getExtractor() {
     const videoId = params.get('v') || (path.startsWith('/shorts/') ? path.split('/').pop() : null);
     if (videoId) return () => extractors.youtube(videoId);
   }
+  if (_META_HOSTS.some((h) => host.includes(h))) return extractors.meta;
   if (host.includes('twitter.com') || host.includes('x.com')) return extractors.twitter;
   return extractors.generic;
 }
@@ -187,9 +229,11 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     } catch (e) {
       data = { type: 'article', title: document.title, content_text: '', thumbnail: '' };
     }
+    let url;
+    try { url = postPermalink(); } catch { url = window.location.href; }
     sendResponse({
       ...data,
-      url: window.location.href,
+      url,
       favicon:
         document.querySelector('link[rel*="icon"]')?.href ||
         `https://www.google.com/s2/favicons?domain=${location.hostname}&sz=64`,
