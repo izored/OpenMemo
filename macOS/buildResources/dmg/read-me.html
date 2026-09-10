@@ -104,7 +104,7 @@
   <p class="lede">Drag <b>openMemo</b> onto the <b>Applications</b> folder in this window. That is the whole install. Getting past the first launch is one line in Terminal, or four clicks.</p>
 
   <h2>Then macOS blocks it once, and that is expected</h2>
-  <p class="lede">Apple has never checked openMemo, because having it checked needs a paid developer account this project does not have. macOS refuses the first launch of every app it cannot vouch for, and makes you allow it by hand. Nothing is wrong with the download.</p>
+  <p class="lede">Apple has never checked openMemo. macOS refuses the first launch of every app it cannot vouch for, and makes you allow it by hand. Nothing is wrong with the download, and this is not something openMemo can turn off from its side.</p>
 
   <h2>The one line way</h2>
   <p>A browser marks what it downloads with a hidden quarantine tag, and that tag is what macOS reacts to. Remove it and openMemo simply opens. Copy this line, paste it into <b>Terminal</b>, press return:</p>
@@ -182,7 +182,7 @@
   <ol class="steps">
     <li><h3>Quit openMemo first</h3><p>Command-Q. The backend holds the database open.</p></li>
     <li><h3>Drag the new openMemo onto Applications and replace</h3><p>Finder asks whether to replace. Say yes.</p></li>
-    <li><h3>Allow it again</h3><p>A fresh download carries a fresh block, so page one applies to every update, not only the first install, and it stays that way until openMemo has an Apple developer account of its own. The one line is the quickest way through:</p><p class="cmd">xattr -dr com.apple.quarantine /Applications/OpenMemo.app</p></li>
+    <li><h3>Allow it again</h3><p>A fresh download carries a fresh block, so page one applies to every update, not only the first install. The one line is the quickest way through:</p><p class="cmd">xattr -dr com.apple.quarantine /Applications/OpenMemo.app</p></li>
   </ol>
 
 </div>
@@ -190,18 +190,18 @@
 <div class="page">
   <header>
     <div class="wordmark"><span>open</span>Memo</div>
-    <div class="kicker">Your library, and why this app is unsigned</div>
+    <div class="kicker">Your library, and the project</div>
   </header>
 
   <h2>Your library is not inside the app</h2>
   <p>Everything you keep lives in <span class="path">~/Library/Application Support/OpenMemo/</span>, so replacing the app replaces the program and nothing else. openMemo also copies the library into its <span class="path">backups</span> folder before the first launch of a new version.</p>
   <div class="note danger"><b>Never delete that folder to reinstall cleanly.</b> That folder is your library. Throwing away the app is harmless. Throwing away that folder is not.</div>
 
-  <h2>About those blocked launches</h2>
-  <p>Getting openMemo checked by Apple, so macOS stops questioning it, means an Apple Developer Program membership: $99 a year, forever, for a free app that makes nothing. That is the only reason page two exists, and it is the first thing any support would pay for.</p>
+  <h2>About openMemo</h2>
+  <p>One person builds this. It is free and open source, it has no account, no subscription and no telemetry, and everything you save stays on your Mac. It gets better because people use it and say what is missing.</p>
   <div class="support">
     <div class="support-t">If openMemo earns its place on your Mac</div>
-    <div class="support-p">Either of these takes it a step closer to that membership, and to a first launch that simply opens:</div>
+    <div class="support-p">Sponsoring it, or buying a coffee, keeps the work going. Both are one click, and neither is expected:</div>
     <div class="support-l">github.com/sponsors/izored &nbsp;·&nbsp; buymeacoffee.com/izored</div>
   </div>
 

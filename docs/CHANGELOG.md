@@ -16,7 +16,7 @@ All notable changes to OpenMemo are documented here.
 
   The artwork was also drawn to the full height of the window, and Finder draws its path bar inside that same rectangle. The last line of the warning was cut in half and the leaflet's own icon label was hidden under the bar. Everything moved up, and nothing is drawn in the bottom strip any more.
 
-  Read Me First grew a page in the process. Each of the four click steps is drawn as the dialog you actually see, the warning about deleting your library folder is now in red where it cannot be skimmed past, and the last page says plainly why any of this is needed: signing openMemo means an Apple Developer Program membership at $99 a year, for a free app that earns nothing. There are two links on that page for anyone who wants to help pay for it, and a Sponsor button on the repository.
+  Read Me First grew a page in the process. Each of the four click steps is drawn as the dialog you actually see, every page opens with its own title so a page turn reads as a new subject, and the warning about deleting your library folder is in red where it cannot be skimmed past. The last page says what openMemo is, one person, free, no account and nothing leaving your Mac, and offers two quiet ways to support it.
 
 ---
 ## [3.22.0] - 2026-09-10
