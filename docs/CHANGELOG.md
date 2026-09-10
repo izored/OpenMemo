@@ -7,6 +7,11 @@ All notable changes to OpenMemo are documented here.
 
 <!-- Add entries here as work lands: ### Added / ### Changed / ### Fixed -->
 
+### Fixed
+- 🧩 **The browser extension's popup loses the white corners.** Four small white wedges sat at the corners of the dark panel, one in each rounded corner, and they looked like a rendering glitch because that is exactly what they were.
+
+  Chrome paints its own window behind an extension popup, and that window is white. The popup was drawn on a see-through page with its own rounded corners cut into the dark panel, so the white underneath showed through the four cut-outs. Chrome has rounded the popup itself for a while now, so the panel no longer rounds its own corners and the page behind it is painted the same near-black as the panel. Nothing else about the popup changed.
+
 ---
 ## [3.23.0] - 2026-09-10
 
