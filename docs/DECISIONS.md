@@ -7,6 +7,88 @@ the decision, and its consequences, so a future reader knows *why*, not just
 
 ---
 
+## ADR-029: When a page is walled, read the payload it still ships
+
+**Date:** 2026-09-10 · **Status:** Accepted · **Relates to:** ADR "scope is the memo type, not the one provider", ADR-001
+
+### Context
+
+A Facebook photo album was saved as a video for the fifth time. The memo
+(`facebook.com/share/1VAZoyFq8Z/`, four photos, no video anywhere on the post)
+was typed `video`, held no gallery, and its download failed with
+`Cannot parse data` because there was nothing to download.
+
+Each previous fix was correct and none of them could have caught this, because
+three separate things were wrong at once and any one of them alone produces the
+same wrong memo:
+
+1. **The share wrapper had a spelling we did not know.** `core/permalinks`
+   matched `/share/p|v|r|g/<code>` and Facebook also hands out a bare
+   `/share/<code>`. `post_scope` answered None, so `resolve_permalink` returned
+   at its own guard without following the 302 to
+   `/groups/OctaneRender/posts/3525920920918294`, and no scope was ever passed
+   to the render. `_landed_rescope`, the designed second line, needs a scope to
+   retry from and so never ran either.
+
+2. **The scope cannot work on this page at all.** Measured live: a logged-out
+   browser on that permalink gets a login wall. 13 anchors, 511 characters of
+   body text, zero anchors containing `/posts/`, and no change over a
+   12-second poll. There is no post subtree to narrow to. Every network
+   openMemo reads this way assumes the post renders; Facebook group posts do
+   not.
+
+3. **`og:type` is a lie.** Served to a link-preview crawler with no wall in
+   front of it, that album reports `og:type: video.other`. `og:image` is one
+   image by specification and can never say "album". The two metadata fields
+   that claim to answer the question are useless here.
+
+With no evidence at all, `classify_media` falls back to `video` because
+`facebook.com` is a video host. That fallback is right and stays: a private or
+region-locked video arrives with no evidence either, and guessing anything else
+loses a real one. The problem was never the fallback. It was that nothing ever
+reached it with any evidence.
+
+### Decision
+
+**Follow anything wrapper-shaped, and decide what it is by looking at where it
+lands.** `is_share_wrapper` no longer depends on `_SHAPES` being complete. Any
+`/share/...` path, and any short opaque path on `fb.watch` / `fb.me` /
+`l.facebook.com`, is worth one HEAD request; whether the destination is a post
+is then answered by the destination itself. `_SHAPES` has now been incomplete
+twice, so the redirect gate stops depending on it. A spelling we have never
+seen costs one HEAD and then works.
+
+**When the DOM scope fails, read the post's photo set out of the page's own
+payload** (`core/facebook.album_photos`). The walled page still ships the post
+JSON, and it names the photos as `/photo/?fbid=<photo>&set=pcb.<post>`. The
+`pcb.<post>` anchoring is what makes this safe and is the same guarantee the DOM
+scope existed to provide: a neighbouring post's photos carry a different set id
+and are ignored. Each photo id resolves to a full-size JPEG through the crawler
+media endpoint with the link-preview UA and no session.
+
+This runs only when the scope found nothing, so a page that scopes normally is
+untouched, and it is a no-op everywhere but Facebook.
+
+### Consequences
+
+- The album that prompted this now resolves to `type: image` with a four-slide
+  gallery, verified by running `extract_video` against the live URL inside the
+  production container.
+- A real Facebook video still resolves to `video` with no gallery, verified the
+  same way on `facebook.com/share/r/1D7PWBAeUB/`.
+- openMemo now depends on the shape of Facebook's payload links. That is a
+  reversal of the "no per-host code" preference, taken deliberately: the
+  host-blind mechanism cannot see a page that is not rendered, and the
+  alternative is continuing to guess. It lives in one module next to
+  `core/instagram` and `core/threads`, which are per-host for the same reason.
+- `resolve_tier` still records `scope:page` for these, which is honest: the
+  narrowing did fail, and the album was recovered by other means.
+- Every fix here is exercised in `backend/tests/test_facebook_album_wall.py`,
+  which runs the code rather than grepping it, and was watched failing against
+  the pre-fix behaviour.
+
+---
+
 ## ADR-028: A download is decided by host, not by predicted size
 
 **Date:** 2026-09-10 · **Status:** Accepted · **Relates to:** ADR-001 (one rule across a memo type, no per-host branches), ADR-025 (local-first)

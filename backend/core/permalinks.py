@@ -45,14 +45,27 @@ _SHAPES = (
     re.compile(r"^(?P<prefix>/@[^/]+/post/[A-Za-z0-9_-]{5,})", re.I),
     # Bluesky — /profile/<handle>/post/<rkey>
     re.compile(r"^(?P<prefix>/profile/[^/]+/post/[A-Za-z0-9]{5,})", re.I),
-    # Facebook share sheet — /share/p|v|r|g/<code>. Must sit ABOVE Instagram,
-    # whose /p/ shape happily claims /share/p/ and hands back the kind "p".
+    # Facebook share sheet — /share/<code>, and the typed spellings
+    # /share/p|v|r|g/<code>. Must sit ABOVE Instagram, whose /p/ shape happily
+    # claims /share/p/ and hands back the kind "p".
+    #
     # This is the only link Facebook offers for a multi-photo post: the post's
     # own Share menu has no copy-link entry, so the URL has to be fished out of
     # a saved collection. The code names neither the author nor the post and
-    # therefore matches nothing on the rendered page — the render re-scopes from
-    # the URL the redirect lands on (headless.render_page).
-    re.compile(r"^(?P<prefix>/share/(?:p|v|r|g)/[A-Za-z0-9_-]{5,})", re.I),
+    # therefore matches nothing on the rendered page — the whole point of
+    # matching it here is that `resolve_permalink` will then follow the redirect
+    # to the real permalink, and the render re-scopes from where the browser
+    # landed (headless.render_page).
+    #
+    # The type letter is OPTIONAL because Facebook also hands out the bare form.
+    # A Facebook photo album shared as `facebook.com/share/1VAZoyFq8Z/` matched
+    # nothing here, so `resolve_permalink` returned at its `post_scope is None`
+    # guard, the redirect to `/groups/OctaneRender/posts/3525920920918294` was
+    # never followed, no scope was passed to the render, `_landed_rescope` never
+    # ran either (it needs a scope to retry), `classify_media` was never
+    # consulted, and the memo took the bare `fallback="video"` from the domain.
+    # Fifth report of the same album-as-video memo, 2026-09-10.
+    re.compile(r"^(?P<prefix>/share/(?:(?:p|v|r|g)/)?[A-Za-z0-9_-]{5,})", re.I),
     # Instagram — /p/, /reel/, /reels/, /tv/, optionally under a username
     re.compile(r"^(?P<prefix>(?:/[^/]+)?/(?:p|reel|reels|tv)/[A-Za-z0-9_-]{5,})", re.I),
     # TikTok — /@user/video/<id>, /@user/photo/<id>
@@ -69,6 +82,43 @@ _SHAPES = (
     # own anchors use.
     re.compile(r"^(?P<prefix>/[^/]+/(?:posts|videos)/[A-Za-z0-9.]{5,})", re.I),
 )
+
+
+# Redirect wrappers: URLs that NAME a post without spelling it. They carry an
+# opaque code, match nothing on the page they point at, and are worthless to
+# scope from — their only use is being followed. `_SHAPES` above knows the
+# spellings we have seen, and that list has now been wrong twice: first for
+# `/share/p/<code>`, then for the bare `/share/<code>` that filed a Facebook
+# photo album as a video five separate times.
+#
+# So the redirect-following gate does not depend on `_SHAPES` being complete.
+# Anything wrapper-SHAPED gets followed, and whether the destination is a post
+# is decided by looking at the destination. A spelling we have never seen costs
+# one HEAD request and then works.
+_WRAPPER_SHAPES = (
+    # Any host's /share/... sheet, typed or bare.
+    re.compile(r"^/share/[A-Za-z0-9_-]", re.I),
+    # Facebook's own short domains, whose entire path is the code.
+    re.compile(r"^/[A-Za-z0-9_-]{5,}/?$", re.I),
+)
+
+_WRAPPER_HOSTS = ("fb.watch", "fb.me", "l.facebook.com", "lm.facebook.com")
+
+
+def is_share_wrapper(url: str) -> bool:
+    """True when `url` is a redirect wrapper around a post rather than a
+    permalink — worth a HEAD to find what it really names."""
+    try:
+        parts = urlparse(url or "")
+    except Exception:
+        return False
+    path = parts.path or ""
+    host = (parts.netloc or "").lower()
+    if _WRAPPER_SHAPES[0].match(path):
+        return True
+    return any(h in host for h in _WRAPPER_HOSTS) and bool(
+        _WRAPPER_SHAPES[1].match(path)
+    )
 
 
 def post_scope(url: str) -> dict | None:
@@ -137,7 +187,7 @@ async def resolve_permalink(url: str, *, timeout: float = 8.0) -> str:
     permalink either, or on any network failure — so every caller behaves
     exactly as it did before whenever this cannot help.
     """
-    if not url or post_scope(url) is None:
+    if not url or (post_scope(url) is None and not is_share_wrapper(url)):
         return url
     import httpx
 
