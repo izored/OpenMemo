@@ -255,3 +255,81 @@ class TestTheWarningMeansSomethingWentWrong:
             "backend.core.canary.last_result", lambda: {"status": "mismatch"}
         )
         assert self._health(client)["status"] != "ok"
+
+
+class TestTheCanaryRollUpDoesNotSwallowAMismatch:
+    """One clean check must not silence a real one.
+
+    The per-check verdict was reordered so the content comparison runs before
+    the tier test. The roll-up underneath it was left alone, and with a sample
+    of two that undid the whole thing: one clean browser-tier read reported
+    "degraded", which Settings no longer alarms on, so a carousel coming back
+    with one slide out of ten went from loud to silent. That is the single
+    thing the canary exists to catch.
+
+    Driven through `run_instagram_canary` rather than by re-deriving the
+    branch, so a change to either half has to face it.
+    """
+
+    def _memo(self, memo_id, slides):
+        class FakeMemo:
+            id = memo_id
+            source_url = f"https://www.instagram.com/p/{memo_id}/"
+            type = "image"
+            gallery = [{"url": f"u{i}"} for i in range(slides)]
+            file_path = "/files/x.jpg"
+
+        return FakeMemo()
+
+    async def _run(self, monkeypatch, stored_and_returned):
+        """`stored_and_returned` is [(slides_stored, slides_returned), ...]."""
+        from backend.core import canary
+
+        memos = [
+            self._memo(f"m{i}", stored)
+            for i, (stored, _) in enumerate(stored_and_returned)
+        ]
+        returned = {m.id: got for m, (_, got) in zip(memos, stored_and_returned)}
+
+        async def _sample(limit=2):
+            return memos
+
+        async def _resolve(url, domain):
+            memo_id = url.rstrip("/").rsplit("/", 1)[-1]
+            slides = returned[memo_id]
+            return {
+                "type": "image",
+                "gallery": [{"url": f"u{i}"} for i in range(slides)],
+                # Both posts read without a login, which is the situation that
+                # made the old order swallow the mismatch.
+                "resolve_tier": "instagram:browser-render",
+            }
+
+        monkeypatch.setattr(canary, "_sample_memos", _sample)
+        monkeypatch.setattr("backend.core.extractor._instagram_resolve", _resolve)
+        monkeypatch.setattr(canary, "_store", lambda r: None, raising=False)
+        return await canary.run_instagram_canary()
+
+    async def test_a_mismatch_beside_a_clean_check_still_reports_mismatch(
+        self, monkeypatch
+    ):
+        # Memo one comes back whole; memo two stored ten slides and returns one.
+        result = await self._run(monkeypatch, [(3, 3), (10, 1)])
+        assert [c["outcome"] for c in result["checks"]] == ["degraded", "mismatch"]
+        assert result["status"] == "mismatch", (
+            "a clean check must not outrank a carousel that lost nine slides"
+        )
+
+    async def test_reads_without_a_login_alone_stay_informational(self, monkeypatch):
+        result = await self._run(monkeypatch, [(3, 3), (4, 4)])
+        assert result["status"] == "degraded"
+
+    def test_settings_alarms_on_a_mismatch_and_not_on_a_login_free_read(
+        self, client, monkeypatch
+    ):
+        for status, should_alarm in (("mismatch", True), ("degraded", False), ("ok", False)):
+            monkeypatch.setattr(
+                "backend.core.canary.last_result", lambda s=status: {"status": s}
+            )
+            body = client.get("/api/settings/instagram/health").json()
+            assert (body["status"] != "ok") is should_alarm, f"{status} -> {body['status']}"

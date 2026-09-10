@@ -126,3 +126,128 @@ than a routine one.
 - `acccddd` — a memo titled with a bare handle can be repaired.
 - `4204518` — the caption reader reports when it stops working.
 - `2c59b72` — the Instagram warning fires on failure, not on having no login.
+
+---
+
+# Parked, part two: the Instagram health work
+
+The four Instagram commits shipped. A second review found real defects in them
+too. One was a regression and was fixed the same evening (`f0…`, the canary
+roll-up). The rest are recorded here, not fixed, deliberately.
+
+## Fixed, because it made things worse than before
+
+**The canary roll-up swallowed a mismatch.** The per-check verdict was
+reordered so content is compared before the tier is considered. The roll-up
+underneath it was left in the old order, so with a sample of two, one clean
+browser-tier read reported "degraded" and Settings no longer alarms on that. A
+carousel returning one slide out of ten went from loud to **silent** — the
+single thing the canary exists to catch. Reordered, and covered by a test that
+drives `run_instagram_canary` with two memos and fails when the order is put
+back.
+
+Also removed: the health route alarmed on a canary status of `"error"`, which
+`run_instagram_canary` never returns. It is a per-check outcome; a run where
+every check raised comes back `"skipped"`. The arm looked like coverage and
+covered nothing.
+
+## Open, with evidence. Worth a session of its own
+
+1. **A resolver crashing on every post is silent.** All-error rolls up to
+   `"skipped"`, which no longer alarms. `test_a_resolver_crash_never_escapes`
+   pins that on purpose, so changing it is a decision rather than a fix.
+
+2. **The caption alarm cannot fire on a logged-in install.**
+   `_instagram_text_from_og` is reachable only from tiers 4 and 4b. A library
+   with a working session resolves at tier 1 or 2 and never touches it, so
+   `caption_parse_health()` stays empty forever and `unreadable` is
+   unreachable. 253 of 385 tagged Instagram memos here are `api-cookie`. The
+   API tier's own caption reading is not monitored at all.
+
+3. **`broken` needs 100% failure.** One success in the 20-entry window silences
+   it, so a partial rewording or a staged rollout never alarms.
+
+4. **The alarm is coupled to the wording it watches.** `parse_failed` requires a
+   username, and a rewording will likely break the handle pattern at the same
+   time. `_instagram_text_from_og("Instagram", "Log in to see photos…")` counts
+   nothing. Mutating `bool(username)` to `True` leaves all 13 tests green.
+
+5. **`_og_offers_a_caption` has false positives.** Any quote character anywhere
+   in either tag counts as an offer, and any colon after a `" on "` does too —
+   so a date carrying a time reads as a caption being offered. Five such posts
+   in a row and a healthy library reports `unreadable`.
+
+6. **It is English-only in the direction that matters.** A Spanish, German or
+   French `og:description` carrying a real caption returns no username and no
+   caption, and `parse_failed` is False. On those installs the reader is
+   already broken and `checked` stays 0 forever.
+
+7. **A ratio is the wrong shape for the failed-tier count.** Five of the last
+   twelve saves failing outright is silence, because `_IG_HEALTH_RATIO` is 0.5
+   and `IG_FAILED_TIERS` now holds one rare tier. Nothing pins 0.5 and there is
+   no mixed-window test.
+
+8. **An expired session is invisible.** `_has_ig_session` never reads the
+   cookie's expiry, so an expired `sessionid` passes, `session_status()` says
+   connected, saves fall to browser tiers, `blocked` is 0, the status is `ok`,
+   and the new quiet note is gated on `!connected` so it is suppressed too.
+   Nothing at all appears. Before the split, that case warned.
+
+9. **The download path still asks the old question.**
+   `localize_media.py` `_localize_via_instagram_api` still gates on
+   `cookies_present()`, so every Instagram video download still pays the
+   un-authenticatable second call. The extractor half was fixed; this twin was
+   missed. Its own docstring claims it mirrors the extractor's ladder.
+
+10. **The handle guard is defeated by first-line truncation.**
+    `_instagram_titles` takes `caption.splitlines()[0]`, so a caption whose
+    first line is only a mention collapses to exactly `@handle` and is
+    indistinguishable from the no-caption fallback. Live example:
+    `@rengodms_sendai_` holds 114 characters of Japanese whose first line is
+    the handle. The test asserting that case is protected does not protect it.
+    Of the 26 newly replaceable titles, 24 are genuine fallbacks and 2 hold
+    the author's words.
+
+11. **Replacing a handle title can be a downgrade.** When the guard opens,
+    re-pull overwrites description and content_text too. A re-resolve landing
+    on tier 5 supplies the needs-login blurb and a bare URL, all truthy, so a
+    real caption is replaced by an error message. Pre-existing for
+    "Instagram post" titles; widened to 26 more memos.
+
+12. **The handle pattern is generic and runs for every host.** It accepts
+    `@media`, `@types`, `@tanstack`, `@home` — plausible one-word bookmark
+    titles — and degenerate strings like `@.` and `@_`. On non-Instagram hosts
+    that land on `scope:page` there is an automatic re-resolve, so such a memo
+    can be overwritten with no user action.
+
+13. **The canary can now false-alarm on a memo the user changed.**
+    `_expected()` compares stored type against resolved type with no
+    allowance, and one Instagram memo here was converted to audio by hand. Now
+    that `mismatch` is the only alarm arm, that matters more than it did.
+
+14. **The canary verdict still has no expiry.** Narrowing which statuses count
+    did not add one. A `mismatch` — including a false one from 13 — holds the
+    banner up indefinitely, and the loop reruns weekly on the Mesh singleton
+    only.
+
+## Claims in the changelog that do not hold
+
+- "A caption that merely starts with a mention is still your words and is left
+  alone" — falsified by `@rengodms_sendai_`.
+- "Every single save paid for two attempts" reads as a complete fix; the
+  download path still does it.
+- "openMemo will notice if it ever stops being able to read Instagram
+  captions" — not on a logged-in install, and not in a non-English locale.
+
+## Tests that would pass with the feature broken
+
+- Nothing covered the canary reorder at all until the fix above. The
+  pre-existing tier test passes under both orders.
+- `test_a_page_that_named_nobody_is_not_a_failure_either` passes for an
+  unrelated reason: both inputs also fail `_og_offers_a_caption`.
+- `test_a_post_that_simply_has_no_caption_is_not_a_failure` uses an empty
+  `og_title`, which Instagram never serves for a readable post.
+- Nothing exercises `_IG_HEALTH_RATIO`, a mixed window, or the
+  `session_expired` branch.
+- `caption_parse_health()` reads process-global state that another test file
+  also writes into; only one of the four tests clears it.

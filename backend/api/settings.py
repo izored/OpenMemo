@@ -538,7 +538,11 @@ async def instagram_health():
     from backend.core.canary import last_result
 
     canary = last_result()
-    if canary and canary.get("status") in ("mismatch", "error"):
+    # "mismatch" only. The canary never returns "error" as a run status — that
+    # is a per-check outcome, and a run where every check raised comes back
+    # "skipped" — so listing it here looked like coverage while covering
+    # nothing.
+    if canary and canary.get("status") == "mismatch":
         unhealthy = True
 
     if not unhealthy:
