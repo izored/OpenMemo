@@ -15,6 +15,13 @@ All notable changes to OpenMemo are documented here.
 ### Changed
 - ☰ **The sidebar collapses with the same hamburger that expands it.** Collapsing used a small left arrow, and with the new back arrow a few pixels to its right that made two arrows in the top left corner, both pointing the same way, meaning two different things. The collapse control is now the hamburger you already press to open the rail again. One glyph, one toggle, nothing to decode.
 
+### Fixed
+- 🖥️ **Looking for your other computer says "no devices found" instead of failing.** On a machine that cannot search the network at all, the search crashed rather than coming back empty. Two ways to end up there: the piece that does the searching is optional and may not be installed, and a machine can have no network to search, which is the everyday case for an offline laptop or a locked-down work adapter.
+
+  Both were already handled, and both handed back an answer of the wrong shape, so the code that unpacked it raised a moment later and took the pairing screen down with it. Pairing by address, which is the one thing you would reach for next, was on the other side of that crash.
+
+  The test written to prevent exactly this had been passing throughout. It only ever reached the broken path on a machine missing the optional piece, and the machine that runs the tests always has it. It now forces both cases, and both were confirmed to fail before the fix and pass after.
+
 ---
 ## [3.20.0] - 2026-09-10
 

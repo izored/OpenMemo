@@ -350,9 +350,17 @@ Written up as ADR-023 section 6, with section 4 marked superseded.
 - **One memo needs a manual re-pull**: the Facebook memo
   `97cd6743-4b83-4c2d-898c-d790eed87340` still has no file. The code that fixes
   it is in this branch, so the re-pull has to happen after the rebuild.
-- `mnemonic` is not installed on the Windows host, so 27 Mesh tests error on
-  import there. It is declared in `backend/requirements.txt` and installed in
-  the container and in CI. Nothing on this branch touches Mesh.
+- **The host was missing two declared dependencies, and now has them.**
+  `mnemonic` and `qrcode` are both declared in `backend/requirements.txt` and
+  were already installed in the container and in CI, but not in the Windows
+  host Python. That made 27 Mesh tests error on import there. Both were
+  installed into `C:\Program Files\Python312` with `python -m pip install
+  --user` on 2026-09-10, while cutting v3.20.0. `python -m pytest backend/tests
+  -q` on the host now reports 939 passed, 1 failed, 18 skipped. The one failure
+  is `backend/tests/test_mesh_discovery.py::test_browsing_without_a_network_returns_nothing_rather_than_raising`,
+  which raises `ValueError: not enough values to unpack (expected 2, got 0)` at
+  `backend/core/mesh/discovery.py:137`. That is unrelated to the missing
+  packages and has its own follow-up. The host suite is not fully green.
 
 ## Process notes worth keeping
 

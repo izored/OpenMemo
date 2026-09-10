@@ -157,14 +157,27 @@ async def scan(
     found: dict[str, Peer] = {}
     strangers: set[str] = set()
 
+    # Both of the exits below mean "there is no network to browse", and both
+    # must answer with the empty result rather than an exception. `browse()`
+    # unpacks this return, so a bare `[]` does not degrade gracefully: it raises
+    # `not enough values to unpack` one frame up and takes the pairing screen
+    # down with it. Every early exit returns the full pair.
     try:
         from zeroconf import ServiceBrowser, ServiceStateChange
         from zeroconf.asyncio import AsyncZeroconf
     except ImportError:
         logger.warning("mesh: zeroconf unavailable; cannot browse")
-        return []
+        return [], 0
 
-    azc = AsyncZeroconf()
+    try:
+        azc = AsyncZeroconf()
+    except Exception:
+        # Constructing this opens a multicast socket per interface, so it is the
+        # first thing to fail on a machine that has no usable one: an offline
+        # laptop, a locked-down adapter, a container with only the bridge.
+        logger.warning("mesh: no network to browse on", exc_info=True)
+        return [], 0
+
     loop = asyncio.get_running_loop()
 
     def _on_change(zeroconf, service_type, name, state_change) -> None:
