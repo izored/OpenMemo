@@ -14,6 +14,12 @@ All notable changes to OpenMemo are documented here.
 
   openMemo now follows any share link, whatever its spelling, and works out what it points at by looking at where it lands. When the page itself is walled, it reads the post's photo set out of the data the page still ships, anchored to that post so a neighbouring post's pictures can never be the answer. A real Facebook video is still saved as a video.
 
+- 🖥️ **Updating the Mac app actually changes the Mac app.** 3.21.0 added a back button on every page and turned the sidebar collapse control into a hamburger. The .dmg contained both, and installing it changed nothing on screen.
+
+  The app loads its own interface over a local address, and that address was served with no instruction about caching at all. A browser given no instruction invents one, so the window was free to reuse the previous version's interface from a cache that lives with your library and survives replacing the app entirely. Old page, old code, new app, no error.
+
+  The interface is now checked against the app on every load, which costs one tiny request and settles the question. The files that carry a version stamp in their name are still cached forever, because their name changes whenever they do. And a version change now clears what the previous build left behind, so a Mac that is currently stuck on an old screen is repaired by updating rather than by knowing about a cache it cannot see.
+
 ---
 ## [3.21.0] - 2026-09-10
 
