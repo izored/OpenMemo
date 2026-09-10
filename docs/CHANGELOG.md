@@ -9,6 +9,12 @@ All notable changes to OpenMemo are documented here.
 
 ### Changed
 
+- 🖱️ **Dropping something into openMemo saves it, wherever you drop it.** Dragging a link or a file onto openMemo already worked, but it only saved straight away if you happened to be inside a collection, inside a Space, or on the Music page. Anywhere else it opened the New Memo panel and waited for you to pick a home first. Anywhere else includes the dashboard, which is where you land, so the thing you met most often was a form. A form is hard to tell apart from the feature being broken.
+
+  A drop now saves every time, and the overlay names where it is going before you let go. No collection open means it lands in your library, which is where everything unfiled already lives, and you file it afterwards the way you would anything else.
+
+  One exception, and it is about what you dragged rather than where you dropped it: a piece of selected text with no link in it becomes a note, a note needs a title, and nothing can invent one for you. That still opens the panel.
+
 - 💾 **Facebook videos save with the video.** A Facebook link saved as a card with a picture and nothing to play. The video was reachable the whole time. openMemo simply never asked for it, because Facebook was on a list of sites trusted to play their own videos, and videos from those sites are left where they are. That trust does not hold for a shared link: the player openMemo would have used comes back with nothing in it and asks you to log in.
 
   Facebook now downloads like any other site without a dependable player. Nothing else moved. A long Facebook video will download in full, which is the known cost of keeping this change small.
