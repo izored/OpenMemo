@@ -6,6 +6,7 @@ const ICON_PATHS: Record<string, string> = {
   chevronLeft: 'M15 18l-6-6 6-6',
   chevronRight: 'M9 6l6 6-6 6',
   chevronDown: 'M6 9l6 6 6-6',
+  arrowLeft: 'M19 12H5M12 19l-7-7 7-7',
   arrowRight: 'M5 12h14M13 5l7 7-7 7',
   arrowUpRight: 'M7 17 17 7M7 7h10v10',
   move: 'M5 9l-3 3 3 3M9 5l3-3 3 3M15 19l-3 3-3-3M19 9l3 3-3 3M2 12h20M12 2v20',

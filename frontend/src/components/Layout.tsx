@@ -12,6 +12,7 @@ import { DndBusContext, type GridDragHandlers } from '@/lib/dndBus';
 import Lenis from 'lenis';
 import 'lenis/dist/lenis.css';
 import { Sidebar } from './Sidebar';
+import { BackButton } from './BackButton';
 import { MobileTopBar } from './MobileTopBar';
 import { AddMemoPanel } from './AddMemoPanel';
 import { FileDropLayer } from './FileDropLayer';
@@ -36,6 +37,7 @@ import { Icon } from './Icon';
 import { useTransitionConfig, type TransitionConfig } from '@/lib/transitionConfig';
 import { useAppStore } from '@/stores/appStore';
 import { useIsMobile } from '@/lib/useBreakpoint';
+import { recordVisit } from '@/lib/navHistory';
 import { applyTweaks } from '@/lib/appearance';
 import { cn } from '@/lib/utils';
 
@@ -260,6 +262,13 @@ export function Layout() {
     return () => window.removeEventListener('online', back);
   }, []);
 
+  // Name every history entry as it is visited, so the global back control knows
+  // which page it is returning to (see lib/navHistory). Layout outlives every
+  // route, so this is the one place that sees them all.
+  useEffect(() => {
+    recordVisit(location.pathname);
+  }, [location.pathname]);
+
   // Close the off-canvas drawer whenever the route changes (tapping a nav item
   // inside the drawer navigates, then this dismisses it).
   useEffect(() => {
@@ -299,6 +308,12 @@ export function Layout() {
         <div className="om-drawer-scrim" onClick={() => setSidebarOpen(false)} aria-hidden />
       )}
       <Sidebar />
+
+      {/* One back control for the whole app. Fixed at the top-left of the
+          content pane rather than rendered per page, so pages that roll their
+          own header (dashboard, memo detail, Ask, Spaces) all get it and it
+          never scrolls away. The mobile copy lives in MobileTopBar. */}
+      <BackButton className="om-global-back" />
 
       <main className="om-main" key={location.pathname} ref={mainRef}>
         <div className="om-main-inner">

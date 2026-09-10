@@ -37,7 +37,6 @@ import {
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useOnline } from '@/lib/useOnline';
-import { BackButton } from '@/components/BackButton';
 import { MemoRemoveModal } from '@/components/MemoRemoveModal';
 import { MarkdownEditor } from '@/components/MarkdownEditor';
 import { memoApi, collectionApi } from '@/lib/api';
@@ -1818,9 +1817,9 @@ export function MemoDetail() {
       <div className="om-detail-pane">
         {/* Header */}
         <header className="om-detail-top">
-          <div style={{ flex: 1, display: 'flex', alignItems: 'center', gap: '12px' }}>
-            <BackButton />
-          </div>
+          {/* Left slot stays empty: the app-wide back control (Layout) floats
+              over it, so a second one here would be the duplicate arrow. */}
+          <div style={{ flex: 1 }} />
           <div className="om-detail-actions">
             {/* Add to playlist — music memos only, same popover as cards. */}
             {!isEditing && audioKind(memo) === 'music' && (

@@ -7,6 +7,14 @@ All notable changes to OpenMemo are documented here.
 
 <!-- Add entries here as work lands: ### Added / ### Changed / ### Fixed -->
 
+### Added
+- ⬅️ **A back button on every page, and it takes you back to where you actually were.** Only the memo page had one, so leaving anywhere else meant finding the right thing in the sidebar and hoping it was the thing you left. The button now sits in the same corner on every page, top left of the content, and it returns you to the page you came from: open a song from Music and back is Music, open a memo from inside a Space and back is that Space.
+
+  Opening a memo from a link, or reloading while you are already inside one, used to leave that button pointing at whatever the browser was showing before openMemo. When there is nothing to go back to it goes one level up instead: a memo to your library, a playlist to Music, a Space collection to its Space. It hides itself on the dashboard with no history behind it, rather than sitting there doing nothing.
+
+### Changed
+- ☰ **The sidebar collapses with the same hamburger that expands it.** Collapsing used a small left arrow, and with the new back arrow a few pixels to its right that made two arrows in the top left corner, both pointing the same way, meaning two different things. The collapse control is now the hamburger you already press to open the rail again. One glyph, one toggle, nothing to decode.
+
 ### Fixed
 - 🖥️ **Looking for your other computer says "no devices found" instead of failing.** On a machine that cannot search the network at all, the search crashed rather than coming back empty. Two ways to end up there: the piece that does the searching is optional and may not be installed, and a machine can have no network to search, which is the everyday case for an offline laptop or a locked-down work adapter.
 
