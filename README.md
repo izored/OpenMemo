@@ -7,6 +7,7 @@ One place for everything worth saving. On your machine. Free.
 A personal space for saving links, files, notes, and videos. No cloud, no subscriptions, no API keys.
 
 [![Version](https://img.shields.io/badge/version-3.23.0-202020?style=flat-square&logo=github)](https://github.com/izored/OpenMemo/blob/main/docs/CHANGELOG.md) [![License](https://img.shields.io/badge/license-AGPL%203.0-ea2804?style=flat-square)](https://github.com/izored/OpenMemo/blob/main/LICENSE) [![Docker](https://img.shields.io/badge/docker-ready-2496ED?style=flat-square&logo=docker)](https://github.com/izored/OpenMemo/blob/main/docs/INSTALL.md)
+[![Sponsor](https://img.shields.io/badge/sponsor-%E2%9D%A4-db61a2?logo=githubsponsors&logoColor=white&style=flat-square)](https://github.com/sponsors/izored) [![Buy me a coffee](https://img.shields.io/badge/buy%20me%20a%20coffee-ffdd00?logo=buymeacoffee&logoColor=black&style=flat-square)](https://buymeacoffee.com/izored)
 
 ---
 
