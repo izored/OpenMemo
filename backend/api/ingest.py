@@ -272,9 +272,29 @@ _BROWSER_UA = (
 )
 
 
+# Meta's link-preview media endpoint. It answers an image ONLY to a
+# link-preview crawler; a browser user agent gets `text/html` and a login page,
+# which `_download_thumb` correctly refuses and reports as a failed download.
+# This is the only address a walled Facebook album's photos can be fetched
+# from (`core/facebook`), so sending the browser headers below at it means
+# every slide of such an album fails to localize — measured on a live album,
+# 4/4 slides, 2026-09-10.
+_META_CRAWLER_MEDIA = "lookaside.fbsbx.com/lookaside/crawler/"
+
+
 def _thumb_headers(src_url: str) -> dict:
-    """Browser-like headers that bypass hotlink protection on visual platforms."""
+    """Headers that get the actual image back, per host family."""
     from urllib.parse import urlparse
+    if _META_CRAWLER_MEDIA in (src_url or ""):
+        # The endpoint is named for the client it serves. Ask as that client and
+        # it hands over the full-size original with no session at all; the
+        # browser theatre below is exactly what it refuses.
+        from backend.core.extractor import _CRAWLER_UA
+
+        return {
+            "User-Agent": _CRAWLER_UA,
+            "Accept": "image/webp,image/avif,image/*,*/*;q=0.8",
+        }
     parsed = urlparse(src_url)
     origin = f"{parsed.scheme}://{parsed.netloc}"
     return {
@@ -398,6 +418,27 @@ class PictureNotLocalized(Exception):
     looks fine until the CDN link expires, and no record anywhere that the
     download was ever attempted.
     """
+
+
+async def _mark_localize_error(memo_id: str, reason: str) -> None:
+    """Land a memo on a terminal `localize_status` with the reason attached.
+
+    Every path that can end a repull has to leave the memo somewhere the UI can
+    read, because `pending` is rendered as work still in progress and there is
+    nothing to end it. Never raises: it exists to report a failure, and failing
+    to report one must not replace it with a different failure.
+    """
+    try:
+        async with AsyncSessionLocal() as db:
+            memo = await db.get(Memo, memo_id)
+            if not memo:
+                return
+            memo.localize_status = "error"
+            memo.localize_error = (reason or "")[:300]
+            memo.updated_at = datetime.utcnow()
+            await db.commit()
+    except Exception as e:  # pragma: no cover - reporting must not raise
+        log.warning("could not record the failure on %s: %r", memo_id, e)
 
 
 async def cache_thumbnail(memo_id: str):
@@ -3115,7 +3156,22 @@ async def repull_memo_task(memo_id: str, mode: str, resolve_only: bool = False):
                 memo.updated_at = datetime.utcnow()
                 await db.commit()
         if len(gallery) > 1:
-            await cache_gallery(memo_id)
+            # `cache_gallery` RAISES when slides do not download, on purpose:
+            # the durable queue retries and then parks the job with a reason.
+            # But this is step 1 of three, and step 2 is what sets
+            # `localize_status`. So the raise walked out of a task holding a
+            # memo still stamped `pending`, which is the state the memo page
+            # spins on. Pressing re-pull then looked like pressing nothing:
+            # four attempts on one album, four background failures, four
+            # spinners that never stopped and no error anywhere on screen.
+            #
+            # Record the reason on the memo, then re-raise so the queue still
+            # does its job. Both contracts hold; neither did before.
+            try:
+                await cache_gallery(memo_id)
+            except PictureNotLocalized as e:
+                await _mark_localize_error(memo_id, str(e))
+                raise
 
     # Read the post again and stop. `reresolve_memo_task` is the one caller,
     # and it exists because the automatic retry after a degraded read must NOT
