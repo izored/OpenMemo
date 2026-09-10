@@ -7,6 +7,9 @@ All notable changes to OpenMemo are documented here.
 
 <!-- Add entries here as work lands: ### Added / ### Changed / ### Fixed -->
 
+---
+## [3.23.0] - 2026-09-10
+
 ### Changed
 - 🔒 **The app lock stops asking for your macOS login password, because it stops touching your keychain.** Setting a PIN put a system panel on screen saying openMemo wanted the confidential information stored in its keychain entry, and it came back after every update. That reads like an app going through your passwords. It never was: what sat in there was a hash of a 4-digit PIN and nothing else. The lock now hashes the PIN with scrypt and keeps it in openMemo's own settings file, next to your library. No keychain, no login password, no access to anything else on your Mac.
 
