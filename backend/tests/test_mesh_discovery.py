@@ -3,6 +3,8 @@
 What matters here is not that broadcasting works — it is what is broadcast, and
 who gets filtered out before a connection is ever attempted.
 """
+import sys
+
 import pytest
 
 from backend.core.mesh import discovery
@@ -39,6 +41,41 @@ async def test_browsing_without_a_network_returns_nothing_rather_than_raising():
     list is the correct answer there; an exception would break the UI."""
     peers = await discovery.browse("nobody-else-here", seconds=0.5)
     assert isinstance(peers, list)
+
+
+async def test_browsing_with_zeroconf_missing_returns_nothing_rather_than_raising(monkeypatch):
+    """The test above only reaches the no-mDNS branch on a machine that has no
+    mDNS, which is why a bare `[]` return sat there while CI stayed green: its
+    container could always import zeroconf and browse for real.
+
+    So force the real ImportError, from the real import statement, inside the
+    real `scan()`. Nothing here stands in for `browse()` or `scan()`; the whole
+    call path runs, including the unpack in `browse()` that used to raise
+    `not enough values to unpack`.
+    """
+    monkeypatch.setitem(sys.modules, "zeroconf", None)
+    monkeypatch.setitem(sys.modules, "zeroconf.asyncio", None)
+
+    assert await discovery.browse("nobody-else-here", seconds=0.5) == []
+
+    # The API's discover route unpacks the pair too, so the shape is the
+    # contract, not an implementation detail of `browse()`.
+    assert await discovery.scan("nobody-else-here", seconds=0.5) == ([], 0)
+
+
+async def test_browsing_with_no_usable_interface_returns_nothing_rather_than_raising(monkeypatch):
+    """zeroconf installed, nothing to bind it to. Opening a multicast socket per
+    interface is the first thing that fails on an offline laptop or behind a
+    locked-down adapter, and it fails before browsing ever starts."""
+    zeroconf_asyncio = pytest.importorskip("zeroconf.asyncio")
+
+    def _no_interfaces(*_a, **_k):
+        raise OSError("no usable network interface")
+
+    monkeypatch.setattr(zeroconf_asyncio, "AsyncZeroconf", _no_interfaces)
+
+    assert await discovery.browse("nobody-else-here", seconds=0.5) == []
+    assert await discovery.scan("nobody-else-here", seconds=0.5) == ([], 0)
 
 
 async def test_advertising_failure_is_survivable():
