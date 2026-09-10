@@ -230,14 +230,24 @@ covered nothing.
     banner up indefinitely, and the loop reruns weekly on the Mesh singleton
     only.
 
-## Claims in the changelog that do not hold
+## Claims in the changelog that did not hold, now corrected
 
-- "A caption that merely starts with a mention is still your words and is left
-  alone" — falsified by `@rengodms_sendai_`.
-- "Every single save paid for two attempts" reads as a complete fix; the
-  download path still does it.
-- "openMemo will notice if it ever stops being able to read Instagram
-  captions" — not on a logged-in install, and not in a non-English locale.
+Three sentences in the unreleased changelog promised more than the code does.
+The code was left alone and the sentences were narrowed on 2026-09-10, before
+any of it reached a release. What they said, and what they say now:
+
+1. "A caption that merely starts with a mention is still your words and is
+   left alone." Falsified by `@rengodms_sendai_`, whose 114 characters of
+   Japanese have the handle alone on the first line. The entry now says that a
+   caption starting with a mention and carrying on is safe, and one that is
+   only a mention on its first line will be replaced.
+2. "Every single save paid for two attempts." True of the save path and read
+   as a complete fix. The download path still asks the old question, finding 9
+   above. The entry now says so.
+3. "openMemo will notice if it ever stops being able to read Instagram
+   captions." Not on an install with a working login, which resolves at a tier
+   the counter never sees, and not in a non-English locale. The entry now
+   scopes the claim to public-page reads and to English wording.
 
 ## Tests that would pass with the feature broken
 
@@ -251,3 +261,119 @@ covered nothing.
   `session_expired` branch.
 - `caption_parse_health()` reads process-global state that another test file
   also writes into; only one of the four tests clears it.
+
+---
+
+# Part three: the ledger for 2026-09-09 and 2026-09-10
+
+The two days above were one working session. This is what went in, what came
+back out, and what is still owed, so none of it has to be reconstructed from a
+chat log. The durable decision that came out of it is ADR-028 in
+`docs/DECISIONS.md`.
+
+## What was reported, and what each thing turned out to be
+
+Seven items were raised at the start. Every one was diagnosed by running the
+real code path, never by reading it, which is the only reason two of them did
+not become fixes for problems that did not exist.
+
+| Reported | Cause | Outcome |
+|---|---|---|
+| The Appearance panel jitters many times a second | The panel measures its own content and animates to fit; the new height crossed the scrollbar threshold, the scrollbar took width, the content rewrapped, and the measurement ran again | Fixed. `scrollbar-gutter: stable` plus a sub-pixel guard |
+| Instagram stopped pulling a title and description | The caption was never missing. Instagram writes author and caption into the tags it serves a link preview; the code read that page and threw the words away | Fixed. The caption becomes the memo |
+| The extension pulls one image, not the carousel | The extension scraped the page itself, a path that never walked the carousel and never recorded how the post was read | Fixed. The extension hands the link to the backend for any host openMemo can read |
+| A play button appears on video thumbnails | Not ours. Opened `files/thumbs/*.jpg` directly: the glyph is baked into the poster JPEG Instagram serves | No change. Removing it is not possible from our side |
+| The music relay says "0 days left" forever | The session is 12 hours, read from `data/app_settings.json`, and the UI only ever rendered days | Fixed. `relayTimeLeft` picks days, hours or minutes |
+| Facebook memo with nothing to play | `facebook.com` was on the trusted-player list and the trust was misplaced | Fixed. See ADR-028 |
+| Profile README's model list is stale | Content, not code | Separate repo. `izored/izored` PR 1 |
+
+## What shipped on this branch
+
+Twelve commits. Ordered as they landed.
+
+- `aa88ce3` + `d15055a`. No resolution ceiling by default, opt-in
+  `video_quality_cap` in Settings. The second commit exists because the first
+  removed the 1080 ceiling from the format selector while three other places
+  went on supplying 1080: the durable queue's replay default, the API client's
+  default argument, and the memo page's initial picker value. So "Make it
+  local", the button pressed precisely because someone wants to keep the thing,
+  was the one path still capped.
+- `ab6ed58`. The two Instagram tiers that need a login now ask whether the
+  cookie jar holds an Instagram session, not whether a jar exists. The jar is
+  shared with every other site, so one YouTube cookie made it look signed in and
+  every save paid for two attempts that could not work.
+- `acccddd`. A memo titled with a bare handle can be repaired by re-pull.
+- `4204518`. The caption reader counts the reads it could not parse and reports
+  when it stops working.
+- `2c59b72`. The Instagram warning fires on a save that came back with nothing,
+  not on a save that had no login.
+- `6812c1a`. The revert. `c93e331` and `b10ebea` out, Facebook off the
+  trusted-player list, this document created.
+- `6fc20dd`. The canary roll-up regression, described in part two.
+- `ca734f5`. A drop always saves, wherever it lands.
+
+## Drag and drop, increment 3
+
+Dropping a link was researched on the assumption it did not exist. It did:
+`FileDropLayer` has read `text/uri-list` since increment 2. The real defect was
+where the drop landed, not what was dropped.
+
+`resolveDropTarget` returned `prefill` for a bare library, so a drop on the
+dashboard, the Spaces list, the Collections list, a memo page or Ask opened the
+New Memo panel and waited. The dashboard is where you land, so the form was the
+thing most people met. A form is hard to tell apart from the feature being
+broken.
+
+It now saves to the library, which is where every other unfiled memo already
+goes. The only remaining panel case keys on **what** was dragged rather than
+where it was dropped: selected text with no link in it becomes a note, and a
+note needs a title nothing can invent.
+
+That rule had **no test at all**, which is how it survived being wrong for two
+increments. It has six now, and they were proved by setting the branch back to
+`prefill` and watching exactly two fail.
+
+Written up as ADR-023 section 6, with section 4 marked superseded.
+
+## Open, owed, or deliberately not done
+
+- **Fourteen Instagram findings** in part two above. Not fixed, on purpose.
+  Numbers 2, 9 and 10 are the ones worth reading first: the caption alarm cannot
+  fire on a logged-in install, the download path still asks the old cookie
+  question the extractor stopped asking, and the handle guard is defeated by a
+  caption whose first line is only a mention (`@rengodms_sendai_`, 114
+  characters of Japanese).
+- **The size rule**, if it is ever picked up, has its checklist in part one.
+- **ADR-023 follow-ups**: per-card drop targets, folder drops, removing the now
+  unused `pendingDropFiles` store slice, and checking the saved confirmation is
+  loud enough for a library drop.
+- **One memo needs a manual re-pull**: the Facebook memo
+  `97cd6743-4b83-4c2d-898c-d790eed87340` still has no file. The code that fixes
+  it is in this branch, so the re-pull has to happen after the rebuild.
+- `mnemonic` is not installed on the Windows host, so 27 Mesh tests error on
+  import there. It is declared in `backend/requirements.txt` and installed in
+  the container and in CI. Nothing on this branch touches Mesh.
+
+## Process notes worth keeping
+
+- **A test that was never seen to fail is not a test.** Two written this session
+  passed against broken code. The Instagram session gate test passed because
+  `cookies_present()` reads a real jar path that does not exist under pytest, so
+  the gate was never exercised; fixed by patching it to `True`. The keep-local
+  override test re-evaluated the route's own condition instead of calling the
+  route, and passed while the field it asserted on had never been added to
+  `URLIngest`. Rewritten to drive `/ingest/url`, it failed immediately and found
+  the missing field.
+- **A source-grep test costs more than it protects.** One asserting `"1080" not
+  in src` failed on the explanatory comment saying why 1080 had been removed. It
+  was deleted rather than reworded.
+- **The first caption alarm counted a captionless post as a parse failure**,
+  which is the exact false positive the alarm exists to avoid. `_og_offers_a_caption` was added to separate them, and part two records that the separator
+  has its own false positives.
+- **CI caught what local runs did not.** A new test file left three
+  fallback-tier Instagram memos in the shared test database, which flipped
+  `test_an_empty_library_reports_ok_not_a_problem` to `no_session`. The fix is a
+  fixture that deletes them; it was reproduced locally before and after.
+- **`git checkout -- <file>` inside a mutation test wiped uncommitted work.**
+  The suite caught it, two failures, and the change was reapplied by hand. A
+  mutation test edits and restores the file itself; it never reaches for git.
