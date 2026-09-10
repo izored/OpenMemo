@@ -21,7 +21,7 @@
  * never see these. They rotate on their own terms instead, because a snapshot
  * that a routine can delete is not a safety net.
  */
-import { app, dialog, shell } from 'electron';
+import { app, dialog, session, shell } from 'electron';
 import { spawn } from 'node:child_process';
 import fs from 'node:fs';
 import os from 'node:os';
@@ -43,6 +43,16 @@ import { cmpVersion } from './update-notifier';
 const TIMEOUT_MS = 120_000;
 
 export type VersionChange = 'first-run' | 'same' | 'upgrade' | 'downgrade';
+
+/** Drop Chromium's HTTP cache, so a new build cannot load the old shell. */
+async function clearRendererCache(log: (line: string) => void): Promise<void> {
+  try {
+    await session.defaultSession.clearCache();
+    log('[shell] Cleared the renderer cache for the new version.\n');
+  } catch (e) {
+    log(`[shell] Could not clear the renderer cache: ${e instanceof Error ? e.message : String(e)}\n`);
+  }
+}
 
 export interface VersionState {
   kind: VersionChange;
@@ -519,6 +529,22 @@ async function runGuard(log: (line: string) => void): Promise<boolean> {
   }
 
   if (state.kind === 'same') return true;
+
+  // A version switch also invalidates everything Chromium cached from the
+  // previous build. That cache lives in userData, so it survives replacing
+  // OpenMemo.app entirely, and the backend used to serve index.html with no
+  // Cache-Control at all — which let Chromium invent a freshness lifetime and
+  // load the OLD shell, naming the OLD asset hashes, which were cached too.
+  // The result is an update that installs perfectly and changes nothing on
+  // screen; reported against 3.21.0, whose .dmg was verified to contain the
+  // new UI.
+  //
+  // backend/main.py now sends `no-cache` on the shell, which prevents this
+  // happening again. This clears what is already there, so a machine that is
+  // currently stuck is repaired by the update rather than by the user knowing
+  // to empty a cache they cannot see. Best effort, and never a reason to stop
+  // a launch: the cost of failing is the stale shell we already had.
+  await clearRendererCache(log);
 
   if (state.kind === 'first-run') {
     stamp(state.current);

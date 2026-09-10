@@ -733,6 +733,23 @@ if settings.FRONTEND_DIST:
         _dist_root = _frontend_dist.resolve()
         _spa_index = _dist_root / "index.html"
 
+        # Vite fingerprints every built asset (`index-BiCUFzlu.js`), so an asset
+        # URL names one immutable file and can be cached forever. `index.html`
+        # is the opposite: one URL whose content changes with every build, and
+        # it is the file that names which fingerprints to load.
+        #
+        # `FileResponse` sends `Last-Modified` and `ETag` and NO `Cache-Control`
+        # at all, and a response with no freshness directive is heuristically
+        # cached: Chromium invents a lifetime from how old `Last-Modified` is
+        # and serves the file without asking. On the desktop app the HTTP cache
+        # lives in userData and outlives the .app bundle, so dropping in a new
+        # OpenMemo.app could leave the window loading the PREVIOUS index.html
+        # from cache, which names the previous asset hashes, which are cached
+        # too. A whole update, installed and invisible. Reported against the
+        # 3.21.0 build, whose .dmg was verified to contain the new UI.
+        _ASSET_CACHE = "public, max-age=31536000, immutable"
+        _SHELL_CACHE = "no-cache"
+
         @app.get("/{full_path:path}")
         async def serve_spa(full_path: str):
             # /api/* is registered above and matches first; anything reaching
@@ -744,10 +761,28 @@ if settings.FRONTEND_DIST:
             # the dist dir is ever served.
             candidate = (_dist_root / full_path).resolve()
             if full_path and _dist_root in candidate.parents and candidate.is_file():
-                return FileResponse(str(candidate))
+                # Only the fingerprinted ones are immutable. Everything else in
+                # dist keeps a stable name across builds — favicon.svg,
+                # icons.svg, the pdfjs worker — so it has to be revalidated like
+                # the shell or it goes stale in exactly the same way.
+                cache = (
+                    _ASSET_CACHE
+                    if full_path.startswith("assets/")
+                    else _SHELL_CACHE
+                )
+                return FileResponse(
+                    str(candidate), headers={"Cache-Control": cache}
+                )
             # Otherwise it's a client-side route (/settings, /space/x …) — hand
             # back index.html and let React Router resolve it.
-            return FileResponse(str(_spa_index))
+            #
+            # `no-cache` is not "do not store": the copy stays on disk and the
+            # ETag above still answers 304, so an unchanged shell costs one
+            # conditional request. What it removes is the browser's licence to
+            # skip that request.
+            return FileResponse(
+                str(_spa_index), headers={"Cache-Control": _SHELL_CACHE}
+            )
     else:
         logger.warning(
             "FRONTEND_DIST=%s is not a directory; SPA not served", settings.FRONTEND_DIST
