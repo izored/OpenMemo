@@ -102,10 +102,12 @@ export async function checkForUpdates({ silent }: { silent: boolean }): Promise<
           '1. Quit openMemo (Command-Q).',
           '2. Open the .dmg and drag openMemo onto Applications. Say yes to replacing it.',
           '3. macOS blocks the first launch, because the new download is not notarised.',
-          '   Open it once, click Done, then System Settings, Privacy & Security,',
-          '   scroll to Security and click Open Anyway.',
+          '   One line in Terminal clears it:',
           '',
-          'Read Me First, inside the .dmg, has the same steps in full.',
+          '   xattr -dr com.apple.quarantine /Applications/OpenMemo.app',
+          '',
+          'Read Me First, inside the .dmg, has that line to copy and the',
+          'click-only way through System Settings.',
         ].join('\n'),
       );
     } else if (choice === 2) {

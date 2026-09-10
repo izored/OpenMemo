@@ -89,15 +89,17 @@ dmg:
   contents:
     # The app.
     - x: 170
-      y: 215
+      y: 190
       type: file
     - x: 450
-      y: 215
+      y: 190
       type: link
       path: /Applications
     # The first-launch leaflet, bottom left, clear of the drag path above it.
+    # Nothing goes below y=340 here: Finder's path bar covers the last ~50px of
+    # the window, and at y=385 this icon's own label was hidden by it.
     - x: 140
-      y: 385
+      y: 332
       type: file
       # Resolved against buildResources first (see getResource in
       # app-builder-lib), and a miss is a hard build error, not a silent skip.

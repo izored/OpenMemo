@@ -7,6 +7,11 @@ All notable changes to OpenMemo are documented here.
 
 <!-- Add entries here as work lands: ### Added / ### Changed / ### Fixed -->
 
+### Changed
+- 💿 **The disk image leads with the one line that skips the block, and stops running off its own bottom edge.** 3.22.0 put the four click steps first and kept the Terminal line for the end of the leaflet. It is one paste and the block never happens at all, so it is now on the window itself, with the clicking route as the alternative rather than the headline.
+
+  The artwork was also drawn to the full height of the window, and Finder draws its path bar inside that same rectangle. The last line of the warning was cut in half and the leaflet's own icon label was hidden under the bar. Everything moved up, and nothing is drawn in the bottom strip any more.
+
 ---
 ## [3.22.0] - 2026-09-10
 

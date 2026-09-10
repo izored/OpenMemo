@@ -42,13 +42,13 @@
   .wordmark span { color: var(--accent); }
   .kicker { margin-top: 2px; font-size: 10pt; color: var(--ink-2); }
 
-  h2 { font-size: 12.5pt; font-weight: 700; letter-spacing: -0.2px; margin: 22px 0 6px; }
+  h2 { font-size: 12.5pt; font-weight: 700; letter-spacing: -0.2px; margin: 15px 0 5px; }
   h2:first-of-type { margin-top: 0; }
   p { margin-bottom: 8px; }
   .lede { font-size: 11pt; color: var(--ink-2); margin-bottom: 4px; }
 
   ol.steps { list-style: none; counter-reset: s; margin-top: 10px; }
-  ol.steps > li { counter-increment: s; position: relative; padding-left: 30px; margin-bottom: 14px; break-inside: avoid; }
+  ol.steps > li { counter-increment: s; position: relative; padding-left: 30px; margin-bottom: 10px; break-inside: avoid; }
   ol.steps > li::before {
     content: counter(s);
     position: absolute; left: 0; top: 1px;
@@ -61,6 +61,11 @@
   .path {
     font-weight: 500;
     background: var(--chip); border-radius: 4px; padding: 1px 5px; font-size: 9.5pt;
+  }
+
+  .cmd {
+    background: var(--chip); border-radius: 6px; padding: 8px 10px;
+    font-weight: 500; font-size: 10pt; margin: 6px 0 8px;
   }
 
   .mock {
@@ -82,14 +87,21 @@
 <div class="page">
   <header>
     <div class="wordmark"><span>open</span>Memo</div>
-    <div class="kicker">Read me first. Installing is one drag, and the first launch is four clicks.</div>
+    <div class="kicker">Read me first. Installing is one drag, and getting past the first launch is one line or four clicks.</div>
   </header>
 
   <h2>Install</h2>
   <p class="lede">Drag <b>openMemo</b> onto the <b>Applications</b> folder in this window. That is the whole install.</p>
 
   <h2>Then macOS blocks it once, and that is expected</h2>
-  <p class="lede">openMemo is not notarised by Apple. Notarising needs a paid Apple developer account, which this project does not have. macOS treats every app it cannot check the same way: it refuses the first launch and makes you allow it by hand. Nothing is wrong with the download.</p>
+  <p class="lede">openMemo is not notarised, because notarising needs a paid Apple developer account this project does not have. macOS refuses the first launch of every app it cannot check, and makes you allow it by hand. Nothing is wrong with the download.</p>
+
+  <h2>The one line way</h2>
+  <p>A browser marks what it downloads with a hidden quarantine tag, and that tag is what macOS reacts to. Remove it and openMemo simply opens. Copy this line, paste it into <b>Terminal</b>, press return:</p>
+  <p class="cmd">xattr -dr com.apple.quarantine /Applications/OpenMemo.app</p>
+  <p>Terminal lives in <span class="path">Applications/Utilities</span>, or press Command-Space and type its name. The line prints nothing when it works, which is the normal outcome. Run it again after each update.</p>
+
+  <h2>Or click through it, four steps</h2>
 
   <ol class="steps">
     <li>
@@ -105,13 +117,7 @@
     <li>
       <h3>Open System Settings, then Privacy &amp; Security</h3>
       <p>Apple menu, <b>System Settings</b>, <b>Privacy &amp; Security</b> in the sidebar. Scroll down to <b>Security</b>. openMemo is named there, with a button beside it. Click <b>Open Anyway</b>.</p>
-      <div class="mock">
-        <div class="row">
-          <div class="t">&ldquo;OpenMemo&rdquo; was blocked to protect your Mac.</div>
-          <span class="btn">Open Anyway</span>
-        </div>
-        <div class="d">That line only appears after step 1, and it fades after a while. If it is not there, try opening the app again.</div>
-      </div>
+      <p>That line only appears after step 1, and it fades after a while. If it is not there, try opening the app again.</p>
     </li>
 
     <li>
@@ -121,12 +127,7 @@
 
     <li>
       <h3>Say yes one last time</h3>
-      <p>A final dialog appears, this one with a way through. Click <b>Open Anyway</b>. openMemo starts, and it starts normally from now on.</p>
-      <div class="mock">
-        <div class="t">Open &ldquo;OpenMemo&rdquo;?</div>
-        <div class="d">Apple is not able to verify that it is free from malware that could harm your Mac or compromise your privacy.</div>
-        <div class="btns"><span class="btn">Move to Bin</span><span class="btn go">Open Anyway</span><span class="btn">Done</span></div>
-      </div>
+      <p>A final dialog appears, this one with a way through: same wording as step 1, now with an <b>Open Anyway</b> button on it. Click that. openMemo starts, and it starts normally from now on.</p>
     </li>
   </ol>
 </div>
@@ -146,17 +147,12 @@
   <ol class="steps">
     <li><h3>Quit openMemo first</h3><p>Command-Q, not just closing the window. The backend holds the database open.</p></li>
     <li><h3>Drag the new openMemo onto Applications and replace</h3><p>Finder asks whether to replace. Say yes.</p></li>
-    <li><h3>Allow it again</h3><p>A fresh download carries a fresh block, so page one applies to every update, not only the first install.</p></li>
+    <li><h3>Allow it again</h3><p>A fresh download carries a fresh block, so page one applies to every update, not only the first install. The one line is the quickest way through it:</p><p class="cmd">xattr -dr com.apple.quarantine /Applications/OpenMemo.app</p></li>
   </ol>
 
   <h2>Your library is not inside the app</h2>
   <p>Everything you keep lives in <span class="path">~/Library/Application Support/OpenMemo/</span>. Replacing the app replaces the program and nothing else. Memos, media, settings and your PIN stay where they are, and openMemo copies the library into its <span class="path">backups</span> folder before the first launch of a new version.</p>
   <div class="note"><b>Never delete that folder to reinstall cleanly.</b> That folder is your library. Throwing away the app is harmless. Throwing away that folder is not.</div>
-
-  <h2>Faster way, if you use Terminal</h2>
-  <p>Files a browser downloads carry a hidden quarantine tag, and that tag is what triggers the blocking. Removing it skips all four steps:</p>
-  <p><span class="path">xattr -dr com.apple.quarantine /Applications/OpenMemo.app</span></p>
-  <p>Same result as clicking through, one line. Run it after each update.</p>
 
   <footer>Full documentation: github.com/izored/OpenMemo, docs/MACOS.md. openMemo is MIT licensed and runs entirely on your Mac.</footer>
 </div>
