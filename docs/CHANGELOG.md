@@ -7,6 +7,9 @@ All notable changes to OpenMemo are documented here.
 
 <!-- Add entries here as work lands: ### Added / ### Changed / ### Fixed -->
 
+---
+## [3.21.2] - 2026-09-10
+
 ### Fixed
 - 🖼️ **A Facebook album's photos now reach your disk, and re-pull stops spinning forever.** 3.21.1 taught openMemo to find the photos on a walled Facebook post. It could not then download them: those photos come from an address that only answers a link-preview crawler, and openMemo asked as a browser, so every one came back as a login page and was thrown away. It asks as the right client now.
 
