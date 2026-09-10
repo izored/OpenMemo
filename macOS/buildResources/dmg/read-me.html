@@ -88,7 +88,8 @@
   .note.danger b { color: #A32D2D; }
   .support { margin-top: 10px; background: var(--chip); border-radius: 8px; padding: 10px 12px; }
   .support-t { font-size: 9.5pt; font-weight: 700; }
-  .support-l { margin-top: 3px; font-size: 9.5pt; font-weight: 500; color: var(--accent); }
+  .support-p { margin-top: 2px; font-size: 9.5pt; color: var(--ink-2); }
+  .support-l { margin-top: 5px; font-size: 9.5pt; font-weight: 500; color: var(--accent-ink); }
 
   footer { margin-top: 20px; border-top: 1px solid var(--rule); padding-top: 8px; font-size: 9pt; color: var(--ink-3); }
 </style>
@@ -103,7 +104,7 @@
   <p class="lede">Drag <b>openMemo</b> onto the <b>Applications</b> folder in this window. That is the whole install. Getting past the first launch is one line in Terminal, or four clicks.</p>
 
   <h2>Then macOS blocks it once, and that is expected</h2>
-  <p class="lede">openMemo is not notarised, because notarising needs a paid Apple developer account this project does not have. macOS refuses the first launch of every app it cannot check, and makes you allow it by hand. Nothing is wrong with the download.</p>
+  <p class="lede">Apple has never checked openMemo, because having it checked needs a paid developer account this project does not have. macOS refuses the first launch of every app it cannot vouch for, and makes you allow it by hand. Nothing is wrong with the download.</p>
 
   <h2>The one line way</h2>
   <p>A browser marks what it downloads with a hidden quarantine tag, and that tag is what macOS reacts to. Remove it and openMemo simply opens. Copy this line, paste it into <b>Terminal</b>, press return:</p>
@@ -197,9 +198,10 @@
   <div class="note danger"><b>Never delete that folder to reinstall cleanly.</b> That folder is your library. Throwing away the app is harmless. Throwing away that folder is not.</div>
 
   <h2>About those blocked launches</h2>
-  <p>Stopping macOS from questioning openMemo means an Apple Developer Program membership: $99 a year, forever, for a free app that makes nothing. That is the only reason page two exists, and it is the first thing any support would pay for.</p>
+  <p>Getting openMemo checked by Apple, so macOS stops questioning it, means an Apple Developer Program membership: $99 a year, forever, for a free app that makes nothing. That is the only reason page two exists, and it is the first thing any support would pay for.</p>
   <div class="support">
     <div class="support-t">If openMemo earns its place on your Mac</div>
+    <div class="support-p">Either of these takes it a step closer to that membership, and to a first launch that simply opens:</div>
     <div class="support-l">github.com/sponsors/izored &nbsp;·&nbsp; buymeacoffee.com/izored</div>
   </div>
 
