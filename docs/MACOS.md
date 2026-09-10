@@ -31,9 +31,18 @@ is bundled or fetched by the app — you don't install it yourself.
    also carries **Read Me First.pdf**, which is this section with the dialogs
    drawn out, for anyone installing without this page in front of them.
 2. **First launch (Gatekeeper).** The app isn't notarized, so macOS refuses it
-   once. On **macOS 15 (Sequoia) and later** the refusal is a dead end by
-   design: the dialog offers only **Done** and **Move to Bin**, and the real
-   permission lives in System Settings. Four steps:
+   once. One line in Terminal removes the download's quarantine flag and the
+   refusal never happens:
+   ```bash
+   xattr -dr com.apple.quarantine /Applications/OpenMemo.app
+   ```
+   It prints nothing when it works, and it applies to every macOS version. This
+   is what the disk image and its **Read Me First.pdf** put first, because the
+   click-only route below is five screens for the same result.
+
+   **Clicking through instead.** On **macOS 15 (Sequoia) and later** the
+   refusal is a dead end by design: the dialog offers only **Done** and **Move
+   to Bin**, and the real permission lives in System Settings. Four steps:
    1. Open OpenMemo from Applications. macOS says **"OpenMemo" Not Opened**.
       Click **Done**.
    2. **System Settings → Privacy & Security**, scroll to **Security**.
@@ -46,12 +55,6 @@ is bundled or fetched by the app — you don't install it yourself.
 
    On **macOS 14 and earlier**, right-click the app and choose **Open**, then
    **Open** in the dialog. That override is gone from Sequoia.
-
-   Either way, one Terminal line does the same job on every macOS version, by
-   removing the download's quarantine flag before macOS ever looks at it:
-   ```bash
-   xattr -dr com.apple.quarantine /Applications/OpenMemo.app
-   ```
 3. The app opens to the loading screen, boots its backend, and shows the UI.
 
 On first run it quietly fetches two optional pieces into your data folder (it
@@ -144,18 +147,20 @@ version is the safer move.
 
 ### If you use the PIN lock
 
-The app lock stores its PIN in your macOS login keychain, and the keychain
-identifies apps by their signature. openMemo is signed ad-hoc rather than by a
-paid Apple developer account (see section 6), so each build has a different
-signature and macOS treats an updated app as a new one. **The first launch
-after an update may ask for your login password.** Allow it, and the PIN keeps
-working.
+The PIN is a scrypt hash in `openmemo-desktop.json`, inside your library
+folder. **openMemo does not use the macOS keychain for it**, so no login-password
+panel appears on any launch, and the app has no access to anything else stored
+on your Mac.
 
-If you deny it, the lock screen will refuse the correct PIN, because the app
-can no longer read what it stored. To recover, quit openMemo and delete the
-`lockEnabled` and `lockBlob` lines from
-`~/Library/Application Support/OpenMemo/openmemo-desktop.json`. That turns the
-lock off and leaves everything else alone. Set a new PIN from Settings.
+Builds up to 3.22.0 did use the keychain (Electron `safeStorage`), and because
+an ad-hoc signature changes with every build, macOS treated each update as a
+new app and asked for your login password to let it read its own PIN back.
+That was the whole reason for the panel, and it is gone.
+
+**Coming from one of those builds:** the old PIN can only be read through that
+same panel, so openMemo drops it rather than asking one last time. On first
+launch it says so, the lock is off, and you set a new PIN in **Settings → App
+lock**. Memos, media and every other setting are untouched.
 
 ---
 

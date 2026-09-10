@@ -7,6 +7,17 @@ All notable changes to OpenMemo are documented here.
 
 <!-- Add entries here as work lands: ### Added / ### Changed / ### Fixed -->
 
+### Changed
+- 🔒 **The app lock stops asking for your macOS login password, because it stops touching your keychain.** Setting a PIN put a system panel on screen saying openMemo wanted the confidential information stored in its keychain entry, and it came back after every update. That reads like an app going through your passwords. It never was: what sat in there was a hash of a 4-digit PIN and nothing else. The lock now hashes the PIN with scrypt and keeps it in openMemo's own settings file, next to your library. No keychain, no login password, no access to anything else on your Mac.
+
+  Upgrading from 3.22.0 or older, the old PIN can only be read back through that same panel, so openMemo throws it away rather than asking one final time. It says so on first launch and the lock is off until you set a new PIN in Settings. Memos, media and every other setting are untouched.
+
+- 💿 **The disk image leads with the one line that skips the block, and stops running off its own bottom edge.** 3.22.0 put the four click steps first and kept the Terminal line for the end of the leaflet. It is one paste and the block never happens at all, so it is now on the window itself, with the clicking route as the alternative rather than the headline.
+
+  The artwork was also drawn to the full height of the window, and Finder draws its path bar inside that same rectangle. The last line of the warning was cut in half and the leaflet's own icon label was hidden under the bar. Everything moved up, and nothing is drawn in the bottom strip any more.
+
+  Read Me First grew a page in the process. Each of the four click steps is drawn as the dialog you actually see, every page opens with its own title so a page turn reads as a new subject, and the warning about deleting your library folder is in red where it cannot be skimmed past. The last page says what openMemo is, one person, free, no account and nothing leaving your Mac, and offers two quiet ways to support it.
+
 ---
 ## [3.22.0] - 2026-09-10
 

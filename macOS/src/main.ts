@@ -36,6 +36,7 @@ import {
   verifyPin,
   setPin,
   disableLock,
+  retireKeychainPin,
   WindowState,
 } from './settings-store';
 import { checkForUpdates } from './update-notifier';
@@ -890,8 +891,8 @@ function registerIpc(): void {
   });
   ipcMain.handle('lock:status', () => ({ enabled: isLockEnabled() }));
   // The Settings page asks for the sheet rather than building its own PIN form:
-  // the current-PIN check and the safeStorage write stay in one place. One at a
-  // time, so nothing can stack native modals over the app.
+  // the current-PIN check and the hashing stay in one place. One at a time, so
+  // nothing can stack native modals over the app.
   ipcMain.handle('lock:configure', (evt) => {
     requireUnlockedMainWindow(evt);
     if (pinDialogOpen) return;
@@ -1011,6 +1012,24 @@ if (!app.requestSingleInstanceLock()) {
     if (!ok) appendLog('[shell] Global shortcut ⌘⇧M unavailable (taken by another app).\n');
     buildMenu();
     registerIpc();
+    // A PIN kept by an older build lives in the macOS keychain, and reading it
+    // back is the panel this app no longer shows. It is dropped rather than
+    // migrated, so say so plainly: the lock is off until a new PIN is set, and
+    // nothing else in the library was touched.
+    if (retireKeychainPin()) {
+      void dialog.showMessageBox({
+        type: 'info',
+        title: 'App lock',
+        message: 'Set your PIN again in Settings.',
+        detail:
+          'openMemo used to keep the PIN in your macOS keychain, which is why macOS asked ' +
+          'for your login password after every update. It does not use the keychain at all ' +
+          'any more.\n\nThe old PIN could only be read back through that same panel, so it ' +
+          'was thrown away instead. The lock is off until you set a new one in Settings, ' +
+          'under App lock. Your memos, media and settings are untouched.',
+        buttons: ['OK'],
+      });
+    }
     void openAppWindow();
 
     // macOS: Dock click with no window → reopen (backend already warm).
