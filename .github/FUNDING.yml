@@ -1,0 +1,5 @@
+# Adds the Sponsor button to the repo. openMemo is free and unsigned; an Apple
+# Developer Program membership ($99/year) is what would let macOS stop blocking
+# the first launch of every build. See docs/MACOS.md.
+github: [izored]
+buy_me_a_coffee: izored

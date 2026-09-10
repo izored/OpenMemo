@@ -50,9 +50,9 @@
   /* Sits behind the icon row: the chevrons live between the two icons. */
   .chevrons { position: absolute; top: 171px; left: 279px; width: 62px; height: 38px; }
 
-  .rule { position: absolute; top: 268px; left: 40px; width: 540px; height: 1px; background: var(--rule); }
+  .rule { position: absolute; top: 260px; left: 40px; width: 540px; height: 1px; background: var(--rule); }
 
-  .foot { position: absolute; top: 286px; left: 226px; width: 356px; }
+  .foot { position: absolute; top: 276px; left: 226px; width: 356px; }
   .foot h2 { font-size: 14.5px; font-weight: 700; letter-spacing: -0.2px; }
   .foot p { margin-top: 5px; font-size: 12.5px; font-weight: 400; line-height: 1.45; color: var(--ink-2); }
 
@@ -61,8 +61,9 @@
     padding: 7px 9px; font-size: 11.5px; font-weight: 500; color: var(--ink);
     white-space: nowrap;
   }
-  .cmd-label { margin-top: 8px; font-size: 11.5px; color: var(--ink-3); }
+  .cmd-label { margin-top: 8px; font-size: 11.5px; line-height: 1.5; color: var(--ink-3); }
   .cmd-label b { font-weight: 500; color: var(--ink-2); }
+  .cmd-label i { font-style: normal; font-weight: 500; color: var(--accent); }
 </style>
 
 <div class="head">
@@ -80,7 +81,7 @@
 
 <div class="foot">
   <h2>Then macOS blocks the first launch.</h2>
-  <p>Not notarised, because Apple charges yearly for that. Paste this into Terminal and it never asks:</p>
+  <p>Not notarised: Apple charges $99 a year for that. Paste this into Terminal and it never asks:</p>
   <div class="cmd">xattr -dr com.apple.quarantine /Applications/OpenMemo.app</div>
-  <p class="cmd-label">Copy it from <b>Read Me First</b>, which also has the click-only way.</p>
+  <p class="cmd-label">Copy it from <b>Read Me First</b>, which also has the click-only way.<br />Help pay for that account: <i>github.com/sponsors/izored</i></p>
 </div>

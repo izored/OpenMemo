@@ -81,6 +81,12 @@
 
   .note { background: var(--chip); border-radius: 8px; padding: 10px 12px; margin-top: 10px; font-size: 9.5pt; color: var(--ink-2); }
   .note b { color: var(--ink); }
+  .note.danger { background: #FBE9E4; color: #7A2A18; }
+  .note.danger b { color: #A32D2D; }
+  .support { margin-top: 10px; background: var(--chip); border-radius: 8px; padding: 10px 12px; }
+  .support-t { font-size: 9.5pt; font-weight: 700; }
+  .support-l { margin-top: 3px; font-size: 9.5pt; font-weight: 500; color: var(--accent); }
+
   footer { margin-top: 20px; border-top: 1px solid var(--rule); padding-top: 8px; font-size: 9pt; color: var(--ink-3); }
 </style>
 
@@ -101,7 +107,16 @@
   <p class="cmd">xattr -dr com.apple.quarantine /Applications/OpenMemo.app</p>
   <p>Terminal lives in <span class="path">Applications/Utilities</span>, or press Command-Space and type its name. The line prints nothing when it works, which is the normal outcome. Run it again after each update.</p>
 
-  <h2>Or click through it, four steps</h2>
+</div>
+
+<div class="page">
+  <header>
+    <div class="wordmark"><span>open</span>Memo</div>
+    <div class="kicker">The click-only way, if you would rather not touch Terminal.</div>
+  </header>
+
+  <h2>Four steps, once per version</h2>
+  <p class="lede">Every one of these dialogs is macOS talking about an app it cannot check. None of them mean the download is damaged.</p>
 
   <ol class="steps">
     <li>
@@ -117,17 +132,33 @@
     <li>
       <h3>Open System Settings, then Privacy &amp; Security</h3>
       <p>Apple menu, <b>System Settings</b>, <b>Privacy &amp; Security</b> in the sidebar. Scroll down to <b>Security</b>. openMemo is named there, with a button beside it. Click <b>Open Anyway</b>.</p>
-      <p>That line only appears after step 1, and it fades after a while. If it is not there, try opening the app again.</p>
+      <div class="mock">
+        <div class="row">
+          <div class="t">&ldquo;OpenMemo&rdquo; was blocked to protect your Mac.</div>
+          <span class="btn">Open Anyway</span>
+        </div>
+        <div class="d">That line only appears after step 1, and it fades after a while. If it is not there, try opening the app again.</div>
+      </div>
     </li>
 
     <li>
       <h3>Confirm with Touch ID or your password</h3>
-      <p>macOS checks that you own the Mac. Use Touch ID, or click <b>Use Password</b> and type your account password.</p>
+      <p>macOS checks that you own the Mac.</p>
+      <div class="mock">
+        <div class="t">You are attempting to open an app that may cause harm to your Mac</div>
+        <div class="d">Touch ID or enter an administrator&rsquo;s name and password to continue with Privacy &amp; Security.</div>
+        <div class="btns"><span class="btn go">Use Password…</span><span class="btn">Cancel</span></div>
+      </div>
     </li>
 
     <li>
       <h3>Say yes one last time</h3>
-      <p>A final dialog appears, this one with a way through: same wording as step 1, now with an <b>Open Anyway</b> button on it. Click that. openMemo starts, and it starts normally from now on.</p>
+      <p>A final dialog appears, this one with a way through. Click <b>Open Anyway</b>. openMemo starts, and it starts normally from now on.</p>
+      <div class="mock">
+        <div class="t">Open &ldquo;OpenMemo&rdquo;?</div>
+        <div class="d">Apple is not able to verify that it is free from malware that could harm your Mac or compromise your privacy.</div>
+        <div class="btns"><span class="btn">Move to Bin</span><span class="btn go">Open Anyway</span><span class="btn">Done</span></div>
+      </div>
     </li>
   </ol>
 </div>
@@ -139,20 +170,35 @@
   </header>
 
   <h2>If you set a PIN lock</h2>
-  <p>The lock keeps its PIN in your macOS login keychain, and the keychain recognises apps by their signature. openMemo signs itself rather than paying Apple to, so every build looks like a new app to the keychain. The first launch after an install or an update asks for your <b>login password</b>. Type it and choose <b>Always Allow</b>, and the PIN keeps working.</p>
-  <div class="note"><b>If you click Deny</b>, the lock screen rejects the correct PIN, because openMemo can no longer read what it stored. Quit openMemo, delete the <span class="path">lockEnabled</span> and <span class="path">lockBlob</span> lines from <span class="path">~/Library/Application Support/OpenMemo/openmemo-desktop.json</span>, then set a new PIN in Settings.</div>
+  <p>openMemo keeps the PIN as a hash in its own settings file, inside your library folder. No keychain, no login password, no access to anything else on your Mac.</p>
+  <div class="note"><b>Updating from 3.22.0 or older?</b> Those builds did keep the PIN in the keychain, which is why macOS asked for your login password after every update. Reading that old PIN back needs the same panel, so openMemo throws it away instead and says so on first launch. Set a new PIN in <b>Settings</b>, under <b>App lock</b>. Nothing else is touched.</div>
 
   <h2>Updating later</h2>
   <p>openMemo checks GitHub for new versions and offers to download the new <span class="path">.dmg</span> for you. When one arrives:</p>
   <ol class="steps">
-    <li><h3>Quit openMemo first</h3><p>Command-Q, not just closing the window. The backend holds the database open.</p></li>
+    <li><h3>Quit openMemo first</h3><p>Command-Q. The backend holds the database open.</p></li>
     <li><h3>Drag the new openMemo onto Applications and replace</h3><p>Finder asks whether to replace. Say yes.</p></li>
-    <li><h3>Allow it again</h3><p>A fresh download carries a fresh block, so page one applies to every update, not only the first install. The one line is the quickest way through it:</p><p class="cmd">xattr -dr com.apple.quarantine /Applications/OpenMemo.app</p></li>
+    <li><h3>Allow it again</h3><p>A fresh download carries a fresh block, so page one applies to every update, not only the first install, and it stays that way until openMemo has an Apple developer account of its own. The one line is the quickest way through:</p><p class="cmd">xattr -dr com.apple.quarantine /Applications/OpenMemo.app</p></li>
   </ol>
 
-  <h2>Your library is not inside the app</h2>
-  <p>Everything you keep lives in <span class="path">~/Library/Application Support/OpenMemo/</span>. Replacing the app replaces the program and nothing else. Memos, media, settings and your PIN stay where they are, and openMemo copies the library into its <span class="path">backups</span> folder before the first launch of a new version.</p>
-  <div class="note"><b>Never delete that folder to reinstall cleanly.</b> That folder is your library. Throwing away the app is harmless. Throwing away that folder is not.</div>
+</div>
 
-  <footer>Full documentation: github.com/izored/OpenMemo, docs/MACOS.md. openMemo is MIT licensed and runs entirely on your Mac.</footer>
+<div class="page">
+  <header>
+    <div class="wordmark"><span>open</span>Memo</div>
+    <div class="kicker">Where your library lives, and why the app is unsigned.</div>
+  </header>
+
+  <h2>Your library is not inside the app</h2>
+  <p>Everything you keep lives in <span class="path">~/Library/Application Support/OpenMemo/</span>, so replacing the app replaces the program and nothing else. openMemo also copies the library into its <span class="path">backups</span> folder before the first launch of a new version.</p>
+  <div class="note danger"><b>Never delete that folder to reinstall cleanly.</b> That folder is your library. Throwing away the app is harmless. Throwing away that folder is not.</div>
+
+  <h2>About those blocked launches</h2>
+  <p>Stopping macOS from questioning openMemo means an Apple Developer Program membership: $99 a year, forever, for a free app that makes nothing. That is the only reason page two exists, and it is the first thing any support would pay for.</p>
+  <div class="support">
+    <div class="support-t">If openMemo earns its place on your Mac</div>
+    <div class="support-l">github.com/sponsors/izored &nbsp;·&nbsp; buymeacoffee.com/izored</div>
+  </div>
+
+  <footer>Full documentation: github.com/izored/OpenMemo, docs/MACOS.md. openMemo is MIT licensed, runs entirely on your Mac, and sends your library nowhere.</footer>
 </div>

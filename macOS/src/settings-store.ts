@@ -3,15 +3,15 @@
  * remembers: where the user's Ollama lives, and (optionally) an app-lock PIN.
  * Ollama is never bundled or managed here — we only record the host:port.
  *
- * The PIN is stored as a salted SHA-256 hash, and that blob is encrypted with
- * Electron safeStorage (tied to the macOS login keychain) when available, so the
- * settings file never holds anything directly reversible. A 4-digit PIN is a
- * casual privacy lock, not a defense against a determined local attacker.
+ * The PIN is stored as a scrypt hash and NOTHING here touches the macOS
+ * keychain: see pin-hash.ts for why that changed. A 4-digit PIN is a casual
+ * privacy lock, not a defense against a determined local attacker.
  */
-import { app, safeStorage } from 'electron';
-import crypto from 'node:crypto';
+import { app } from 'electron';
 import fs from 'node:fs';
 import path from 'node:path';
+
+import { isKeychainBlob, makePinBlob, verifyPinBlob } from './pin-hash';
 
 export interface WindowState {
   x?: number;
@@ -26,7 +26,7 @@ export interface ShellSettings {
   ollamaHost: string;
   /** App-lock on (a PIN is set). */
   lockEnabled?: boolean;
-  /** Encrypted {salt,hash} blob — see encryptBlob/decryptBlob. */
+  /** Hashed PIN — see pin-hash.ts. Never the PIN itself, never reversible. */
   lockBlob?: string;
   /** Last window size/position, restored on next launch. */
   windowState?: WindowState;
@@ -84,35 +84,6 @@ export function saveSettings(patch: Partial<ShellSettings>): ShellSettings {
 
 // --- app-lock PIN ------------------------------------------------------------
 
-function encryptBlob(obj: unknown): string {
-  const json = JSON.stringify(obj);
-  if (safeStorage.isEncryptionAvailable()) {
-    return 'v1:' + safeStorage.encryptString(json).toString('base64');
-  }
-  // Fallback when the OS keychain is unavailable — still not plaintext PIN, but
-  // weaker. Better than nothing for a casual lock.
-  return 'raw:' + Buffer.from(json, 'utf-8').toString('base64');
-}
-
-function decryptBlob(blob: string): { salt: string; hash: string } | null {
-  try {
-    if (blob.startsWith('v1:')) {
-      const json = safeStorage.decryptString(Buffer.from(blob.slice(3), 'base64'));
-      return JSON.parse(json);
-    }
-    if (blob.startsWith('raw:')) {
-      return JSON.parse(Buffer.from(blob.slice(4), 'base64').toString('utf-8'));
-    }
-  } catch {
-    /* corrupt / wrong keychain */
-  }
-  return null;
-}
-
-function hashPin(salt: string, pin: string): string {
-  return crypto.createHash('sha256').update(`${salt}:${pin}`).digest('hex');
-}
-
 /** True when an app-lock PIN is set. Cheap (no crypto). */
 export function isLockEnabled(): boolean {
   const s = loadSettings();
@@ -121,21 +92,39 @@ export function isLockEnabled(): boolean {
 
 /** Set (or replace) the PIN and turn the lock on. */
 export function setPin(pin: string): void {
-  const salt = crypto.randomBytes(16).toString('hex');
-  const blob = encryptBlob({ salt, hash: hashPin(salt, pin) });
-  saveSettings({ lockEnabled: true, lockBlob: blob });
+  saveSettings({ lockEnabled: true, lockBlob: makePinBlob(pin) });
 }
 
 /** Verify a PIN. Returns true if no lock is set. */
 export function verifyPin(pin: string): boolean {
   const s = loadSettings();
   if (!s.lockEnabled || !s.lockBlob) return true;
-  const dec = decryptBlob(s.lockBlob);
-  if (!dec) return false;
-  return hashPin(dec.salt, pin) === dec.hash;
+  const { ok, upgraded } = verifyPinBlob(s.lockBlob, pin);
+  // An old-format blob is rewritten the moment its PIN is proven, so the
+  // upgrade costs the user nothing and happens exactly once.
+  if (ok && upgraded) saveSettings({ lockBlob: upgraded });
+  return ok;
 }
 
 /** Turn the lock off and forget the PIN. */
 export function disableLock(): void {
   saveSettings({ lockEnabled: false, lockBlob: '' });
+}
+
+/**
+ * Retire a PIN that an older build stored in the keychain.
+ *
+ * Those blobs can only be read back through safeStorage, which is the panel
+ * this change exists to remove, so they are not read: the lock is switched off
+ * and the blob dropped. The alternative was one last keychain prompt to
+ * migrate, which is the exact thing the user is being spared.
+ *
+ * Returns true when that happened, so the caller can say so. Nothing else is
+ * touched: the library, the Ollama host and the window state stay as they are.
+ */
+export function retireKeychainPin(): boolean {
+  const s = loadSettings();
+  if (!isKeychainBlob(s.lockBlob)) return false;
+  saveSettings({ lockEnabled: false, lockBlob: '' });
+  return true;
 }
