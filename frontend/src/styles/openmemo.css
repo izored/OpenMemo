@@ -295,6 +295,39 @@ input, textarea { font: inherit; color: inherit; }
 .om-icon-btn:hover { background: var(--surface-2); color: var(--text); }
 .om-icon-btn.sm { width: 22px; height: 22px; border-radius: 6px; }
 
+/* ─ Back control ───────────────────────────────────────────────────────────
+   One affordance, one corner, every page. `.om-back-btn` is the button itself;
+   `.om-global-back` is the desktop instance Layout pins to the top-left of the
+   content pane, and `.om-mtb-back` (in the mobile block) is the copy that rides
+   inside the mobile top bar. */
+.om-back-btn {
+  width: 32px; height: 32px; border-radius: 10px;
+  display: inline-flex; align-items: center; justify-content: center;
+  color: var(--text-3); background: transparent;
+  transition: background .15s ease, color .15s ease;
+}
+.om-back-btn:hover { background: var(--surface-2); color: var(--text); }
+
+/* Fixed, not sticky: the memo detail page and the Ask page own their own
+   scrollers, so anchoring to the viewport is the only placement that holds
+   still on all of them. Left edge tracks the content column — --om-px lives on
+   .om-main and this button is its sibling, so the density gutter is repeated
+   here off [data-density] instead. --sidebar-w is written by the Sidebar. */
+.om-global-back {
+  position: fixed; top: 14px; z-index: 30;
+  left: calc(var(--sidebar-w, 260px) + 48px);
+  background: color-mix(in oklab, var(--bg-rail) 55%, transparent);
+  -webkit-backdrop-filter: blur(8px);
+          backdrop-filter: blur(8px);
+  transition: left .3s cubic-bezier(.25, 1, .5, 1), background .15s ease, color .15s ease;
+}
+.om-global-back:hover { background: var(--surface-2); color: var(--text); }
+[data-density="compact"] .om-global-back { left: calc(var(--sidebar-w, 260px) + 32px); }
+[data-density="roomy"]   .om-global-back { left: calc(var(--sidebar-w, 260px) + 64px); }
+/* Memo detail strips .om-main's gutter and pads its own header 20px instead. */
+.om-app:has(.om-detail-page) .om-global-back { left: calc(var(--sidebar-w, 260px) + 20px); }
+@media (prefers-reduced-motion: reduce) { .om-global-back { transition: none; } }
+
 .om-sidebar-search {
   display: flex; align-items: center; gap: 10px;
   height: 36px; flex-shrink: 0; padding: 0 12px; margin: 0 0 16px;
@@ -6719,6 +6752,12 @@ button.om-add-link { background: none; border: 0; padding: 0; cursor: pointer; f
     border-radius: 10px; color: var(--text-2);
   }
   .om-mtb-burger { width: 40px; flex-shrink: 0; }
+  .om-mtb-back {
+    width: 40px; height: 40px; border-radius: 10px; flex-shrink: 0;
+    color: var(--text-2);
+  }
+  .om-mtb-back:active { background: var(--surface-2); }
+  .om-global-back { display: none; }
   .om-mtb-burger:active { background: var(--surface-2); }
   .om-mtb-brand { padding: 0 6px; }
   .om-mtb-brand .om-brand-name { font-size: 18px; color: var(--text); }

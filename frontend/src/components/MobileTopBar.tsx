@@ -1,5 +1,6 @@
 import { useNavigate } from 'react-router-dom';
 import { Icon } from './Icon';
+import { BackButton } from './BackButton';
 import { useAppStore } from '@/stores/appStore';
 
 // Slim top bar shown only below the lg breakpoint (CSS hides it on desktop).
@@ -18,6 +19,7 @@ export function MobileTopBar() {
       >
         <Icon name="menu" size={20} />
       </button>
+      <BackButton className="om-mtb-back" />
       <button
         className="om-mtb-brand"
         onClick={() => {

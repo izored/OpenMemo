@@ -532,10 +532,13 @@ export function Sidebar() {
             : <span className="om-brand-name">openMemo</span>
           }
         </button>
-        {/* Desktop: collapse chevron. Hidden on mobile via CSS. */}
+        {/* Desktop: collapse toggle. Hidden on mobile via CSS. Deliberately the
+            SAME hamburger the collapsed rail shows in the brand slot — one glyph
+            for one toggle, and no second arrow competing with the global back
+            control a few pixels to its right. */}
         {!sidebarCollapsed && (
-          <button className="om-icon-btn om-collapse-chevron" onClick={toggleSidebarCollapsed} title="Collapse">
-            <Icon name="chevronLeft" size={14} />
+          <button className="om-icon-btn om-collapse-chevron" onClick={toggleSidebarCollapsed} title="Collapse sidebar">
+            <Icon name="menu" size={18} />
           </button>
         )}
         {/* Mobile: prominent close button for the full-screen drawer. Hidden on
