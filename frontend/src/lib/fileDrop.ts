@@ -143,8 +143,18 @@ export function isAllImageUrls(urls: string[]): boolean {
 }
 
 export interface DropTarget {
-  // 'instant' uploads straight to the resolved bucket; 'prefill' stages the
-  // files into the New-Memo panel so the user picks a home first (ADR-023 §4).
+  // 'instant' uploads straight to the resolved bucket. 'prefill' stages the
+  // drop into the New-Memo panel instead, and survives for exactly one case:
+  // a dragged text selection, which cannot be saved without a title.
+  //
+  // It used to cover every "ambiguous" surface — the dashboard, the Spaces and
+  // Collections lists, a memo page, Ask — on the reasoning that no single
+  // bucket was implied. The dashboard is where you land and where you spend
+  // most of your time, so the outcome you met most often was a form, and a
+  // form is indistinguishable from the feature not working. The library is a
+  // real destination and dropping into it is a complete instruction; filing
+  // happens afterwards, the way it does for everything else you save.
+  // (ADR-023 §6.)
   mode: 'instant' | 'prefill';
   // The bucket the files land in. 'music' routes audio through the album path.
   scope: 'collection' | 'space' | 'music' | 'library';
@@ -166,9 +176,8 @@ interface ResolveArgs {
 }
 
 // Tier-1 page-default targeting (ADR-023 §2). Reads where the user already is
-// from the route + store and decides the bucket AND the commit mode. Clear
-// buckets (a collection, a Space, the Music page) ingest instantly; ambiguous
-// surfaces (bare library, lists, detail, ask) prefill the panel.
+// from the route + store and names the bucket. Every drop ingests instantly;
+// the bucket is a collection, a Space, Music, or the library itself (§6).
 export function resolveDropTarget({
   pathname,
   activeSpace,
@@ -201,9 +210,10 @@ export function resolveDropTarget({
     return { mode: 'instant', scope: 'space', workspaceId: activeSpace, label };
   }
 
-  // Bare library / Spaces list / Collections list / memo detail / Ask — no
-  // single bucket. Prefill the panel so the user chooses (ADR-023 §4).
-  return { mode: 'prefill', scope: 'library', label: 'your library' };
+  // Bare library, the Spaces or Collections list, a memo page, Ask. No
+  // collection is implied, so it lands in the library — which is where an
+  // unfiled memo belongs and where every other unfiled save already goes.
+  return { mode: 'instant', scope: 'library', label: 'your library' };
 }
 
 // Type routing (ADR-023 §3): on the Music page a pure-audio drop becomes an

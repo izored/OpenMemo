@@ -2353,10 +2353,11 @@ async def _localize_apple_track(memo_id: str, url: str, ws: str):
         await db.commit()
 
 
-async def localize_memo_task(memo_id: str, mode: str, quality: int = 1080):
+async def localize_memo_task(memo_id: str, mode: str, quality: int | None = None):
     """Background: download a memo's remote source via yt-dlp and re-home it as a
     local video/audio memo. `mode='audio'` is an explicit video→audio conversion.
-    `quality` caps the video height (720/1080/1440/2160, OPNMMO-0022).
+    `quality` caps the video height. None means "whatever the user set", and the
+    default setting is no cap at all: a kept copy is an archive copy.
     Status flows pending → processing → done | error on memo.localize_status.
 
     Spotify track sources take a different route entirely (no yt-dlp): the
@@ -2389,6 +2390,13 @@ async def localize_memo_task(memo_id: str, mode: str, quality: int = 1080):
     if is_apple_track_url(url):
         await _localize_apple_track(memo_id, url, ws)
         return
+
+    # None = follow the user's Settings preference, resolved here rather than
+    # at every call site so a background job and a button press agree.
+    if quality is None:
+        from backend.core.app_settings import get_settings
+
+        quality = int(get_settings().get("video_quality_cap", 0) or 0)
 
     try:
         result = await localize_media(url, ws, mode, quality)
@@ -2814,6 +2822,11 @@ async def ingest_from_extension(
     return {"id": memo.id, "title": memo.title, "status": "saved"}
 
 
+# An author handle standing in for a title. Deliberately strict: it must be the
+# WHOLE title, so a caption that opens with a mention keeps the memo it named.
+_BARE_HANDLE_RE = re.compile(r"@[A-Za-z0-9._]{1,30}")
+
+
 def _is_placeholder_title(title: str | None, url: str, domain: str) -> bool:
     """Is this a title nobody chose, and therefore safe to replace?
 
@@ -2826,14 +2839,28 @@ def _is_placeholder_title(title: str | None, url: str, domain: str) -> bool:
       - the raw URL, which is what a failed resolve leaves behind
       - the bare domain or its first label ("temu.com", "Temu")
       - that label plus a generic noun ("Instagram post", "Reddit thread")
+      - a bare author handle, "@someone", which is what a resolver falls back
+        to when it found the author but no caption
 
     Anything else is treated as the user's, and left alone (ADR-001: one rule,
     no per-host branches).
+
+    The handle case was the gap. A resolver that cannot read a caption files
+    the memo under its author, and "@someone" is not a name anybody chose — but
+    it did not match any of the tests above, so the memo froze. 25 memos in one
+    library were stuck that way, 21 of them saved through a working login long
+    before the browser tiers learned to read captions at all: press re-pull as
+    often as you like and the title could never improve. Someone who genuinely
+    wants a memo called "@someone" writes something else next to it, and the
+    guard below leaves any longer title alone.
     """
     t = (title or "").strip()
     if not t:
         return True
     if t == (url or "").strip():
+        return True
+    # "@handle" and nothing else. "@handle 🖤" is a caption and stays.
+    if _BARE_HANDLE_RE.fullmatch(t):
         return True
     bare = (domain or "").lstrip(".").casefold()
     if not bare:

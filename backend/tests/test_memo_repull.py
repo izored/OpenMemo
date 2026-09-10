@@ -324,3 +324,46 @@ class TestPlaceholderTitle:
 
         assert not _is_placeholder_title("premium slow rebound - Temu Belgium", "u", "temu.com")
         assert not _is_placeholder_title("Lamp for the hallway", "u", "temu.com")
+
+
+class TestAHandleIsNotATitle:
+    """A memo filed under its author can be repaired later.
+
+    A resolver that finds the author but no caption falls back to "@someone".
+    That is not a name anybody chose, but it did not match any placeholder
+    test, so the memo froze: pressing re-pull could never improve the title
+    even once a login could finally read the real caption. Measured in one
+    library on 2026-09-09 — 25 memos stuck, 21 of them saved through a working
+    login long before the browser tiers learned to read captions at all.
+    """
+
+    URL = "https://www.instagram.com/p/DcThbX-jBTJ/"
+
+    def test_a_bare_handle_can_be_replaced(self):
+        from backend.api.ingest import _is_placeholder_title
+
+        for title in ("@Sas", "@annalouisegille", "@a", "@some.one_1"):
+            assert _is_placeholder_title(title, self.URL, "instagram.com") is True, title
+
+    def test_a_caption_that_merely_starts_with_a_mention_is_left_alone(self):
+        from backend.api.ingest import _is_placeholder_title
+
+        # These are real captions. Overwriting them would be the bug this
+        # guard exists to prevent, pointing the other way.
+        for title in ("@depratodesign 🖤", "@googlegemini us next?", "@a @b"):
+            assert _is_placeholder_title(title, self.URL, "instagram.com") is False, title
+
+    def test_the_older_placeholders_still_count(self):
+        from backend.api.ingest import _is_placeholder_title
+
+        for title in ("", "Instagram post", "Instagram", self.URL):
+            assert _is_placeholder_title(title, self.URL, "instagram.com") is True, title
+
+    def test_an_ordinary_title_is_still_the_users(self):
+        from backend.api.ingest import _is_placeholder_title
+
+        assert _is_placeholder_title(
+            "Never thought I would be a capri girl", self.URL, "instagram.com"
+        ) is False
+        # An email address is not a handle standing in for a title.
+        assert _is_placeholder_title("me@example.com", self.URL, "instagram.com") is False

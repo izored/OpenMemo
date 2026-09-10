@@ -576,7 +576,18 @@ _EMBED_VIDEO_HOSTS = (
     "instagram.com",
     "tiktok.com",
     "twitter.com", "x.com",
-    "facebook.com", "fb.com", "fb.watch",
+    # Facebook is deliberately NOT here. Its embed does not play a share link:
+    # fetching the player openMemo would use for facebook.com/share/r/… returns
+    # a page with no video element and a login prompt, so a memo saved from one
+    # held a thumbnail and nothing playable. yt-dlp reads the same link fine —
+    # eight formats, up to 1920p, measured 2026-09-09 — it was simply never
+    # asked, because this list said the host would take care of it.
+    #
+    # A Facebook video is now downloaded like any host with no dependable
+    # player. Clips are small: five already in one library have a median of
+    # 3.6 MB. A long Facebook video will download in full, which is the known
+    # cost of this line and the reason a size-aware rule was attempted and
+    # parked (docs/parked-2026-09-09-download-policy.md).
     "dailymotion.com", "dai.ly",
     "streamable.com",
     "twitch.tv",
@@ -865,11 +876,18 @@ def _parse_gallery_dl_dump(text: str) -> tuple[list[str], str] | None:
 
 async def _instagram_gallery_dl(url: str) -> tuple[list[str], str] | None:
     """All full-size image URLs + caption via gallery-dl and the ADR-012 cookie
-    jar. None when cookies are absent, the tool is missing (dev venv), or
-    extraction fails — the caller falls down the tier ladder."""
-    from backend.core.app_settings import cookies_present, get_cookies_path
+    jar. None when there is no Instagram login, the tool is missing (dev venv),
+    or extraction fails — the caller falls down the tier ladder.
 
-    if not cookies_present():
+    The test is for an Instagram LOGIN, not for a cookie file. Those are not
+    the same thing and the difference is not free: the jar is shared with every
+    other host, so a YouTube cookie made `cookies_present()` true and this ran
+    a subprocess that could not possibly authenticate, on every Instagram save,
+    before the browser tiers did the work anyway."""
+    from backend.core.app_settings import get_cookies_path
+    from backend.core.instagram_login import _has_ig_session
+
+    if not _has_ig_session():
         return None
     try:
         proc = await asyncio.create_subprocess_exec(
@@ -934,12 +952,22 @@ IG_TIERS = (
     IG_TIER_BLOCKED,
 )
 
-# Tiers that mean "we could not read the post properly". A save landing here
-# still produces a memo — that is exactly why the drop went unnoticed for six
-# weeks — so these are the ones worth telling the user about.
-IG_FALLBACK_TIERS = frozenset(
-    {IG_TIER_BROWSER_SNIFF, IG_TIER_BROWSER_RENDER, IG_TIER_BLOCKED}
-)
+# Tiers reached without an Instagram login. Worth SAYING — connecting an
+# account is faster and steadier — but no longer worth an alarm: since the
+# browser tiers learned to read the caption and walk the whole carousel, a save
+# that lands here comes back with its words and its pictures. Verified on a
+# live post, 2026-09-09: ten slides and the full caption, from browser-render.
+IG_NO_SESSION_TIERS = frozenset({IG_TIER_BROWSER_SNIFF, IG_TIER_BROWSER_RENDER})
+
+# The tier that means the save actually failed. Everything above it produces a
+# usable memo; this one produces a bookmark saying "connect Instagram". It is
+# the only Instagram outcome that deserves a warning.
+IG_FAILED_TIERS = frozenset({IG_TIER_BLOCKED})
+
+# Every tier that did not reach the API. Kept because the canary and older
+# callers ask "did this reach the good path", which is still a real question —
+# it is just not the same question as "is anything wrong".
+IG_FALLBACK_TIERS = IG_NO_SESSION_TIERS | IG_FAILED_TIERS
 
 
 # Instagram writes the author and the whole caption into its OpenGraph tags and
@@ -957,6 +985,40 @@ IG_FALLBACK_TIERS = frozenset(
 # matches gives back empty strings and the caller keeps its old fallback.
 _IG_OG_QUOTED = re.compile(r'[:—-]\s*[\"“”](.+)[\"“”]\s*\.?\s*$', re.S)
 _IG_OG_HANDLE = re.compile(r'[-–—]\s*([A-Za-z0-9._]{2,30})\s+on\s', re.S)
+
+
+# A rolling count of how the caption read went, kept in memory. Small on
+# purpose: it exists to answer "did our reading of Instagram break?", which is
+# a question about the last few saves, not about the library's history. Lost on
+# restart, which is correct — a fresh process has no evidence either way.
+_IG_CAPTION_READS: list[bool] = []
+_IG_CAPTION_WINDOW = 20
+
+
+def _note_caption_parse(failed: bool) -> None:
+    _IG_CAPTION_READS.append(failed)
+    del _IG_CAPTION_READS[:-_IG_CAPTION_WINDOW]
+
+
+def caption_parse_health() -> dict:
+    """Is openMemo still able to read an Instagram caption?
+
+    Counts only reads where the answer was knowable: the page named an author,
+    so the post was visible, and the caption either came back or did not. A
+    post that genuinely has no caption never reaches the counter, which is what
+    lets a rate mean something — the base rate of captionless posts in a real
+    library is around one in twelve, and this is not measuring that.
+
+    `broken` needs several reads before it will say anything, because one odd
+    post is not a platform change.
+    """
+    reads = list(_IG_CAPTION_READS)
+    failed = sum(1 for r in reads if r)
+    return {
+        "checked": len(reads),
+        "failed": failed,
+        "broken": len(reads) >= 5 and failed == len(reads),
+    }
 
 
 def _instagram_text_from_html(html: str) -> dict:
@@ -978,10 +1040,49 @@ def _instagram_text_from_html(html: str) -> dict:
         return {"caption": "", "username": ""}
 
 
+def _og_offers_a_caption(og_title: str, og_desc: str) -> bool:
+    """Do these tags contain a caption at all, whatever shape it is in?
+
+    Instagram introduces a caption after the author-and-date clause, normally
+    in quotes. A post with no caption ends at the date:
+
+        with     3,416 likes, 79 comments - someone on August 21, 2026: "words"
+        without  3 likes, 0 comments - someone on May 1, 2026
+
+    Quotes alone are not enough to test for, because dropping them is one of
+    the rewordings this is meant to survive. So a colon introducing anything at
+    all, after an author clause, counts as an offer too.
+    """
+    for text in (og_title, og_desc):
+        t = (text or "").strip()
+        if not t:
+            continue
+        if any(q in t for q in '"“”'):
+            return True
+        m = re.search(r":\s*\S", t)
+        if m and " on " in t[: m.start()]:
+            return True
+    return False
+
+
 def _instagram_text_from_og(og_title: str, og_desc: str) -> dict:
     """Author handle + caption for an Instagram post, read from its OG tags.
 
-    Returns `{"caption": str, "username": str}`, either of which may be empty.
+    Returns `{"caption": str, "username": str, "parse_failed": bool}`.
+
+    `parse_failed` is the alarm this feature was missing. A post with no
+    caption and a caption openMemo could not read produce the identical memo —
+    filed under "@someone" with no words — so nothing downstream can tell a
+    normal empty post from the day Meta rewords its tags and every save goes
+    quiet. Here, and only here, the difference is visible: the page named an
+    author, so it IS a post we can see, and the caption pattern still found
+    nothing. That is not a captionless post, that is a parser that has stopped
+    matching.
+
+    The regex is one pattern doing all the work, and it is brittle by nature.
+    Verified against wording variants on 2026-09-09: a trailing " | Instagram",
+    a dropped colon, an ellipsis instead of the closing quote — each one yields
+    an empty caption today, silently.
     """
     caption = ""
     for candidate in (og_title, og_desc):
@@ -997,7 +1098,33 @@ def _instagram_text_from_og(og_title: str, og_desc: str) -> dict:
         username = m.group(1)
     elif og_title and " on Instagram" in og_title:
         username = og_title.split(" on Instagram")[0].strip()
-    return {"caption": caption, "username": username}
+
+    # Three ways to end up with no caption, and only one of them is a fault:
+    #
+    #   the page named nobody          we could not read it at all — a wall, a
+    #                                  dead post. A different problem, own tier.
+    #   the tags offer no caption      the post genuinely has none. About one
+    #                                  post in twelve; never an alarm.
+    #   the tags offer one and the     the pattern has stopped matching. THIS.
+    #   pattern found nothing
+    #
+    # The middle case is what makes a naive "no words = broken" counter useless,
+    # so the test is whether the tags were OFFERING a caption to read.
+    parse_failed = (
+        bool(username)
+        and not caption
+        and _og_offers_a_caption(og_title, og_desc)
+    )
+    if parse_failed:
+        _note_caption_parse(failed=True)
+        log.warning(
+            "instagram: read the author but not the caption — the OG wording may "
+            "have changed. og:title=%r",
+            (og_title or "")[:160],
+        )
+    elif caption:
+        _note_caption_parse(failed=False)
+    return {"caption": caption, "username": username, "parse_failed": parse_failed}
 
 
 def _instagram_titles(text: dict, fallback: str = "Instagram post") -> dict:
@@ -1027,11 +1154,15 @@ async def _instagram_resolve(url: str, domain: str) -> dict:
     A carousel becomes a `gallery` (type=image, first slide = thumbnail); a
     single photo is type=image; a single video keeps the video/embed shape with
     a real poster. Always returns a dict (never None) — the caller stores it."""
-    from backend.core.app_settings import cookies_present, get_cookies_path
+    from backend.core.app_settings import get_cookies_path
     from backend.core.instagram import fetch_media_info
+    from backend.core.instagram_login import _has_ig_session
 
     fav = None
-    cookies = get_cookies_path() if cookies_present() else None
+    # An Instagram login, not "some cookie file exists". The jar holds cookies
+    # for every host openMemo has ever touched, so a YouTube session made the
+    # old test true and tier 2 went out to be refused on every single save.
+    cookies = get_cookies_path() if _has_ig_session() else None
 
     # Tiers 1–2: the guest media-info API (anonymous, then with the session jar).
     info = await fetch_media_info(url)

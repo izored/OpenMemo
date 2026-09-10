@@ -213,16 +213,27 @@ def _is_sniff_first(url: str) -> bool:
         return False
     return any(h in host for h in SNIFF_FIRST_HOSTS)
 
-# User-selectable video quality caps (OPNMMO-0022). 1080 stays the default so
-# a casual "make it local" never fills the disk; 4K is an explicit choice.
-VALID_QUALITIES = {720, 1080, 1440, 2160}
-DEFAULT_QUALITY = 1080
+# No ceiling. A kept copy is an archive copy, so the default is whatever the
+# host serves at its best, and a ceiling is something you opt into rather than
+# something you have to notice and remove.
+#
+# It used to default to 1080 to stop a casual "make it local" filling the disk.
+# Disk is now defended where the cost actually is — the save path declines to
+# keep a file it predicts will be large at all (`should_keep_local`) — so
+# capping the resolution of the clips it does keep was buying nothing and
+# quietly throwing away the 1440p and 2160p renditions of a four megabyte reel.
+QUALITY_BEST = 0
+VALID_QUALITIES = {QUALITY_BEST, 720, 1080, 1440, 2160}
+DEFAULT_QUALITY = QUALITY_BEST
 
 _AUDIO_FORMAT = "bestaudio[ext=m4a]/bestaudio/best"
 
 
 def _video_format(quality: int) -> str:
-    """yt-dlp format selector capped at `quality` pixels of height.
+    """yt-dlp format selector, capped at `quality` pixels of height.
+
+    `QUALITY_BEST` (0) means no cap at all: take the best rendition the host
+    offers. Any other value caps the height.
 
     mp4+m4a is preferred for native browser playback, but above 1080p most
     hosts (YouTube included) only serve VP9/AV1 — so the selector falls back
@@ -230,6 +241,8 @@ def _video_format(quality: int) -> str:
     The merge step still remuxes into an mp4 container.
     """
     q = quality if quality in VALID_QUALITIES else DEFAULT_QUALITY
+    if q == QUALITY_BEST:
+        return "bestvideo[ext=mp4]+bestaudio[ext=m4a]/bestvideo+bestaudio/best"
     return (
         f"bestvideo[height<={q}][ext=mp4]+bestaudio[ext=m4a]"
         f"/bestvideo[height<={q}]+bestaudio"

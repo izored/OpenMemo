@@ -108,13 +108,23 @@ async def run_instagram_canary() -> dict:
         got_type = resolved.get("type")
         got_slides = len(resolved.get("gallery") or [])
 
-        if tier in IG_FALLBACK_TIERS:
-            outcome = "degraded"
-        elif got_type != want_type or got_slides < want_slides:
+        # Content first. This used to sit behind the tier test, which made it
+        # unreachable on any library without an Instagram login: the tier said
+        # "degraded" and the comparison never ran. The comparison is the whole
+        # reason this module exists — it is the only thing anywhere that can
+        # see a carousel come back with fewer slides than you already have —
+        # and it had never once decided anything on a session-less install.
+        if got_type != want_type or got_slides < want_slides:
             # Fewer slides than stored, or a different kind of post entirely.
             # Not necessarily our bug — the author may have edited the post —
             # but it is exactly the shape the original bug had, so say it.
             outcome = "mismatch"
+        elif tier in IG_FALLBACK_TIERS:
+            # Read without a login. Worth reporting, not worth alarming: since
+            # the browser tiers learned to read the caption and the whole
+            # carousel, what comes back this way is correct, and the comparison
+            # above just confirmed it.
+            outcome = "degraded"
         else:
             outcome = "ok"
         checks.append({
@@ -122,14 +132,26 @@ async def run_instagram_canary() -> dict:
             "expected": f"{want_type}/{want_slides}", "got": f"{got_type}/{got_slides}",
         })
 
+    # Same order as the per-check verdict above, and for the same reason. This
+    # roll-up was left in the old order when the checks were reordered, and with
+    # a sample of two that silenced the thing the module exists for: one clean
+    # browser-tier read outranked a genuine mismatch on the other post, the run
+    # reported "degraded", and Settings no longer alarms on that. A carousel
+    # coming back with one slide out of ten went from loud to silent.
     outcomes = [c["outcome"] for c in checks]
-    if any(o == "degraded" for o in outcomes):
-        status = "degraded"
-    elif any(o == "mismatch" for o in outcomes):
+    if any(o == "mismatch" for o in outcomes):
         status = "mismatch"
+    elif any(o == "degraded" for o in outcomes):
+        status = "degraded"
     elif all(o == "ok" for o in outcomes):
         status = "ok"
     else:
+        # Nothing to judge, or every check raised. A run where the resolver
+        # crashed throughout is reported as skipped rather than as a fault,
+        # which `test_a_resolver_crash_never_escapes` pins deliberately. That
+        # means a resolver broken on every post says nothing; noted as an open
+        # gap in docs/parked-2026-09-09-download-policy.md rather than changed
+        # here, where the job is the regression above and nothing else.
         status = "skipped"
 
     result = {"status": status, "checked_at": started, "checks": checks}

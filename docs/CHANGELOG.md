@@ -7,6 +7,34 @@ All notable changes to OpenMemo are documented here.
 
 <!-- Add entries here as work lands: ### Added / ### Changed / ### Fixed -->
 
+### Changed
+
+- 🖱️ **Dropping something into openMemo saves it, wherever you drop it.** Dragging a link or a file onto openMemo already worked, but it only saved straight away if you happened to be inside a collection, inside a Space, or on the Music page. Anywhere else it opened the New Memo panel and waited for you to pick a home first. Anywhere else includes the dashboard, which is where you land, so the thing you met most often was a form. A form is hard to tell apart from the feature being broken.
+
+  A drop now saves every time, and the overlay names where it is going before you let go. No collection open means it lands in your library, which is where everything unfiled already lives, and you file it afterwards the way you would anything else.
+
+  One exception, and it is about what you dragged rather than where you dropped it: a piece of selected text with no link in it becomes a note, a note needs a title, and nothing can invent one for you. That still opens the panel.
+
+- 💾 **Facebook videos save with the video.** A Facebook link saved as a card with a picture and nothing to play. The video was reachable the whole time. openMemo simply never asked for it, because Facebook was on a list of sites trusted to play their own videos, and videos from those sites are left where they are. That trust does not hold for a shared link: the player openMemo would have used comes back with nothing in it and asks you to log in.
+
+  Facebook now downloads like any other site without a dependable player. Nothing else moved. A long Facebook video will download in full, which is the known cost of keeping this change small.
+
+  This is deliberately the smallest fix. A cleverer rule that decided by predicted file size was written and then withdrawn the same day, because a review found a way to point its size check at things it should not reach, and because it could not see most of a real library. Written up in `docs/parked-2026-09-09-download-policy.md` so it can be picked up properly rather than half-remembered.
+
+- 🎬 **A kept video is kept at full quality.** Every download was quietly capped at 1080p, so a four megabyte clip was served its 1080p copy while its sharper ones were thrown away for no saving at all. The cap is gone. If you would rather trade resolution for disk space there is now a ceiling in Settings, switched off.
+
+### Fixed
+
+- 🔔 **Settings stops telling you Instagram is broken when it is working.** It counted every save that read the public page as a failure and said so in an orange panel, promising that reels could miss their video and carousels could arrive as a single photo. Neither has happened since the last release taught those reads to pull the caption and the whole carousel. On one library it was reporting twelve failures out of twelve while all twelve memos were complete.
+
+  The warning is now for a save that actually came back with nothing. Reading a post without being signed in is reported as a plain line instead, because it is a fact rather than a fault. Connecting an account is still faster and less likely to be rate limited, and it still says so, once, quietly.
+
+- 🔍 **openMemo will notice if it stops being able to read Instagram captions off a public post.** Reading one depends on Instagram wording its pages a particular way. If that ever changes, every save loses its words while every other check still reports success, which is exactly how an earlier problem went unnoticed for six weeks. The difficulty is that a post with no caption looks identical, and about one post in twelve genuinely has none. openMemo now tells those apart by whether the page was offering a caption at all, counts the ones it could not read, and says so plainly rather than filing them under the author and moving on. Two honest limits: this watches the reads that come off the public page, so an install signed in to Instagram takes a different route and will not see it, and the wording it recognises is the English one.
+
+- 🧹 **A memo filed under its author can be repaired.** When a post's caption could not be read, the memo was named after whoever posted it. That is not a name anybody chose, but re-pull treated it as one and refused to replace it, so the memo was stuck with it forever even once openMemo could read the real caption. Twenty five memos in one library were in that state. A caption that starts with a mention and then carries on is still your words and is left alone. One that is only a mention on its first line cannot be told apart from a memo that never had a caption, so re-pull will replace it.
+
+- ⚡ **Instagram saves stop knocking on a door they have no key to.** Two of the ways openMemo pulls a post need you to be signed in to Instagram. It was checking whether a cookies file existed rather than whether that file held an Instagram login, and the file is shared with every other site, so one YouTube cookie made it look signed in. Every single save paid for two attempts that could not possibly work before falling back to the one that does. Downloading an Instagram video still asks the old question and still pays for it once; that half is written up and not yet fixed.
+
 ### Added
 
 - ⚡ **A Check now button for phone capture.** Under Settings, in the phone capture card, below the interval. It asks Telegram for waiting shares straight away instead of sitting out the wait, and it tells you what came back: how many shares it saved, that there was nothing waiting, or what went wrong reaching Telegram. It waits for the answer rather than firing and shrugging, because a button that goes quiet is indistinguishable from a broken one, and the moment you press it is the moment you already suspect something is wrong.

@@ -72,10 +72,12 @@ export const memoApi = {
   // wrong rather than merely remote.
   repull: (id: string) =>
     fetchJSON<{ id: string; status: string; mode: string }>(`/memos/${id}/repull`, { method: 'POST' }),
-  localize: (id: string, mode: 'video' | 'audio', quality: number = 1080) =>
+  // `quality` is a height ceiling in pixels: 0 = none, or 720/1080/1440/2160.
+  // Omit it to follow the preference in Settings, which defaults to no ceiling.
+  localize: (id: string, mode: 'video' | 'audio', quality?: number) =>
     fetchJSON<{ id: string; status: string; mode: string }>(`/memos/${id}/localize`, {
       method: 'POST',
-      body: JSON.stringify({ mode, quality }),
+      body: JSON.stringify({ mode, quality: quality ?? null }),
     }),
   // Set a custom thumbnail (already cropped client-side) for any memo. Multipart;
   // the browser sets the boundary, so don't add a Content-Type header.
@@ -666,12 +668,18 @@ export const settingsApi = {
   // the last few saves really used.
   instagramHealth: () =>
     fetchJSON<{
-      status: 'ok' | 'session_expired' | 'no_session';
+      /** `unreadable` is not about the session: openMemo can reach the post and
+       *  cannot read it, which connecting an account would not fix. */
+      status: 'ok' | 'session_expired' | 'no_session' | 'unreadable';
       connected: boolean;
       checked: number;
+      /** Saves that actually failed. Reading a post without a login is not one. */
       degraded: number;
+      /** Saves that read the public page. A fact, not a fault. */
+      no_session_saves?: number;
       blocked: number;
       recent_tiers: string[];
+      captions?: { checked: number; failed: number; broken: boolean };
     }>('/settings/instagram/health'),
   instagramImportSession: (cookies: string) =>
     fetchJSON<{ connected: boolean; who: string | null }>('/settings/instagram/session', {

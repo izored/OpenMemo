@@ -540,7 +540,10 @@ async def transcribe_memo(
 
 class LocalizeRequest(BaseModel):
     mode: str = "video"  # video | audio (audio = explicit video→audio conversion)
-    quality: int = 1080  # video height cap: 720 | 1080 | 1440 | 2160 (OPNMMO-0022)
+    # Height ceiling in pixels: 0 (no ceiling) | 720 | 1080 | 1440 | 2160.
+    # None means "whatever the user set in Settings", which is what the UI
+    # sends — a request should not have to know the preference to respect it.
+    quality: Optional[int] = None
 
 
 class MoveRequest(BaseModel):
@@ -701,7 +704,12 @@ async def localize_memo(
         raise HTTPException(status_code=400, detail="Memo has no source URL to download")
     if body.mode not in VALID_MODES:
         raise HTTPException(status_code=400, detail=f"Invalid mode: {body.mode}")
-    if body.quality not in VALID_QUALITIES:
+    from backend.core.app_settings import get_settings
+
+    quality = body.quality
+    if quality is None:
+        quality = int(get_settings().get("video_quality_cap", 0) or 0)
+    if quality not in VALID_QUALITIES:
         raise HTTPException(status_code=400, detail=f"Invalid quality: {body.quality}")
 
     memo.localize_status = "pending"
@@ -711,8 +719,8 @@ async def localize_memo(
 
     from backend.api.ingest import localize_memo_task
 
-    queue_task(localize_memo_task, memo_id, body.mode, body.quality)
-    return {"id": memo_id, "status": "pending", "mode": body.mode, "quality": body.quality}
+    queue_task(localize_memo_task, memo_id, body.mode, quality)
+    return {"id": memo_id, "status": "pending", "mode": body.mode, "quality": quality}
 
 
 @router.post("/{memo_id}/repull")

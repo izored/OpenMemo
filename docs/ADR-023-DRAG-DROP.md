@@ -1,6 +1,6 @@
 # ADR-023: Dropping files onto openMemo is a first-class ingest, not a browser accident
 
-**Date:** 2026-07-14 · **Status:** In progress · **Amended:** 2026-08-29 (increment 2, browser drags) · **Builds on:** ADR-001 (define shared things once), ADR-020 (Spaces isolation), ADR-021 (bottom bar + IslandFab New-Memo flow)
+**Date:** 2026-07-14 · **Status:** In progress · **Amended:** 2026-08-29 (increment 2, browser drags), 2026-09-10 (increment 3, a drop always saves) · **Builds on:** ADR-001 (define shared things once), ADR-020 (Spaces isolation), ADR-021 (bottom bar + IslandFab New-Memo flow)
 
 ## Context
 
@@ -53,6 +53,10 @@ Multi-file is native throughout: `ingestApi.file` is looped and `ingestApi.album
 
 ### 4. Hybrid commit — instant when the target is clear, prefill when it is not
 
+> **Superseded 2026-09-10 by §6.** A drop always saves. What follows is kept
+> because it explains what was tried and why it was wrong, and because the
+> prefill machinery still carries one case.
+
 What happens the instant you release depends on whether there is an unambiguous bucket:
 
 - **Instant ingest** when you are inside a **collection**, inside a **Space**, or on the **Music** page. The files upload straight to that target; a progress pill shows `Uploading n / total`, then a branded notice confirms (or reports partial failure). Zero clicks. This is the WeTransfer feel.
@@ -84,6 +88,46 @@ A dragged selection is never an instant ingest even inside a collection: a note 
 
 **The internal-drag guard had to change.** §3's `'Files'` check was doing double duty as the "this is not an internal drag" guard. It cannot any more: anchors and images inside openMemo are natively draggable, so dragging a memo card's link across the app produces a `text/uri-list` drag indistinguishable from one out of Chrome. The layer now tracks a `dragstart` on `window`: a drag that STARTED in this document is never an import. It is still `preventDefault()`ed on drop, because letting it through navigates the app to the dragged href. (dnd-kit's card reorder is pointer-driven and carries no `DataTransfer` at all, so it never reaches any of this.)
 
+### 6. Increment 3: a drop always saves
+
+§4 split drops into two outcomes. Inside a collection, a Space or Music, files
+went straight in. Everywhere else — the bare library, the Spaces and
+Collections lists, a memo page, Ask — the New-Memo panel opened and waited.
+
+The reasoning was that those surfaces are ambiguous, because no single bucket
+is implied. That reasoning does not survive contact with where people actually
+are. The dashboard is the landing page and the place most time is spent, so the
+outcome met most often was a form. A form is indistinguishable from the feature
+not working, and it was reported as exactly that: dropping a link "does not
+work", when in fact it worked and then asked a question.
+
+The premise was also wrong on its own terms. **The library is not the absence
+of a destination, it is a destination.** Every other way of saving into
+openMemo puts an unfiled memo in the library and lets you file it later. A drop
+is the one gesture that demanded filing up front, and it demanded it at the
+exact moment the user has the least context — mid-drag, holding something from
+another window.
+
+So: `resolveDropTarget` returns `mode: 'instant'` for every surface. The
+library is a named bucket like any other, and the veil says "Into your library"
+rather than "Choose a collection before saving".
+
+**One case still opens the panel**, and it is not a surface, it is a payload: a
+dragged text SELECTION with no link in it. A note has no title to fetch from
+anywhere, and inventing one is worse than asking. That branch lives in the
+layer's link dispatcher, keyed on the payload rather than on the route, which
+is the right place for it — it was previously entangled with the surface test
+and fired for the wrong reason.
+
+`pendingDropFiles` is therefore dead: no file drop prefills any more.
+`pendingDropLinks` survives for the selection case.
+
+**Why this is safe to make instant everywhere.** Nothing is destroyed by a
+drop. A memo saved to the wrong place is dragged to the right one, or filed
+from the memo itself, and delete carries the same five-second undo everything
+else does. The cost of a wrong instant save is one correction; the cost of a
+form on every drop is that the gesture stops feeling like a gesture.
+
 ## Constraints (must respect)
 
 - **Engage on `'Files'`, or on a text drag that did not start inside this document.** The `'Files'` check alone used to be the internal-drag guard; since increment 2 a `dragstart` seen on `window` is what marks a drag as internal. dnd-kit card reordering is pointer-driven and carries no `DataTransfer`, so it never reaches the layer either way.
@@ -92,6 +136,7 @@ A dragged selection is never an instant ingest even inside a collection: a note 
 - **`preventDefault()` on `dragover` AND `drop`** — both are required or the browser still opens the file. `dragover` must also set `dropEffect = 'copy'` for the correct cursor.
 - **Flicker-free enter/leave.** `dragenter`/`dragleave` fire per descendant as the pointer moves over child nodes. Track a depth counter and only hide the veil when it returns to zero.
 - **Suppress while a panel owns the drop.** When `addPanelOpen` or `musicModalOpen` is true, the layer does not ingest (the panel's own dropzone does) — it only prevents the browser hijack.
+- **A drop always saves (increment 3).** `resolveDropTarget` never returns `prefill`. The only drop that opens the panel is a text selection carrying no link, decided from the payload in the layer, never from the route.
 - **`activeSpace` is route-derived, not persisted** (ADR-020). Read it live from the store at drop time; don't cache it in the listener closure.
 - **No backend work.** Every ingest endpoint (`/ingest/file`, `/ingest/album`) already exists and already takes `collection_id` + `workspace_id`.
 
@@ -114,7 +159,19 @@ A dragged selection is never an instant ingest even inside a collection: a note 
 4. **Browser drags are in scope after all.** A link, an image or a selection dragged out of a web page is the same ingest as a file, routed by the same Tier-1 target and the same hybrid commit. See §5.
 5. **The internal-drag guard is a `dragstart` flag, not the `'Files'` check.**
 
+## Resolved (increment 3)
+
+6. **A drop always saves.** The ambiguous-surface prefill of §4 is gone; the
+   library is a real destination. See §6.
+7. **The one remaining prefill is keyed on the payload, not the surface.** A
+   dragged selection with no link needs a title, and only the panel can ask.
+
 ## Open (follow-up)
 
 - Tier-2 per-card drop targets (Space cards, collection cards, playlist rows).
 - Folder (directory) drops via `webkitGetAsEntry` recursion.
+- `pendingDropFiles` is now unused and can be removed from the store once
+  nothing else reaches for it.
+- The saved-confirmation notice is the only feedback for a drop onto the
+  library, since the memo may not be visible on the current page. Worth
+  checking it is loud enough before calling increment 3 finished.

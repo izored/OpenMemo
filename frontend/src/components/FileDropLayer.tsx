@@ -38,7 +38,6 @@ export function FileDropLayer() {
   const queryClient = useQueryClient();
   const activeSpace = useAppStore((s) => s.activeSpace);
   const activeCollection = useAppStore((s) => s.activeCollection);
-  const setPendingDropFiles = useAppStore((s) => s.setPendingDropFiles);
   const setPendingDropLinks = useAppStore((s) => s.setPendingDropLinks);
   const setAddPanelOpen = useAppStore((s) => s.setAddPanelOpen);
   const showNotice = useAppStore((s) => s.showNotice);
@@ -79,15 +78,9 @@ export function FileDropLayer() {
   const dispatch = async (files: File[], t: DropTarget) => {
     if (!files.length) return;
 
-    // Prefill branch — hand the files to the New-Memo panel and let the user
-    // pick a home + tags. No upload here (ADR-023 §4).
-    if (t.mode === 'prefill') {
-      setPendingDropFiles(files);
-      setAddPanelOpen(true);
-      return;
-    }
-
-    // Instant branch — upload straight to the resolved bucket.
+    // Every file drop uploads. `resolveDropTarget` always names a bucket now,
+    // so there is no branch here any more: the library is the bucket when no
+    // collection is implied.
     const bytes = files.reduce((s, f) => s + f.size, 0);
     if (bytes >= HUGE) {
       const ok = await ask({
@@ -157,15 +150,16 @@ export function FileDropLayer() {
     }
   };
 
-  // A link / image / selection dragged out of a browser. Same hybrid commit as
-  // files: a clear bucket ingests immediately, an ambiguous surface prefills.
+  // A link / image / selection dragged out of a browser. Every link saves
+  // where you dropped it; only a dragged selection with no link in it opens
+  // the panel, because a note needs a title and nothing else can supply one.
   const dispatchLinks = async (payload: { urls: string[]; text: string }, t: DropTarget) => {
     const { urls, text } = payload;
     if (!urls.length && !text) return;
 
-    // Prefill branch, and the only home for a dragged text selection — a note
-    // needs a title and a home, which is exactly what the panel asks for.
-    if (t.mode === 'prefill' || !urls.length) {
+    // A selection with no link in it is the one drop that cannot complete on
+    // its own: there is nothing to fetch a title from.
+    if (!urls.length) {
       setPendingDropLinks({ urls, text });
       setAddPanelOpen(true);
       return;
@@ -362,9 +356,7 @@ export function FileDropLayer() {
             </div>
             <p className="om-dropveil-title">{kind === 'links' ? 'Drop to save the link' : 'Drop to add'}</p>
             <p className="om-dropveil-sub mono">
-              {target?.mode === 'prefill'
-                ? 'Choose a collection before saving'
-                : <>Into <b>{target?.label}</b></>}
+              Into <b>{target?.label}</b>
               {count > 0 && <> · {count} file{count === 1 ? '' : 's'}</>}
             </p>
           </div>

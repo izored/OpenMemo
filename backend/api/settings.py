@@ -46,6 +46,11 @@ class SettingsPatch(BaseModel):
     mailing_list_consent: Optional[bool] = None
     auto_download_audio: Optional[bool] = None
     auto_download_video: Optional[bool] = None
+    # Height ceiling on a kept video, 0 = none. Off by default: a kept copy is
+    # an archive copy.
+    video_quality_cap: Optional[int] = None
+    # The largest video openMemo keeps a copy of on its own, in megabytes.
+    keep_local_max_mb: Optional[int] = None
     auto_file_by_source: Optional[bool] = None
     auto_file_rules: Optional[list[dict]] = None
     music_quality: Optional[str] = None
@@ -481,7 +486,11 @@ async def instagram_health():
     """
     from sqlalchemy import select
 
-    from backend.core.extractor import IG_FALLBACK_TIERS, IG_TIER_BLOCKED
+    from backend.core.extractor import (
+        IG_FAILED_TIERS,
+        IG_NO_SESSION_TIERS,
+        caption_parse_health,
+    )
     from backend.core.instagram_login import session_status
     from backend.db.database import AsyncSessionLocal
     from backend.db.models import Memo
@@ -502,26 +511,49 @@ async def instagram_health():
 
     session = session_status()
     tiers = [t for t in rows if t]
-    degraded = [t for t in tiers if t in IG_FALLBACK_TIERS]
-    blocked = [t for t in tiers if t == IG_TIER_BLOCKED]
+    # Two different facts, kept apart on purpose. "No login" describes how a
+    # save got here; "failed" describes whether it worked. They used to be one
+    # set, which was right while a browser-tier save really did come back
+    # poorer. It stopped being right the day those tiers learned to read the
+    # caption and walk the carousel, and the warning went on firing at a
+    # library whose memos were all correct.
+    no_session = [t for t in tiers if t in IG_NO_SESSION_TIERS]
+    blocked = [t for t in tiers if t in IG_FAILED_TIERS]
+
     # No tagged saves yet (a library from before this shipped) is not a
     # problem to report — there is simply nothing to judge.
-    unhealthy = bool(tiers) and len(degraded) / len(tiers) >= _IG_HEALTH_RATIO
+    unhealthy = bool(tiers) and len(blocked) / len(tiers) >= _IG_HEALTH_RATIO
 
-    # The canary is the other half: saves only reveal a problem once you make
-    # one, so a weekly re-check catches a lapsed session while the library is
-    # sitting idle (core/canary.py).
+    # The reader itself is the other thing that can break, and it breaks
+    # silently: Meta rewords a tag and every save loses its caption while every
+    # tier still reports success (core/extractor `caption_parse_health`).
+    captions = caption_parse_health()
+    if captions.get("broken"):
+        unhealthy = True
+
+    # The canary is the third: saves only reveal a problem once you make one,
+    # so a weekly re-check catches a lapsed session while the library sits idle
+    # (core/canary.py). Only its hard failures count here, for the same reason
+    # the tier split exists.
     from backend.core.canary import last_result
 
     canary = last_result()
-    if canary and canary.get("status") == "degraded":
+    # "mismatch" only. The canary never returns "error" as a run status — that
+    # is a per-check outcome, and a run where every check raised comes back
+    # "skipped" — so listing it here looked like coverage while covering
+    # nothing.
+    if canary and canary.get("status") == "mismatch":
         unhealthy = True
 
     if not unhealthy:
         status = "ok"
+    elif captions.get("broken"):
+        # Not about the session at all: openMemo can reach the post and cannot
+        # read it. Connecting an account would not help.
+        status = "unreadable"
     elif session.get("connected"):
-        # Cookies are present and saves STILL cannot reach the API: the jar is
-        # there but Instagram is not accepting it any more.
+        # A login is present and saves STILL fail: the jar is there but
+        # Instagram is not accepting it any more.
         status = "session_expired"
     else:
         status = "no_session"
@@ -530,9 +562,13 @@ async def instagram_health():
         "status": status,
         "connected": bool(session.get("connected")),
         "checked": len(tiers),
-        "degraded": len(degraded),
+        # Kept under its old name so nothing downstream breaks, but it now
+        # counts only saves that actually failed.
+        "degraded": len(blocked),
+        "no_session_saves": len(no_session),
         "blocked": len(blocked),
         "recent_tiers": tiers,
+        "captions": captions,
         "canary": canary,
     }
 

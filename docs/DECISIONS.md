@@ -7,6 +7,86 @@ the decision, and its consequences, so a future reader knows *why*, not just
 
 ---
 
+## ADR-028: A download is decided by host, not by predicted size
+
+**Date:** 2026-09-10 · **Status:** Accepted · **Relates to:** ADR-001 (one rule across a memo type, no per-host branches), ADR-025 (local-first)
+
+### Context
+
+A memo saved from `facebook.com/share/r/1D7PWBAeUB/` held a thumbnail and
+nothing to play. The video was reachable the whole time: yt-dlp inside
+openMemo's own container reads that exact link and offers eight formats up to
+1920p. openMemo never asked, because `facebook.com` sat on `_EMBED_VIDEO_HOSTS`,
+a list of hosts trusted to play their own videos, whose members are deliberately
+left where they are. Fetching the player openMemo would have used returns a page
+with no video element and a login prompt, so the trust was misplaced and the
+list had no way to find that out.
+
+That is the shape of the objection to a host list, and it is a fair one. A host
+list is a promise about the future that the list cannot keep. The same host
+serves a 24 second reel and a two hour stream, and only one of those belongs on
+a disk.
+
+So the obvious replacement was tried: ask yt-dlp what the best rendition weighs,
+keep it under a ceiling, save a link over it. It measured correctly on three
+live links. It was reverted the same day.
+
+### Decision
+
+**Downloads are decided by host. A size rule is not adopted.**
+
+Facebook comes off the trusted-player list and its videos download like any host
+without a dependable player. Every other host keeps its old answer.
+
+Quality is separate, and unbounded by default: an archive copy is kept at the
+host's best. A ceiling is available in Settings and is switched off, because a
+ceiling that has to be discovered and removed is a ceiling nobody chose.
+
+### Why the size rule lost
+
+Recorded in full, with the reproductions, in
+`docs/parked-2026-09-09-download-policy.md`. In short:
+
+1. **The probe endpoint was an SSRF primitive.** The host gate was a substring
+   test and the URL validator has no private-address check, so
+   `http://youtube.com@127.0.0.1:11434/api/tags` passed, typed as a video, and
+   was handed to yt-dlp. Unauthenticated, no memo created, fast negative path.
+2. **It could not see most of a real library.** A prediction is only attached in
+   the generic yt-dlp branch. Instagram and Threads return earlier through their
+   own resolvers. Of 361 live video memos with a file on disk, 36 were on hosts
+   where a prediction was possible at all, so "size decides now, not host" was
+   false for 90 percent of saves.
+3. **It priced a different file than the one that downloads.** The predictor took
+   the tallest format, the selector prefers mp4 first, and ties were broken by
+   list order. One constructed case predicted 715 MB and refused a 79 MB
+   download; another predicted 71 MB for a 286 MB one.
+4. **A live stream has no duration** and fell back to the host list anyway, which
+   on an unknown host means downloading until the 1800 second timeout.
+
+The lesson worth keeping is narrower than "size beats host". It is that a
+prediction has to name the exact artefact the download will fetch, or it is not
+a prediction of anything. Until it does, a host list is a worse rule that is
+honest about being one.
+
+### Consequences
+
+- A long Facebook video now downloads in full. Clips are small (five in one
+  library, median 3.6 MB), so the exposure is a rare long video rather than a
+  routine one. This is the accepted cost of the smallest fix.
+- The doorway inconsistency stays: saves arriving through the Telegram relay set
+  `force_localize` and download regardless, while a paste obeys the list. That
+  is why one library held 324 of 324 Instagram videos and a Facebook link with
+  nothing. Not addressed here.
+- `backend/tests/test_facebook_video_downloads.py` asserts both halves, that
+  Facebook moved and that nothing else did, so a future edit to the list is a
+  decision rather than an accident.
+- Any future probe endpoint that reaches out on a user-supplied URL uses
+  `validate_proxy_url`, parses the host rather than substring-matching it, and is
+  bounded by a semaphore. `asyncio.to_thread` shares its executor with downloads
+  and transcription.
+
+---
+
 ## ADR-027: A permalink page is scoped to its post before anything reads it
 
 **Date:** 2026-09-01 · **Status:** Accepted · **Relates to:** ADR-001 (changes are systematic across a memo type), ADR-002 (self-hosted headless Chromium)
