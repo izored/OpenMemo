@@ -1,0 +1,73 @@
+<!doctype html>
+<meta charset="utf-8" />
+<title>openMemo dmg background</title>
+<!--
+  Source art for the .dmg window background. Rendered to
+  ../background.png (620x480) and ../background@2x.png by
+  ./render.mjs, and both PNGs are committed. Nothing here runs at build time.
+
+  The three Finder icons (OpenMemo.app, the Applications link, Read Me First.pdf)
+  are drawn by Finder ON TOP of this image at the coordinates set in
+  ../../electron-builder.yml. This file must therefore leave those three spots
+  empty: 170,215 and 450,215 for the row, 140,385 for the read-me.
+-->
+<style>
+  @font-face { font-family: 'Satoshi'; font-weight: 400; src: url('../../../frontend/public/fonts/satoshi-400.woff2') format('woff2'); }
+  @font-face { font-family: 'Satoshi'; font-weight: 500; src: url('../../../frontend/public/fonts/satoshi-500.woff2') format('woff2'); }
+  @font-face { font-family: 'Satoshi'; font-weight: 700; src: url('../../../frontend/public/fonts/satoshi-700.woff2') format('woff2'); }
+
+  :root {
+    --accent: #F4825A;
+    --ink: #23201C;
+    --ink-2: #6B6459;
+    --ink-3: #9A9184;
+    --paper: #FBF7EE;
+    --rule: #E4DCCC;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html, body { width: 620px; height: 480px; }
+  body {
+    font-family: 'Satoshi', -apple-system, sans-serif;
+    background:
+      radial-gradient(120% 90% at 50% -20%, #FFFDF8 0%, rgba(255,253,248,0) 60%),
+      var(--paper);
+    color: var(--ink);
+    -webkit-font-smoothing: antialiased;
+  }
+
+  .head { padding: 34px 40px 0; text-align: center; }
+  .wordmark { font-size: 34px; font-weight: 700; letter-spacing: -0.5px; }
+  .wordmark span { color: var(--accent); }
+  .lede { margin-top: 8px; font-size: 15px; font-weight: 400; color: var(--ink-2); }
+
+  /* Sits behind the icon row: the chevrons live between the two icons. */
+  .chevrons { position: absolute; top: 196px; left: 279px; width: 62px; height: 38px; }
+
+  .rule { position: absolute; top: 322px; left: 40px; width: 540px; height: 1px; background: var(--rule); }
+
+  .foot { position: absolute; top: 344px; left: 232px; width: 344px; }
+  .foot h2 { font-size: 15px; font-weight: 700; letter-spacing: -0.2px; }
+  .foot p { margin-top: 6px; font-size: 13px; font-weight: 400; line-height: 1.5; color: var(--ink-2); }
+  .foot .file { font-weight: 500; color: var(--ink); }
+  .step { margin-top: 10px; font-size: 12px; color: var(--ink-3); }
+  .step b { font-weight: 500; color: var(--ink-2); }
+</style>
+
+<div class="head">
+  <div class="wordmark"><span>open</span>Memo</div>
+  <p class="lede">Drag openMemo into your Applications folder.</p>
+</div>
+
+<svg class="chevrons" viewBox="0 0 62 38" fill="none">
+  <path d="M4 8 L18 19 L4 30" stroke="#F4825A" stroke-opacity="0.35" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M24 8 L38 19 L24 30" stroke="#F4825A" stroke-opacity="0.6" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M44 8 L58 19 L44 30" stroke="#F4825A" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"/>
+</svg>
+
+<div class="rule"></div>
+
+<div class="foot">
+  <h2>The first launch is blocked. That is normal.</h2>
+  <p>openMemo is not notarised, because Apple charges yearly for that. macOS refuses it once, then lets you allow it by hand.</p>
+  <p class="step">Open <b><span class="file">Read Me First</span></b> for the four steps.</p>
+</div>

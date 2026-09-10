@@ -27,18 +27,31 @@ is bundled or fetched by the app — you don't install it yourself.
 
 ## 2. Install a prebuilt `.dmg`
 
-1. Open the `.dmg` and drag **OpenMemo** to **Applications**.
-2. **First launch (Gatekeeper):** because the app isn't notarized, double-click
-   will say it "cannot be opened." Clear the quarantine flag in Terminal:
+1. Open the `.dmg` and drag **OpenMemo** to **Applications**. The disk image
+   also carries **Read Me First.pdf**, which is this section with the dialogs
+   drawn out, for anyone installing without this page in front of them.
+2. **First launch (Gatekeeper).** The app isn't notarized, so macOS refuses it
+   once. On **macOS 15 (Sequoia) and later** the refusal is a dead end by
+   design: the dialog offers only **Done** and **Move to Bin**, and the real
+   permission lives in System Settings. Four steps:
+   1. Open OpenMemo from Applications. macOS says **"OpenMemo" Not Opened**.
+      Click **Done**.
+   2. **System Settings → Privacy & Security**, scroll to **Security**.
+      OpenMemo is named there with an **Open Anyway** button beside it. That
+      line only appears after step 1 and it expires after a while; if it is
+      missing, try opening the app again.
+   3. Confirm with Touch ID, or **Use Password** and your account password.
+   4. A second dialog appears, this one with **Open Anyway** on it. Click it.
+      The app starts, and starts normally from then on.
+
+   On **macOS 14 and earlier**, right-click the app and choose **Open**, then
+   **Open** in the dialog. That override is gone from Sequoia.
+
+   Either way, one Terminal line does the same job on every macOS version, by
+   removing the download's quarantine flag before macOS ever looks at it:
    ```bash
    xattr -dr com.apple.quarantine /Applications/OpenMemo.app
    ```
-   This works on every macOS version. If you would rather click:
-   - **macOS 14 and earlier:** right-click the app, choose **Open**, then
-     **Open** in the dialog.
-   - **macOS 15 (Sequoia) and later:** right-click no longer offers the
-     override. Try to open the app once, then go to **System Settings →
-     Privacy & Security**, scroll to the bottom, and press **Open Anyway**.
 3. The app opens to the loading screen, boots its backend, and shows the UI.
 
 On first run it quietly fetches two optional pieces into your data folder (it
@@ -56,6 +69,13 @@ into `/Applications` replaces the program and nothing else. Memos, collections,
 media, settings, your PIN, the downloaded speech model: all of it stays exactly
 where it was, and the new build picks it up on first launch.
 
+openMemo checks GitHub for new versions on launch and from **OpenMemo → Check
+for Updates…**. When one exists it offers **Download .dmg**, which pulls the
+disk image straight from the release rather than dropping you on the release
+page to hunt for it, and then leaves the install steps on screen. If a release
+has no `.dmg` attached yet, the same button opens the release page, where the
+file sits at the very bottom under **Assets**.
+
 So updating is:
 
 1. **Quit OpenMemo** (Cmd-Q, not just closing the window). The backend holds
@@ -64,7 +84,8 @@ So updating is:
 2. Open the new `.dmg` and drag **OpenMemo** to **Applications**. Finder asks
    whether to replace. Say yes.
 3. **Gatekeeper again.** A fresh download carries a fresh quarantine flag, so
-   the step from section 2 applies to every update, not just the first install:
+   the four steps from section 2 apply to every update, not just the first
+   install. The Terminal line does it in one go:
    ```bash
    xattr -dr com.apple.quarantine /Applications/OpenMemo.app
    ```

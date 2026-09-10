@@ -70,13 +70,35 @@ mac:
   entitlements: buildResources/entitlements.mac.plist
   entitlementsInherit: buildResources/entitlements.mac.plist
 
+# The .dmg is the whole onboarding surface for an un-notarised app: the window
+# has to say what to do AND warn that the first launch gets blocked, because the
+# macOS 15+ block dialog is a dead end (only "Done" and "Move to Bin") and users
+# who do not know that bin the app. Hence a designed background and a leaflet
+# next to the icons.
+#
+# background.png / background@2x.png are picked up by name from buildResources.
+# Both are generated from buildResources/dmg/background.html by
+# `node buildResources/dmg/render.mjs`; edit the HTML, never the PNGs. Icon
+# coordinates below and the empty zones in that HTML are one layout — move one,
+# move the other.
 dmg:
   title: OpenMemo
+  window:
+    width: 620
+    height: 480
   contents:
-    - x: 140
-      y: 200
+    # The app.
+    - x: 170
+      y: 215
       type: file
-    - x: 400
-      y: 200
+    - x: 450
+      y: 215
       type: link
       path: /Applications
+    # The first-launch leaflet, bottom left, clear of the drag path above it.
+    - x: 140
+      y: 385
+      type: file
+      # Resolved against buildResources first (see getResource in
+      # app-builder-lib), and a miss is a hard build error, not a silent skip.
+      path: Read Me First.pdf

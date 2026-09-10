@@ -5,10 +5,14 @@
  * code-signed with a Developer ID; an ad-hoc / unsigned build can't apply
  * updates, the patch just fails. Since this app ships unsigned (no paid Apple
  * account), we do the next best thing: check GitHub Releases for a newer
- * version and offer to open the download page. If a Developer ID is added
- * later, swap this for electron-updater's `autoUpdater.checkForUpdatesAndNotify`.
+ * version and offer the .dmg. The download link is the release asset itself,
+ * not the release page: the .dmg hangs at the very bottom of that page under
+ * Assets, below the entire changelog, and people were not finding it. If a
+ * Developer ID is added later, swap this for electron-updater's
+ * `autoUpdater.checkForUpdatesAndNotify`.
  */
 import { app, dialog, shell } from 'electron';
+import { pickDmgUrl, type ReleaseAsset } from './release-assets';
 import { loadSettings, saveSettings } from './settings-store';
 
 const REPO = 'izored/OpenMemo';
@@ -43,7 +47,11 @@ export async function checkForUpdates({ silent }: { silent: boolean }): Promise<
       if (!silent) info('Could not check for updates.', `GitHub returned ${res.status}.`);
       return;
     }
-    const rel = (await res.json()) as { tag_name?: string; html_url?: string };
+    const rel = (await res.json()) as {
+      tag_name?: string;
+      html_url?: string;
+      assets?: ReleaseAsset[];
+    };
     const latest = (rel.tag_name || '').trim();
     if (!latest) {
       if (!silent) info('No releases found yet.');
@@ -56,16 +64,50 @@ export async function checkForUpdates({ silent }: { silent: boolean }): Promise<
     // Newer version exists.
     if (silent && loadSettings().updateSkipVersion === latest) return; // user skipped it
 
+    const page = rel.html_url || `https://github.com/${REPO}/releases/latest`;
+    const dmg = pickDmgUrl(rel.assets);
+
+    // Where the download lands, and what happens next, before the browser
+    // steals the screen. Two things bit users here: the .dmg is at the very
+    // bottom of the release page under Assets, below the whole changelog, and
+    // the replaced app is blocked by macOS again on its first launch because a
+    // fresh download carries a fresh quarantine flag.
+    const detail = dmg
+      ? [
+          `You have ${current}. Download replaces openMemo and nothing else: your memos, media and settings live outside the app.`,
+          '',
+          'Quit openMemo before you install it.',
+        ].join('\n')
+      : [
+          `You have ${current}. This release has no .dmg attached yet, so this opens the release page.`,
+          '',
+          'The .dmg sits at the bottom of that page, under Assets, below the release notes.',
+        ].join('\n');
+
     const choice = dialog.showMessageBoxSync({
       type: 'info',
       message: `Update available: ${latest}`,
-      detail: `You have ${current}. Download the new .dmg from GitHub?`,
-      buttons: ['Download', 'Later', 'Skip This Version'],
+      detail,
+      buttons: [dmg ? 'Download .dmg' : 'Open release page', 'Later', 'Skip This Version'],
       defaultId: 0,
       cancelId: 1,
     });
     if (choice === 0) {
-      void shell.openExternal(rel.html_url || `https://github.com/${REPO}/releases/latest`);
+      void shell.openExternal(dmg || page);
+      // Stays on screen behind the browser, so the steps are still there when
+      // the download finishes and the .dmg opens.
+      info(
+        'Installing the update',
+        [
+          '1. Quit openMemo (Command-Q).',
+          '2. Open the .dmg and drag openMemo onto Applications. Say yes to replacing it.',
+          '3. macOS blocks the first launch, because the new download is not notarised.',
+          '   Open it once, click Done, then System Settings, Privacy & Security,',
+          '   scroll to Security and click Open Anyway.',
+          '',
+          'Read Me First, inside the .dmg, has the same steps in full.',
+        ].join('\n'),
+      );
     } else if (choice === 2) {
       saveSettings({ updateSkipVersion: latest });
     }
