@@ -7,6 +7,9 @@ All notable changes to OpenMemo are documented here.
 
 <!-- Add entries here as work lands: ### Added / ### Changed / ### Fixed -->
 
+---
+## [3.22.0] - 2026-09-10
+
 ### Added
 - 💿 **The Mac disk image explains itself now, blocked first launch and all.** Opening the .dmg used to show two icons on grey and nothing else, and then macOS refused the app with a dialog offering only Done and Move to Bin. That refusal is a dead end on purpose: the button that actually lets the app run lives in System Settings, several screens away, and nothing on screen says so. Someone who does not already know that has been handed a broken download and a bin button.
 
