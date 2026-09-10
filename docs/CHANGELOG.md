@@ -7,6 +7,9 @@ All notable changes to OpenMemo are documented here.
 
 <!-- Add entries here as work lands: ### Added / ### Changed / ### Fixed -->
 
+---
+## [3.20.0] - 2026-09-10
+
 ### Added
 - ⚡ **A Check now button for phone capture.** Under Settings, in the phone capture card, below the interval. It asks Telegram for waiting shares straight away instead of sitting out the wait, and it tells you what came back: how many shares it saved, that there was nothing waiting, or what went wrong reaching Telegram. It waits for the answer rather than firing and shrugging, because a button that goes quiet is indistinguishable from a broken one, and the moment you press it is the moment you already suspect something is wrong.
 
