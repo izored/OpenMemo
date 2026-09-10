@@ -1,0 +1,162 @@
+<!doctype html>
+<meta charset="utf-8" />
+<title>openMemo, read me first</title>
+<!--
+  Source for "Read Me First.pdf", the leaflet that ships inside the .dmg next to
+  the app. Rendered by ./render.mjs; the PDF is committed. A4, two pages.
+
+  It exists because the first launch of an un-notarised app is a dead end in
+  macOS 15 and later: the first dialog offers only "Done" and "Move to Bin",
+  and the real permission lives in System Settings. Users who do not know that
+  bin the app and assume the download is broken.
+-->
+<style>
+  @font-face { font-family: 'Satoshi'; font-weight: 400; src: url('../../../frontend/public/fonts/satoshi-400.woff2') format('woff2'); }
+  @font-face { font-family: 'Satoshi'; font-weight: 500; src: url('../../../frontend/public/fonts/satoshi-500.woff2') format('woff2'); }
+  @font-face { font-family: 'Satoshi'; font-weight: 700; src: url('../../../frontend/public/fonts/satoshi-700.woff2') format('woff2'); }
+
+  @page { size: A4; margin: 16mm 16mm 14mm; }
+
+  :root {
+    --accent: #F4825A;
+    --ink: #23201C;
+    --ink-2: #5C554A;
+    --ink-3: #918978;
+    --rule: #E4DCCC;
+    --chip: #F3EEE2;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: 'Satoshi', -apple-system, sans-serif;
+    color: var(--ink);
+    font-size: 10.5pt;
+    line-height: 1.55;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+  .page { page-break-after: always; }
+  .page:last-child { page-break-after: auto; }
+
+  header { border-bottom: 1px solid var(--rule); padding-bottom: 10px; margin-bottom: 18px; }
+  .wordmark { font-size: 20pt; font-weight: 700; letter-spacing: -0.4px; }
+  .wordmark span { color: var(--accent); }
+  .kicker { margin-top: 2px; font-size: 10pt; color: var(--ink-2); }
+
+  h2 { font-size: 12.5pt; font-weight: 700; letter-spacing: -0.2px; margin: 22px 0 6px; }
+  h2:first-of-type { margin-top: 0; }
+  p { margin-bottom: 8px; }
+  .lede { font-size: 11pt; color: var(--ink-2); margin-bottom: 4px; }
+
+  ol.steps { list-style: none; counter-reset: s; margin-top: 10px; }
+  ol.steps > li { counter-increment: s; position: relative; padding-left: 30px; margin-bottom: 14px; break-inside: avoid; }
+  ol.steps > li::before {
+    content: counter(s);
+    position: absolute; left: 0; top: 1px;
+    width: 20px; height: 20px; border-radius: 10px;
+    background: var(--accent); color: #fff;
+    font-size: 9.5pt; font-weight: 700; text-align: center; line-height: 20px;
+  }
+  li h3 { font-size: 10.5pt; font-weight: 700; margin-bottom: 2px; }
+  li p { color: var(--ink-2); margin-bottom: 4px; }
+  .path {
+    font-weight: 500;
+    background: var(--chip); border-radius: 4px; padding: 1px 5px; font-size: 9.5pt;
+  }
+
+  .mock {
+    margin-top: 8px; border: 1px solid var(--rule); border-radius: 10px;
+    background: #FCFAF5; padding: 10px 12px; max-width: 118mm;
+  }
+  .mock .t { font-size: 9.5pt; font-weight: 700; }
+  .mock .d { font-size: 9pt; color: var(--ink-2); margin-top: 2px; }
+  .mock .btns { margin-top: 8px; display: flex; gap: 6px; }
+  .btn { font-size: 8.5pt; font-weight: 500; border-radius: 6px; padding: 3px 10px; background: #EDE7DA; color: var(--ink-2); }
+  .btn.go { background: var(--accent); color: #fff; }
+  .row { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+
+  .note { background: var(--chip); border-radius: 8px; padding: 10px 12px; margin-top: 10px; font-size: 9.5pt; color: var(--ink-2); }
+  .note b { color: var(--ink); }
+  footer { margin-top: 20px; border-top: 1px solid var(--rule); padding-top: 8px; font-size: 9pt; color: var(--ink-3); }
+</style>
+
+<div class="page">
+  <header>
+    <div class="wordmark"><span>open</span>Memo</div>
+    <div class="kicker">Read me first. Installing is one drag, and the first launch is four clicks.</div>
+  </header>
+
+  <h2>Install</h2>
+  <p class="lede">Drag <b>openMemo</b> onto the <b>Applications</b> folder in this window. That is the whole install.</p>
+
+  <h2>Then macOS blocks it once, and that is expected</h2>
+  <p class="lede">openMemo is not notarised by Apple. Notarising needs a paid Apple developer account, which this project does not have. macOS treats every app it cannot check the same way: it refuses the first launch and makes you allow it by hand. Nothing is wrong with the download.</p>
+
+  <ol class="steps">
+    <li>
+      <h3>Open openMemo from Applications</h3>
+      <p>macOS refuses, and this dialog offers no way through. Click <b>Done</b>. Do not click Move to Bin.</p>
+      <div class="mock">
+        <div class="t">&ldquo;OpenMemo&rdquo; Not Opened</div>
+        <div class="d">Apple could not verify &ldquo;OpenMemo&rdquo; is free of malware that may harm your Mac or compromise your privacy.</div>
+        <div class="btns"><span class="btn go">Done</span><span class="btn">Move to Bin</span></div>
+      </div>
+    </li>
+
+    <li>
+      <h3>Open System Settings, then Privacy &amp; Security</h3>
+      <p>Apple menu, <b>System Settings</b>, <b>Privacy &amp; Security</b> in the sidebar. Scroll down to <b>Security</b>. openMemo is named there, with a button beside it. Click <b>Open Anyway</b>.</p>
+      <div class="mock">
+        <div class="row">
+          <div class="t">&ldquo;OpenMemo&rdquo; was blocked to protect your Mac.</div>
+          <span class="btn">Open Anyway</span>
+        </div>
+        <div class="d">That line only appears after step 1, and it fades after a while. If it is not there, try opening the app again.</div>
+      </div>
+    </li>
+
+    <li>
+      <h3>Confirm with Touch ID or your password</h3>
+      <p>macOS checks that you own the Mac. Use Touch ID, or click <b>Use Password</b> and type your account password.</p>
+    </li>
+
+    <li>
+      <h3>Say yes one last time</h3>
+      <p>A final dialog appears, this one with a way through. Click <b>Open Anyway</b>. openMemo starts, and it starts normally from now on.</p>
+      <div class="mock">
+        <div class="t">Open &ldquo;OpenMemo&rdquo;?</div>
+        <div class="d">Apple is not able to verify that it is free from malware that could harm your Mac or compromise your privacy.</div>
+        <div class="btns"><span class="btn">Move to Bin</span><span class="btn go">Open Anyway</span><span class="btn">Done</span></div>
+      </div>
+    </li>
+  </ol>
+</div>
+
+<div class="page">
+  <header>
+    <div class="wordmark"><span>open</span>Memo</div>
+    <div class="kicker">After the first launch.</div>
+  </header>
+
+  <h2>If you set a PIN lock</h2>
+  <p>The lock keeps its PIN in your macOS login keychain, and the keychain recognises apps by their signature. openMemo signs itself rather than paying Apple to, so every build looks like a new app to the keychain. The first launch after an install or an update asks for your <b>login password</b>. Type it and choose <b>Always Allow</b>, and the PIN keeps working.</p>
+  <div class="note"><b>If you click Deny</b>, the lock screen rejects the correct PIN, because openMemo can no longer read what it stored. Quit openMemo, delete the <span class="path">lockEnabled</span> and <span class="path">lockBlob</span> lines from <span class="path">~/Library/Application Support/OpenMemo/openmemo-desktop.json</span>, then set a new PIN in Settings.</div>
+
+  <h2>Updating later</h2>
+  <p>openMemo checks GitHub for new versions and offers to download the new <span class="path">.dmg</span> for you. When one arrives:</p>
+  <ol class="steps">
+    <li><h3>Quit openMemo first</h3><p>Command-Q, not just closing the window. The backend holds the database open.</p></li>
+    <li><h3>Drag the new openMemo onto Applications and replace</h3><p>Finder asks whether to replace. Say yes.</p></li>
+    <li><h3>Allow it again</h3><p>A fresh download carries a fresh block, so page one applies to every update, not only the first install.</p></li>
+  </ol>
+
+  <h2>Your library is not inside the app</h2>
+  <p>Everything you keep lives in <span class="path">~/Library/Application Support/OpenMemo/</span>. Replacing the app replaces the program and nothing else. Memos, media, settings and your PIN stay where they are, and openMemo copies the library into its <span class="path">backups</span> folder before the first launch of a new version.</p>
+  <div class="note"><b>Never delete that folder to reinstall cleanly.</b> That folder is your library. Throwing away the app is harmless. Throwing away that folder is not.</div>
+
+  <h2>Faster way, if you use Terminal</h2>
+  <p>Files a browser downloads carry a hidden quarantine tag, and that tag is what triggers the blocking. Removing it skips all four steps:</p>
+  <p><span class="path">xattr -dr com.apple.quarantine /Applications/OpenMemo.app</span></p>
+  <p>Same result as clicking through, one line. Run it after each update.</p>
+
+  <footer>Full documentation: github.com/izored/OpenMemo, docs/MACOS.md. openMemo is MIT licensed and runs entirely on your Mac.</footer>
+</div>

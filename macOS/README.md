@@ -18,6 +18,18 @@ Full guide: **[../docs/MACOS.md](../docs/MACOS.md)**.
 | `static/` | `loading.html`, `ollama-config.html` |
 | `scripts/bundle-backend.mjs` | Assemble `resources-stage/` (Python + deps + SPA + ffmpeg) |
 | `electron-builder.yml` | arm64 `.dmg`, unsigned/ad-hoc |
+| `buildResources/dmg/` | Source HTML for the `.dmg` window art and its leaflet |
+
+The `.dmg` window background and `Read Me First.pdf` are generated, not
+hand-drawn: edit `buildResources/dmg/background.html` or `read-me.html`, then
+
+```bash
+node frontend/scripts/fetch-fonts.mjs      # from the repo root, once, for Satoshi
+node macOS/buildResources/dmg/render.mjs   # needs Chrome; writes the PNGs and the PDF
+```
+
+and commit the outputs. Icon coordinates in `electron-builder.yml` and the empty
+zones in `background.html` are one layout: change one, change the other.
 
 ## Commands
 

@@ -7,6 +7,18 @@ All notable changes to OpenMemo are documented here.
 
 <!-- Add entries here as work lands: ### Added / ### Changed / ### Fixed -->
 
+### Added
+- 💿 **The Mac disk image explains itself now, blocked first launch and all.** Opening the .dmg used to show two icons on grey and nothing else, and then macOS refused the app with a dialog offering only Done and Move to Bin. That refusal is a dead end on purpose: the button that actually lets the app run lives in System Settings, several screens away, and nothing on screen says so. Someone who does not already know that has been handed a broken download and a bin button.
+
+  The window now carries openMemo's own artwork, says where to drag the app, and warns that the first launch gets blocked before it happens. Next to the app sits **Read Me First**, a two page leaflet with the four steps drawn out dialog by dialog, plus what the login password prompt is about if you use the PIN lock, what updating looks like later, and the single Terminal line that skips the whole dance for anyone who prefers that.
+
+  None of this is a workaround for something broken. openMemo is not notarised because Apple charges yearly for the privilege, and every un-notarised app on every Mac gets the same treatment.
+
+### Changed
+- ⬇️ **Update available now downloads the .dmg itself.** The button opened the release page and left you there. The .dmg is the last thing on that page, under Assets, below the entire changelog, so the file people came for was the one thing they could not see. The button now pulls the disk image straight from the release, and falls back to the page, saying where the file sits, on the rare release that has no image attached yet.
+
+  The popup also stops assuming you know the rest. It asks you to quit openMemo before installing, since the running app holds the database open, and once the download starts it leaves the install steps on screen: replace the app, expect the block, and where the Open Anyway button hides. Your memos, media and settings are never inside the app and are never touched by any of it.
+
 ---
 ## [3.21.2] - 2026-09-10
 
