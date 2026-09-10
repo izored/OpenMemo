@@ -7,6 +7,11 @@ All notable changes to OpenMemo are documented here.
 
 <!-- Add entries here as work lands: ### Added / ### Changed / ### Fixed -->
 
+### Fixed
+- 🖼️ **A Facebook album's photos now reach your disk, and re-pull stops spinning forever.** 3.21.1 taught openMemo to find the photos on a walled Facebook post. It could not then download them: those photos come from an address that only answers a link-preview crawler, and openMemo asked as a browser, so every one came back as a login page and was thrown away. It asks as the right client now.
+
+  The second half is worse and older. When pictures fail to download, the memo was left marked as still working, which the page shows as a spinner. There was no failure anywhere on screen and no way for the spinner to stop, so pressing re-pull and pressing nothing looked identical. A failed download now lands on the memo as an error you can see, and still retries in the background the way it always did.
+
 ---
 ## [3.21.1] - 2026-09-10
 
