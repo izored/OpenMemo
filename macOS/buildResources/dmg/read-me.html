@@ -19,6 +19,9 @@
 
   :root {
     --accent: #F4825A;
+    /* The brand orange is too light for body-sized print. This is the same hue
+       with enough weight behind it to read on paper and on a white viewer. */
+    --accent-ink: #C05A32;
     --ink: #23201C;
     --ink-2: #5C554A;
     --ink-3: #918978;
@@ -40,7 +43,7 @@
   header { border-bottom: 1px solid var(--rule); padding-bottom: 10px; margin-bottom: 18px; }
   .wordmark { font-size: 20pt; font-weight: 700; letter-spacing: -0.4px; }
   .wordmark span { color: var(--accent); }
-  .kicker { margin-top: 2px; font-size: 10pt; color: var(--ink-2); }
+  .kicker { margin-top: 3px; font-size: 13.5pt; font-weight: 700; letter-spacing: -0.2px; color: var(--accent-ink); }
 
   h2 { font-size: 12.5pt; font-weight: 700; letter-spacing: -0.2px; margin: 15px 0 5px; }
   h2:first-of-type { margin-top: 0; }
@@ -93,11 +96,11 @@
 <div class="page">
   <header>
     <div class="wordmark"><span>open</span>Memo</div>
-    <div class="kicker">Read me first. Installing is one drag, and getting past the first launch is one line or four clicks.</div>
+    <div class="kicker">Install, and the first launch</div>
   </header>
 
   <h2>Install</h2>
-  <p class="lede">Drag <b>openMemo</b> onto the <b>Applications</b> folder in this window. That is the whole install.</p>
+  <p class="lede">Drag <b>openMemo</b> onto the <b>Applications</b> folder in this window. That is the whole install. Getting past the first launch is one line in Terminal, or four clicks.</p>
 
   <h2>Then macOS blocks it once, and that is expected</h2>
   <p class="lede">openMemo is not notarised, because notarising needs a paid Apple developer account this project does not have. macOS refuses the first launch of every app it cannot check, and makes you allow it by hand. Nothing is wrong with the download.</p>
@@ -112,11 +115,11 @@
 <div class="page">
   <header>
     <div class="wordmark"><span>open</span>Memo</div>
-    <div class="kicker">The click-only way, if you would rather not touch Terminal.</div>
+    <div class="kicker">The click-only way</div>
   </header>
 
   <h2>Four steps, once per version</h2>
-  <p class="lede">Every one of these dialogs is macOS talking about an app it cannot check. None of them mean the download is damaged.</p>
+  <p class="lede">For anyone who would rather not touch Terminal. Every one of these dialogs is macOS talking about an app it cannot check, and none of them mean the download is damaged.</p>
 
   <ol class="steps">
     <li>
@@ -166,7 +169,7 @@
 <div class="page">
   <header>
     <div class="wordmark"><span>open</span>Memo</div>
-    <div class="kicker">After the first launch.</div>
+    <div class="kicker">After the first launch</div>
   </header>
 
   <h2>If you set a PIN lock</h2>
@@ -186,7 +189,7 @@
 <div class="page">
   <header>
     <div class="wordmark"><span>open</span>Memo</div>
-    <div class="kicker">Where your library lives, and why the app is unsigned.</div>
+    <div class="kicker">Your library, and why this app is unsigned</div>
   </header>
 
   <h2>Your library is not inside the app</h2>
