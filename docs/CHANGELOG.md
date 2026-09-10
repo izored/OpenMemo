@@ -7,6 +7,9 @@ All notable changes to OpenMemo are documented here.
 
 <!-- Add entries here as work lands: ### Added / ### Changed / ### Fixed -->
 
+---
+## [3.21.1] - 2026-09-10
+
 ### Fixed
 - 🖼️ **A Facebook photo album is saved as photos, not as a video that will not play.** This was the fifth report of the same thing: an album arrives as a video memo with nothing to play, no gallery, and a download that fails. Three separate problems were stacked on top of each other, and any one of them alone was enough to produce it.
 
