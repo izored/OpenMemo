@@ -7,6 +7,11 @@ All notable changes to OpenMemo are documented here.
 
 <!-- Add entries here as work lands: ### Added / ### Changed / ### Fixed -->
 
+### Changed
+- 🔒 **The one-off "set your PIN again" dialog is gone.** 3.23.0 moved the app lock off the macOS keychain, and a PIN saved by an older build could not be carried across: reading it back needs the very panel that change removes. openMemo dropped it and said so in a dialog on the launch that found one. That was a modal standing in front of the app before it had even opened, explaining something Settings already shows.
+
+  The old PIN is still dropped, because a lock nobody can open is worse than a lock switched off, and it is still recorded in the shell log. It just no longer interrupts the launch. Setting a new PIN in Settings takes a few seconds.
+
 ---
 ## [3.23.0] - 2026-09-10
 
