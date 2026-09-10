@@ -7,6 +7,13 @@ All notable changes to OpenMemo are documented here.
 
 <!-- Add entries here as work lands: ### Added / ### Changed / ### Fixed -->
 
+### Fixed
+- 🖼️ **A Facebook photo album is saved as photos, not as a video that will not play.** This was the fifth report of the same thing: an album arrives as a video memo with nothing to play, no gallery, and a download that fails. Three separate problems were stacked on top of each other, and any one of them alone was enough to produce it.
+
+  Facebook hands out two spellings of a share link and openMemo only knew one, so the shorter one was never followed to the post it points at. Even following it does not help on its own, because a group post shows a login wall to anyone not signed in, and there is no post on that page to read. And the one piece of metadata that claims to say what a post is reports a four-photo album as a video.
+
+  openMemo now follows any share link, whatever its spelling, and works out what it points at by looking at where it lands. When the page itself is walled, it reads the post's photo set out of the data the page still ships, anchored to that post so a neighbouring post's pictures can never be the answer. A real Facebook video is still saved as a video.
+
 ---
 ## [3.21.0] - 2026-09-10
 

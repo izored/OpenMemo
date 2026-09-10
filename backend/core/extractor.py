@@ -1454,6 +1454,25 @@ async def _minimal_link(
                 "_post_text": rendered.get("post_text") or "",
                 "_scoped": bool(rendered.get("scoped")),
             }
+            # The scope found nothing and the page still holds the answer.
+            # A logged-out browser gets a login wall on a Facebook group post,
+            # so there is no post subtree to narrow to and the DOM scope can
+            # only fail — while the payload inside that same walled page names
+            # the post's whole photo set. Read it before falling through to
+            # `classify_media`, whose no-evidence answer on a video host is
+            # `video`, which is how a four-photo album was pulled as a video
+            # five times over. Anchored on this post's id, so a neighbour's
+            # photos are never the answer. No-op off Facebook.
+            if not extras["_scoped"] and not extras["_post_media"]:
+                from backend.core.facebook import album_photos
+
+                album = album_photos(rendered.get("html") or "", url)
+                if album:
+                    print(
+                        f"[extract] {domain} served a wall, not the post; its "
+                        f"payload names {len(album)} photo(s) — using those"
+                    )
+                    extras["_post_media"] = album
         # An interactive puzzle (Temu, DataDome, PerimeterX) rendered instead of
         # the page. Its DOM parses perfectly well — into a memo titled "Verify"
         # with the CAPTCHA's own artwork as the thumbnail. Stop here and file an
