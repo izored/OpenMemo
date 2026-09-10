@@ -7,6 +7,9 @@ All notable changes to OpenMemo are documented here.
 
 <!-- Add entries here as work lands: ### Added / ### Changed / ### Fixed -->
 
+---
+## [3.21.0] - 2026-09-10
+
 ### Added
 - ⬅️ **A back button on every page, and it takes you back to where you actually were.** Only the memo page had one, so leaving anywhere else meant finding the right thing in the sidebar and hoping it was the thing you left. The button now sits in the same corner on every page, top left of the content, and it returns you to the page you came from: open a song from Music and back is Music, open a memo from inside a Space and back is that Space.
 
