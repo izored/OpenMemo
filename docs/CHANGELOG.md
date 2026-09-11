@@ -8,6 +8,10 @@ All notable changes to OpenMemo are documented here.
 <!-- Add entries here as work lands: ### Added / ### Changed / ### Fixed -->
 
 ### Fixed
+- 🖼️ **A Reddit picture is saved as a picture, not as a video with nothing to play.** Saving a Reddit image from the browser hands openMemo a URL like `reddit.com/media?url=...png`. The domain is `reddit.com`, which openMemo treats as a video host by default, so the memo got filed as a video. The card then had no local file and no embed player, so opening it did the only thing left, which was bounce you out to the original link.
+
+  openMemo now reads what the wrapper carries. Reddit's `/media?url=` redirect is a picture whenever the URL inside it ends in a picture extension, and a `reddit.com/gallery/` link is a picture set. A post permalink at `/r/x/comments/` is still classified from what the post actually holds, so a video thread stays a video and a text thread stays a link. Existing Reddit photo memos that were mistyped will re-file themselves on the next sorter pass, which runs at startup after this release.
+
 - 🧩 **The browser extension's popup loses the white corners.** Four small white wedges sat at the corners of the dark panel, one in each rounded corner, and they looked like a rendering glitch because that is exactly what they were.
 
   Chrome paints its own window behind an extension popup, and that window is white. The popup was drawn on a see-through page with its own rounded corners cut into the dark panel, so the white underneath showed through the four cut-outs. Chrome has rounded the popup itself for a while now, so the panel no longer rounds its own corners and the page behind it is painted the same near-black as the panel. Nothing else about the popup changed.

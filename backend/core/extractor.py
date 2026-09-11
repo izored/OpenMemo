@@ -610,21 +610,63 @@ def has_embed_player(url: str) -> bool:
 # image instead of a video. Deliberately conservative — ambiguous paths (e.g.
 # Instagram /p/, which can be photo OR video) are left out so a real video is
 # never mislabeled a photo. yt-dlp still wins whenever it can pull an actual video.
+#
+# Reddit's post permalink `/r/<sub>/comments/<id>/` is DELIBERATELY absent: a
+# thread can be a video, a photo, or plain text, and only the scoped read can
+# tell. The Reddit shapes we DO recognise here are the ones that name a still
+# by themselves — a gallery post, and the /media?url= redirect (handled below
+# because its evidence is in the query string, not the path).
 _PHOTO_PATH_RE = re.compile(
     r"""
       facebook\.com/(?:photo\b|photo\.php|[^/]+/photos/)   # FB photo permalinks
     | tiktok\.com/@[^/]+/photo/                             # TikTok photo mode
     | (?:twitter|x)\.com/[^/]+/status/\d+/photo/           # X/Twitter photo view
+    | reddit\.com/gallery/[A-Za-z0-9]+                     # Reddit gallery post
     """,
     re.I | re.X,
 )
+
+# Extensions carrying a still image, matched against a URL PATH (no query).
+_IMAGE_EXT_RE = re.compile(r"\.(?:png|jpe?g|gif|webp|bmp|tiff?|avif|heic)$", re.I)
+
+
+def _reddit_media_wrapper_hint(url: str) -> str | None:
+    """'image' for Reddit's ``/media?url=<encoded>`` redirector when the wrapped
+    URL is a still. Reddit uses this shape when a post's link goes off-site or
+    to preview.redd.it; the wrapped URL is the picture, and its extension is
+    the evidence. Anything not shaped like this returns None."""
+    try:
+        parts = urlparse(url or "")
+    except Exception:
+        return None
+    host = (parts.netloc or "").lower()
+    if host.startswith("www."):
+        host = host[4:]
+    if host != "reddit.com" and not host.endswith(".reddit.com"):
+        return None
+    if (parts.path or "") != "/media":
+        return None
+    from urllib.parse import parse_qs
+
+    inner = (parse_qs(parts.query).get("url") or [""])[0]
+    if not inner:
+        return None
+    try:
+        inner_path = urlparse(unquote(inner)).path or ""
+    except Exception:
+        return None
+    return "image" if _IMAGE_EXT_RE.search(inner_path) else None
 
 
 def _url_media_hint(url: str) -> str | None:
     """Return 'image' when the URL path unambiguously points at a still photo on
     a video-capable host, else None. Centralizes photo-vs-video disambiguation so
     no classify/render site hardcodes per-host rules (ADR-001)."""
-    return "image" if _PHOTO_PATH_RE.search(url or "") else None
+    if not url:
+        return None
+    if _PHOTO_PATH_RE.search(url):
+        return "image"
+    return _reddit_media_wrapper_hint(url)
 
 
 async def extract_video(url: str) -> dict:

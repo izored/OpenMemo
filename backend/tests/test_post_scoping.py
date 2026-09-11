@@ -219,6 +219,95 @@ def test_the_sorter_leaves_a_resolved_text_post_alone(url):
     assert derive_memo_type(_Memo()) == "link"
 
 
+# ------------------------------------------------ Reddit image shape recognition
+#
+# `reddit.com` sits on the video-host list, so a URL from it defaults to video.
+# The three Reddit shapes below carry a still photo by themselves — no scoped
+# read, no yt-dlp, just the URL — and must not be filed as video. A memo saved
+# from `reddit.com/media?url=<encoded png>` used to render as an unplayable
+# video card that only knew how to open the original link (2026-09-11).
+
+
+@pytest.mark.parametrize(
+    "url",
+    [
+        # The media redirector, in the spellings a browser hands over.
+        "https://www.reddit.com/media?url=https%3A%2F%2Fpreview.redd.it%2Fabc.png%3Fwidth%3D1080",
+        "https://www.reddit.com/media?url=https%3A%2F%2Fi.redd.it%2Fabc.jpg",
+        "https://www.reddit.com/media?url=https%3A%2F%2Fpreview.redd.it%2Fabc.webp%3Fs%3Dsig",
+        "https://old.reddit.com/media?url=https%3A%2F%2Fpreview.redd.it%2Fabc.gif",
+        # A gallery post is always photos.
+        "https://www.reddit.com/gallery/abc123",
+    ],
+)
+def test_reddit_photo_shapes_are_hinted_as_image(url):
+    from backend.core.extractor import _url_media_hint
+
+    assert _url_media_hint(url) == "image"
+
+
+@pytest.mark.parametrize(
+    "url",
+    [
+        # A post permalink can be a video, a gallery, or plain text — only the
+        # scoped read can tell, so no hint here.
+        "https://www.reddit.com/r/pics/comments/1abcdef/a_title/",
+        # The media redirector wrapping a video is not our concern here (the
+        # hint is only for stills); return None so the caller keeps the default.
+        "https://www.reddit.com/media?url=https%3A%2F%2Fv.redd.it%2Fabc.mp4",
+        # No `url` query at all — not a hint.
+        "https://www.reddit.com/media",
+        # The subreddit feed.
+        "https://www.reddit.com/r/pics/",
+    ],
+)
+def test_reddit_non_photo_shapes_are_not_hinted(url):
+    from backend.core.extractor import _url_media_hint
+
+    assert _url_media_hint(url) is None
+
+
+def test_reddit_media_wrapper_memo_reclassifies_to_image():
+    """The exact shape a memo arrived in on 2026-09-11: a Reddit `/media?url=`
+    redirect wrapping a preview.redd.it PNG, saved with type=video because the
+    domain default won. The sorter must retype it to image."""
+    from backend.core.classify import derive_memo_type
+
+    class _Memo:
+        file_path = None
+        source_url = (
+            "https://www.reddit.com/media?url="
+            "https%3A%2F%2Fpreview.redd.it%2Fnew-random-stuff-v0-abc.png"
+            "%3Fwidth%3D1080%26crop%3Dsmart%26auto%3Dwebp%26s%3Dsig"
+        )
+        type = "video"
+
+    assert derive_memo_type(_Memo()) == "image"
+
+
+def test_reddit_gallery_memo_reclassifies_to_image():
+    from backend.core.classify import derive_memo_type
+
+    class _Memo:
+        file_path = None
+        source_url = "https://www.reddit.com/gallery/1abc123"
+        type = "video"
+
+    assert derive_memo_type(_Memo()) == "image"
+
+
+def test_a_reddit_post_permalink_still_needs_scoping_to_decide():
+    """A `/r/<sub>/comments/<id>/` permalink may be a photo, a video, or a text
+    thread. Without a scoped read we do NOT hint anything — the sorter's
+    already-resolved path (post is a permalink → keep the current type) is what
+    protects a video thread that was correctly stored as video."""
+    from backend.core.extractor import _url_media_hint
+
+    assert _url_media_hint(
+        "https://www.reddit.com/r/pics/comments/1abcdef/a_photo/"
+    ) is None
+
+
 def test_a_video_host_with_no_permalink_still_defaults_to_video():
     """Nothing read this post, so nothing overrides the domain."""
     from backend.core.classify import derive_memo_type
