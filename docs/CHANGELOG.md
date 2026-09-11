@@ -7,6 +7,9 @@ All notable changes to OpenMemo are documented here.
 
 <!-- Add entries here as work lands: ### Added / ### Changed / ### Fixed -->
 
+---
+## [3.23.1] - 2026-09-11
+
 ### Fixed
 - 🖼️ **A Reddit picture is saved as a picture, not as a video with nothing to play.** Saving a Reddit image from the browser hands openMemo a URL like `reddit.com/media?url=...png`. The domain is `reddit.com`, which openMemo treats as a video host by default, so the memo got filed as a video. The card then had no local file and no embed player, so opening it did the only thing left, which was bounce you out to the original link.
 
