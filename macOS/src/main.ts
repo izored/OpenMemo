@@ -1013,22 +1013,17 @@ if (!app.requestSingleInstanceLock()) {
     buildMenu();
     registerIpc();
     // A PIN kept by an older build lives in the macOS keychain, and reading it
-    // back is the panel this app no longer shows. It is dropped rather than
-    // migrated, so say so plainly: the lock is off until a new PIN is set, and
-    // nothing else in the library was touched.
+    // back is the panel this app no longer shows, so it is dropped instead.
+    //
+    // The drop stays. Deleting it would leave anyone upgrading from 3.22.0 or
+    // earlier with a `v1:` blob that can never verify, which is a lock nobody
+    // can open. What is gone is the modal that used to announce it: it only
+    // ever fires on the one launch that finds such a blob, and a dialog in
+    // front of the app on first run costs more than it explains. Settings shows
+    // the lock as off, MACOS.md section 3 says why, and the log records it for
+    // anyone who goes looking.
     if (retireKeychainPin()) {
-      void dialog.showMessageBox({
-        type: 'info',
-        title: 'App lock',
-        message: 'Set your PIN again in Settings.',
-        detail:
-          'openMemo used to keep the PIN in your macOS keychain, which is why macOS asked ' +
-          'for your login password after every update. It does not use the keychain at all ' +
-          'any more.\n\nThe old PIN could only be read back through that same panel, so it ' +
-          'was thrown away instead. The lock is off until you set a new one in Settings, ' +
-          'under App lock. Your memos, media and settings are untouched.',
-        buttons: ['OK'],
-      });
+      appendLog('[shell] Dropped a keychain-era PIN. The app lock is off until a new one is set.\n');
     }
     void openAppWindow();
 

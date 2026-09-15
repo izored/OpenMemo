@@ -158,9 +158,10 @@ new app and asked for your login password to let it read its own PIN back.
 That was the whole reason for the panel, and it is gone.
 
 **Coming from one of those builds:** the old PIN can only be read through that
-same panel, so openMemo drops it rather than asking one last time. On first
-launch it says so, the lock is off, and you set a new PIN in **Settings → App
-lock**. Memos, media and every other setting are untouched.
+same panel, so openMemo drops it rather than asking one last time. The lock
+shows as off in **Settings → App lock**, where you set a new PIN. Memos, media
+and every other setting are untouched. The drop is recorded in
+`~/Library/Application Support/OpenMemo/logs/openmemo.log`.
 
 ---
 
