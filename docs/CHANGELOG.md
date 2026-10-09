@@ -16,14 +16,14 @@ All notable changes to OpenMemo are documented here.
 
   The cover now belongs to its clip. A post of clips keeps all of them as a carousel, each slide shows its cover and plays in place on the memo page, and the clips are downloaded next to the memo so they keep working after Meta's links expire. That download follows the same "download videos automatically" setting as any other video. Photo albums are unchanged.
 
-- 📱 **iPhone: no more empty band at the bottom of the page.** The page was taller than the screen by the height of Safari's toolbar. A swipe that reached the end of a list carried on into the page itself, the whole app slid up, and bare background showed underneath. Only the content area scrolls now.
+- 📱 **iPhone: the app runs all the way down behind the browser's floating toolbar.** Safari on iOS 26 and Comet draw a web page under their bottom bar, the way any ordinary site keeps scrolling behind it. openMemo sized itself to the space above the bar, so a flat band of page colour sat under it instead, on every page and in the drawer. The app and its background now fill the whole screen, and the end of a list still scrolls clear of the bar so nothing is trapped behind it. On a phone, a single column of Memos also fills the width now, instead of stopping short and hugging the left edge.
 
 - ⌨️ **iPhone: the New Memo sheet sits on top of the keyboard.** Safari does not resize the page when the keyboard opens, so the sheet stayed pinned behind the keys with a gap above them. It now follows the visible part of the screen and rises with the keyboard.
 
 ### Changed
 - 🔒 **Dependencies patched.** The web framework moves to a release with the fixes for two public denial-of-service advisories in file-upload parsing (FastAPI 0.116.2, Starlette 0.48, python-multipart 0.0.32), and the frontend picks up React Router 7.18.4, which closes an open-redirect advisory, plus routine minor updates. Nothing you use changes.
 
-- 🃏 **Minimal is the card style on phones and tablets, and the default for new installs.** The Appearance panel is desktop-only, so a phone never got to choose and was stuck on the old default. Below desktop width the cards are always minimal now. A style you picked on desktop is untouched there.
+- 🃏 **A phone starts with Fractal Maze and minimal cards.** The Appearance panel is desktop-only, so a phone never got to choose and was stuck on the old defaults. The first time openMemo opens on a phone it picks the Fractal Maze background with its green accent and dark theme, plus minimal cards, and remembers that, so the light/dark toggle in the drawer still works afterwards. Below desktop width the cards are always minimal, and new installs default to minimal everywhere. A style you picked on desktop is untouched there.
 
 - 📝 **The note editor moves up a major version, and four security advisories go with the old one.** The editor reads the YAML block at the top of a note with a library called js-yaml, and four advisories against it (GHSA-h67p-54hq-rp68, GHSA-52cp-r559-cp3m, GHSA-5p4m-2wfm-xmqj, GHSA-2883-xcg3-v3hh) all describe the same thing: a crafted YAML block can make the parser burn CPU until the tab stalls. The fix never reached the 3.x editor, so the only way out was the 4.x one.
 

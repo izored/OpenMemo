@@ -2,7 +2,7 @@ import { useCallback, useRef } from 'react';
 import { Icon } from './Icon';
 import { useAppStore } from '@/stores/appStore';
 import { cn } from '@/lib/utils';
-import { ACCENT_OPTIONS, accentHarmony, randomBlobPositions } from '@/lib/appearance';
+import { ACCENT_OPTIONS, accentHarmony, presetTweaks } from '@/lib/appearance';
 import { BG_PRESETS, type BgPreset } from '@/lib/bgPresets';
 import { SKY_BANDS } from '@/lib/skyPalette';
 import { CloudRenderer } from '@/lib/cloudShader';
@@ -26,15 +26,7 @@ export function AppearancePanel() {
   // (all three are encoded in the filename), so the UI always matches its image.
   const pickPreset = useCallback(
     (p: BgPreset) => {
-      setTweak({
-        bgMode: 'image',
-        bgPreset: p.id,
-        bgImage: p.url,
-        accent: p.accent,
-        theme: p.theme,
-        bgPalette: accentHarmony(p.accent),
-        bgPositions: randomBlobPositions(),
-      });
+      setTweak(presetTweaks(p));
     },
     [setTweak],
   );

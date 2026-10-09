@@ -6733,16 +6733,29 @@ button.om-add-link { background: none; border: 0; padding: 0; cursor: pointer; f
 /* lg breakpoint: below the desktop rail layout → off-canvas full-screen drawer.
    Keep 1024px in sync with LG_MAX in frontend/src/lib/useBreakpoint.ts. */
 @media (max-width: 1024px) {
-  /* Shell uses dvh so the iOS Safari toolbar doesn't make it overshoot. */
-  .om-app { height: 100dvh; }
-  /* The document itself must not scroll: only .om-main does. #root's base
-     `min-height: 100vh` is the LARGE viewport on iOS Safari (toolbar hidden)
-     while the shell is the dynamic one, so the page was taller than the screen
-     by the toolbar's height. A swipe that reached the end of .om-main chained
-     into the document, the whole app slid up, and a band of bare background
-     opened at the bottom (iPhone 12 Pro Max, 2026-10-09). */
-  html, body { height: 100%; overflow: hidden; overscroll-behavior: none; }
-  #root { min-height: 0; height: 100%; }
+  /* Full bleed behind the browser's floating toolbar. iOS 26 Safari and Comet
+     draw the page UNDER their bottom bar, the way an ordinary scrolling site
+     shows its text through it. A 100dvh shell stops where the bar begins, so a
+     flat band of page colour sat under the bar instead (iPhone 12 Pro Max,
+     2026-10-09). The shell is the LARGE viewport now, and --toolbar-h (the
+     part of it the bar covers, 0 where nothing floats) is added back as scroll
+     padding so the last card can still scroll clear of the bar. Fixed layers
+     sit on the layout viewport, which ends at the bar, so each one that should
+     reach the screen edge drops its bottom by the same amount. */
+  :root { --toolbar-h: 0px; }
+  @supports (height: 100lvh) {
+    :root { --toolbar-h: calc(100lvh - 100dvh); }
+    .om-app { height: 100lvh; }
+  }
+  .om-app::before { bottom: calc(-10% - var(--toolbar-h)); }
+  .om-app::after,
+  .om-bg-veil { bottom: calc(-1 * var(--toolbar-h)); }
+  .om-cloud-bg { bottom: calc(-1 * var(--cloud-blur, 0px) - var(--toolbar-h)); }
+  /* No overflow: hidden on html/body. Body would clip the shell at its own
+     height, which ends where the toolbar starts: the band again. Only rubber
+     banding is stopped, so a fling past the end of .om-main does not drag the
+     page. */
+  html, body { overscroll-behavior: none; }
 
   /* Slim fixed top bar (hamburger + logo). */
   .om-mobile-topbar {
@@ -6773,8 +6786,13 @@ button.om-add-link { background: none; border: 0; padding: 0; cursor: pointer; f
   /* Page content clears the fixed top bar and drops the wide desktop side
      padding (48–64px) for a tight 14px so cards use the screen. !important
      beats the [data-density] padding rules. */
-  .om-main { padding: calc(52px + env(safe-area-inset-top)) 14px 88px !important; }
-  .om-main:has(.om-detail-page) { padding: calc(52px + env(safe-area-inset-top)) 0 0 !important; }
+  .om-main { padding: calc(52px + env(safe-area-inset-top)) 14px calc(88px + var(--toolbar-h)) !important; }
+  .om-main:has(.om-detail-page) { padding: calc(52px + env(safe-area-inset-top)) 0 var(--toolbar-h) !important; }
+  .om-main:has(.om-bbar-page) { padding-bottom: var(--toolbar-h) !important; }
+  /* One column fills the phone. The desktop grid caps each column at 320px and
+     starts at the left, so on a 428pt screen every card stopped ~80pt short of
+     the right edge, out of line with the full-width cards around it. */
+  .om-masonry-grid { max-width: none; }
   /* No accidental sideways scroll on vertical pages. Child rails keep their own
      overflow-x:auto, so carousels still scroll — the page itself does not. */
   .om-main { overflow-x: hidden; }
@@ -6793,7 +6811,8 @@ button.om-add-link { background: none; border: 0; padding: 0; cursor: pointer; f
     border-right: 0;
     padding: 0 16px;
     padding-top: max(12px, env(safe-area-inset-top));
-    padding-bottom: max(16px, env(safe-area-inset-bottom));
+    padding-bottom: calc(max(16px, env(safe-area-inset-bottom)) + var(--toolbar-h));
+    bottom: calc(-1 * var(--toolbar-h));
     overflow: hidden;
     transform: translateX(-100%);
     transition: transform .3s cubic-bezier(.2, .8, .2, 1);
@@ -6844,6 +6863,7 @@ button.om-add-link { background: none; border: 0; padding: 0; cursor: pointer; f
   /* Scrim under the drawer (covers the slide-in; tap to dismiss). */
   .om-drawer-scrim {
     display: block; position: fixed; inset: 0; z-index: 55;
+    bottom: calc(-1 * var(--toolbar-h));
     background: rgba(0, 0, 0, 0.45);
     animation: omScrimIn .2s ease;
   }
