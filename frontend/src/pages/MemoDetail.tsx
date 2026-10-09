@@ -248,13 +248,27 @@ function GalleryCarousel({ gallery, alt }: { gallery: GalleryItem[]; alt: string
   return (
     <div className="om-gallery" style={{ marginBottom: '24px' }}>
       <div className="om-gallery-stage" style={{ position: 'relative' }}>
-        <img
-          key={cur.url}
-          src={cur.url}
-          alt={`${alt} — ${i + 1} of ${n}`}
-          onClick={() => openGalleryLightbox(urls, i)}
-          style={{ cursor: 'zoom-in', width: '100%', borderRadius: 12, display: 'block' }}
-        />
+        {cur.type === 'video' && cur.video_url ? (
+          // A clip slide plays in place. `url` is its cover, so the frame is
+          // never blank while the clip loads.
+          <video
+            key={cur.video_url}
+            src={cur.video_url}
+            poster={cur.url}
+            controls
+            playsInline
+            preload="metadata"
+            style={{ width: '100%', borderRadius: 12, display: 'block', background: '#000' }}
+          />
+        ) : (
+          <img
+            key={cur.url}
+            src={cur.url}
+            alt={`${alt} — ${i + 1} of ${n}`}
+            onClick={() => openGalleryLightbox(urls, i)}
+            style={{ cursor: 'zoom-in', width: '100%', borderRadius: 12, display: 'block' }}
+          />
+        )}
         <button type="button" className="om-lightbox-nav prev" onClick={() => go(-1)} aria-label="Previous image" style={{ position: 'absolute', left: 8, top: '50%', transform: 'translateY(-50%)' }}>
           <ChevronLeft size={24} />
         </button>
@@ -274,11 +288,16 @@ function GalleryCarousel({ gallery, alt }: { gallery: GalleryItem[]; alt: string
             aria-label={`Go to image ${idx + 1}`}
             aria-current={idx === i}
             style={{
-              flex: '0 0 auto', width: 56, height: 56, padding: 0, borderRadius: 8, overflow: 'hidden', cursor: 'pointer',
+              position: 'relative', flex: '0 0 auto', width: 56, height: 56, padding: 0, borderRadius: 8, overflow: 'hidden', cursor: 'pointer',
               border: idx === i ? '2px solid var(--accent, #D97706)' : '2px solid transparent', opacity: idx === i ? 1 : 0.65,
             }}
           >
             <img src={g.url} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} />
+            {g.type === 'video' && (
+              <span aria-hidden="true" style={{ position: 'absolute', inset: 0, display: 'grid', placeItems: 'center', color: '#fff', background: 'rgba(0,0,0,0.25)' }}>
+                <Play size={16} style={{ fill: 'currentColor' }} />
+              </span>
+            )}
           </button>
         ))}
       </div>
@@ -1761,7 +1780,11 @@ export function MemoDetail() {
   // Inline player for a remote video memo (no local file yet). Covers every
   // platform in the registry — YouTube, Vimeo, Instagram, TikTok, etc. Null →
   // no embeddable player; the "Make it local" panel + Open Original still show.
-  const videoEmbed = memo.type === 'video' && !memo.file_path ? videoEmbedUrl(memo) : null;
+  // A post made only of clips (a Threads carousel of three videos) is a
+  // `video` memo with a gallery. It renders as the carousel, every clip in its
+  // slot, rather than as one player standing in for all of them.
+  const clipCarousel = memo.type === 'video' && (memo.gallery?.length ?? 0) > 1;
+  const videoEmbed = memo.type === 'video' && !memo.file_path && !clipCarousel ? videoEmbedUrl(memo) : null;
   // posterAspect is measured up top (before the early returns) so hook order
   // stays stable; resolveEmbedShape itself is a pure call and can run here.
   const videoEmbedShape = resolveEmbedShape(memo, posterAspect);
@@ -2109,7 +2132,7 @@ export function MemoDetail() {
                 images serve from the file route; scraped image memos (a Facebook
                 /photo, an Instagram/X photo, etc.) have no local file — their
                 real, localized image lives in thumbnail_path. */}
-            {memo.type === 'image' && !isEditing && memo.gallery && memo.gallery.length > 1 ? (
+            {(memo.type === 'image' || clipCarousel) && !isEditing && memo.gallery && memo.gallery.length > 1 ? (
               <GalleryCarousel gallery={memo.gallery} alt={memo.title} />
             ) : memo.type === 'image' && !isEditing && (memo.file_path || memo.thumbnail_path) ? (
               <MediaPreview
@@ -2122,7 +2145,7 @@ export function MemoDetail() {
             ) : null}
 
             {/* Local video preview — with theater + fullscreen */}
-            {memo.type === 'video' && memo.file_path && !isEditing && (
+            {memo.type === 'video' && memo.file_path && !clipCarousel && !isEditing && (
               <MediaPreview src={`/api/memos/${memo.id}/file`} alt={memo.title} kind="video" poster={memo.thumbnail_path} seek={videoSeek} theater={theater} onTheaterChange={setTheater} />
             )}
 
@@ -2174,7 +2197,7 @@ export function MemoDetail() {
                 file has been pulled yet. Without this the page shows only tool
                 cards and looks empty. Render the poster as a play button that
                 opens the original; "Make it local" (rail) pulls a native file. */}
-            {memo.type === 'video' && !videoEmbed && !memo.file_path && !isEditing && (
+            {memo.type === 'video' && !videoEmbed && !memo.file_path && !clipCarousel && !isEditing && (
               <a
                 className={cn('om-detail-poster', !memo.thumbnail_path && 'no-thumb')}
                 href={memo.source_url || undefined}

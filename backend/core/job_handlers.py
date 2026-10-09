@@ -42,6 +42,9 @@ KIND_THUMBNAIL = "thumbnail"
 # KIND_THUMBNAIL handles. Its own kind because the two run for the same memo and
 # dedupe keys on (kind, memo_id) — sharing one would drop the gallery pass.
 KIND_GALLERY = "gallery"
+# A carousel's clip slides. Separate from KIND_GALLERY because clips follow the
+# video rule (auto_download_video), and pictures never wait on a slow clip.
+KIND_GALLERY_CLIPS = "gallery_clips"
 KIND_LOCALIZE = "localize"
 # Auto-localize is a SEPARATE kind from explicit localize on purpose. Both
 # fire for the same memo on the auto-download path (ingest.py ~2215), and
@@ -95,6 +98,13 @@ async def _gallery(payload: dict[str, Any]) -> None:
     from backend.api.ingest import cache_gallery
 
     await cache_gallery(payload["memo_id"])
+
+
+@register(KIND_GALLERY_CLIPS, concurrency=2)
+async def _gallery_clips(payload: dict[str, Any]) -> None:
+    from backend.api.ingest import cache_gallery_clips
+
+    await cache_gallery_clips(payload["memo_id"])
 
 
 @register(KIND_RELOCALIZE_PICTURES, concurrency=2)
@@ -228,6 +238,7 @@ _ROUTING: dict[str, tuple[str, Callable[[tuple], tuple[str | None, dict[str, Any
     # and raised "unrouted function" AFTER the memo was committed, so the save
     # 500'd and no slide was ever downloaded to disk.
     "cache_gallery": (KIND_GALLERY, _p_memo),
+    "cache_gallery_clips": (KIND_GALLERY_CLIPS, _p_memo),
     "relocalize_pictures_task": (KIND_RELOCALIZE_PICTURES, _p_memo),
     "localize_memo_task": (KIND_LOCALIZE, _p_localize),
     "repull_memo_task": (KIND_REPULL, _p_localize),

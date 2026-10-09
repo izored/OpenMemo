@@ -320,3 +320,94 @@ def test_only_a_post_permalink_is_worth_scoping():
     assert _post_permalink("https://www.instagram.com/p/DAbc123/") is not None
     assert _post_permalink("https://www.threads.com/@medallomami_") is None
     assert _post_permalink("https://example.com/") is None
+
+
+# ------------------------------------------------------- clip carousels
+#
+# Live 2026-10-09: @carlos___tv/post/DcvjD2WDVDP is three clips. Threads draws
+# each one as a cover <img> stacked on a poster-less <video>, so the reader saw
+# six items, and a single-clip post (@alimlife_/post/DbaW7tajRDI) came out as
+# "photo + clip", which types it image. These pin the shapes that come out once
+# the cover is folded into its player.
+
+THREE_CLIPS = [
+    {"url": f"https://cdn/clip{i}.mp4", "type": "video", "poster": f"https://cdn/cover{i}.jpg"}
+    for i in range(3)
+]
+
+
+def test_a_carousel_of_clips_with_covers_keeps_its_gallery():
+    gallery = _slides(THREE_CLIPS)
+    assert gallery == [
+        {"url": f"https://cdn/cover{i}.jpg", "type": "video", "video_url": f"https://cdn/clip{i}.mp4"}
+        for i in range(3)
+    ]
+
+
+def test_a_carousel_of_clips_is_still_a_video():
+    assert classify(THREE_CLIPS, "", scoped=True) == "video"
+
+
+def test_one_clip_with_its_cover_is_a_video_not_a_photo():
+    one = THREE_CLIPS[:1]
+    assert classify(one, "", scoped=True) == "video"
+    assert _slides(one) is None
+
+
+def test_a_clip_in_a_mixed_album_carries_its_cover_and_its_source():
+    gallery = _slides(SIX_PHOTOS[:1] + THREE_CLIPS[:1])
+    assert gallery[1] == {
+        "url": "https://cdn/cover0.jpg", "type": "video", "video_url": "https://cdn/clip0.mp4",
+    }
+
+
+def test_a_clip_cover_is_a_picture_and_a_bare_clip_is_not():
+    from backend.core.pictures import is_picture_slide, picture_urls
+
+    covered = {"url": "https://cdn/cover.jpg", "type": "video", "video_url": "https://cdn/c.mp4"}
+    bare = {"url": "https://cdn/c.mp4", "type": "video"}
+    assert is_picture_slide(covered)
+    assert not is_picture_slide(bare)
+    assert picture_urls(None, [covered, bare]) == ["https://cdn/cover.jpg"]
+
+
+def test_remote_clips_are_detected_and_local_ones_are_not():
+    from backend.api.ingest import has_remote_clips
+
+    assert has_remote_clips(_slides(THREE_CLIPS))
+    local = [{"url": "/api/files/thumb/a.jpg", "type": "video", "video_url": "/api/memos/m/clip/0"}]
+    assert not has_remote_clips(local)
+    assert not has_remote_clips(None)
+
+
+def test_the_reader_folds_a_stacked_cover_into_its_player():
+    """Runs the real `_SCOPE_MEDIA_JS` in Chromium against Threads' markup."""
+    pw = pytest.importorskip("playwright.sync_api")
+    from backend.core.headless import _SCOPE_MEDIA_JS
+
+    slide = (
+        '<div style="position:relative;width:224px;height:280px;display:inline-block">'
+        '<img src="https://cdn/cover{i}.jpg" style="position:absolute;inset:0;width:224px;height:280px">'
+        '<video src="https://cdn/clip{i}.mp4" style="position:absolute;inset:0;width:224px;height:280px"></video>'
+        '</div>'
+    )
+    photo = '<img src="https://cdn/photo.jpg" style="width:224px;height:280px">'
+    html = (
+        '<div data-om-scope style="white-space:nowrap">'
+        + photo + "".join(slide.format(i=i) for i in range(2)) + "</div>"
+    )
+    with pw.sync_playwright() as p:
+        try:
+            browser = p.chromium.launch()
+        except Exception as e:  # pragma: no cover - no browser binary here
+            pytest.skip(f"no chromium: {e}")
+        page = browser.new_page()
+        page.set_content(html)
+        items = page.evaluate(_SCOPE_MEDIA_JS)
+        browser.close()
+
+    assert [(i["type"], i["url"], i["poster"]) for i in items] == [
+        ("image", "https://cdn/photo.jpg", ""),
+        ("video", "https://cdn/clip0.mp4", "https://cdn/cover0.jpg"),
+        ("video", "https://cdn/clip1.mp4", "https://cdn/cover1.jpg"),
+    ]
