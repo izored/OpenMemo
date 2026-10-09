@@ -136,6 +136,10 @@ def post_scope(url: str) -> dict | None:
     if not path:
         return None
 
+    query_scope = _query_permalink(parts)
+    if query_scope:
+        return query_scope
+
     for shape in _SHAPES:
         m = shape.match(path)
         if not m:
@@ -152,6 +156,47 @@ def post_scope(url: str) -> dict | None:
             "kind": segments[-2],
         }
     return None
+
+
+# Facebook's query-string permalinks: `/permalink.php?story_fbid=<id>&id=<page>`
+# and `/story.php?…`. A share link from a page that has no vanity username
+# redirects HERE, not to `/<author>/posts/<pfbid>`, and every path shape above
+# misses it because the post id lives in the query. Three Facebook albums saved
+# on 2026-09-28/29 were read as the whole page and filed as videos that way.
+#
+# Both ids are folded into a pseudo-path, `/permalink.php/<page id>/<story>`,
+# and the scope reader (headless._SCOPE_POST_JS `norm`) folds every anchor on
+# the page the same way. So the path-prefix matcher and the "foreign post" test
+# work unchanged, with `permalink.php` as the kind token. `stem` keeps the "one
+# post, two ids" fallback to THIS page's posts, the way the author segment does
+# for `/<author>/posts/<id>`: Facebook links a post to itself under a different
+# pfbid than the one the share link landed on.
+_QUERY_PERMALINK_PATHS = re.compile(r"^/(?:permalink|story)\.php/?$", re.I)
+
+
+def _query_permalink(parts) -> dict | None:
+    if not _QUERY_PERMALINK_PATHS.match(parts.path or ""):
+        return None
+    from urllib.parse import parse_qs, urlencode
+
+    q = parse_qs(parts.query or "")
+    story = (q.get("story_fbid") or [""])[0].strip()
+    if not re.fullmatch(r"[A-Za-z0-9.]{5,}", story):
+        return None
+    kind = parts.path.strip("/").lower()
+    keep = {"story_fbid": story}
+    owner = (q.get("id") or [""])[0].strip()
+    if owner:
+        keep["id"] = owner
+    stem = f"/{kind}/{owner or '_'}/"
+    return {
+        # The page needs both ids to load, so the query survives here; every
+        # tracking parameter beside them does not.
+        "url": urlunparse(parts._replace(query=urlencode(keep), fragment="")),
+        "prefix": stem + story,
+        "kind": kind,
+        "stem": stem,
+    }
 
 
 def is_post_permalink(url: str) -> bool:

@@ -500,6 +500,81 @@ async def cache_gallery(memo_id: str):
         )
 
 
+def clip_path(memo_id: str, index: int) -> Path:
+    """Where a carousel's clip slide lives on disk. One file per slide index."""
+    return Path(settings.FILES_DIR) / "clips" / f"{memo_id}_c{int(index)}.mp4"
+
+
+async def cache_gallery_clips(memo_id: str):
+    """Download every clip slide of a carousel so it still plays next week.
+
+    A clip slide's `video_url` is a signed CDN link that dies within days, the
+    same rot `cache_gallery` exists to stop for pictures. Each clip lands at
+    `clip_path` and the slide is rewritten to the route that serves it. Callers
+    gate on `auto_download_video` (or an explicit re-pull); this only fetches.
+    Best-effort per slide, and raises when any slide failed so the durable queue
+    retries rather than reporting a carousel with a hole in it as finished."""
+    from backend.core.localize_media import (
+        LocalizeError, _download_direct, _reject_pictureless,
+    )
+
+    async with AsyncSessionLocal() as db:
+        memo = await db.get(Memo, memo_id)
+        if not memo or not memo.gallery:
+            return
+        slides = list(memo.gallery)
+        referer = memo.source_url or None
+
+    todo = [
+        (i, s["video_url"]) for i, s in enumerate(slides)
+        if isinstance(s, dict) and s.get("type") == "video"
+        and str(s.get("video_url") or "").startswith("http")
+    ]
+    if not todo:
+        return
+
+    done: dict[int, str] = {}
+    failed = 0
+    for i, src in todo:
+        dest = clip_path(memo_id, i)
+        dest.parent.mkdir(parents=True, exist_ok=True)
+        try:
+            await _download_direct(src, dest, referer=referer)
+            _reject_pictureless(dest, "carousel clip")
+            done[i] = f"/api/memos/{memo_id}/clip/{i}"
+        except (LocalizeError, OSError) as e:
+            failed += 1
+            log.info("clip %d of %s not downloaded: %r", i, memo_id, e)
+
+    if done:
+        # Re-read before writing: a re-pull may have replaced the gallery while
+        # the downloads ran, and its slides must not be overwritten with ours.
+        async with AsyncSessionLocal() as db:
+            memo = await db.get(Memo, memo_id)
+            if memo and memo.gallery:
+                fresh = list(memo.gallery)
+                for i, local in done.items():
+                    if i < len(fresh) and isinstance(fresh[i], dict) and \
+                            fresh[i].get("video_url") == slides[i].get("video_url"):
+                        fresh[i] = {**fresh[i], "video_url": local}
+                memo.gallery = fresh
+                memo.updated_at = datetime.utcnow()
+                await db.commit()
+
+    if failed:
+        raise PictureNotLocalized(f"{failed}/{len(todo)} carousel clips not downloaded")
+
+
+def has_remote_clips(gallery) -> bool:
+    """True when a gallery holds a clip slide still pointing at its source."""
+    from backend.core.pictures import _slides
+
+    return any(
+        s.get("type") == "video" and str(s.get("video_url") or "").startswith("http")
+        for s in _slides(gallery)
+    )
+
+
 async def relocalize_pictures_task(memo_id: str):
     """Get a memo's pictures onto disk, re-resolving the post if the links died.
 
@@ -872,6 +947,14 @@ async def ingest_url_core(data: URLIngest, db: AsyncSession, schedule) -> dict:
             schedule(cache_gallery, memo.id)
         elif memo.thumbnail_path and memo.thumbnail_path.startswith("http"):
             schedule(cache_thumbnail, memo.id)
+    # A carousel's clip slides are media, so they follow the video rule rather
+    # than the picture one: auto_download_video, or a relay that forces it.
+    if (
+        not data.no_pull
+        and has_remote_clips(memo.gallery)
+        and (data.force_localize or bool(get_settings().get("auto_download_video", True)))
+    ):
+        schedule(cache_gallery_clips, memo.id)
     schedule(_localize_memo_task, memo.id)
     if auto_localize_audio:
         schedule(localize_memo_task, memo.id, "audio")
@@ -3172,6 +3255,12 @@ async def repull_memo_task(memo_id: str, mode: str, resolve_only: bool = False):
             except PictureNotLocalized as e:
                 await _mark_localize_error(memo_id, str(e))
                 raise
+            # A re-pull is an explicit ask, so the clips come too. Queued, not
+            # awaited: a clip that fails must not hold the type and cover
+            # repairs below hostage. Never on the resolve-only retry, which
+            # must not download anything.
+            if not resolve_only and has_remote_clips(gallery):
+                queue_task(cache_gallery_clips, memo_id)
 
     # Read the post again and stop. `reresolve_memo_task` is the one caller,
     # and it exists because the automatic retry after a degraded read must NOT

@@ -7,6 +7,24 @@ All notable changes to OpenMemo are documented here.
 
 <!-- Add entries here as work lands: ### Added / ### Changed / ### Fixed -->
 
+### Fixed
+- 🖼️ **A Facebook album from a page with no username is an album again, not a video that won't play.** Facebook's share link for these posts redirects to `permalink.php?story_fbid=...`, where the post id sits in the query string instead of the path. openMemo only knew the path spellings, so it could not narrow the read to the post. It read the whole page, found nothing it trusted, and filed the post as a video from the domain alone. The download then failed with a red error chip. Three albums landed that way in late September.
+
+  That spelling is understood now. On the live posts the read lands on the post and comes back with all five photos. Memos already saved wrong fix themselves with a re-pull.
+
+- 🎞️ **A Threads post made of clips saves as a carousel of clips, and a single clip saves as a video.** Threads draws every clip as a cover picture stacked on top of the player. openMemo counted the cover as a photo of its own, so a three-clip post read as six items and a one-clip post read as "photo plus clip". The first came out as one video, with the other two clips gone. The second would have come out as a photo.
+
+  The cover now belongs to its clip. A post of clips keeps all of them as a carousel, each slide shows its cover and plays in place on the memo page, and the clips are downloaded next to the memo so they keep working after Meta's links expire. That download follows the same "download videos automatically" setting as any other video. Photo albums are unchanged.
+
+- 📱 **iPhone: no more empty band at the bottom of the page.** The page was taller than the screen by the height of Safari's toolbar. A swipe that reached the end of a list carried on into the page itself, the whole app slid up, and bare background showed underneath. Only the content area scrolls now.
+
+- ⌨️ **iPhone: the New Memo sheet sits on top of the keyboard.** Safari does not resize the page when the keyboard opens, so the sheet stayed pinned behind the keys with a gap above them. It now follows the visible part of the screen and rises with the keyboard.
+
+### Changed
+- 🔒 **Dependencies patched.** The web framework moves to a release with the fixes for two public denial-of-service advisories in file-upload parsing (FastAPI 0.116.2, Starlette 0.48, python-multipart 0.0.32), and the frontend picks up React Router 7.18.4, which closes an open-redirect advisory, plus routine minor updates. Nothing you use changes.
+
+- 🃏 **Minimal is the card style on phones and tablets, and the default for new installs.** The Appearance panel is desktop-only, so a phone never got to choose and was stuck on the old default. Below desktop width the cards are always minimal now. A style you picked on desktop is untouched there.
+
 ---
 ## [3.23.1] - 2026-09-11
 

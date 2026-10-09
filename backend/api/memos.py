@@ -398,6 +398,84 @@ async def _stream_file_range(path, start: int, end: int, chunk_size: int = 256 *
         await anyio.to_thread.run_sync(f.close)
 
 
+def _serve_with_range(request: Request, p: Path, media_type: str):
+    """Serve a media file honouring HTTP Range, as `get_memo_file` documents."""
+    file_size = p.stat().st_size
+    range_header = request.headers.get("range", "")
+    rng = _parse_range(range_header, file_size)
+
+    if rng is None and not range_header:
+        # No Range at all — full file, but still advertise range support so
+        # players enable seeking.
+        return FileResponse(
+            str(p),
+            media_type=media_type,
+            headers={"Accept-Ranges": "bytes"},
+        )
+
+    if rng is None:
+        # A Range we can't satisfy: malformed, or a first-byte-pos past EOF.
+        # RFC 9110 recommends 416 here, but it also lets a server ignore Range
+        # entirely, and 416 is the worse answer for the only clients we have.
+        # Every consumer is a native <audio>/<video> element (nothing in the
+        # frontend reads Content-Range), and those treat a 416 as a fatal load
+        # error — a dead player needing a reload — while they handle a plain
+        # 200 fine, because any server may ignore Range. The case that reaches
+        # here in practice is a player whose cached size is stale after a memo's
+        # file was replaced by a smaller one; serving the file is exactly the
+        # recovery it needs.
+        #
+        # This is streamed by us rather than handed to FileResponse on purpose.
+        # Starlette >= 0.45 parses Range inside FileResponse and answers 416
+        # (400 for a malformed one), so delegating would make this route's
+        # behaviour depend on a transitive pin instead of on this file.
+        return StreamingResponse(
+            _stream_file_range(p, 0, file_size - 1),
+            status_code=200,
+            media_type=media_type,
+            headers={
+                "Accept-Ranges": "bytes",
+                "Content-Length": str(file_size),
+            },
+        )
+
+    start, end = rng
+    headers = {
+        "Content-Range": f"bytes {start}-{end}/{file_size}",
+        "Accept-Ranges": "bytes",
+        "Content-Length": str(end - start + 1),
+    }
+    return StreamingResponse(
+        _stream_file_range(p, start, end),
+        status_code=206,
+        media_type=media_type,
+        headers=headers,
+    )
+
+
+@router.get("/{memo_id}/clip/{index}")
+async def get_memo_clip(request: Request, memo_id: str, index: int):
+    """Serve one clip slide of a carousel, downloaded by `cache_gallery_clips`.
+
+    Same Range handling as the memo file, because iOS Safari will not play a
+    video from a server that cannot answer a byte range. No DB session: the
+    path is derived from the id, and SafePath refuses anything that escapes
+    the clips folder."""
+    from backend.api.ingest import clip_path
+    from backend.core.security import SafePath
+
+    if index < 0:
+        raise HTTPException(status_code=404, detail="Clip not found")
+    p = clip_path(memo_id, index)
+    try:
+        p = SafePath(p.parent).resolve(p.name)
+    except Exception:
+        raise HTTPException(status_code=404, detail="Clip not found")
+    if not p.exists():
+        raise HTTPException(status_code=404, detail="Clip not found")
+    return _serve_with_range(request, p, "video/mp4")
+
+
 @router.get("/{memo_id}/file")
 async def get_memo_file(
     request: Request,
@@ -453,57 +531,7 @@ async def get_memo_file(
         filename = (memo_title or p.name).replace('"', "")
         return FileResponse(str(p), media_type=media_type, filename=filename)
 
-    file_size = p.stat().st_size
-    range_header = request.headers.get("range", "")
-    rng = _parse_range(range_header, file_size)
-
-    if rng is None and not range_header:
-        # No Range at all — full file, but still advertise range support so
-        # players enable seeking.
-        return FileResponse(
-            str(p),
-            media_type=media_type,
-            headers={"Accept-Ranges": "bytes"},
-        )
-
-    if rng is None:
-        # A Range we can't satisfy: malformed, or a first-byte-pos past EOF.
-        # RFC 9110 recommends 416 here, but it also lets a server ignore Range
-        # entirely, and 416 is the worse answer for the only clients we have.
-        # Every consumer is a native <audio>/<video> element (nothing in the
-        # frontend reads Content-Range), and those treat a 416 as a fatal load
-        # error — a dead player needing a reload — while they handle a plain
-        # 200 fine, because any server may ignore Range. The case that reaches
-        # here in practice is a player whose cached size is stale after a memo's
-        # file was replaced by a smaller one; serving the file is exactly the
-        # recovery it needs.
-        #
-        # This is streamed by us rather than handed to FileResponse on purpose.
-        # Starlette >= 0.45 parses Range inside FileResponse and answers 416
-        # (400 for a malformed one), so delegating would make this route's
-        # behaviour depend on a transitive pin instead of on this file.
-        return StreamingResponse(
-            _stream_file_range(p, 0, file_size - 1),
-            status_code=200,
-            media_type=media_type,
-            headers={
-                "Accept-Ranges": "bytes",
-                "Content-Length": str(file_size),
-            },
-        )
-
-    start, end = rng
-    headers = {
-        "Content-Range": f"bytes {start}-{end}/{file_size}",
-        "Accept-Ranges": "bytes",
-        "Content-Length": str(end - start + 1),
-    }
-    return StreamingResponse(
-        _stream_file_range(p, start, end),
-        status_code=206,
-        media_type=media_type,
-        headers=headers,
-    )
+    return _serve_with_range(request, p, media_type)
 
 
 @router.post("/{memo_id}/transcribe")

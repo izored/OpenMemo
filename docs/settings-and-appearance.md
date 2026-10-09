@@ -158,8 +158,17 @@ theme, so it now stays the same readable red on any segment, theme, or accent
 | Player size | Big* |
 
 The panel footer carries the key, in the creator's voice: *"\* My picks. This is
-how I run openMemo, and how it looks best to me."* It is a hint only. The actual
-defaults are unchanged and nothing is forced.
+how I run openMemo, and how it looks best to me."* It is a hint only, with one
+exception: Minimal is now also the **default** card style for a browser with no
+saved appearance.
+
+### Card style below desktop width
+
+The appearance panel is desktop-only (it is hidden in the mobile block of
+`openmemo.css`), so a phone or tablet never gets to pick a card style. Below
+1024px (`LG_MAX`) `applyTweaks` therefore always writes `data-card="minimal"`,
+whatever the saved tweak says. The saved choice is not touched, and a
+`matchMedia` listener puts it back the moment the window is wide again.
 
 ### Live badge
 

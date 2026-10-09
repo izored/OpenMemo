@@ -68,7 +68,8 @@ export type MemoType = 'note' | 'article' | 'video' | 'image' | 'audio' | 'docum
 
 /** One slide of a carousel memo. `url` is always a still (a photo, or a video
  *  slide's poster) so it renders without a player; `video_url` is present when
- *  the slide is a video, for a future inline-play upgrade. */
+ *  the slide is a video: a local `/api/memos/:id/clip/:i` once downloaded, the
+ *  source's signed URL until then. The memo page plays it in place. */
 export interface GalleryItem {
   url: string;
   type: 'image' | 'video';

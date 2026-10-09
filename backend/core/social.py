@@ -73,17 +73,30 @@ def classify_media(
 def slides(post_media: list) -> list | None:
     """The gallery for a multi-item post, or None for a single item.
 
-    Mirrors the Instagram sidecar shape ({url, type}) so a carousel from any
+    Mirrors the Instagram sidecar shape: `url` is always a still, and a clip
+    slide carries its player source in `video_url`, so a carousel from any
     network renders in the memo page and the lightbox with no viewer changes.
-    An all-video post keeps no gallery: expiring CDN mp4 URLs are not renderable
-    slides, which is the rule `_instagram_resolve` already applies to a sidecar
-    of reels."""
+
+    A clip with no cover has nothing to draw, and an expiring CDN mp4 in `url`
+    is not a renderable slide. So an all-clip post keeps its gallery only when
+    every clip has a cover; otherwise it stays a plain video, which is the rule
+    `_instagram_resolve` applies to a sidecar of reels."""
     items = [m for m in (post_media or []) if (m or {}).get("url")]
     if len(items) < 2:
         return None
-    if all(m.get("type") == "video" for m in items):
+    clips = [m for m in items if m.get("type") == "video"]
+    if clips and len(clips) == len(items) and not all(m.get("poster") for m in clips):
         return None
-    return [{"url": m["url"], "type": m.get("type") or "image"} for m in items]
+    out = []
+    for m in items:
+        if m.get("type") == "video":
+            slide = {"url": m.get("poster") or m["url"], "type": "video"}
+            if m.get("poster") and m["url"] != m["poster"]:
+                slide["video_url"] = m["url"]
+            out.append(slide)
+        else:
+            out.append({"url": m["url"], "type": m.get("type") or "image"})
+    return out
 
 
 def cover(post_media: list) -> str:

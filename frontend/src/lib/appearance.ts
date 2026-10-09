@@ -2,6 +2,7 @@
 // Drive theme / accent / background CSS variables on <html>.
 import { presetById } from './bgPresets';
 import { resolveSky, skyCss, type SkyBand } from './skyPalette';
+import { LG_MAX } from './useBreakpoint';
 
 // Perceived luminance (0..1) for choosing a readable text color on an accent.
 export function luminance(hex: string): number {
@@ -168,13 +169,33 @@ function resolveTheme(theme: string): string {
   return theme === 'dark' ? 'hi' : 'light';
 }
 
+// Below the desktop layout the Appearance panel does not exist (it is hidden in
+// the mobile block of openmemo.css), so a phone never got to pick a card style
+// and was stuck on whatever the default was. Minimal is the one that reads at
+// phone width, so it is the mobile card style, full stop. The saved desktop
+// choice is untouched and comes back the moment the window is wide again.
+const BELOW_LG_QUERY = `(max-width: ${LG_MAX}px)`;
+let appliedTweaks: Tweaks | null = null;
+let cardQueryBound = false;
+
+function cardStyleFor(t: Tweaks): Tweaks['cardStyle'] {
+  return window.matchMedia(BELOW_LG_QUERY).matches ? 'minimal' : t.cardStyle;
+}
+
 // Apply the full tweak set to <html> as data attributes + CSS variables.
 // `theme: 'dark'` maps to the design's high-contrast inky `data-theme="hi"`.
 export function applyTweaks(t: Tweaks) {
   const root = document.documentElement;
+  appliedTweaks = t;
+  if (!cardQueryBound) {
+    cardQueryBound = true;
+    window.matchMedia(BELOW_LG_QUERY).addEventListener('change', () => {
+      if (appliedTweaks) root.dataset.card = cardStyleFor(appliedTweaks);
+    });
+  }
   root.dataset.theme = resolveTheme(t.theme);
   root.dataset.density = 'roomy';
-  root.dataset.card = t.cardStyle;
+  root.dataset.card = cardStyleFor(t);
   root.dataset.layout = t.layout || 'boxed';
   root.dataset.bg = t.bgMode || 'none';
   root.style.setProperty('--bg-blur', `${t.bgBlur ?? 64}px`);
@@ -235,7 +256,7 @@ export const ACCENT_OPTIONS = ['#F4825A', '#E8D77B', '#7DB9E8', '#A8CE7C', '#717
 export const DEFAULT_TWEAKS: Tweaks = {
   theme: 'light',
   accent: '#F4825A',
-  cardStyle: 'normal',
+  cardStyle: 'minimal',
   density: 'roomy',
   typePair: 'cabinet',
   layout: 'boxed',

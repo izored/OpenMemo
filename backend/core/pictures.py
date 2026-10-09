@@ -48,8 +48,12 @@ def is_picture_slide(slide: dict) -> bool:
     localize path's job, gated by `auto_download_video` because a library of
     long videos fills a disk. That is the one trade openMemo makes on purpose.
     Pictures get no such exemption.
+
+    A clip slide that names its player in `video_url` is the sidecar shape: its
+    `url` is the cover still, and a cover is a picture like any other. Leaving
+    it out is how a carousel of clips would render as a row of blanks.
     """
-    return (slide.get("type") or "image") != "video"
+    return (slide.get("type") or "image") != "video" or bool(slide.get("video_url"))
 
 
 def picture_urls(thumbnail_path: Any, gallery: Any) -> list[str]:

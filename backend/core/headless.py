@@ -165,10 +165,20 @@ _SCOPE_OWNS_CAROUSEL_JS = """() => {
 # of the same shape. Walk up from the anchor, stop at the first ancestor that
 # pulls in a foreign permalink, and tag what is left as `data-om-scope`. Every
 # reader below then works inside that tag when it exists.
-_SCOPE_POST_JS = r"""([wantPrefix, kind]) => {
+_SCOPE_POST_JS = r"""([wantPrefix, kind, wantStem]) => {
+  // Facebook's query permalinks (`/permalink.php?story_fbid=X&id=P`) are
+  // folded to `/permalink.php/P/X`, the same pseudo-path permalinks.post_scope
+  // builds, so a post whose id lives in the query can be matched like any other.
   const norm = (h) => {
-    try { return new URL(h, location.origin).pathname.replace(/\/+$/, ''); }
-    catch (_) { return ''; }
+    try {
+      const u = new URL(h, location.origin);
+      const p = u.pathname.replace(/\/+$/, '');
+      const story = u.searchParams.get('story_fbid');
+      if (story && /^\/(permalink|story)\.php$/i.test(p)) {
+        return p.toLowerCase() + '/' + (u.searchParams.get('id') || '_') + '/' + story;
+      }
+      return p;
+    } catch (_) { return ''; }
   };
   document.querySelectorAll('[data-om-scope]').forEach(
     (e) => e.removeAttribute('data-om-scope'));
@@ -200,9 +210,11 @@ _SCOPE_POST_JS = r"""([wantPrefix, kind]) => {
     // test exists for and where this still refuses. Reddit, Threads and
     // Instagram permalink pages all list neighbouring posts, so they never
     // reach here at all.
+    // `wantStem` is handed over when the URL shape knows better than this
+    // slice where "this author's posts" ends (Facebook's query permalinks).
     const at = want0.indexOf('/' + kind + '/');
     if (at < 0) return false;
-    const stem = want0.slice(0, at + kind.length + 2);
+    const stem = wantStem || want0.slice(0, at + kind.length + 2);
     const cands = new Set();
     for (const a of anchors) {
       const p = norm(a.getAttribute('href'));
@@ -286,11 +298,39 @@ _SCOPE_MEDIA_JS = r"""() => {
   // Same photo, different rendition = different URL. Key on the CDN path so a
   // slide cannot land twice under two size params.
   const key = (u) => { try { return new URL(u, location.href).pathname; } catch (_) { return u; } };
+  // A still stacked on a player in the same box is the player's cover, not a
+  // photo. Threads draws every clip slide this way - an <img> beside a
+  // poster-less <video>, same rect - so reading both counted a one-clip post as
+  // "photo + clip" (typed image) and a three-clip carousel as six slides.
+  // Measured live 2026-10-09 on @carlos___tv/post/DcvjD2WDVDP.
+  //
+  // Matched from the cover's side, on purpose. The cover sits a level or two
+  // under a wrapper, while the player is buried more than eight levels deep
+  // in its own, so walking up from the player never meets the cover.
+  const sameBox = (a, b) =>
+    Math.abs(a.x - b.x) < 4 && Math.abs(a.y - b.y) < 4 &&
+    Math.abs(a.width - b.width) < 4 && Math.abs(a.height - b.height) < 4;
+  const covers = new Map();   // <video> -> its cover <img>
+  const isCover = new Set();
+  for (const img of root.querySelectorAll('img')) {
+    const r = img.getBoundingClientRect();
+    let p = img.parentElement;
+    for (let i = 0; i < 3 && p && !isCover.has(img); i++, p = p.parentElement) {
+      for (const v of p.querySelectorAll('video')) {
+        if (!covers.has(v) && sameBox(v.getBoundingClientRect(), r)) {
+          covers.set(v, img);
+          isCover.add(img);
+          break;
+        }
+      }
+    }
+  }
   const seen = new Set(), out = [];
   for (const el of root.querySelectorAll('img, video')) {
     const r = el.getBoundingClientRect();
     // Avatars, reaction glyphs and spacer pixels. A slide is never this small.
     if (r.width < 120 || r.height < 120) continue;
+    if (isCover.has(el)) continue;
     let u = '', type = 'image', poster = '';
     if (el.tagName === 'VIDEO') {
       // A player is a player before it has loaded. Facebook mounts <video>
@@ -303,6 +343,7 @@ _SCOPE_MEDIA_JS = r"""() => {
       // not disagree about what a player is.
       const src = el.currentSrc || el.src || '';
       poster = el.poster || '';
+      if (!poster && covers.has(el)) poster = widest(covers.get(el));
       u = src || poster;
       type = 'video';
     } else {
@@ -743,7 +784,9 @@ async def _scope_post(page, permalink: str) -> bool:
         return False
     try:
         return bool(
-            await page.evaluate(_SCOPE_POST_JS, [scope["prefix"], scope["kind"]])
+            await page.evaluate(
+                _SCOPE_POST_JS, [scope["prefix"], scope["kind"], scope.get("stem", "")]
+            )
         )
     except Exception:
         return False

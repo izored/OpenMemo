@@ -559,7 +559,7 @@ def test_the_scope_script_takes_one_argument():
     every scope attempt returns false."""
     from backend.core import headless
 
-    assert headless._SCOPE_POST_JS.startswith("([wantPrefix, kind]) =>")
+    assert headless._SCOPE_POST_JS.startswith("([wantPrefix, kind, wantStem]) =>")
 
 
 # ------------------------------------------- one post, two names for it
@@ -594,7 +594,7 @@ def test_the_fallback_only_considers_this_authors_posts():
     from backend.core import headless
 
     js = headless._SCOPE_POST_JS
-    assert "const stem = want0.slice(0, at + kind.length + 2);" in js
+    assert "const stem = wantStem || want0.slice(0, at + kind.length + 2);" in js
     assert "p.startsWith(stem)" in js
 
 
@@ -631,3 +631,78 @@ def test_the_scoped_path_reports_which_read_answered():
     # Only when a scope was attempted. A URL naming no post was never going to
     # be narrowed and must not be reported as a degraded read.
     assert "if scope:" in src
+
+
+# ------------------------------------------- Facebook query permalinks
+#
+# Live 2026-10-09: three albums by N'Archive (facebook.com/share/p/19YW3t8eMx,
+# 1K9xopjwTM, 1ExUVCLpGh) were saved as videos. A page with no vanity name
+# redirects its share link to /permalink.php?story_fbid=<pfbid>&id=<page>, a
+# spelling no path shape matched, so the read was never narrowed to the post.
+
+FB_LANDED = (
+    "https://www.facebook.com/permalink.php?story_fbid=pfbid02HbDjZVK769W9inwtFd6Y1M"
+    "&id=61578860241237&rdid=tpGyK0V2Z3BXw6mx#"
+)
+
+
+def test_a_query_permalink_names_one_post():
+    scope = post_scope(FB_LANDED)
+    assert scope == {
+        "url": "https://www.facebook.com/permalink.php?story_fbid=pfbid02HbDjZVK769W9inwtFd6Y1M&id=61578860241237",
+        "prefix": "/permalink.php/61578860241237/pfbid02HbDjZVK769W9inwtFd6Y1M",
+        "kind": "permalink.php",
+        "stem": "/permalink.php/61578860241237/",
+    }
+
+
+def test_the_story_spelling_is_the_same_shape():
+    scope = post_scope("https://m.facebook.com/story.php?story_fbid=12345678&id=999")
+    assert scope["prefix"] == "/story.php/999/12345678"
+    assert scope["kind"] == "story.php"
+
+
+def test_a_query_permalink_with_no_story_is_not_a_post():
+    assert post_scope("https://www.facebook.com/permalink.php?id=61578860241237") is None
+    assert post_scope("https://www.facebook.com/permalink.php") is None
+
+
+def test_a_share_link_is_rescoped_from_a_query_permalink():
+    from backend.core.headless import _landed_rescope
+
+    assert _landed_rescope("https://www.facebook.com/share/p/19YW3t8eMx/", FB_LANDED) == FB_LANDED
+
+
+def test_the_scope_reader_matches_a_query_permalink_with_a_second_id():
+    """Runs the real `_SCOPE_POST_JS` in Chromium. The page links to itself
+    under a DIFFERENT pfbid than the one the share link landed on, which is
+    what Facebook served live; the post's photos must still be the scope."""
+    pw = pytest.importorskip("playwright.sync_api")
+    from backend.core.headless import _SCOPE_MEDIA_JS, _SCOPE_POST_JS
+
+    own = "/permalink.php?story_fbid=pfbid02HgMmOTHERID&id=61578860241237&__cft__[0]=x"
+    photo = '<a href="/photo/?fbid={i}&set=pcb.1"><img src="https://cdn/p{i}.jpg" style="width:232px;height:290px"></a>'
+    html = (
+        '<div role="article"><div><a href="' + own + '">Sep 28</a></div>'
+        + "".join(photo.format(i=i) for i in range(3))
+        + '<a href="' + own + '&comment_id=5">comment</a></div>'
+        '<div role="article"><a href="/permalink.php?story_fbid=pfbidNEIGHBOUR1&id=7">x</a>'
+        '<img src="https://cdn/neighbour.jpg" style="width:300px;height:300px"></div>'
+    )
+    scope = post_scope(FB_LANDED)
+    with pw.sync_playwright() as p:
+        try:
+            browser = p.chromium.launch()
+        except Exception as e:  # pragma: no cover - no browser binary here
+            pytest.skip(f"no chromium: {e}")
+        page = browser.new_page()
+        # A real origin, served offline: on about:blank `location.origin` is
+        # "null" and every relative link fails to parse.
+        page.route("https://www.facebook.com/**", lambda r: r.fulfill(body=html, content_type="text/html"))
+        page.goto("https://www.facebook.com/permalink.php?story_fbid=x&id=1")
+        scoped = page.evaluate(_SCOPE_POST_JS, [scope["prefix"], scope["kind"], scope["stem"]])
+        items = page.evaluate(_SCOPE_MEDIA_JS)
+        browser.close()
+
+    assert scoped is True
+    assert [i["url"] for i in items] == [f"https://cdn/p{i}.jpg" for i in range(3)]
