@@ -7,6 +7,9 @@ All notable changes to OpenMemo are documented here.
 
 <!-- Add entries here as work lands: ### Added / ### Changed / ### Fixed -->
 
+---
+## [3.23.2] - 2026-10-09
+
 ### Fixed
 - 🖼️ **A Facebook album from a page with no username is an album again, not a video that won't play.** Facebook's share link for these posts redirects to `permalink.php?story_fbid=...`, where the post id sits in the query string instead of the path. openMemo only knew the path spellings, so it could not narrow the read to the post. It read the whole page, found nothing it trusted, and filed the post as a video from the domain alone. The download then failed with a red error chip. Three albums landed that way in late September.
 
