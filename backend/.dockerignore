@@ -1,0 +1,6 @@
+# The image installs requirements.txt itself. The host venv is a Windows
+# install the container cannot use, and was 382 MB copied into every image.
+.venv
+__pycache__
+*.pyc
+.pytest_cache

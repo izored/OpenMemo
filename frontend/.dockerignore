@@ -1,0 +1,6 @@
+# The image runs its own `npm ci`. A host node_modules copied over it by
+# `COPY . .` mixes a Windows install into a Linux one: on 2026-10-09 the host
+# esbuild JS (0.28.1) landed on the container's 0.28.2 binary and every
+# `vite build` died with "Host version does not match binary version".
+node_modules
+dist
