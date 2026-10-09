@@ -25,6 +25,10 @@ All notable changes to OpenMemo are documented here.
 
 - 🃏 **Minimal is the card style on phones and tablets, and the default for new installs.** The Appearance panel is desktop-only, so a phone never got to choose and was stuck on the old default. Below desktop width the cards are always minimal now. A style you picked on desktop is untouched there.
 
+- 📝 **The note editor moves up a major version, and four security advisories go with the old one.** The editor reads the YAML block at the top of a note with a library called js-yaml, and four advisories against it (GHSA-h67p-54hq-rp68, GHSA-52cp-r559-cp3m, GHSA-5p4m-2wfm-xmqj, GHSA-2883-xcg3-v3hh) all describe the same thing: a crafted YAML block can make the parser burn CPU until the tab stalls. The fix never reached the 3.x editor, so the only way out was the 4.x one.
+
+  Notes read and write exactly as before. Nothing in openMemo's own editor code had to change, because the one thing 4.x removes is a live code sandbox that openMemo never turned on. Dropping it also takes about thirty packages out of the install. The text engine underneath jumped from Lexical 0.35 to 0.48, so the editor now has a test that mounts it and checks that headings, lists, tables, code blocks and pasted Markdown still come through, in the compact toolbar and the full one.
+
 ---
 ## [3.23.1] - 2026-09-11
 
