@@ -6735,6 +6735,14 @@ button.om-add-link { background: none; border: 0; padding: 0; cursor: pointer; f
 @media (max-width: 1024px) {
   /* Shell uses dvh so the iOS Safari toolbar doesn't make it overshoot. */
   .om-app { height: 100dvh; }
+  /* The document itself must not scroll: only .om-main does. #root's base
+     `min-height: 100vh` is the LARGE viewport on iOS Safari (toolbar hidden)
+     while the shell is the dynamic one, so the page was taller than the screen
+     by the toolbar's height. A swipe that reached the end of .om-main chained
+     into the document, the whole app slid up, and a band of bare background
+     opened at the bottom (iPhone 12 Pro Max, 2026-10-09). */
+  html, body { height: 100%; overflow: hidden; overscroll-behavior: none; }
+  #root { min-height: 0; height: 100%; }
 
   /* Slim fixed top bar (hamburger + logo). */
   .om-mobile-topbar {
@@ -6892,16 +6900,20 @@ button.om-add-link { background: none; border: 0; padding: 0; cursor: pointer; f
   /* Add-memo / music-add panels become near-full-width bottom sheets that slide
      up from the bottom (ADR-009 #7), instead of a 296px corner card. Appearance
      is desktop-only, so it never opens here. */
+  /* `bottom` rides --kb-inset (lib/keyboardInset.ts) so an open keyboard lifts
+     the sheet instead of covering its lower half, and the height cap follows
+     the visible viewport so the lifted sheet still fits above the keys. Both
+     read 0 / 100dvh with no keyboard. */
   .om-add-panel {
-    left: 8px; right: 8px; bottom: 0; width: auto; max-width: none;
-    max-height: 86dvh;
+    left: 8px; right: 8px; bottom: var(--kb-inset, 0px); width: auto; max-width: none;
+    max-height: min(86dvh, calc(var(--vv-height, 100dvh) - 12px));
     border-radius: 18px 18px 0 0;
     transform-origin: bottom center;
     transform: translateY(110%); opacity: 1;
     padding-bottom: env(safe-area-inset-bottom);
   }
   .om-add-panel.open { transform: translateY(0); }
-  .om-add-panel.om-mm-panel { width: auto; height: auto; max-height: 86dvh; }
+  .om-add-panel.om-mm-panel { width: auto; height: auto; max-height: min(86dvh, calc(var(--vv-height, 100dvh) - 12px)); }
   /* Appearance panel is desktop-only and never opens on mobile. It is always in
      the DOM (hidden by transform/opacity on desktop), but its own .om-ap-panel
      transform outranks the bottom-sheet rule above and the opacity:1 unhid it —

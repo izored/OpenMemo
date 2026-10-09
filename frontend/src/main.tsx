@@ -7,6 +7,7 @@ import './index.css';
 import './styles/transitions.css';
 import './styles/typeset.css';
 import './styles/openmemo.css';
+import { trackKeyboardInset } from './lib/keyboardInset';
 
 // Running inside the macOS shell? The window is frameless
 // (titleBarStyle: 'hiddenInset'), so the traffic lights float over whatever the
@@ -17,6 +18,9 @@ import './styles/openmemo.css';
 if (typeof window !== 'undefined' && window.openmemoShell?.platform === 'darwin') {
   document.documentElement.dataset.shell = 'mac';
 }
+
+// Bottom sheets read --kb-inset to sit on top of the iOS keyboard.
+if (typeof window !== 'undefined') trackKeyboardInset();
 
 const queryClient = new QueryClient({
   defaultOptions: {
