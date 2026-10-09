@@ -21,6 +21,8 @@ All notable changes to OpenMemo are documented here.
 - ⌨️ **iPhone: the New Memo sheet sits on top of the keyboard.** Safari does not resize the page when the keyboard opens, so the sheet stayed pinned behind the keys with a gap above them. It now follows the visible part of the screen and rises with the keyboard.
 
 ### Changed
+- 🔒 **Dependencies patched.** The web framework moves to a release with the fixes for two public denial-of-service advisories in file-upload parsing (FastAPI 0.116.2, Starlette 0.48, python-multipart 0.0.32), and the frontend picks up React Router 7.18.4, which closes an open-redirect advisory, plus routine minor updates. Nothing you use changes.
+
 - 🃏 **Minimal is the card style on phones and tablets, and the default for new installs.** The Appearance panel is desktop-only, so a phone never got to choose and was stuck on the old default. Below desktop width the cards are always minimal now. A style you picked on desktop is untouched there.
 
 ---
