@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import type { Collection, Memo, MusicPlaylist, Space } from '@/types';
-import { DEFAULT_TWEAKS, applyTweaks, type Tweaks } from '@/lib/appearance';
+import { DEFAULT_TWEAKS, applyTweaks, withMobileDefaults, type Tweaks } from '@/lib/appearance';
 
 // Ids of the step-by-step guides the GuideModal can render. Add new guides here.
 export type GuideId = 'yt-cookies';
@@ -326,7 +326,7 @@ export const useAppStore = create<AppState>((set) => ({
       return { lightboxSlide: (s.lightboxSlide + delta + n) % n };
     }),
 
-  tweaks: loadTweaks(),
+  tweaks: withMobileDefaults(loadTweaks()),
   setTweak: (keyOrPatch, value) =>
     set((s) => {
       const patch =

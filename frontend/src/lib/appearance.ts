@@ -1,6 +1,6 @@
 // Appearance helpers ported from the OpenMemo design bundle (app.jsx).
 // Drive theme / accent / background CSS variables on <html>.
-import { presetById } from './bgPresets';
+import { presetById, type BgPreset } from './bgPresets';
 import { resolveSky, skyCss, type SkyBand } from './skyPalette';
 import { LG_MAX } from './useBreakpoint';
 
@@ -249,6 +249,44 @@ export function applyTweaks(t: Tweaks) {
   // position (low = top color sits near the top; high = it reaches down).
   const grad = typeof t.skyGradient === 'number' ? t.skyGradient : 0.5;
   root.style.setProperty('--sky-stop', `${Math.round(12 + (1 - grad) * 76)}%`);
+}
+
+// Everything a built-in background brings with it: the wallpaper, the accent it
+// was made for, and its theme. One definition for both callers, the Appearance
+// gallery and the phone default below, so the two can never disagree about what
+// "picking Fractal Maze" means.
+export function presetTweaks(p: BgPreset): Partial<Tweaks> {
+  return {
+    bgMode: 'image',
+    bgPreset: p.id,
+    bgImage: p.url,
+    accent: p.accent,
+    theme: p.theme,
+    bgPalette: accentHarmony(p.accent),
+    bgPositions: randomBlobPositions(),
+  };
+}
+
+// A phone gets the creator's mobile look on first load: Fractal Maze and minimal
+// cards. Appearance is desktop-only, so this is the only way a phone ever gets a
+// look chosen for it. Applied ONCE per browser and then remembered, so the theme
+// toggle in the drawer still works afterwards. `pointer: coarse` keeps a narrow
+// desktop window from being restyled for good.
+export const MOBILE_DEFAULT_PRESET = 'Green - Dark - Fractal Maze - 60';
+const MOBILE_DEFAULTS_KEY = 'openmemo_mobile_defaults_v1';
+
+export function withMobileDefaults(t: Tweaks): Tweaks {
+  try {
+    if (localStorage.getItem(MOBILE_DEFAULTS_KEY)) return t;
+    if (!window.matchMedia(`(max-width: ${LG_MAX}px) and (pointer: coarse)`).matches) return t;
+    const preset = presetById(MOBILE_DEFAULT_PRESET);
+    const next: Tweaks = { ...t, ...(preset ? presetTweaks(preset) : {}), cardStyle: 'minimal' };
+    localStorage.setItem('openmemo_tweaks', JSON.stringify(next));
+    localStorage.setItem(MOBILE_DEFAULTS_KEY, '1');
+    return next;
+  } catch {
+    return t;
+  }
 }
 
 export const ACCENT_OPTIONS = ['#F4825A', '#E8D77B', '#7DB9E8', '#A8CE7C', '#71717A'];

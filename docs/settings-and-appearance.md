@@ -170,6 +170,16 @@ The appearance panel is desktop-only (it is hidden in the mobile block of
 whatever the saved tweak says. The saved choice is not touched, and a
 `matchMedia` listener puts it back the moment the window is wide again.
 
+### A phone's first look
+
+A phone gets a look chosen for it on first load: the **Fractal Maze** preset
+(wallpaper, green accent, dark theme) plus minimal cards. `withMobileDefaults` in
+`lib/appearance.ts` applies it once per browser, when the screen is below 1024px
+with a coarse pointer, and records that it did, so the drawer's light/dark toggle
+keeps working afterwards and a narrow desktop window is never restyled. It uses
+the same `presetTweaks` helper as the Appearance gallery, so picking a preset and
+the phone default can never mean two different things.
+
 ### Live badge
 
 The header "live" badge has a pulsing accent dot (`om-ap-live`), so the panel
