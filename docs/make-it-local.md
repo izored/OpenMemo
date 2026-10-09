@@ -166,6 +166,16 @@ Every reader that looks at a page can now be scoped to the post first.
    (`post`, `p`, `status`, `comments`, `video`). Threads, Reddit, X, Instagram,
    TikTok, Bluesky and Facebook are one list; anything not on it is simply not
    scoped, which is the old whole-page behaviour.
+
+   Facebook has one spelling that keeps its post id in the **query** instead of
+   the path: `/permalink.php?story_fbid=<id>&id=<page>`, which is where a share
+   link from a page with no username lands. Both ids are folded into a
+   pseudo-path, `/permalink.php/<page>/<story>`, and the page-side matcher folds
+   every anchor the same way, so the rest of the walk needs no special case.
+   The post links to itself under a different pfbid than the one the share link
+   landed on, so this shape also hands over a `stem` that keeps the "one post,
+   two ids" fallback to that page's own posts. Without it, three albums saved
+   on 2026-09-28/29 were read as the whole page and filed as videos.
 2. **`headless.render_page(scope_permalink=…)` finds the post's subtree.** It
    walks out from the post's own permalink anchor and stops at the first
    ancestor that links to a *different* permalink of the same kind. What is left
@@ -183,6 +193,35 @@ Threads, where the slides are a horizontal strip with no Next control at all.
 And slides are taken from the widest `srcset` entry rather than `currentSrc`,
 because a carousel renders at thumbnail size and `currentSrc` hands back the
 320 px rendition of a 3072 px photograph.
+
+**A cover stacked on a player is the player's poster, not a photo.** Threads
+draws every clip as an `<img>` in the same box as a `<video>` that has no
+`poster` attribute. Counted separately, a one-clip post reads as "photo + clip"
+(which types it image) and a three-clip post reads as six slides. The reader
+matches each such image to its player by box, from the image's side, because
+the player sits more than eight levels deeper in its own wrapper, and hands the
+image over as the clip's `poster`.
+
+### Carousels of clips
+
+A slide that is a clip uses the Instagram sidecar shape:
+`{"url": <cover still>, "type": "video", "video_url": <clip>}`. `url` is always
+a picture, so the card, the thumbnail strip and the picture localizer treat it
+like any other still (`pictures.is_picture_slide` counts a clip slide that names
+its `video_url`). A post made only of clips keeps its gallery when every clip
+has a cover, and stays a `video` memo; one without covers falls back to a plain
+video, since an expiring mp4 is not a slide anyone can render.
+
+The clips themselves follow the **video** rule, not the picture one.
+`cache_gallery_clips` (job kind `gallery_clips`) downloads each `video_url` to
+`files/clips/<memo>_c<i>.mp4` and rewrites the slide to
+`/api/memos/<memo>/clip/<i>`, which answers byte ranges like the memo file
+route (iOS will not play a video otherwise). It runs on save when
+`auto_download_video` is on or the relay forces it, and always on an explicit
+re-pull. A clip that fails keeps its source URL and the job retries.
+
+The memo page plays a clip slide in place, with its cover as the poster. A
+`video` memo with a gallery renders the carousel instead of a single player.
 
 `core/social` then types the post from what it holds: a clip inside the post
 makes it a video, stills make it an image with a gallery, and a scope with text
